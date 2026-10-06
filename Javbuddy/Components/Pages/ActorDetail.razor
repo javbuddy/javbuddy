@@ -1,0 +1,994 @@
+@page "/actors/{RouteName}"
+@using Microsoft.EntityFrameworkCore
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Components.Pages.MoviesSections
+@using Javbuddy.Services
+@using Javbuddy.Services.Jellyfin
+@using Javbuddy.Services.R18Dev
+@using Javbuddy.Components.Pages.ActorDetailSections
+@using Microsoft.Extensions.DependencyInjection
+@inject IActorDetailQueryService ActorDetailQuery
+@inject IR18DevSettingsService R18DevSettingsService
+@inject IActorService ActorService
+@inject IMovieService MovieService
+@inject IJellyfinClient JellyfinClient
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject IServiceProvider ServiceProvider
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>@(actor?.DisplayName ?? "Actor") · Javbuddy</PageTitle>
+
+@if (loaded && actor is null)
+{
+    <p>Actor not found. <a href="/actors">Back to actors</a></p>
+}
+else if (actor is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <div class="actor-toolbar">
+        <BackButton Href="/actors" CssClass="actor-toolbar-btn">All actors</BackButton>
+        <span class="actor-toolbar-sep"></span>
+        <button class="actor-toolbar-btn @(actor.IsFavorite ? "actor-toolbar-btn-favorite active" : "")" @onclick="ToggleFavorite" title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true">
+                @if (actor.IsFavorite)
+                {
+                    <path fill-rule="evenodd" d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z"/>
+                }
+                else
+                {
+                    <path d="m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-4.385C13.486.878 10.4.28 8.717 2.01L8 2.748zM8 15C-7.333 4.868 3.279-3.04 7.824 1.143c.06.055.119.112.176.171a3.12 3.12 0 0 1 .176-.17C12.72-3.042 23.333 4.867 8 15z"/>
+                }
+            </svg>
+            @(actor.IsFavorite ? "Favorited" : "Favorite")
+        </button>
+        <span class="actor-toolbar-sep"></span>
+        <a class="actor-toolbar-btn" href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}/edit")">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708l-3-3zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11l.178-.178z"/></svg>
+            Edit
+        </a>
+        <span class="actor-toolbar-sep"></span>
+        <button class="actor-toolbar-btn" @onclick="OpenPhotoUploadModal">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/><path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2zm.5 2a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1zm9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/></svg>
+            Change Photo
+        </button>
+        <span class="actor-toolbar-sep"></span>
+        <div class="actor-toolbar-dropdown" @onfocusout="OnSearchDropdownFocusOut" tabindex="-1">
+            <button class="actor-toolbar-btn actor-toolbar-btn-split-main" @onclick="OpenCombinedSearchModal" title="Search all metadata providers (WAPdB + minnano-av.com) for this actor">
+                <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>
+                Search
+            </button>
+            <button class="actor-toolbar-btn actor-toolbar-btn-split-arrow" @onclick="ToggleSearchDropdown" aria-label="Choose a metadata provider" aria-haspopup="true" aria-expanded="@showSearchDropdown">
+                <svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>
+            </button>
+            @if (showSearchDropdown)
+            {
+                <div class="actor-toolbar-dropdown-menu">
+                    <button type="button" class="actor-toolbar-dropdown-item" @onclick="OpenWarashiSearch">WAPdB</button>
+                    <button type="button" class="actor-toolbar-dropdown-item" @onclick="OpenMinnanoAvSearch">minnano-av</button>
+                </div>
+            }
+        </div>
+        <span class="actor-toolbar-sep"></span>
+        <button class="actor-toolbar-btn" @onclick="() => showMergeModal = true">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.646 5.646a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708L10.293 8 8.646 6.354a.5.5 0 0 1 0-.708z"/><path fill-rule="evenodd" d="M12 8a.5.5 0 0 1-.5.5H4a.5.5 0 0 1 0-1h7.5A.5.5 0 0 1 12 8z"/><path d="M4.5 3a2.5 2.5 0 0 0-2.5 2.5v5A2.5 2.5 0 0 0 4.5 13H5a.5.5 0 0 0 0-1h-.5A1.5 1.5 0 0 1 3 10.5v-5A1.5 1.5 0 0 1 4.5 4H5a.5.5 0 0 0 0-1h-.5z"/></svg>
+            Merge...
+        </button>
+        <span class="actor-toolbar-sep"></span>
+        <button class="actor-toolbar-btn" @onclick="() => showNfoSyncModal = true" title="Synchronize actor name in linked movie .nfo files">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/></svg>
+            Sync .nfo
+        </button>
+        <span class="actor-toolbar-sep"></span>
+        <button class="actor-toolbar-btn" @onclick="RefreshMetadata" disabled="@refreshing" title="Refresh actor metadata from local library">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+            </svg>
+            @(refreshing ? "Refreshing…" : "Refresh")
+        </button>
+        @if (r18DevEnabled)
+        {
+            <span class="actor-toolbar-sep"></span>
+            <a class="actor-toolbar-btn" href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}/missing")">
+                <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M2 2.5A1.5 1.5 0 0 1 3.5 1h9A1.5 1.5 0 0 1 14 2.5v11a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5v-11zM3.5 2a.5.5 0 0 0-.5.5v11a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-11a.5.5 0 0 0-.5-.5h-9z" /><path d="M4.5 4h7v1h-7V4zm0 2.5h7v1h-7v-1zm0 2.5h4v1h-4V9z" /></svg>
+                Missing
+            </a>
+        }
+        @if (allMovies.Any(m => m.Status == MovieStatus.Got))
+        {
+            <span class="actor-toolbar-sep"></span>
+            <a class="actor-toolbar-btn" href="@($"/movies/review?actorId={actor.Id}")" title="Step through this actor's movies one at a time in Review mode">
+                <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M14.5 3a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h13zm-13-1A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-13z"/><path d="M7 5.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm-1.496-.854a.5.5 0 0 1 0 .708l-.5.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708l.146.147 1.146-1.147a.5.5 0 0 1 .708 0zM7 9.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm-1.496-.854a.5.5 0 0 1 0 .708l-.5.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 0 1 .708-.708l.146.147 1.146-1.147a.5.5 0 0 1 .708 0z"/></svg>
+                Review
+            </a>
+        }
+        <span class="actor-toolbar-sep"></span>
+        <button class="actor-toolbar-btn actor-toolbar-btn-danger" @onclick="OpenDeleteConfirmation">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" /><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L13.882 4H4.118zM2.5 3h11V2h-11v1z" /></svg>
+            Delete
+        </button>
+    </div>
+
+    <div class="actor-hero">
+        @if (hasImage)
+        {
+            <div class="actor-hero-avatar actor-hero-avatar-photo actor-hero-avatar-clickable" @onclick="OpenImageLightbox" title="Click to view large photo">
+                <img src="@($"/actor-image/{actor.Id}/full?v={imageVersion}")" alt="@actor.DisplayName" />
+            </div>
+        }
+        else
+        {
+            <div class="actor-hero-avatar actor-hero-avatar-clickable" @onclick="OpenPhotoUploadModal" title="Click to upload photo">@Initials(actor.DisplayName)</div>
+        }
+        <div class="actor-hero-info">
+            <h1 class="actor-hero-title">
+                @actor.DisplayName
+                <BirthdayIndicator BirthDate="actor.BirthDate" />
+                @if (actor.IsFavorite)
+                {
+                    <span class="actor-hero-favorite" title="Favorite">♥</span>
+                }
+                @if (actor.IsRetired)
+                {
+                    <span class="actor-badge actor-badge-retired" title="Retired from the industry">Retired</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKanji) || !string.IsNullOrWhiteSpace(actor.JapaneseNameKana))
+                {
+                    <span class="actor-hero-japanese">
+                        @actor.JapaneseNameKanji
+                        @if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKanji) && !string.IsNullOrWhiteSpace(actor.JapaneseNameKana))
+                        {
+                            <span class="actor-hero-japanese-sep">·</span>
+                        }
+                        @actor.JapaneseNameKana
+                    </span>
+                }
+            </h1>
+            <p class="actor-hero-meta">@allMovies.Count movie@(allMovies.Count == 1 ? "" : "s") · @imageCount image@(imageCount == 1 ? "" : "s")</p>
+            @if (actor.HasPhysicalAttributes)
+            {
+                <div class="actor-hero-attributes">
+                    @if (actor.BirthDate.HasValue)
+                    {
+                        <span class="actor-attribute-item">
+                            <span class="actor-attribute-label">Birthdate:</span>
+                            <span class="actor-attribute-value">@actor.FormattedBirthDate</span>
+                        </span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(actor.FormattedMeasurements))
+                    {
+                        <span class="actor-attribute-item">
+                            <span class="actor-attribute-label">Measurements:</span>
+                            <span class="actor-attribute-value">@actor.FormattedMeasurements</span>
+                        </span>
+                    }
+                    @if (cupSizeHistory.Count > 0)
+                    {
+                        <span class="actor-attribute-item" title="@ActorPhysicalAttributesHelper.JapaneseCupSizeExplanation">
+                            <span class="actor-attribute-label">Cup size:</span>
+                            <span class="actor-attribute-value">
+                                @if (actor.CupSizePeriods.Count == 0)
+                                {
+                                    <span class="actor-cup-step">@cupSizeHistory[0].CupSize</span>
+                                }
+                                else
+                                {
+                                    @for (var i = 0; i < cupSizeHistory.Count; i++)
+                                    {
+                                        var step = cupSizeHistory[i];
+                                        var isCurrent = i == cupSizeHistory.Count - 1;
+                                        @if (i > 0)
+                                        {
+                                            <span class="actor-cup-arrow" aria-hidden="true">→</span>
+                                        }
+                                        <span class="actor-cup-step@(isCurrent ? " actor-cup-step-current" : "")" title="@ActorPhysicalAttributesHelper.FormatCupSizeStepRange(step)">@step.CupSize</span>
+                                    }
+                                }
+                            </span>
+                            <span class="actor-cup-info-icon" title="@ActorPhysicalAttributesHelper.JapaneseCupSizeExplanation" aria-label="Japanese cup size details">
+                                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
+                                    <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                    <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+                                </svg>
+                            </span>
+                        </span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(actor.FormattedHeight))
+                    {
+                        <span class="actor-attribute-item">
+                            <span class="actor-attribute-label">Height:</span>
+                            <span class="actor-attribute-value">@actor.FormattedHeight</span>
+                        </span>
+                    }
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(actor.JellyfinPersonId) || !string.IsNullOrWhiteSpace(actor.R18DevName))
+            {
+                <div class="actor-hero-badges">
+                    @if (!string.IsNullOrWhiteSpace(jellyfinWebUrl))
+                    {
+                        <a class="actor-badge actor-badge-jellyfin" href="@jellyfinWebUrl" target="_blank" rel="noopener noreferrer" title="Open in Jellyfin">
+                            <svg width="12" height="12" viewBox="0 0 72 72" fill="none" aria-hidden="true">
+                                <path d="M24.2116 49.1581C22.6599 46.0424 32.8378 27.5879 35.9999 27.5879C39.1666 27.5895 49.3228 46.0764 47.7882 49.1581C46.2536 52.2398 25.7632 52.2738 24.2116 49.1581Z" fill="url(#actor-jellyfin-icon-gradient-a)" />
+                                <path fill-rule="evenodd" clip-rule="evenodd" d="M0.481861 64.9951C-4.19479 55.6047 26.4765 0 36 0C45.5328 0 76.153 55.713 71.5274 64.9951C66.9018 74.2773 5.15852 74.3856 0.481861 64.9951ZM12.7358 56.847C15.8005 62.9995 56.2536 62.9314 59.2843 56.847C62.3149 50.761 42.2515 14.2605 36.0093 14.2605C29.767 14.2605 9.67118 50.6944 12.7358 56.847Z" fill="url(#actor-jellyfin-icon-gradient-b)" />
+                                <defs>
+                                    <linearGradient id="actor-jellyfin-icon-gradient-a" x1="11.9999" y1="30.0006" x2="71.9989" y2="63.0024" gradientUnits="userSpaceOnUse">
+                                        <stop stop-color="#AA5CC3" />
+                                        <stop offset="1" stop-color="#00A4DC" />
+                                    </linearGradient>
+                                    <linearGradient id="actor-jellyfin-icon-gradient-b" x1="12" y1="29.9992" x2="71.999" y2="63.001" gradientUnits="userSpaceOnUse">
+                                        <stop stop-color="#AA5CC3" />
+                                        <stop offset="1" stop-color="#00A4DC" />
+                                    </linearGradient>
+                                </defs>
+                            </svg>
+                            Open in Jellyfin
+                        </a>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(actor.JellyfinPersonId))
+                    {
+                        <span class="actor-badge" title="Jellyfin Person ID">Jellyfin</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(actor.R18DevName))
+                    {
+                        <span class="actor-badge" title="r18.dev Name Override">r18: @actor.R18DevName</span>
+                    }
+                </div>
+            }
+            @if (actor.Aliases.Count > 0)
+            {
+                <div class="actor-hero-aliases">
+                    <span class="text-muted small">Aliases:</span>
+                    @foreach (var alias in actor.Aliases)
+                    {
+                        <span class="actor-alias-tag">@alias.Name</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @* Sections in the order set in Settings > UI. *@
+    @foreach (var section in sectionOrder)
+    {
+        switch (section)
+        {
+            case ActorDetailSection.Photos:
+                <ActorPhotoGallery @ref="photoGalleryRef"
+                                   ActorId="@actor.Id"
+                                   ActorName="@actor.DisplayName"
+                                   OnPortraitEditorRequested="OpenGalleryPortraitEditor" />
+                break;
+            case ActorDetailSection.Movies:
+                <section class="actor-detail-movies card mb-4">
+                    <div class="card-body">
+                        <div class="actor-detail-movies-header">
+                            <h2 class="card-title">Movies <span class="actor-detail-movies-count">(@allMovies.Count)</span></h2>
+                        </div>
+                        @if (allMovies.Count == 0)
+                        {
+                            <p class="text-muted mb-0">No movies in your library are matched to this actor yet.</p>
+                        }
+                        else
+                        {
+                            <MovieFilterToolbar TotalCount="@StatusCounts.Total"
+                                                MissingCount="@StatusCounts.Missing"
+                                                GotCount="@StatusCounts.Got"
+                                                StatusFilter="@filter"
+                                                OnStatusFilterChanged="SetFilter"
+                                                LibraryNames="@libraryNames"
+                                                LibraryFilter="@libraryFilter"
+                                                OnLibraryFilterChanged="OnLibraryFilterChanged"
+                                                TextFilter="@textFilter"
+                                                OnTextFilterChanged="OnTextFilterChanged"
+                                                ResolutionFilter="@resolutionFilter"
+                                                OnToggleResolution="ToggleResolutionFilter"
+                                                ScanTypeFilter="@scanTypeFilter"
+                                                OnToggleScanType="ToggleScanTypeFilter"
+                                                NfoDriftFilter="@nfoDriftFilter"
+                                                OnToggleNfoDrift="ToggleNfoDriftFilter"
+                                                AvailableCodecs="@availableCodecs"
+                                                CodecFilter="@codecFilter"
+                                                OnToggleCodec="ToggleCodecFilter"
+                                                AvailableStudios="@availableStudios"
+                                                StudioFilter="@studioFilter"
+                                                OnToggleStudio="ToggleStudioFilter"
+                                                OnSelectAllStudios="SelectAllStudios"
+                                                OnSelectNoneStudios="SelectNoneStudios"
+                                                AvailableGenres="@availableGenres"
+                                                GenreFilter="@genreFilter"
+                                                OnToggleGenre="ToggleGenreFilter"
+                                                OnSelectAllGenres="SelectAllGenres"
+                                                OnSelectNoneGenres="SelectNoneGenres"
+                                                FeatureFilter="@featureFilter"
+                                                OnToggleFeature="ToggleFeatureFilter"
+                                                SortField="@sortField"
+                                                SortDescending="@sortDescending"
+                                                OnSortChanged="SetSort"
+                                                HasActiveFilters="@HasActiveFilters"
+                                                OnResetFilters="ResetFilters" />
+
+                            @if (!DisplayedMovies.Any())
+                            {
+                                <p class="text-muted mb-0">No movies match the active filters. <button type="button" class="btn btn-link p-0 align-baseline" @onclick="ResetFilters">Reset filters</button></p>
+                            }
+                            else
+                            {
+                                <div @ref="moviesGridRef">
+                                    <MoviePosterGrid Movies="DisplayedMovies"
+                                                     Options="posterOptions"
+                                                     DownloadingCodes="downloadingCodes"
+                                                     HrefQuery="@($"?actor={Uri.EscapeDataString(RouteName)}")"
+                                                     Loading="PosterImageLoading.JsLazy"
+                                                     EagerImageCount="EagerImageCount"
+                                                     OnToggleFavorite="ToggleMovieFavorite" />
+                                </div>
+                            }
+                        }
+                    </div>
+                </section>
+                break;
+            case ActorDetailSection.Scenes:
+                <ActorClipsSection ActorId="@actor.Id" Kind="PlayerClipKind.Scene" />
+                break;
+            case ActorDetailSection.Highlights:
+                <ActorClipsSection ActorId="@actor.Id" Kind="PlayerClipKind.Highlight" />
+                break;
+            case ActorDetailSection.Apexes:
+                <ActorClipsSection ActorId="@actor.Id" Kind="PlayerClipKind.Apex" />
+                break;
+        }
+    }
+
+    <ImageLightboxModal Show="@showLightbox"
+                        Title="@(actor?.DisplayName ?? "")"
+                        ImageUrl="@($"/actor-image/{actor?.Id ?? 0}/full?v={imageVersion}")"
+                        AlternateImageUrl="@((portraitInfo.HasCroppedImage && portraitInfo.HasSourceImage) ? $"/actor-image/{actor?.Id ?? 0}/source?v={imageVersion}" : null)"
+                        OnClose="CloseImageLightbox" />
+
+    <ActorImageUploadModal Show="@showUploadModal"
+                           ActorId="@(actor?.Id ?? 0)"
+                           ActorName="@(actor?.DisplayName ?? "")"
+                           InitialImage="@galleryPortrait"
+                           OnClose="ClosePhotoUploadModal"
+                           OnPhotoChanged="OnPhotoChanged" />
+
+    <ActorMergeModal Show="@showMergeModal"
+                     SourceActor="@actor"
+                     SourceHasImage="@hasImage"
+                     OnClose="() => showMergeModal = false"
+                     OnMerged="OnActorMerged" />
+
+    <ActorNfoSyncModal Show="@showNfoSyncModal"
+                       Actor="@actor"
+                       OnClose="() => showNfoSyncModal = false" />
+
+    <ActorMetadataSearchModal Show="@showSearchModal"
+                              Actor="@actor"
+                              ActorHasImage="@hasImage"
+                              InitialSelectedPath="@warashiInitialPath"
+                              OnClose="() => { showSearchModal = false; warashiInitialPath = null; }"
+                              OnEnriched="OnActorEnriched" />
+
+    <MinnanoAvMetadataSearchModal Show="@showMinnanoAvSearchModal"
+                                  Actor="@actor"
+                                  InitialSelectedPath="@minnanoAvInitialPath"
+                                  OnClose="() => { showMinnanoAvSearchModal = false; minnanoAvInitialPath = null; }"
+                                  OnEnriched="OnActorEnriched" />
+
+    <CombinedActorSearchModal Show="@showCombinedSearchModal"
+                              Actor="@actor"
+                              OnClose="() => showCombinedSearchModal = false"
+                              OnPickWarashi="OnCombinedPickWarashi"
+                              OnPickMinnanoAv="OnCombinedPickMinnanoAv" />
+
+    @if (showDeleteConfirmation)
+    {
+        <div class="actor-delete-modal-backdrop" tabindex="-1" role="presentation" @onclick="CloseDeleteConfirmation" @onkeydown="HandleDeleteConfirmationKeyDown">
+            <div class="actor-delete-modal-panel" role="dialog" aria-modal="true" aria-labelledby="actor-delete-modal-title" @onclick:stopPropagation="true">
+                <h2 id="actor-delete-modal-title">Delete @actor!.DisplayName?</h2>
+                <p>This will unlink the actor from linked movies, delete custom aliases, and remove cached portraits.</p>
+                <div class="actor-delete-modal-actions">
+                    <button class="btn btn-outline-secondary" @onclick="CloseDeleteConfirmation" disabled="@deleting" autofocus>Cancel</button>
+                    <button class="btn btn-danger" @onclick="DeleteActor" disabled="@deleting">
+                        @(deleting ? "Deleting…" : "Delete Actor")
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public string RouteName { get; set; } = "";
+
+    private Actor? actor;
+    private IReadOnlyList<CupSizeStep> cupSizeHistory = [];
+    private bool loaded;
+    private bool hasImage;
+    private List<Movie> allMovies = new();
+    private MovieStatus? filter;
+    private string? libraryFilter;
+    private HashSet<MovieResolutionFilterOption> resolutionFilter = new();
+    private HashSet<MovieScanTypeFilterOption> scanTypeFilter = new();
+    private HashSet<NfoDriftKind> nfoDriftFilter = new();
+    private HashSet<string> codecFilter = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> studioFilter = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> genreFilter = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<MovieFeatureFilterOption> featureFilter = new();
+    private string textFilter = "";
+    private string sortField = "release";
+    private bool sortDescending = true;
+    private int randomSortSeed = Random.Shared.Next(1, int.MaxValue);
+    private List<string> libraryNames = new();
+    private List<string> availableCodecs = new();
+    private List<string> availableStudios = new();
+    private List<string> availableGenres = new();
+    private int imageCount;
+    private bool r18DevEnabled;
+    private string? loadedRouteName;
+    private bool showUploadModal;
+    private bool showLightbox;
+    private bool showMergeModal;
+    private bool showNfoSyncModal;
+    private bool showSearchModal;
+    private bool showMinnanoAvSearchModal;
+    private bool showCombinedSearchModal;
+    private bool showSearchDropdown;
+    private string? warashiInitialPath;
+    private string? minnanoAvInitialPath;
+    private bool showDeleteConfirmation;
+    private bool deleting;
+    private bool refreshing;
+    private ActorImageUploadModal.InitialImageSource? galleryPortrait;
+    private long imageVersion;
+    private ActorPortraitInfo portraitInfo = new(false, false, false);
+    private string? jellyfinWebUrl;
+    private ElementReference moviesGridRef;
+    private MoviePosterOptions posterOptions = MoviePosterOptions.Default;
+    private IReadOnlySet<string> downloadingCodes = new HashSet<string>();
+    private IJSObjectReference? jsModule;
+    private string? scrollTrackedRouteName;
+    private ActorPhotoGallery? photoGalleryRef;
+    private IReadOnlyList<ActorDetailSection> sectionOrder = ActorDetailSectionOrder.Default;
+
+    private const long RandomSortModulus = int.MaxValue;
+
+    // Rendered as PosterImageLoading.Eager (real src, present from the very first server render)
+    // instead of JsLazy — otherwise even the always-visible first screenful would show blank
+    // placeholders until the interactive circuit connects and the IntersectionObserver JS module
+    // has a chance to run, a regression from how these looked before JsLazy was introduced.
+    // Matches Movies.razor's own EagerImageCount precedent for the same reasoning.
+    private const int EagerImageCount = 30;
+
+
+    // OnParametersSetAsync, not OnInitializedAsync: Blazor reuses the same component instance
+    // when navigating directly between two "/actors/{RouteName}" URLs — OnInitializedAsync only
+    // runs once per instance and would leave the previous actor's data on screen.
+    // The request's cookie gives the prerender the right section order; OnAfterRenderAsync rechecks the
+    // browser's. Resolved optionally, like Movies.razor: bUnit doesn't register IHttpContextAccessor.
+    // The poster options are the Movies page's, so both grids show the same cards.
+    protected override void OnInitialized()
+    {
+        var httpContextAccessor = ServiceProvider.GetService<IHttpContextAccessor>();
+        sectionOrder = ActorDetailSectionOrder.Load(httpContextAccessor);
+        posterOptions = MoviePosterOptions.Load(httpContextAccessor);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedRouteName == RouteName) return;
+        loadedRouteName = RouteName;
+        ResetFilters();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        actor = await ActorService.GetByRouteNameAsync(RouteName);
+        cupSizeHistory = actor is null ? [] : ActorPhysicalAttributesHelper.CupSizeHistory(actor.CupSize, actor.CupSizePeriods);
+        loaded = true;
+
+        // Reset per-actor state so a stale previous actor's movies/flags can never leak through
+        // while this instance is reused across a route-parameter change.
+        allMovies = new();
+        imageCount = 0;
+        hasImage = false;
+        portraitInfo = new(false, false, false);
+        r18DevEnabled = false;
+        jellyfinWebUrl = null;
+        availableCodecs.Clear();
+        availableStudios.Clear();
+        availableGenres.Clear();
+        libraryNames.Clear();
+
+        if (actor is not null)
+        {
+            var info = await ActorService.GetPortraitInfoAsync(actor.Id);
+            portraitInfo = info ?? new(false, false, false);
+            hasImage = portraitInfo.HasImage;
+            imageVersion = portraitInfo.ImageVersion;
+
+            allMovies = await ActorDetailQuery.GetMoviesAsync(actor.Id);
+            downloadingCodes = await ActorDetailQuery.GetDownloadingCodesAsync();
+
+            PopulateAvailableOptions();
+
+            imageCount = await ActorDetailQuery.GetPhotoCountAsync(actor.Id);
+            r18DevEnabled = (await R18DevSettingsService.GetAsync()).Enabled;
+
+            jellyfinWebUrl = !string.IsNullOrWhiteSpace(actor.JellyfinPersonId)
+                ? await JellyfinClient.GetWebUrlAsync(actor.JellyfinPersonId)
+                : null;
+        }
+    }
+
+    private void PopulateAvailableOptions()
+    {
+        availableCodecs = allMovies
+            .Where(m => !string.IsNullOrWhiteSpace(m.MediaVideoCodec))
+            .Select(m => m.MediaVideoCodec!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c)
+            .ToList();
+
+        availableStudios = allMovies
+            .Where(m => !string.IsNullOrWhiteSpace(m.MetaStudio))
+            .Select(m => m.MetaStudio!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s)
+            .ToList();
+
+        // Sourced from the canonical Tags/MovieTags relation (allMovies is loaded with it
+        // included), not MetaGenres's comma-joined cache string — a Tag name containing its own
+        // comma (e.g. "Nasty, hardcore") can't be told apart from two separate genres once
+        // it's been joined into that string. Built like the Movies page's, so a subtag
+        // also offers its parent for rollup filtering.
+        availableGenres = MovieFilterPredicates.BuildGenreOptions(allMovies
+            .SelectMany(m => m.MovieTags.Select(mt => (mt.Tag.Name, mt.Tag.ParentTag?.Name))));
+
+        libraryNames = allMovies
+            .Where(m => !string.IsNullOrWhiteSpace(m.JellyfinLibraryName))
+            .Select(m => m.JellyfinLibraryName!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(l => l)
+            .ToList();
+    }
+
+    private IEnumerable<Movie> FilteredMoviesWithoutStatus
+    {
+        get
+        {
+            var query = (IEnumerable<Movie>)allMovies;
+
+            if (!string.IsNullOrEmpty(libraryFilter))
+            {
+                query = query.Where(m => m.JellyfinLibraryName == libraryFilter);
+            }
+
+            query = MovieFilterPredicates.WhereResolutions(query.AsQueryable(), resolutionFilter);
+            query = MovieFilterPredicates.WhereScanTypes(query.AsQueryable(), scanTypeFilter);
+            query = MovieFilterPredicates.WhereCodecs(query.AsQueryable(), codecFilter);
+            query = MovieFilterPredicates.WhereStudios(query.AsQueryable(), studioFilter);
+
+            // Same predicates as the Movies page, evaluated in memory over the
+            // loaded movies (MovieTags → Tag → ParentTag and Scenes are included above).
+            query = MovieFilterPredicates.WhereGenres(query.AsQueryable(), genreFilter);
+            query = MovieFilterPredicates.WhereFeatures(query.AsQueryable(), featureFilter);
+
+            query = MovieFilterPredicates.WhereNfoDriftKinds(query.AsQueryable(), nfoDriftFilter);
+
+            if (!string.IsNullOrWhiteSpace(textFilter))
+            {
+                var term = textFilter.Trim();
+                query = query.Where(m =>
+                    (m.Code != null && m.Code.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                    (m.MetaTitle != null && m.MetaTitle.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                    (m.Title != null && m.Title.Contains(term, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            return query;
+        }
+    }
+
+    private (int Total, int Missing, int Got) StatusCounts
+    {
+        get
+        {
+            var list = FilteredMoviesWithoutStatus.ToList();
+            return (list.Count, list.Count(m => m.Status == MovieStatus.Missing), list.Count(m => m.Status == MovieStatus.Got));
+        }
+    }
+
+    private IEnumerable<Movie> DisplayedMovies
+    {
+        get
+        {
+            var query = FilteredMoviesWithoutStatus;
+
+            if (filter is not null)
+            {
+                query = query.Where(m => m.Status == filter);
+            }
+
+            return sortField switch
+            {
+                "title" => sortDescending
+                    ? query.OrderByDescending(m => m.Code)
+                    : query.OrderBy(m => m.Code),
+                "size" => sortDescending
+                    ? query.OrderBy(m => m.LocalFileSizeBytes == null).ThenByDescending(m => m.LocalFileSizeBytes)
+                    : query.OrderBy(m => m.LocalFileSizeBytes == null).ThenBy(m => m.LocalFileSizeBytes),
+                "status" => sortDescending
+                    ? query.OrderBy(m => m.Status == MovieStatus.Missing)
+                    : query.OrderByDescending(m => m.Status == MovieStatus.Missing),
+                "release" => sortDescending
+                    ? query.OrderBy(m => m.MetaReleaseDate == null).ThenByDescending(m => m.MetaReleaseDate)
+                    : query.OrderBy(m => m.MetaReleaseDate == null).ThenBy(m => m.MetaReleaseDate),
+                "runtime" => sortDescending
+                    ? query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenByDescending(m => m.MetaRuntimeMinutes)
+                    : query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenBy(m => m.MetaRuntimeMinutes),
+                "random" => query.OrderBy(m => (long)m.Id * randomSortSeed % RandomSortModulus),
+                _ => sortDescending
+                    ? query.OrderByDescending(m => m.FileAddedAt ?? m.CreatedAt)
+                    : query.OrderBy(m => m.FileAddedAt ?? m.CreatedAt),
+            };
+        }
+    }
+
+    private int ActiveFilterCount => resolutionFilter.Count + scanTypeFilter.Count + nfoDriftFilter.Count + codecFilter.Count + studioFilter.Count + genreFilter.Count + featureFilter.Count;
+
+    private bool HasActiveFilters =>
+        filter is not null
+        || !string.IsNullOrEmpty(libraryFilter)
+        || !string.IsNullOrWhiteSpace(textFilter)
+        || ActiveFilterCount > 0;
+
+    private void ResetFilters()
+    {
+        filter = null;
+        libraryFilter = null;
+        textFilter = string.Empty;
+        resolutionFilter.Clear();
+        scanTypeFilter.Clear();
+        nfoDriftFilter.Clear();
+        codecFilter.Clear();
+        studioFilter.Clear();
+        genreFilter.Clear();
+        featureFilter.Clear();
+    }
+
+    private void SetFilter(MovieStatus? status) => filter = status;
+
+    private void OnLibraryFilterChanged(string? value) => libraryFilter = value;
+
+    private void OnTextFilterChanged(string value) => textFilter = value;
+
+    private void ToggleResolutionFilter(MovieResolutionFilterOption bucket)
+    {
+        resolutionFilter.Toggle(bucket);
+    }
+
+    private void ToggleNfoDriftFilter(NfoDriftKind kind)
+    {
+        nfoDriftFilter.Toggle(kind);
+    }
+
+    private void ToggleScanTypeFilter(MovieScanTypeFilterOption scanType)
+    {
+        scanTypeFilter.Toggle(scanType);
+    }
+
+    private void ToggleCodecFilter(string codec)
+    {
+        codecFilter.Toggle(codec);
+    }
+
+    private void ToggleStudioFilter(string studio)
+    {
+        studioFilter.Toggle(studio);
+    }
+
+    private void SelectAllStudios(IReadOnlyList<string> studios) => studioFilter.UnionWith(studios);
+
+    private void SelectNoneStudios() => studioFilter.Clear();
+
+    private void ToggleGenreFilter(string genre)
+    {
+        genreFilter.Toggle(genre);
+    }
+
+    private void SelectAllGenres(IReadOnlyList<string> genres) => genreFilter.UnionWith(genres);
+
+    private void SelectNoneGenres() => genreFilter.Clear();
+
+    private void ToggleFeatureFilter(MovieFeatureFilterOption feature)
+    {
+        featureFilter.Toggle(feature);
+    }
+
+    private void SetSort(MovieSortChange change)
+    {
+        sortField = change.Field;
+        sortDescending = change.Descending;
+        if (change.RandomSortSeed.HasValue) randomSortSeed = change.RandomSortSeed.Value;
+    }
+
+    private async Task RefreshMetadata()
+    {
+        if (actor is null) return;
+        refreshing = true;
+
+        try
+        {
+            var result = await ActorService.RefreshMetadataAsync(actor.Id);
+            if (result.Success)
+            {
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            refreshing = false;
+        }
+    }
+
+    private async Task OnPhotoChanged()
+    {
+        await LoadAsync();
+    }
+
+    private void OpenGalleryPortraitEditor(byte[] imageBytes)
+    {
+        galleryPortrait = new(imageBytes);
+        showUploadModal = true;
+    }
+
+    private void OpenImageLightbox() => showLightbox = true;
+
+    private void CloseImageLightbox() => showLightbox = false;
+
+    private void OpenPhotoUploadModal()
+    {
+        galleryPortrait = null;
+        showUploadModal = true;
+    }
+
+    private void ClosePhotoUploadModal()
+    {
+        showUploadModal = false;
+        galleryPortrait = null;
+    }
+
+    private async Task ToggleFavorite()
+    {
+        if (actor is null) return;
+        var newStatus = await ActorService.ToggleFavoriteAsync(actor.Id);
+        actor.IsFavorite = newStatus;
+        actor.FavoritedAt = newStatus ? DateTime.UtcNow : null;
+    }
+
+    // Flips the heart from the returned value, like the Movies grid.
+    private async Task ToggleMovieFavorite(Movie movie)
+    {
+        movie.IsFavorite = await MovieService.ToggleFavoriteAsync(movie.Id);
+    }
+
+    private void OpenDeleteConfirmation() => showDeleteConfirmation = true;
+
+    private void CloseDeleteConfirmation()
+    {
+        if (!deleting)
+        {
+            showDeleteConfirmation = false;
+        }
+    }
+
+    private void HandleDeleteConfirmationKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CloseDeleteConfirmation();
+        }
+    }
+
+    private async Task DeleteActor()
+    {
+        if (actor is null) return;
+        deleting = true;
+
+        try
+        {
+            await ActorService.DeleteAsync(actor.Id);
+            Nav.NavigateTo("/actors");
+        }
+        finally
+        {
+            deleting = false;
+        }
+    }
+
+    private void OnActorMerged(Actor target)
+    {
+        showMergeModal = false;
+        Nav.NavigateTo($"/actors/{Uri.EscapeDataString(target.DisplayName)}");
+    }
+
+    private async Task OnActorEnriched()
+    {
+        await LoadAsync();
+
+        // actor.Id doesn't change on enrichment, so ActorPhotoGallery's own ActorId-change
+        // guard never fires — reload it explicitly or any WAPdB/minnano-av imported photos
+        // stay stale until a manual page refresh recreates the component.
+        if (photoGalleryRef is not null)
+        {
+            await photoGalleryRef.RefreshAsync();
+        }
+    }
+
+    private void ToggleSearchDropdown() => showSearchDropdown = !showSearchDropdown;
+
+    private async Task OnSearchDropdownFocusOut()
+    {
+        // Give a click on a dropdown item time to register before the blur closes the menu.
+        await Task.Delay(150);
+        showSearchDropdown = false;
+    }
+
+    private void OpenCombinedSearchModal()
+    {
+        showSearchDropdown = false;
+        showCombinedSearchModal = true;
+    }
+
+    private void OpenWarashiSearch()
+    {
+        showSearchDropdown = false;
+        warashiInitialPath = null;
+        showSearchModal = true;
+    }
+
+    private void OpenMinnanoAvSearch()
+    {
+        showSearchDropdown = false;
+        minnanoAvInitialPath = null;
+        showMinnanoAvSearchModal = true;
+    }
+
+    private void OnCombinedPickWarashi(string path)
+    {
+        warashiInitialPath = path;
+        showCombinedSearchModal = false;
+        showSearchModal = true;
+    }
+
+    private void OnCombinedPickMinnanoAv(string path)
+    {
+        minnanoAvInitialPath = path;
+        showCombinedSearchModal = false;
+        showMinnanoAvSearchModal = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // A live circuit's HttpContext can hold a stale cookie: an order just changed in
+        // Settings > UI, or poster options just changed on the Movies page, only reach this page
+        // through the browser's own copy.
+        if (firstRender)
+        {
+            try
+            {
+                var order = ActorDetailSectionOrder.Parse(await JS.InvokeAsync<string?>("lsActorDetailSections.get"));
+                var options = MoviePosterOptions.Parse(await JS.InvokeAsync<string?>("lsPosterOptions.get"));
+                if (!order.SequenceEqual(sectionOrder) || options != posterOptions)
+                {
+                    sectionOrder = order;
+                    posterOptions = options;
+                    StateHasChanged();
+                    return;
+                }
+            }
+            catch (JSDisconnectedException)
+            {
+                return;
+            }
+            catch (JSException)
+            {
+            }
+        }
+
+        // moviesGridRef is only bound by the renderer when the movies grid <div> actually renders
+        // (allMovies.Count > 0 && DisplayedMovies.Any()) — otherwise it's still default(ElementReference).
+        // Passing that to JS interop resolves to a bogus, non-element object, so both calls below must
+        // stay behind this same condition rather than risk "container.querySelectorAll is not a
+        // function" crashing the circuit (only JSDisconnectedException was being caught on the
+        // "observe" path, so any other JS-side error there was previously fatal).
+        if (allMovies.Count == 0 || !DisplayedMovies.Any())
+        {
+            return;
+        }
+
+        if (jsModule is null)
+        {
+            try
+            {
+                jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/ActorDetail.razor.js");
+                await jsModule.InvokeVoidAsync("init", moviesGridRef);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (Exception)
+            {
+                // In test or non-browser environments, JS module import may not resolve
+            }
+        }
+        else
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("observe", moviesGridRef);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        // Once per loaded actor (this instance is reused across "/actors/{RouteName}" changes), and
+        // only once the filmography has rendered, so the restored position has a page to land on.
+        if (jsModule is not null && scrollTrackedRouteName != loadedRouteName)
+        {
+            scrollTrackedRouteName = loadedRouteName;
+            try
+            {
+                await jsModule.InvokeVoidAsync("trackScroll", ScrollStorageKey(loadedRouteName));
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    internal static string ScrollStorageKey(string? routeName) => $"javbuddy-actor-detail-scroll-{routeName}";
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("dispose");
+                await jsModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+
+    private static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant()
+        };
+    }
+}

@@ -1,0 +1,251 @@
+@page "/activity/history"
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Movies
+@implements IDisposable
+@inject ITorrentHistoryService HistoryService
+@inject TorrentChangeNotifier ChangeNotifier
+@inject IDeletedMovieService DeletedMovies
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>History · Javbuddy</PageTitle>
+
+<h1 class="activity-title">History</h1>
+
+<div class="mb-3">
+    <StatusFilterButtonGroup Options="@ViewOptions" />
+</div>
+
+@if (ShowDeleted)
+{
+    @if (error is not null)
+    {
+        <div class="alert alert-danger" role="alert">@error</div>
+    }
+    <p class="text-muted">Deleted movies show as <strong>Previously Deleted</strong> in r18.dev searches and actor missing filmographies. Adding one to your library again, or a library rescan finding its folder, clears its record. Purging a record lets the movie show as missing again.</p>
+    @if (deleted is null)
+    {
+        <LoadingIndicator />
+    }
+    else if (deleted.TotalCount == 0)
+    {
+        <p class="text-muted">No deleted movies recorded.</p>
+    }
+    else
+    {
+        <div class="activity-deleted-actions">
+            <button type="button" class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => RequestPurge(null)">Purge all history</button>
+        </div>
+        <div class="activity-table">
+            <div class="activity-row activity-header activity-row-deleted">
+                <span>Movie</span>
+                <span>Title</span>
+                <span>Previous status</span>
+                <span>Deleted</span>
+                <span></span>
+            </div>
+            @foreach (var movie in deleted.Movies)
+            {
+                <div class="activity-row activity-row-deleted" @key="movie.Id">
+                    <a class="activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(movie.Code)}")">@movie.Code</a>
+                    <span class="text-break">@(movie.MetaTitle ?? movie.Title ?? "—")</span>
+                    <span>@movie.PreviousStatus</span>
+                    <span>@movie.DeletedAt.ToLocalTime().ToString("MMM d yyyy, HH:mm")</span>
+                    <span>
+                        <button type="button" class="btn btn-outline-danger btn-sm" aria-label="Purge history for @movie.Code" disabled="@busy" @onclick="() => RequestPurge(movie)">Purge</button>
+                    </span>
+                </div>
+            }
+        </div>
+        @Pager(CurrentPage, DeletedTotalPages, deleted.TotalCount, "Deleted movie pages")
+    }
+
+    @if (confirmPurge)
+    {
+        <DeleteConfirmDialog ItemName="@(pendingMovie?.Code is { } code ? $"history for {code}" : "all deleted movie history")"
+                             Message="This removes the deletion record only. It does not restore the movie or change any files."
+                             Busy="busy" OnConfirm="PurgeAsync" OnCancel="CancelPurge" />
+    }
+}
+else if (history is null)
+{
+    <LoadingIndicator />
+}
+else if (history.TotalCount == 0)
+{
+    <p class="text-muted">No history yet.</p>
+}
+else
+{
+    <div class="activity-table">
+        <div class="activity-row activity-header activity-row-history">
+            <span>Movie</span>
+            <span>Release</span>
+            <span>Indexer</span>
+            <span>Size</span>
+            <span>Status</span>
+            <span>Grabbed</span>
+            <span>Ended</span>
+            <span></span>
+        </div>
+        @foreach (var row in history.Rows)
+        {
+            <div class="activity-row activity-row-history">
+                <a class="activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(row.MovieCode)}")">@row.MovieCode</a>
+                <span class="text-break">@row.ReleaseTitle</span>
+                <span>@row.Indexer</span>
+                <span>@(row.Size is long size ? ByteSizeFormatter.Format(size) : "—")</span>
+                <span><span class="activity-badge activity-badge-@(row.Status.ToString().ToLowerInvariant())">@row.Status</span></span>
+                <span>@row.GrabbedAt.ToLocalTime().ToString("MMM d yyyy, HH:mm")</span>
+                <span>@(EndedAt(row) is { } ended ? ended.ToLocalTime().ToString("MMM d yyyy, HH:mm") : "—")</span>
+                <span>
+                    @if (row.Status is TorrentDownloadStatus.Completed or TorrentDownloadStatus.Seeding)
+                    {
+                        @if (row.SortedAt is { } sortedAt)
+                        {
+                            <a class="activity-badge activity-badge-completed activity-sorted-badge" href="@($"/activity/sort/{row.Id}")" title="@($"Sorted {sortedAt.ToLocalTime():MMM d yyyy, HH:mm}")">Sorted</a>
+                        }
+                        else
+                        {
+                            <a class="activity-sort-link" href="@($"/activity/sort/{row.Id}")" title="Sort">
+                                <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M0 3.5A.5.5 0 0 1 .5 3H15a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5zM0 8a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 0 8zm0 4.5a.5.5 0 0 1 .5-.5H10a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5z" /></svg>
+                            </a>
+                        }
+                    }
+                </span>
+            </div>
+        }
+    </div>
+
+    @Pager(history.Page, history.TotalPages, history.TotalCount, "History pages")
+}
+
+@code {
+    private const int PageSize = 50;
+    private const string DeletedView = "deleted";
+
+    private TorrentHistoryPage? history;
+    private DeletedMoviePage? deleted;
+    private bool busy;
+    private bool confirmPurge;
+    private DeletedMovie? pendingMovie;
+    private string? error;
+
+    [SupplyParameterFromQuery(Name = "page")]
+    public int? Page { get; set; }
+
+    /// <summary>"deleted" shows the deleted-movie history; anything else the downloads.</summary>
+    [SupplyParameterFromQuery(Name = "view")]
+    public string? View { get; set; }
+
+    private bool ShowDeleted => string.Equals(View, DeletedView, StringComparison.OrdinalIgnoreCase);
+    private int CurrentPage => Math.Max(1, Page ?? 1);
+    private int DeletedTotalPages => Math.Max(1, ((deleted?.TotalCount ?? 0) + DeletedMovieService.PageSize - 1) / DeletedMovieService.PageSize);
+
+    private IReadOnlyList<FilterButtonOption> ViewOptions =>
+    [
+        new("Downloads", !ShowDeleted, EventCallback.Factory.Create(this, () => Nav.NavigateTo(PageHref(1, deletedView: false)))),
+        new("Deleted movies", ShowDeleted, EventCallback.Factory.Create(this, () => Nav.NavigateTo(PageHref(1, deletedView: true)))),
+    ];
+
+    protected override void OnInitialized() => ChangeNotifier.Changed += OnChangedElsewhere;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (!ShowDeleted)
+        {
+            history = await HistoryService.GetPageAsync(CurrentPage, PageSize);
+            return;
+        }
+
+        deleted = await DeletedMovies.GetPageAsync(CurrentPage - 1);
+        // Past the end — e.g. the last row of the last page was just purged: step back to the
+        // last page that still has rows.
+        if (deleted.Movies.Count == 0 && deleted.TotalCount > 0)
+        {
+            Nav.NavigateTo(PageHref(DeletedTotalPages), replace: true);
+        }
+    }
+
+    private string PageHref(int page) => PageHref(page, ShowDeleted);
+
+    private static string PageHref(int page, bool deletedView)
+    {
+        var query = new List<string>();
+        if (deletedView) query.Add($"view={DeletedView}");
+        if (page > 1) query.Add($"page={page}");
+        return query.Count == 0 ? "/activity/history" : $"/activity/history?{string.Join('&', query)}";
+    }
+
+    private RenderFragment Pager(int pageNumber, int totalPages, int totalCount, string label) => @<text>
+        @if (totalPages > 1)
+        {
+            <nav class="activity-pager" aria-label="@label">
+                @if (pageNumber > 1)
+                {
+                    <a class="activity-pager-link" href="@PageHref(pageNumber - 1)" rel="prev">‹ Newer</a>
+                }
+                else
+                {
+                    <span class="activity-pager-link activity-pager-disabled">‹ Newer</span>
+                }
+                <span class="activity-pager-status">Page @pageNumber of @totalPages · @totalCount entries</span>
+                @if (pageNumber < totalPages)
+                {
+                    <a class="activity-pager-link" href="@PageHref(pageNumber + 1)" rel="next">Older ›</a>
+                }
+                else
+                {
+                    <span class="activity-pager-link activity-pager-disabled">Older ›</span>
+                }
+            </nav>
+        }
+    </text>;
+
+    private void RequestPurge(DeletedMovie? movie)
+    {
+        pendingMovie = movie;
+        confirmPurge = true;
+    }
+
+    private void CancelPurge()
+    {
+        confirmPurge = false;
+        pendingMovie = null;
+    }
+
+    private async Task PurgeAsync()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            await DeletedMovies.PurgeAsync(pendingMovie?.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = $"Couldn't purge deletion history: {ex.Message}";
+        }
+        finally
+        {
+            confirmPurge = false;
+            pendingMovie = null;
+            busy = false;
+        }
+    }
+
+    private void OnChangedElsewhere() => _ = InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    private static DateTime? EndedAt(TorrentDownload row) => row.CompletedAt ?? row.SortedAt ?? row.RemovedFromClientAt;
+
+    public void Dispose() => ChangeNotifier.Changed -= OnChangedElsewhere;
+}

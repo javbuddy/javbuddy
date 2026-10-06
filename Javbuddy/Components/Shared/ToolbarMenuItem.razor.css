@@ -1,0 +1,23 @@
+.toolbar-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: #cfd3de;
+    font-size: 0.85rem;
+    padding: 0.45rem 0.85rem;
+    white-space: nowrap;
+}
+
+    .toolbar-menu-item:hover:not(:disabled) {
+        background-color: #3d4354;
+        color: #ffffff;
+    }
+
+    .toolbar-menu-item:disabled {
+        opacity: 0.45;
+        cursor: default;
+    }

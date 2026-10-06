@@ -1,0 +1,83 @@
+.stats-title {
+    font-size: 1.6rem;
+    font-weight: 400;
+    margin: 2rem 0 1rem;
+}
+
+.stats-title:first-child {
+    margin-top: 0.5rem;
+}
+
+.stats-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+    gap: 0.75rem;
+    max-width: 1100px;
+}
+
+.stats-tile {
+    display: flex;
+    flex-direction: column;
+    padding: 0.8rem 1rem;
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    border-radius: 4px;
+}
+
+.stats-tile-value {
+    font-size: 1.6rem;
+    line-height: 1.2;
+}
+
+.stats-tile-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+    gap: 1rem;
+    max-width: 1100px;
+}
+
+.stats-card {
+    padding: 0.8rem 1rem;
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    border-radius: 4px;
+}
+
+.stats-card h3 {
+    font-size: 1rem;
+    margin: 0 0 0.6rem;
+}
+
+.stats-stack {
+    display: flex;
+    height: 1.1rem;
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(127, 127, 127, 0.18);
+}
+
+.stats-stack-got {
+    background: #2fa84f;
+}
+
+.stats-stack-missing {
+    background: #2f8fd6;
+}
+
+.stats-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.stats-swatch {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 2px;
+}

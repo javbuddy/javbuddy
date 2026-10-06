@@ -1,0 +1,41 @@
+/* Colors come from custom properties so a host can restyle the search for its own background;
+   the fallbacks are Movie Detail's dark look. */
+.tag-search {
+    position: relative;
+    margin-top: 0.7rem;
+    max-width: 320px;
+}
+
+.tag-search-input {
+    width: 100%;
+    background-color: var(--tag-search-input-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--tag-search-input-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    color: var(--tag-search-fg, #e6e8ec);
+    font-size: 0.85rem;
+    padding: 0.35rem 0.6rem;
+}
+
+.tag-search-results {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    background-color: var(--tag-search-results-bg, #1a1c23);
+    border: 1px solid var(--tag-search-results-border, #3d4354);
+    border-radius: 4px;
+    color: var(--tag-search-fg, #e6e8ec);
+    z-index: 5;
+}
+
+.tag-search-candidate {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+    .tag-search-candidate:hover {
+        background-color: var(--tag-search-hover-bg, #252a36);
+    }

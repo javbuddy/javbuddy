@@ -1,0 +1,13 @@
+services:
+  javbuddy:
+    image: ghcr.io/javbuddy/javbuddy:latest
+    ports:
+      - "8080:8080"
+    environment:
+      LocalLibrary__RootPaths__0: /media
+    volumes:
+      - ./data:/data        # SQLite database + key ring — needs reliable file locking (not NFS)
+      - ./cache:/cache      # Regenerable image cache — fast disk, safe to lose
+      - ./objects:/objects  # Actor photos and trickplay — bulk storage, NFS is fine
+      - /path/to/your/library:/media
+    restart: unless-stopped

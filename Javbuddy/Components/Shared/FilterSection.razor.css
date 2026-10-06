@@ -1,0 +1,34 @@
+/* Copied from MultiSelectFilterGroup.razor.css: scoped CSS isn't shared between components. */
+.sort-dropdown-arrow {
+    font-size: 0.65rem;
+    margin-left: 0.35rem;
+}
+
+.sort-dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 0.5rem 1rem;
+    color: #e7e9ee;
+    font-size: 0.9rem;
+}
+
+    .sort-dropdown-item:hover {
+        background-color: #3d4256;
+        color: #ffffff;
+    }
+
+    .sort-dropdown-item.active {
+        color: #4fc3e0;
+        font-weight: 600;
+    }
+
+.filter-section-body {
+    margin-left: 0.75rem;
+    padding-left: 0.5rem;
+    border-left: 2px solid rgba(255, 255, 255, 0.15);
+}

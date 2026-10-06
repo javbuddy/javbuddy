@@ -1,0 +1,83 @@
+.movies-stats-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 4rem;
+    row-gap: 1.25rem;
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.movies-stats-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.movies-stats-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+    color: #495057;
+}
+
+.movies-stats-swatch {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.movies-stats-swatch-missing {
+    background-color: #2f8fd6;
+}
+
+.movies-stats-swatch-downloading {
+    background-color: #e6b800;
+}
+
+.movies-stats-swatch-got {
+    background-color: #2fa84f;
+}
+
+.movies-stats-numbers {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 3.5rem;
+    row-gap: 1rem;
+}
+
+.movies-stats-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1.5rem;
+    font-size: 0.9rem;
+    padding: 0.15rem 0;
+}
+
+    .movies-stats-row strong {
+        font-weight: 600;
+    }
+
+    .movies-stats-row span {
+        color: #495057;
+    }
+
+:root[data-theme="dark"] .movies-stats-footer {
+    border-top-color: #363c4a;
+}
+
+:root[data-theme="dark"] .movies-stats-legend-item,
+:root[data-theme="dark"] .movies-stats-row span {
+    color: #b9bfd1;
+}
+
+/* Browsing r18.dev releases instead of the library: hidden, not removed — VirtualizedGrid's JS keeps
+   references to this element and its spacers for the page's lifetime. */
+.movies-grid-hidden {
+    display: none;
+}

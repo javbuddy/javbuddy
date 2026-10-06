@@ -1,0 +1,411 @@
+@page "/system/status"
+@using System.Diagnostics
+@using System.Reflection
+@using System.Runtime.InteropServices
+@using Microsoft.Data.Sqlite
+@using Javbuddy.Services
+@using Javbuddy.Services.Javinizer
+@using Javbuddy.Services.Prowlarr
+@using Javbuddy.Services.Jellyfin
+@using Javbuddy.Services.QBittorrent
+@using Javbuddy.Services.LocalLibrary
+@inject ISystemStatusService SystemStatusService
+@inject IImageCacheMaintenanceService ImageCacheMaintenanceService
+@inject IDiskSpaceService DiskSpaceService
+@inject ILocalImageCache LocalImageCache
+@inject IConfiguration Configuration
+@inject IWebHostEnvironment Env
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>Status · Javbuddy</PageTitle>
+
+<h1 class="status-section-title">Health</h1>
+
+@if (healthMessages is null)
+{
+    <LoadingIndicator />
+}
+else if (healthMessages.Count == 0)
+{
+    <div class="health-row health-ok">
+        <span class="health-icon health-icon-ok" aria-hidden="true"></span>
+        <span>No issues found.</span>
+    </div>
+}
+else
+{
+    <div class="health-table">
+        @foreach (var message in healthMessages)
+        {
+            <div class="health-row">
+                <span class="health-icon health-icon-warning" aria-hidden="true"></span>
+                <span>@message</span>
+            </div>
+        }
+    </div>
+}
+
+<div class="d-flex align-items-center justify-content-between">
+    <h1 class="status-section-title mb-0">Sub-services</h1>
+    <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="RefreshSubServiceHealthAsync" disabled="@refreshingSubServices">
+        @(refreshingSubServices ? "Checking…" : "Refresh")
+    </button>
+</div>
+
+@if (subServiceHealth is null)
+{
+    <LoadingIndicator />
+}
+else if (subServiceHealth.All(row => !row.Configured))
+{
+    <div class="health-row health-ok">
+        <span class="health-icon health-icon-ok" aria-hidden="true"></span>
+        <span>No sub-services configured.</span>
+    </div>
+}
+else
+{
+    <div class="health-table">
+        @foreach (var row in subServiceHealth.Where(row => row.Configured))
+        {
+            <div class="health-row">
+                @if (row.Success)
+                {
+                    <span class="health-icon health-icon-ok" aria-hidden="true"></span>
+                    <span>
+                        <strong>
+                            @if (row.Url is not null)
+                            {
+                                <a class="health-service-link" href="@row.Url" target="_blank" rel="noopener noreferrer">@row.Name</a>
+                            }
+                            else
+                            {
+                                @row.Name
+                            }
+                        </strong>
+                        @if (!string.IsNullOrWhiteSpace(row.Version))
+                        {
+                            <span class="health-service-version text-muted ms-1">(@row.Version)</span>
+                        }
+                    </span>
+                }
+                else
+                {
+                    <span class="health-icon health-icon-warning" aria-hidden="true"></span>
+                    <span>
+                        <strong>
+                            @if (row.Url is not null)
+                            {
+                                <a class="health-service-link" href="@row.Url" target="_blank" rel="noopener noreferrer">@row.Name</a>
+                            }
+                            else
+                            {
+                                @row.Name
+                            }
+                        </strong> — @row.Message
+                    </span>
+                }
+            </div>
+        }
+    </div>
+}
+
+<div class="d-flex align-items-center justify-content-between">
+    <h1 class="status-section-title mb-0">Image Cache</h1>
+    @if (!confirmingPurge)
+    {
+        <button class="btn btn-sm btn-outline-danger" type="button" @onclick="() => confirmingPurge = true" disabled="@purging">
+            Purge Cache
+        </button>
+    }
+    else
+    {
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted">Delete all cached image variants? Newly stored actor images are kept and regenerated on demand.</span>
+            <button class="btn btn-sm btn-danger" type="button" @onclick="PurgeCacheAsync" disabled="@purging">
+                @(purging ? "Purging…" : "Confirm")
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="() => confirmingPurge = false" disabled="@purging">
+                Cancel
+            </button>
+        </div>
+    }
+</div>
+
+<div class="about-table">
+    <div class="about-row">
+        <span class="about-label">Cache Mode</span>
+        <span>@LocalImageCache.Settings.Mode</span>
+    </div>
+    <div class="about-row">
+        <span class="about-label">Cache TTL</span>
+        <span>@FormatCacheTtl(LocalImageCache.Settings.Ttl)</span>
+    </div>
+    <div class="about-row">
+        <span class="about-label">Cache Limit</span>
+        <span>@FormatCacheLimit(LocalImageCache.Settings.MaxSizeBytes)</span>
+    </div>
+</div>
+
+@if (imageCacheStats is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <div class="about-table">
+        <div class="about-row">
+            <span class="about-label">Cached Files</span>
+            <span>@imageCacheStats.FileCount.ToString("N0") (@ByteSizeFormatter.Format(imageCacheStats.TotalBytes))</span>
+        </div>
+        <div class="about-row">
+            <span class="about-label">Still Images</span>
+            <span>@imageCacheStats.StillImageFileCount.ToString("N0") (@ByteSizeFormatter.Format(imageCacheStats.StillImageBytes))</span>
+        </div>
+        <div class="about-row">
+            <span class="about-label">WebM Previews</span>
+            <span>@imageCacheStats.PreviewFileCount.ToString("N0") (@ByteSizeFormatter.Format(imageCacheStats.PreviewBytes))</span>
+        </div>
+        <div class="about-row">
+            <span class="about-label">DeoVR Timelines</span>
+            <span>@imageCacheStats.TimelineFileCount.ToString("N0") (@ByteSizeFormatter.Format(imageCacheStats.TimelineBytes))</span>
+        </div>
+        <div class="about-row">
+            <span class="about-label">Movie Image Rows</span>
+            <span>@imageCacheStats.MovieImageRows.ToString("N0")</span>
+        </div>
+    </div>
+}
+
+<h1 class="status-section-title">Disk Space</h1>
+
+@if (diskSpace is null)
+{
+    <LoadingIndicator />
+}
+else if (diskSpace.Count == 0)
+{
+    <div class="text-muted">No locations to report.</div>
+}
+else
+{
+    <div class="disk-space-table">
+        <div class="disk-space-row disk-space-header">
+            <span>Location</span>
+            <span>Used Space</span>
+            <span>Free Space</span>
+            <span>Total Space</span>
+            <span></span>
+        </div>
+        @foreach (var location in diskSpace)
+        {
+            <div class="disk-space-row">
+                <span class="disk-space-location">
+                    @if (!string.IsNullOrEmpty(location.Label))
+                    {
+                        <span class="disk-space-location-label">@location.Label</span>
+                        <span class="disk-space-location-path">@location.Location</span>
+                    }
+                    else
+                    {
+                        <span>@location.Location</span>
+                    }
+                </span>
+                <span>@ByteSizeFormatter.Format(location.UsedBytes)</span>
+                <span>@ByteSizeFormatter.Format(location.FreeBytes)</span>
+                <span>@ByteSizeFormatter.Format(location.TotalBytes)</span>
+                <span class="disk-space-bar" title="@FormatUsedPercent(location)">
+                    <span class="disk-space-bar-fill" style="width: @(UsedPercent(location))%"></span>
+                </span>
+            </div>
+        }
+    </div>
+}
+
+<h1 class="status-section-title">About</h1>
+
+<div class="about-table">
+    <div class="about-row">
+        <span class="about-label">Version</span>
+        <span>@version</span>
+    </div>
+    <div class="about-row">
+        <span class="about-label">.NET</span>
+        <span>@RuntimeInformation.FrameworkDescription</span>
+    </div>
+    <div class="about-row">
+        <span class="about-label">Database</span>
+        <span>@databaseProvider</span>
+    </div>
+    <div class="about-row">
+        <span class="about-label">Migration</span>
+        <span>@migrationVersion</span>
+    </div>
+    <div class="about-row">
+        <span class="about-label">Data Directory</span>
+        <span>@dataDirectory</span>
+    </div>
+    <div class="about-row">
+        <span class="about-label">AppData Directory</span>
+        <span>@Env.ContentRootPath</span>
+    </div>
+    <div class="about-row">
+        <span class="about-label">Environment</span>
+        <span>@Env.EnvironmentName</span>
+    </div>
+    <div class="about-row">
+        <span class="about-label">Uptime</span>
+        <span>@FormatUptime(DateTime.Now - processStartTime)</span>
+    </div>
+</div>
+
+@code {
+    private List<string>? healthMessages;
+    private string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
+    private string databaseProvider = "";
+    private string migrationVersion = "";
+    private string dataDirectory = "";
+    private DateTime processStartTime;
+    private Timer? uptimeTimer;
+
+    // One row per integration this app talks to — LocalLibrary is deliberately excluded since
+    // it's just filesystem paths with nothing to "connect" to.
+
+    private List<SubServiceHealth>? subServiceHealth;
+    private bool refreshingSubServices;
+
+    private ImageCacheStats? imageCacheStats;
+    private bool confirmingPurge;
+    private bool purging;
+
+    private List<DiskSpaceInfo>? diskSpace;
+
+    private ConfiguredIntegrations configuredFlags = ConfiguredIntegrations.None;
+    private CancellationTokenSource? slowSectionsCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        processStartTime = Process.GetCurrentProcess().StartTime;
+        databaseProvider = Configuration.GetValue("Database:Provider", "Sqlite") ?? "Sqlite";
+        dataDirectory = ResolveDataDirectory();
+        uptimeTimer = new Timer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+
+        var report = await SystemStatusService.GetHealthReportAsync();
+        migrationVersion = report.MigrationVersion;
+        configuredFlags = report.Configured;
+        healthMessages = report.Messages.ToList();
+    }
+
+    // Sub-service health (network calls to each integration) and the image cache file-count scan
+    // are the slow parts of this page — started here, after the interactive circuit has actually
+    // attached, rather than in OnInitializedAsync, so prerendering isn't blocked on them and the
+    // rest of the page (Health, About) renders immediately with these sections still showing their
+    // own LoadingIndicator. Same pattern as ActivityQueue.razor's LivePollLoopAsync.
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            slowSectionsCts = new CancellationTokenSource();
+            _ = LoadSlowSectionsAsync(slowSectionsCts.Token);
+        }
+    }
+
+    private async Task LoadSlowSectionsAsync(CancellationToken ct)
+    {
+        try
+        {
+            await LoadSubServiceHealthAsync(configuredFlags, ct);
+            if (ct.IsCancellationRequested) return;
+            await InvokeAsync(StateHasChanged);
+
+            imageCacheStats = await ImageCacheMaintenanceService.GetStatsAsync(ct);
+            if (ct.IsCancellationRequested) return;
+            await InvokeAsync(StateHasChanged);
+
+            diskSpace = await DiskSpaceService.GetDiskSpaceAsync(dataDirectory, LocalImageCache.RootPath, ct);
+            if (ct.IsCancellationRequested) return;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+            // Circuit disposed or cancelled
+        }
+        catch (Exception)
+        {
+            // Catch unexpected background exceptions to protect the circuit
+        }
+    }
+
+    private static int UsedPercent(DiskSpaceInfo location) => location.TotalBytes <= 0
+        ? 0
+        : (int)Math.Clamp(location.UsedBytes * 100 / location.TotalBytes, 0, 100);
+
+    private static string FormatUsedPercent(DiskSpaceInfo location) => $"{UsedPercent(location)}% used";
+
+    private static string FormatCacheTtl(TimeSpan? ttl) => ttl is { } value
+        ? $"{value.TotalHours:N0} hours"
+        : "Unlimited";
+
+    private static string FormatCacheLimit(long? maxSizeBytes) => maxSizeBytes is { } value
+        ? $"{value / 1024d / 1024d:N0} MB"
+        : "Unlimited";
+
+    private async Task LoadSubServiceHealthAsync(ConfiguredIntegrations flags, CancellationToken ct = default) =>
+        subServiceHealth = await SystemStatusService.GetSubServiceHealthAsync(flags, ct);
+
+    private async Task RefreshSubServiceHealthAsync()
+    {
+        refreshingSubServices = true;
+
+        configuredFlags = await SystemStatusService.GetConfiguredAsync();
+        await LoadSubServiceHealthAsync(configuredFlags);
+        refreshingSubServices = false;
+    }
+
+    private async Task PurgeCacheAsync()
+    {
+        purging = true;
+
+        await ImageCacheMaintenanceService.PurgeAsync();
+        imageCacheStats = await ImageCacheMaintenanceService.GetStatsAsync();
+
+        purging = false;
+        confirmingPurge = false;
+    }
+
+    // Mirrors Program.cs's own fallback so this reports the directory that's actually in effect,
+    // not just what's configured. The SQLite DB, image cache, and DataProtection key ring are all
+    // meant to live together under this directory (see Dockerfile) so a viewer can confirm their
+    // volume mount is pointed at the right place.
+    private string ResolveDataDirectory()
+    {
+        var connectionString = Configuration.GetConnectionString("Default") ?? "Data Source=Javbuddy.db";
+        var dataSource = new SqliteConnectionStringBuilder(connectionString).DataSource;
+        var directory = Path.GetDirectoryName(dataSource);
+        if (string.IsNullOrEmpty(directory))
+        {
+            directory = Env.ContentRootPath;
+        }
+        else if (!Path.IsPathRooted(directory))
+        {
+            directory = Path.GetFullPath(directory, Env.ContentRootPath);
+        }
+
+        return directory;
+    }
+
+    private static string FormatUptime(TimeSpan span)
+    {
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+        return span.Days > 0
+            ? $"{span.Days}d {span:hh\\:mm\\:ss}"
+            : span.ToString(@"hh\:mm\:ss");
+    }
+
+    public void Dispose()
+    {
+        uptimeTimer?.Dispose();
+        slowSectionsCts?.Cancel();
+    }
+}

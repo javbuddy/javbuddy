@@ -1,0 +1,34 @@
+# Build output
+bin/
+obj/
+TestResults/
+
+# SQLite dev database
+*.db
+*.db-shm
+*.db-wal
+*.db.*
+# Local image cache (LocalImageCacheTask/ActorImageCacheTask) — generated, not source
+Javbuddy/cache/
+Javbuddy/data/
+# Playwright browser download cache, when PLAYWRIGHT_BROWSERS_PATH points in-repo
+.playwright-browsers/
+test-jav
+test-jav-nfo
+test-vr-nfo
+# User-specific / IDE
+.vs/
+.idea/
+*.user
+r18.dev
+publish/
+
+# Local secrets / machine-specific overrides
+appsettings.Development.json
+appsettings.*.local.json
+.env
+
+# Local agent state
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.scratch/

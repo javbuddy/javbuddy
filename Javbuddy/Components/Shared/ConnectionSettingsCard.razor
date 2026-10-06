@@ -1,0 +1,91 @@
+@typeparam TSettings where TSettings : class
+
+<div class="card @(IsFirst ? "" : "mt-4")" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">@Title</h5>
+        <p class="text-muted">@Description</p>
+
+        @if (EnvConfigured)
+        {
+            <div class="alert alert-info">@EnvBanner</div>
+        }
+
+        @if (Settings is null)
+        {
+            <LoadingIndicator />
+        }
+        else
+        {
+            <EditForm Model="Settings" OnValidSubmit="OnSave" FormName="@FormName">
+                @if (ShowValidator)
+                {
+                    <DataAnnotationsValidator />
+                }
+                @FormFields
+                <button class="btn btn-primary" type="submit" disabled="@EnvConfigured">Save</button>
+                @if (ShowTestButton)
+                {
+                    <button class="btn btn-outline-secondary" type="button" @onclick="OnTest" disabled="@Testing">
+                        @(Testing ? "Testing…" : "Test connection")
+                    </button>
+                }
+            </EditForm>
+
+            @if (TestResult is not null)
+            {
+                <div class="alert @(TestResult.Value.Success ? "alert-success" : "alert-danger") mt-3 mb-0">
+                    <div>@TestResult.Value.Message</div>
+                    @if (TestResult.Value.Success && TestResultDetails is not null)
+                    {
+                        @TestResultDetails
+                    }
+                </div>
+            }
+            @if (Saved)
+            {
+                <div class="alert alert-success mt-3 mb-0">Saved.</div>
+            }
+
+            @ExtraContent
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>The single-row settings upsert + env-override-banner + Save/Test-connection card
+    /// shared by every integration on Settings &gt; Connections. Each page-specific section
+    /// component owns its own state (Settings/Testing/Saved/etc.) and Save/Test callbacks — this
+    /// component only renders the common shell, since the form fields themselves, descriptions,
+    /// and env-banner text genuinely differ per integration.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? Description { get; set; }
+    [Parameter] public bool EnvConfigured { get; set; }
+    [Parameter] public RenderFragment? EnvBanner { get; set; }
+    [Parameter, EditorRequired] public TSettings? Settings { get; set; }
+    [Parameter, EditorRequired] public string FormName { get; set; } = "";
+
+    /// <summary>Two of the five original hand-authored forms (Local Library, qBittorrent) never
+    /// had a DataAnnotationsValidator — preserved as-is rather than "fixed", since none of these
+    /// settings models declare validation attributes that would make it observable either way.</summary>
+    [Parameter] public bool ShowValidator { get; set; } = true;
+
+    [Parameter] public RenderFragment? FormFields { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnSave { get; set; }
+
+    /// <summary>Local Library has no network connection to test, so it has no Test button.</summary>
+    [Parameter] public bool ShowTestButton { get; set; } = true;
+
+    [Parameter] public EventCallback OnTest { get; set; }
+    [Parameter] public bool Testing { get; set; }
+    [Parameter] public (bool Success, string Message)? TestResult { get; set; }
+    [Parameter] public RenderFragment? TestResultDetails { get; set; }
+    [Parameter] public bool Saved { get; set; }
+
+    /// <summary>The first card on the page skips the top margin the others use to separate from
+    /// the page's own &lt;h1&gt;.</summary>
+    [Parameter] public bool IsFirst { get; set; }
+
+    /// <summary>Extra content rendered after the Save/Test alerts — Jellyfin's library picker and
+    /// link-sync stats section, not used by anything else.</summary>
+    [Parameter] public RenderFragment? ExtraContent { get; set; }
+}

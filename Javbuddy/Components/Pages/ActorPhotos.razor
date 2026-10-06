@@ -1,0 +1,612 @@
+@page "/actors/photos"
+@using System.Globalization
+@using Javbuddy.Components.Shared
+@using Javbuddy.Services
+@implements IAsyncDisposable
+@inject IActorPhotoService ActorPhotoService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>Photos · Actors · Javbuddy</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="mb-0">Photos @(allPhotos is not null ? $"({allPhotos.Count})" : "")</h1>
+</div>
+
+@if (allPhotos is null)
+{
+    <LoadingIndicator />
+}
+else if (allPhotos.Count == 0)
+{
+    <p class="text-muted">No actor photos uploaded yet. You can upload photos on any actor's detail page.</p>
+}
+else
+{
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <input type="search"
+               class="form-control form-control-sm w-auto"
+               style="min-width: 220px;"
+               placeholder="Filter by actor or album…"
+               value="@textFilter"
+               @oninput="OnTextFilterInput" />
+
+        @if (showFilterDropdown)
+        {
+            <div class="dropdown-backdrop" @onclick="CloseFilterDropdown"></div>
+        }
+        <div class="sort-dropdown-wrapper">
+            <DropdownMenuButton Label="@($"Filter{(ActiveFilterCount > 0 ? $" ({ActiveFilterCount})" : "")}")"
+                                Active="ActiveFilterCount > 0"
+                                ShowClear="HasActiveFilters"
+                                OnClear="ResetFilters"
+                                ClearTitle="Reset all filters"
+                                ClearAriaLabel="Reset all filters"
+                                ShowMenu="showFilterDropdown"
+                                OnToggle="ToggleFilterDropdown">
+                <button type="button" class="sort-dropdown-item @(selectedActorId is null ? "active" : "")" @onclick="() => SetActorFilter(null)">
+                    <span>All Actors</span>
+                    @if (selectedActorId is null)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+                @if (actorsWithPhotos is not null)
+                {
+                    @foreach (var actor in actorsWithPhotos)
+                    {
+                        <button type="button" class="sort-dropdown-item @(selectedActorId == actor.Id ? "active" : "")" @onclick="() => SetActorFilter(actor.Id)">
+                            <span>@actor.DisplayName (@actor.PhotoCount)</span>
+                            @if (selectedActorId == actor.Id)
+                            {
+                                <span class="ms-2">✓</span>
+                            }
+                        </button>
+                    }
+                }
+                <div class="sort-dropdown-divider"></div>
+                <button type="button" class="sort-dropdown-item @(albumFilter == AlbumFilterOption.All ? "active" : "")" @onclick="() => SetAlbumFilter(AlbumFilterOption.All)">
+                    <span>All Albums</span>
+                    @if (albumFilter == AlbumFilterOption.All)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+                <button type="button" class="sort-dropdown-item @(albumFilter == AlbumFilterOption.InAlbum ? "active" : "")" @onclick="() => SetAlbumFilter(AlbumFilterOption.InAlbum)">
+                    <span>In an Album</span>
+                    @if (albumFilter == AlbumFilterOption.InAlbum)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+                <button type="button" class="sort-dropdown-item @(albumFilter == AlbumFilterOption.Uncategorized ? "active" : "")" @onclick="() => SetAlbumFilter(AlbumFilterOption.Uncategorized)">
+                    <span>Uncategorized</span>
+                    @if (albumFilter == AlbumFilterOption.Uncategorized)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+                <div class="sort-dropdown-divider"></div>
+                <button type="button" class="sort-dropdown-item @(favoritesOnly ? "active" : "")" @onclick="ToggleFavoritesOnly">
+                    <span>Favorites only</span>
+                    @if (favoritesOnly)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+            </DropdownMenuButton>
+        </div>
+
+        @if (showSortDropdown)
+        {
+            <div class="dropdown-backdrop" @onclick="CloseSortDropdown"></div>
+        }
+        <div class="sort-dropdown-wrapper">
+            <DropdownMenuButton Label="@($"Sort: {SortLabel(sort)}")"
+                                Arrow="@(sort == "oldest" ? "▲" : "▼")"
+                                ShowMenu="showSortDropdown"
+                                OnToggle="ToggleSortDropdown">
+                <button type="button" class="sort-dropdown-item @(sort == "newest" ? "active" : "")" @onclick="@(() => SetSort("newest"))">
+                    <span>Newest</span>
+                    @if (sort == "newest") { <span class="ms-2">✓</span> }
+                </button>
+                <button type="button" class="sort-dropdown-item @(sort == "oldest" ? "active" : "")" @onclick="@(() => SetSort("oldest"))">
+                    <span>Oldest</span>
+                    @if (sort == "oldest") { <span class="ms-2">✓</span> }
+                </button>
+                <button type="button" class="sort-dropdown-item @(sort == "actor" ? "active" : "")" @onclick="@(() => SetSort("actor"))">
+                    <span>Actor Name</span>
+                    @if (sort == "actor") { <span class="ms-2">✓</span> }
+                </button>
+                <button type="button" class="sort-dropdown-item @(sort == "random" ? "active" : "")" @onclick="@(() => SetSort("random"))">
+                    <span>Random</span>
+                    @if (sort == "random") { <span class="ms-2">✓</span> }
+                </button>
+            </DropdownMenuButton>
+        </div>
+    </div>
+
+    @if (FilteredPhotos.Count == 0)
+    {
+        <p class="text-muted">No photos match your current filters. <button type="button" class="btn btn-link p-0" @onclick="ResetFilters">Reset filters</button></p>
+    }
+    else
+    {
+        <div class="actor-photos-timeline" @ref="gridContainerRef" data-generation="@gridGeneration">
+            @foreach (var group in TimelineGroups)
+            {
+                <section class="actor-photos-timeline-section">
+                    <h2 class="actor-photos-timeline-heading">
+                        @group.PeriodHeading
+                        <span class="actor-photos-timeline-count">(@group.TotalCount)</span>
+                    </h2>
+                    <div class="actor-photos-justified-grid">
+                        @foreach (var photo in group.Photos)
+                        {
+                            var current = photo;
+                            <div class="actor-photo-tile"
+                                 @key="current.Id"
+                                 style="--ar: @(current.AspectRatio.ToString("0.####", CultureInfo.InvariantCulture));"
+                                 @onclick="() => OpenLightbox(current)">
+                                <img class="actor-photo-tile-img"
+                                     data-src="@($"/actor-photo/{current.Id}/thumb")"
+                                     alt="@current.ActorDisplayName"
+                                     decoding="async" />
+                                <div class="actor-photo-tile-overlay" @onclick:stopPropagation="true">
+                                    <a class="actor-photo-tile-actor" href="@($"/actors/{Uri.EscapeDataString(current.ActorDisplayName)}")">
+                                        <img class="actor-photo-tile-avatar"
+                                             data-src="@($"/actor-image/{current.ActorId}/thumb")"
+                                             alt=""
+                                             decoding="async"
+                                             onerror="this.style.display='none'" />
+                                        <span class="actor-photo-tile-name" title="@current.ActorDisplayName">@current.ActorDisplayName</span>
+                                    </a>
+                                    @if (!string.IsNullOrEmpty(current.AlbumName))
+                                    {
+                                        <span class="actor-photo-tile-album" title="@current.AlbumName">@current.AlbumName</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+            @if (visiblePhotoCount < FilteredPhotos.Count)
+            {
+                <button type="button" class="btn btn-outline-secondary actor-photos-load-more" @onclick="() => LoadMorePhotos(gridGeneration)">
+                    Load more photos
+                </button>
+            }
+            @if (PlaceholderHeightPx > 0)
+            {
+                <div class="actor-photos-placeholder" style="height: @(PlaceholderHeightPx.ToString("0", CultureInfo.InvariantCulture))px;" aria-hidden="true"></div>
+            }
+        </div>
+    }
+}
+
+@if (ActiveLightboxPhoto is not null)
+{
+    <GalleryLightbox Count="FilteredPhotos.Count"
+                     @bind-Index="activeLightboxIndex"
+                     ImageUrl="@(i => $"/actor-photo/{FilteredPhotos[i].Id}/full")"
+                     OriginalUrl="@(i => FilteredPhotos[i].HasOriginal ? $"/actor-photo/{FilteredPhotos[i].Id}/original" : null)"
+                     ImageAlt="@(i => FilteredPhotos[i].ActorDisplayName)"
+                     ItemName="photo"
+                     OnClose="CloseLightbox">
+        <Title Context="i">
+            <a class="gallery-actor-link" href="@($"/actors/{Uri.EscapeDataString(FilteredPhotos[i].ActorDisplayName)}")">
+                @FilteredPhotos[i].ActorDisplayName
+            </a>
+            @if (!string.IsNullOrEmpty(FilteredPhotos[i].AlbumName))
+            {
+                <span class="gallery-album-badge">@FilteredPhotos[i].AlbumName</span>
+            }
+        </Title>
+        <Actions Context="i">
+            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="DeleteActivePhotoAsync" disabled="@deleting">
+                Delete
+            </button>
+        </Actions>
+    </GalleryLightbox>
+}
+
+@code {
+    private List<GlobalActorPhotoItem>? allPhotos;
+    private List<ActorWithPhotoCountSummary>? actorsWithPhotos;
+    private string textFilter = "";
+    private int? selectedActorId;
+    private AlbumFilterOption albumFilter = AlbumFilterOption.All;
+    private bool favoritesOnly;
+    private string sort = "newest";
+    private bool showFilterDropdown;
+    private bool showSortDropdown;
+    private int activeLightboxIndex = -1;
+    private ElementReference gridContainerRef;
+    private IJSObjectReference? jsModule;
+    private bool deleting;
+    private int randomSeed = System.Environment.TickCount;
+    private const int PhotoBatchSize = 120;
+    private int visiblePhotoCount = PhotoBatchSize;
+    private double containerWidth;
+    private double sectionOverheadPx;
+    private int gridGeneration;
+    private bool gridChanged;
+    private bool loadMoreObserverDirty;
+    private bool disposed;
+    private DotNetObjectReference<ActorPhotos>? dotNetRef;
+    private List<GlobalActorPhotoItem> FilteredPhotos { get; set; } = [];
+    private IReadOnlyList<TimelineGroup> allTimelineGroups = [];
+    private IReadOnlyList<TimelineGroup> TimelineGroups { get; set; } = [];
+
+    private enum AlbumFilterOption { All, InAlbum, Uncategorized }
+
+    private sealed record TimelineGroup(string PeriodHeading, IReadOnlyList<GlobalActorPhotoItem> Photos, int TotalCount);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        allPhotos = (await ActorPhotoService.GetGlobalPhotosAsync()).ToList();
+        actorsWithPhotos = (await ActorPhotoService.GetActorsWithPhotosAsync()).ToList();
+        RebuildPhotos();
+    }
+
+    private void OnTextFilterInput(ChangeEventArgs e)
+    {
+        textFilter = e.Value?.ToString() ?? "";
+        RebuildPhotos();
+    }
+
+    private void ToggleFilterDropdown()
+    {
+        showFilterDropdown = !showFilterDropdown;
+        showSortDropdown = false;
+    }
+
+    private void CloseFilterDropdown() => showFilterDropdown = false;
+
+    private void ToggleSortDropdown()
+    {
+        showSortDropdown = !showSortDropdown;
+        showFilterDropdown = false;
+    }
+
+    private void CloseSortDropdown() => showSortDropdown = false;
+
+    private void SetActorFilter(int? actorId)
+    {
+        selectedActorId = actorId;
+        showFilterDropdown = false;
+        RebuildPhotos();
+    }
+
+    private void SetAlbumFilter(AlbumFilterOption option)
+    {
+        albumFilter = option;
+        showFilterDropdown = false;
+        RebuildPhotos();
+    }
+
+    private void ToggleFavoritesOnly()
+    {
+        favoritesOnly = !favoritesOnly;
+        showFilterDropdown = false;
+        RebuildPhotos();
+    }
+
+    private void SetSort(string sortOption)
+    {
+        sort = sortOption;
+        randomSeed = Random.Shared.Next();
+        showSortDropdown = false;
+        RebuildPhotos();
+    }
+
+    private static string SortLabel(string sortOption) => sortOption switch
+    {
+        "oldest" => "Oldest",
+        "actor" => "Actor Name",
+        "random" => "Random",
+        _ => "Newest"
+    };
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(textFilter)
+        || selectedActorId.HasValue
+        || albumFilter != AlbumFilterOption.All
+        || favoritesOnly;
+
+    private int ActiveFilterCount =>
+        (selectedActorId.HasValue ? 1 : 0)
+        + (albumFilter != AlbumFilterOption.All ? 1 : 0)
+        + (favoritesOnly ? 1 : 0);
+
+    private void ResetFilters()
+    {
+        textFilter = "";
+        selectedActorId = null;
+        albumFilter = AlbumFilterOption.All;
+        favoritesOnly = false;
+        showFilterDropdown = false;
+        RebuildPhotos();
+    }
+
+    private void RebuildPhotos(bool resetVisibleCount = true)
+    {
+        FilteredPhotos = GetFilteredPhotos();
+        allTimelineGroups = GetTimelineGroups();
+        if (resetVisibleCount) visiblePhotoCount = PhotoBatchSize;
+        gridGeneration++;
+        RebuildVisibleGroups();
+    }
+
+    private void RebuildVisibleGroups()
+    {
+        var remaining = visiblePhotoCount;
+        var groups = new List<TimelineGroup>();
+        foreach (var group in allTimelineGroups)
+        {
+            if (remaining <= 0) break;
+            var count = Math.Min(remaining, group.Photos.Count);
+            groups.Add(count == group.Photos.Count
+                ? group
+                : group with { Photos = group.Photos.Take(count).ToList() });
+            remaining -= count;
+        }
+        TimelineGroups = groups;
+        gridChanged = true;
+    }
+
+    [JSInvokable]
+    public void LoadMorePhotos(int generation)
+    {
+        if (disposed || generation != gridGeneration || visiblePhotoCount >= FilteredPhotos.Count) return;
+        visiblePhotoCount = Math.Min(visiblePhotoCount + PhotoBatchSize, FilteredPhotos.Count);
+        RebuildVisibleGroups();
+        StateHasChanged();
+    }
+
+    // Reports the real grid width and per-section heading overhead (measured from the DOM) so the
+    // placeholder below can reserve the exact height the not-yet-rendered photos will occupy,
+    // instead of letting the scrollbar grow as each batch mounts.
+    [JSInvokable]
+    public void OnLayoutMetricsChanged(double width, double sectionOverhead)
+    {
+        if (disposed || width <= 0 || double.IsNaN(width) || double.IsNaN(sectionOverhead)) return;
+        var changed = Math.Abs(containerWidth - width) > 0.5 || Math.Abs(sectionOverheadPx - sectionOverhead) > 0.5;
+        containerWidth = width;
+        sectionOverheadPx = Math.Max(sectionOverhead, 0);
+        if (changed)
+        {
+            // The placeholder div this renders may be newly appearing (or resizing) as a result -
+            // the "load more" trigger needs to be (re-)attached to it once the DOM reflects that.
+            loadMoreObserverDirty = true;
+            StateHasChanged();
+        }
+    }
+
+    // The exact pixel height the photos beyond the currently rendered batch will occupy once
+    // rendered, computed from their real aspect ratios and the real container width (not an
+    // estimate) so it can be reserved without creating a DOM tile per unrendered photo.
+    private double PlaceholderHeightPx
+    {
+        get
+        {
+            if (containerWidth <= 0) return 0;
+
+            var remaining = visiblePhotoCount;
+            var height = 0.0;
+            foreach (var group in allTimelineGroups)
+            {
+                if (remaining <= 0)
+                {
+                    // Entire group unrendered - its heading isn't in the DOM either.
+                    height += sectionOverheadPx;
+                    height += JustifiedGridLayout.CalculateHeight(group.Photos.Select(p => p.AspectRatio), containerWidth);
+                    continue;
+                }
+
+                var count = Math.Min(remaining, group.Photos.Count);
+                remaining -= count;
+                if (count < group.Photos.Count)
+                {
+                    // Group is rendered but truncated - its heading is already in the DOM.
+                    height += JustifiedGridLayout.CalculateHeight(
+                        group.Photos.Skip(count).Select(p => p.AspectRatio), containerWidth);
+                }
+            }
+
+            return height;
+        }
+    }
+
+    private List<GlobalActorPhotoItem> GetFilteredPhotos()
+    {
+        if (allPhotos is null) return [];
+        var query = allPhotos.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(textFilter))
+        {
+            var search = textFilter.Trim();
+            query = query.Where(p =>
+                p.ActorDisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || (p.AlbumName is not null && p.AlbumName.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        if (selectedActorId.HasValue)
+        {
+            query = query.Where(p => p.ActorId == selectedActorId.Value);
+        }
+
+        if (albumFilter == AlbumFilterOption.InAlbum)
+        {
+            query = query.Where(p => p.AlbumId.HasValue);
+        }
+        else if (albumFilter == AlbumFilterOption.Uncategorized)
+        {
+            query = query.Where(p => !p.AlbumId.HasValue);
+        }
+
+        if (favoritesOnly)
+        {
+            query = query.Where(p => p.IsFavorite);
+        }
+
+        return sort switch
+        {
+            "oldest" => query.OrderBy(p => p.UploadedAt).ThenBy(p => p.Id).ToList(),
+            "actor" => query.OrderBy(p => p.ActorDisplayName).ThenByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id).ToList(),
+            "random" => query.OrderBy(p => HashCode.Combine(p.Id, randomSeed)).ToList(),
+            _ => query.OrderByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id).ToList()
+        };
+    }
+
+    private IReadOnlyList<TimelineGroup> GetTimelineGroups()
+    {
+        var items = FilteredPhotos;
+        if (items.Count == 0) return [];
+
+        if (sort == "actor")
+        {
+            return items
+                .GroupBy(p => p.ActorDisplayName)
+                .Select(g => new TimelineGroup(g.Key, g.ToList(), g.Count()))
+                .ToList();
+        }
+
+        if (sort == "random")
+        {
+            return [new TimelineGroup("All Photos", items, items.Count)];
+        }
+
+        return items
+            .GroupBy(p => new { p.UploadedAt.Year, p.UploadedAt.Month })
+            .Select(g => new TimelineGroup(
+                new DateTime(g.Key.Year, g.Key.Month, 1).ToString("MMMM yyyy", CultureInfo.InvariantCulture),
+                g.ToList(), g.Count()))
+            .ToList();
+    }
+
+    private GlobalActorPhotoItem? ActiveLightboxPhoto =>
+        activeLightboxIndex >= 0 && activeLightboxIndex < FilteredPhotos.Count ? FilteredPhotos[activeLightboxIndex] : null;
+
+    private void OpenLightbox(GlobalActorPhotoItem photo)
+    {
+        activeLightboxIndex = FilteredPhotos.FindIndex(p => p.Id == photo.Id);
+    }
+
+    private void CloseLightbox()
+    {
+        activeLightboxIndex = -1;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (gridChanged)
+        {
+            gridChanged = false;
+            if (jsModule is null)
+            {
+                if (FilteredPhotos.Count == 0) return;
+                try
+                {
+                    var module = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/ActorPhotos.razor.js");
+                    if (disposed)
+                    {
+                        await module.DisposeAsync();
+                        return;
+                    }
+                    jsModule = module;
+                    dotNetRef = DotNetObjectReference.Create(this);
+                    await jsModule.InvokeVoidAsync("init", gridContainerRef, dotNetRef);
+                }
+                catch (JSDisconnectedException)
+                {
+                }
+                catch (Exception)
+                {
+                    // In test or non-browser environments, JS module import may not resolve
+                }
+            }
+            else
+            {
+                try
+                {
+                    await jsModule.InvokeVoidAsync("observe", FilteredPhotos.Count > 0 ? gridContainerRef : null);
+                }
+                catch (JSDisconnectedException)
+                {
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+
+        if (loadMoreObserverDirty && jsModule is not null)
+        {
+            loadMoreObserverDirty = false;
+            try
+            {
+                await jsModule.InvokeVoidAsync("refreshLoadMoreObserver");
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("dispose");
+                await jsModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+        dotNetRef?.Dispose();
+    }
+
+    private async Task DeleteActivePhotoAsync()
+    {
+        if (ActiveLightboxPhoto is not { } photoToDelete || deleting) return;
+        deleting = true;
+        try
+        {
+            var result = await ActorPhotoService.DeletePhotoAsync(photoToDelete.ActorId, photoToDelete.Id);
+            if (result.Success)
+            {
+                allPhotos?.RemoveAll(p => p.Id == photoToDelete.Id);
+                RebuildPhotos(resetVisibleCount: false);
+                var photos = FilteredPhotos;
+                if (photos.Count == 0)
+                {
+                    CloseLightbox();
+                }
+                else
+                {
+                    activeLightboxIndex = Math.Clamp(activeLightboxIndex, 0, photos.Count - 1);
+                }
+                actorsWithPhotos = (await ActorPhotoService.GetActorsWithPhotosAsync()).ToList();
+            }
+        }
+        finally
+        {
+            deleting = false;
+        }
+    }
+}

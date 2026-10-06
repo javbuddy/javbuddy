@@ -1,0 +1,108 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@inject IMovieGridQueryService GridQueries
+@inject NfoDriftPushLauncher PushLauncher
+
+@* The Movies page's "Write Javbuddy metadata to .nfo" confirmation: per-direction counts
+   for the current filter, Javbuddy-changed movies selected by default and outside edits opt-in,
+   then the push itself runs as a background job (NfoDriftPushLauncher). *@
+<div class="nfo-push-modal-backdrop" tabindex="0" @onclick="Close">
+    <div class="nfo-push-modal-panel" @onclick:stopPropagation="true">
+        <div class="nfo-push-modal-header">
+            <h5 class="nfo-push-modal-title">Write Javbuddy metadata to .nfo</h5>
+            <button class="nfo-push-modal-close-btn" @onclick="Close" aria-label="Close">
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+            </button>
+        </div>
+        <div class="nfo-push-modal-body">
+            @if (counts is null)
+            {
+                <LoadingIndicator />
+            }
+            else
+            {
+                <p class="mb-0">
+                    Writes Javbuddy's metadata into the .nfo files of the drifting movies matching the current filter.
+                    Each file's previous version is kept in its history (Edit .nfo &gt; History).
+                </p>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="nfo-push-javbuddy" checked="@includeJavbuddyChanged"
+                           @onchange="e => includeJavbuddyChanged = (bool)e.Value!" disabled="@queueing" />
+                    <label class="form-check-label" for="nfo-push-javbuddy">Javbuddy changed (@Count(NfoDriftKind.JavbuddyChanged))</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="nfo-push-external" checked="@includeExternal"
+                           @onchange="e => includeExternal = (bool)e.Value!" disabled="@queueing" />
+                    <label class="form-check-label" for="nfo-push-external">
+                        Also overwrite External edit (@Count(NfoDriftKind.ExternalEdit)) / Both changed (@Count(NfoDriftKind.BothChanged))
+                    </label>
+                </div>
+                @if (includeExternal)
+                {
+                    <div class="alert alert-warning mb-0 nfo-push-warning">
+                        These .nfo files were changed outside Javbuddy. Writing will overwrite those edits
+                        with Javbuddy's metadata (the previous version is kept in the .nfo's history).
+                    </div>
+                }
+                @if (error is not null)
+                {
+                    <div class="alert alert-danger mb-0">@error</div>
+                }
+            }
+        </div>
+        <div class="nfo-push-modal-footer">
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="Close">Cancel</button>
+            <button type="button" class="btn btn-primary btn-sm" disabled="@(counts is null || SelectedCount == 0 || queueing)" @onclick="ConfirmAsync">
+                Write @SelectedCount .nfo file(s)
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public MovieGridFilter Filter { get; set; } = new();
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Dictionary<NfoDriftKind, int>? counts;
+    private bool includeJavbuddyChanged = true;
+    private bool includeExternal;
+    private bool queueing;
+    private string? error;
+
+    protected override async Task OnInitializedAsync() =>
+        counts = await GridQueries.GetNfoDriftCountsAsync(Filter);
+
+    private int Count(NfoDriftKind kind) => counts?.GetValueOrDefault(kind) ?? 0;
+
+    private List<NfoDriftKind> SelectedKinds =>
+    [
+        .. includeJavbuddyChanged ? [NfoDriftKind.JavbuddyChanged] : Array.Empty<NfoDriftKind>(),
+        .. includeExternal ? [NfoDriftKind.ExternalEdit, NfoDriftKind.BothChanged] : Array.Empty<NfoDriftKind>(),
+    ];
+
+    private int SelectedCount => SelectedKinds.Sum(Count);
+
+    private async Task ConfirmAsync()
+    {
+        queueing = true;
+        error = null;
+        try
+        {
+            // Snapshot of the target set now, so the job acts on exactly what was confirmed even
+            // if the filter or the drift state changes while it runs.
+            var movieIds = await GridQueries.GetNfoDriftMovieIdsAsync(Filter, SelectedKinds);
+            if (PushLauncher.TryQueue(movieIds, includeExternal) is null)
+            {
+                error = "A write to .nfo files is already running.";
+                return;
+            }
+            await OnClose.InvokeAsync();
+        }
+        finally
+        {
+            queueing = false;
+        }
+    }
+
+    private Task Close() => OnClose.InvokeAsync();
+}

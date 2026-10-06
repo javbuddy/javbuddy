@@ -1,0 +1,8 @@
+.birthday-indicator {
+    display: inline-block;
+    flex-shrink: 0;
+    margin-left: 0.3em;
+    font-size: 0.95em;
+    line-height: 1;
+    cursor: default;
+}

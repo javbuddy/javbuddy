@@ -1,0 +1,33 @@
+.scene-preview-none {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #adb5bd;
+    font-size: 0.85rem;
+}
+
+/* ActorMissing's skeleton shimmer, over the frame's dark background in either theme. */
+.scene-preview-shimmer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+}
+
+.scene-preview-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.09) 50%, transparent 100%);
+    animation: scene-preview-skeleton-wave 1.5s infinite;
+}
+
+@keyframes scene-preview-skeleton-wave {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}

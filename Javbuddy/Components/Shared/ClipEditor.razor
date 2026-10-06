@@ -1,0 +1,1162 @@
+@using Javbuddy.Services
+@using Javbuddy.Services.SceneMedia
+@using Javbuddy.Services.Trickplay
+@inject IMovieSceneService SceneService
+@inject IMovieHighlightService HighlightService
+@inject IMovieApexService ApexService
+@inject ISceneChapterImportService ChapterImportService
+@inject ISceneMediaService SceneMedia
+@inject IHighlightMediaService HighlightMedia
+@inject IApexMediaService ApexMedia
+@inject SceneMediaQueue SceneMediaQueue
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* One movie's scenes, highlights and apexes as a tree: each scene expands to the highlights
+   starting in it and the apexes in it, each highlight to its apexes, and what no scene holds goes under
+   "Outside scenes" (ClipTree). Tags roll up and show grayed on the scenes and highlights above them; actors
+   flow down and show grayed on the highlights and apexes inheriting them. Replaces the stacked SceneEditor,
+   HighlightEditor and ApexEditor, whose rows and forms live on in ClipHighlightRow,
+   ClipHighlightForm, ClipApexRow and ClipApexForm. Shared by Review mode's card and the player modal's side
+   panel; talks to the host's <video> through ClipEditor.razor.js (current time, seek, play-clip, and — when
+   EnableShortcuts — the m / Shift+M, h / Shift+H and a keys) and reports every (re)load through the three
+   On…Changed callbacks so the host can draw its timeline. *@
+<div class="scene-editor clip-editor">
+    @* Header, add buttons and the open add forms; the player's side panel pins this while the clip list
+       scrolls, as long as it fits. *@
+    <div class="clip-editor-top" @ref="topBlock">
+        <div class="scene-editor-header">
+            <div class="scene-editor-title">
+                <h3 class="scene-editor-heading">Scenes@(scenes.Count > 0 ? $" ({scenes.Count})" : null)</h3>
+                <SectionInfo Label="What are scenes, highlights and apexes?">Scenes split the movie up (acts, encounters) and can be written into the file as chapters. Highlights are favorite clips with their own start and end, free to overlap scenes. Apexes are single climax moments. Each sits under what contains it: tags roll up from apexes and highlights to the scenes around them (shown grayed), and actors flow down from scenes to the highlights and apexes in them unless you pick their own.</SectionInfo>
+            </div>
+            @if (highlights.Count > 0 || apexes.Count > 0)
+            {
+                @* Symbols as on the timeline (teal highlight bar, orange apex diamond) to keep the header short. *@
+                var countsLabel = $"{Count(highlights.Count, "highlight")} · {Count(apexes.Count, "apex", "apexes")}";
+                <span class="clip-editor-counts" role="img" aria-label="@countsLabel" title="@countsLabel">
+                    @if (highlights.Count > 0)
+                    {
+                        <span class="clip-editor-count"><span class="clip-editor-highlight-glyph" aria-hidden="true"></span>@highlights.Count</span>
+                    }
+                    @if (apexes.Count > 0)
+                    {
+                        <span class="clip-editor-count"><span class="clip-editor-apex-glyph" aria-hidden="true"></span>@apexes.Count</span>
+                    }
+                </span>
+            }
+        </div>
+        <div class="clip-editor-add-row">
+            @if (sceneForm is null)
+            {
+                <button type="button" class="scene-editor-btn scene-editor-add-btn" @onclick="StartAddSceneAsync" disabled="@busy" title="Add a scene starting at the player's current time">+ Scene</button>
+            }
+            @if (highlightForm is null)
+            {
+                <button type="button" class="scene-editor-btn highlight-editor-add-btn" @onclick="StartAddHighlightAsync" disabled="@busy" title="Add a highlight starting at the player's current time">+ Highlight</button>
+            }
+            @if (apexForm is null)
+            {
+                <button type="button" class="scene-editor-btn apex-editor-add-btn" @onclick="StartAddApexAsync" disabled="@busy" title="Mark an apex at the player's current time">+ Apex</button>
+            }
+            @if (tree.Scenes.Any(HasChildren))
+            {
+                @* An icon, not "Collapse all" text, so it fits beside the add buttons in the player's 300px panel. *@
+                var allCollapsed = tree.Scenes.Where(HasChildren).All(n => collapsedSceneIds.Contains(n.Scene.Id));
+                var collapseAllLabel = allCollapsed ? "Expand all" : "Collapse all";
+                <button type="button" class="scene-editor-btn clip-editor-collapse-all-btn" @onclick="() => SetAllCollapsed(!allCollapsed)"
+                        aria-label="@collapseAllLabel" title="@(allCollapsed ? "Expand all scenes" : "Collapse all scenes")">
+                    @if (allCollapsed)
+                    {
+                        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8M7.646.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 1.707V5.5a.5.5 0 0 1-1 0V1.707L6.354 2.854a.5.5 0 1 1-.708-.708zM8 10a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 0 1 .708-.708L7.5 14.293V10.5A.5.5 0 0 1 8 10" /></svg>
+                    }
+                    else
+                    {
+                        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h13a.5.5 0 0 1 0 1h-13A.5.5 0 0 1 1 8m7-8a.5.5 0 0 1 .5.5v3.793l1.146-1.147a.5.5 0 0 1 .708.708l-2 2a.5.5 0 0 1-.708 0l-2-2a.5.5 0 1 1 .708-.708L7.5 4.293V.5A.5.5 0 0 1 8 0m-.5 11.707-1.146 1.147a.5.5 0 0 1-.708-.708l2-2a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1-.708.708L8.5 11.707V15.5a.5.5 0 0 1-1 0z" /></svg>
+                    }
+                </button>
+            }
+        </div>
+
+        @if (error is not null)
+        {
+            <p class="scene-editor-error" role="alert">@error</p>
+        }
+
+        @if (sceneForm is { SceneId: null })
+        {
+            @SceneFormFragment()
+        }
+        @if (highlightForm is { HighlightId: null } addingHighlight)
+        {
+            <div class="clip-editor-add-form">@HighlightFormFragment(addingHighlight)</div>
+        }
+        @if (apexForm is { ApexId: null } addingApex)
+        {
+            <div class="clip-editor-add-form">@ApexFormFragment(addingApex)</div>
+        }
+    </div>
+
+    @if (scenes.Count == 0 && loaded && sceneForm is null)
+    {
+        <p class="scene-editor-empty">No scenes yet.</p>
+        @if (fileChapters is { Chapters.Count: > 0 } found)
+        {
+            <button type="button" class="scene-editor-btn scene-editor-import-btn" @onclick="ImportChaptersAsync" disabled="@busy" title="@ImportTooltip(found)">
+                Import @found.Chapters.Count @(found.Chapters.Count == 1 ? "chapter" : "chapters") from file
+            </button>
+        }
+    }
+
+    @if (tree.Scenes.Count > 0)
+    {
+        <ol class="scene-editor-list">
+            @foreach (var node in tree.Scenes)
+            {
+                var scene = node.Scene;
+                <li class="scene-editor-item @(scene.IsHiddenFromOverview ? "scene-editor-item-hidden" : null)" @key="scene.Id" @onmouseenter="() => hoveredSceneId = scene.Id" @onmouseleave="() => hoveredSceneId = null">
+                    @if (sceneForm?.SceneId == scene.Id)
+                    {
+                        @SceneFormFragment()
+                    }
+                    else
+                    {
+                        <div class="clip-editor-line">@CollapseToggle(node)@SceneRow(node)</div>
+                    }
+                    @if (!collapsedSceneIds.Contains(scene.Id))
+                    {
+                        @Children(node.Highlights, node.Apexes)
+                    }
+                </li>
+            }
+        </ol>
+    }
+
+    @if (tree.OutsideHighlights.Count > 0 || tree.OutsideApexes.Count > 0)
+    {
+        <div class="clip-editor-outside">
+            <h4 class="clip-editor-outside-heading">Outside scenes</h4>
+            @Children(tree.OutsideHighlights, tree.OutsideApexes)
+        </div>
+    }
+
+    @BeforeTools
+
+    @* Last row of the panel: the two actions side by side; what they expand into
+       (progress, suggestions, confirmation, message) wraps onto full-width lines below. *@
+    <div class="scene-editor-tools">
+        <SceneDetector MovieId="MovieId" FirstSceneStart="@(scenes.Count > 0 ? scenes.Min(s => s.StartSeconds) : null)"
+                       OnScenesAdded="ReloadAsync" OnSuggestionsChanged="OnSuggestionsChanged" OnSeek="SeekToAsync" />
+
+        @if (scenes.Count > 0)
+        {
+            <SceneChapterWriter MovieId="MovieId" SceneCount="scenes.Count" />
+        }
+    </div>
+
+    @switch (pendingDelete)
+    {
+        case SceneItem toDelete:
+            <DeleteConfirmDialog @key="toDelete" ItemName="@toDelete.DisplayTitle" Message="Its screenshot and preview are deleted too. Highlights and apexes inside it stay."
+                                 Busy="busy" OnConfirm="ConfirmDeleteAsync" OnCancel="CancelDelete" />
+            break;
+        case HighlightItem toDelete:
+            <DeleteConfirmDialog @key="toDelete" ItemName="@toDelete.DisplayTitle" Busy="busy" OnConfirm="ConfirmDeleteAsync" OnCancel="CancelDelete" />
+            break;
+        case ApexItem toDelete:
+            <DeleteConfirmDialog @key="toDelete" ItemName="@($"Apex at {SceneTimeFormat.Format(toDelete.Seconds)}")" Busy="busy" OnConfirm="ConfirmDeleteAsync" OnCancel="CancelDelete" />
+            break;
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int MovieId { get; set; }
+
+    /// <summary>CSS selector of the host's <c>&lt;video&gt;</c>, resolved lazily in JS.</summary>
+    [Parameter, EditorRequired] public string VideoSelector { get; set; } = default!;
+
+    /// <summary>The movie's duration; times taken from the player are clamped to it, since the
+    /// browser's duration can run a fraction of a second past MediaInfo's.</summary>
+    [Parameter] public double? DurationSeconds { get; set; }
+
+    /// <summary>Enables the m / Shift+M, h / Shift+H and a keyboard shortcuts.</summary>
+    [Parameter] public bool EnableShortcuts { get; set; }
+
+    [Parameter] public EventCallback<IReadOnlyList<SceneItem>> OnScenesChanged { get; set; }
+
+    [Parameter] public EventCallback<IReadOnlyList<HighlightItem>> OnHighlightsChanged { get; set; }
+
+    [Parameter] public EventCallback<IReadOnlyList<ApexItem>> OnApexesChanged { get; set; }
+
+    /// <summary>Pending detected boundaries, for the host's timeline ghost markers.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<SceneSuggestionItem>> OnSuggestionsChanged { get; set; }
+
+    /// <summary>Raised after a change that can alter the movie's tags through its clips, so a
+    /// host showing them can re-read them.</summary>
+    [Parameter] public EventCallback OnMovieTagsMayHaveChanged { get; set; }
+
+    /// <summary>The playing movie's trickplay, when known: its tile for a scene's start
+    /// stands in for a screenshot that hasn't been generated.</summary>
+    [Parameter] public TrickplayLayout? Trickplay { get; set; }
+
+    /// <summary>Whether the movie has a local video to take scene screenshots from; without one a
+    /// missing screenshot isn't being generated, so its thumbnail doesn't shimmer.</summary>
+    [Parameter] public bool HasLocalVideo { get; set; } = true;
+
+    /// <summary>Rendered between the tree and the Detect scenes / Write chapters row, so that row stays at
+    /// the bottom of the panel — the hosts put the movie's tag and cast editors here.</summary>
+    [Parameter] public RenderFragment? BeforeTools { get; set; }
+
+    private const int ThumbWidth = 64;
+
+    private sealed class SceneForm
+    {
+        public int? SceneId { get; init; }
+        public string Title { get; set; } = string.Empty;
+        public string Start { get; set; } = string.Empty;
+        public string End { get; set; } = string.Empty;
+    }
+
+    private IReadOnlyList<SceneItem> scenes = [];
+    private IReadOnlyList<HighlightItem> highlights = [];
+    private IReadOnlyList<ApexItem> apexes = [];
+    private IReadOnlyList<SceneActorItem> cast = [];
+    private ClipTreeModel tree = new([], [], []);
+    private FileChapters? fileChapters;
+    private bool chaptersProbed;
+    private bool loaded;
+    private int? loadedMovieId;
+    private int? hoveredSceneId;
+    private readonly HashSet<int> collapsedSceneIds = [];
+    private bool subscribed;
+    private SceneForm? sceneForm;
+    private HighlightFormModel? highlightForm;
+    private ApexFormModel? apexForm;
+    private ApexWindow defaultApexWindow = ApexWindow.Default;
+    private string? error;
+    private bool busy;
+    private object? pendingDelete;
+    private IJSObjectReference? jsModule;
+    private ElementReference topBlock;
+    private PlayheadShortcuts<ClipEditor>? shortcuts;
+    private static readonly Dictionary<string, string> ShortcutBindings = new()
+    {
+        ["m"] = nameof(AddSceneAtAsync),
+        ["shift+m"] = nameof(EndSceneAtAsync),
+        ["h"] = nameof(StartHighlightAtAsync),
+        ["shift+h"] = nameof(EndHighlightAtAsync),
+        ["a"] = nameof(StartApexAtAsync)
+    };
+    private bool disposed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!subscribed)
+        {
+            SceneMediaQueue.Generated += OnMediaGenerated;
+            subscribed = true;
+        }
+        if (loadedMovieId == MovieId) return;
+
+        loadedMovieId = MovieId;
+        sceneForm = null;
+        highlightForm = null;
+        apexForm = null;
+        pendingDelete = null;
+        error = null;
+        fileChapters = null;
+        chaptersProbed = false;
+        collapsedSceneIds.Clear();
+        await ReloadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        shortcuts ??= new(this, ShortcutBindings);
+        await shortcuts.SyncAsync(GetModuleAsync, EnableShortcuts, VideoSelector);
+        if (firstRender && await GetModuleAsync() is { } module)
+        {
+            try
+            {
+                await module.InvokeVoidAsync("watchTopFit", topBlock);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+
+    /// <summary>Re-reads everything after the host changed it elsewhere (e.g. the cast).</summary>
+    public async Task RefreshAsync()
+    {
+        await ReloadAsync();
+        StateHasChanged();
+    }
+
+    // All three lists every time: a change to one alters what the others roll up or inherit.
+    private async Task ReloadAsync()
+    {
+        scenes = await SceneService.GetScenesAsync(MovieId);
+        highlights = await HighlightService.GetHighlightsAsync(MovieId);
+        apexes = await ApexService.GetApexesAsync(MovieId);
+        defaultApexWindow = await ApexService.GetDefaultWindowAsync();
+        cast = await SceneService.GetCastOptionsAsync(MovieId);
+        tree = ClipTree.Build(cast, scenes, highlights, apexes);
+        loaded = true;
+        await OnScenesChanged.InvokeAsync(scenes);
+        await OnHighlightsChanged.InvokeAsync(highlights);
+        await OnApexesChanged.InvokeAsync(apexes);
+
+        if (scenes.Count == 0 && !chaptersProbed)
+        {
+            chaptersProbed = true;
+            _ = ProbeChaptersAsync(MovieId);
+        }
+
+        // Queued here too, not only on the host's page load, so a clip added or moved in the editor gets
+        // its screenshot/preview while the host stays open.
+        try
+        {
+            if (scenes.Any(s => s.ThumbVersion is null || s.PreviewVersion is null))
+            {
+                await SceneMedia.EnsureQueuedAsync(MovieId);
+            }
+            if (highlights.Any(h => h.ThumbVersion is null || h.PreviewVersion is null))
+            {
+                await HighlightMedia.EnsureQueuedAsync(MovieId);
+            }
+            if (apexes.Any(a => a.PreviewVersion is null))
+            {
+                await ApexMedia.EnsureQueuedAsync(MovieId);
+            }
+        }
+        catch (Exception)
+        {
+            // Screenshots are a convenience; the list works without them.
+        }
+    }
+
+    // Raised on the queue's worker thread when a scene's screenshot/preview was written.
+    private void OnMediaGenerated(int movieId)
+    {
+        if (disposed || movieId != MovieId) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed || movieId != MovieId) return;
+            await ReloadAsync();
+            StateHasChanged();
+        });
+    }
+
+    private static string Count(int count, string singular, string? plural = null) =>
+        $"{count} {(count == 1 ? singular : plural ?? singular + "s")}";
+
+    // --- Tree fragments ---
+
+    private static bool HasChildren(SceneNode node) => node.Highlights.Count > 0 || node.Apexes.Count > 0;
+
+    private void ToggleCollapsed(int sceneId)
+    {
+        if (!collapsedSceneIds.Remove(sceneId)) collapsedSceneIds.Add(sceneId);
+    }
+
+    private void SetAllCollapsed(bool collapsed)
+    {
+        collapsedSceneIds.Clear();
+        if (collapsed) collapsedSceneIds.UnionWith(tree.Scenes.Where(HasChildren).Select(n => n.Scene.Id));
+    }
+
+    // Collapsing a scene hides the highlights and apexes under it; a scene holding none gets a
+    // spacer instead, so the rows stay aligned.
+    private RenderFragment CollapseToggle(SceneNode node) => __builder =>
+    {
+        var scene = node.Scene;
+        if (!HasChildren(node))
+        {
+            <span class="clip-editor-collapse-spacer" aria-hidden="true"></span>
+            return;
+        }
+        var collapsed = collapsedSceneIds.Contains(scene.Id);
+        <button type="button" class="scene-editor-icon-btn clip-editor-collapse-btn @(collapsed ? "clip-editor-collapsed" : null)" @onclick="() => ToggleCollapsed(scene.Id)"
+                aria-expanded="@(collapsed ? "false" : "true")" aria-label="@(collapsed ? "Expand" : "Collapse") @scene.DisplayTitle" title="@(collapsed ? "Show its highlights and apexes" : "Hide its highlights and apexes")">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>
+        </button>
+    };
+
+    // What a collapsed scene hides, e.g. "2 highlights · 1 apex" — apexes inside its highlights included.
+    private static string CollapsedSummary(SceneNode node)
+    {
+        var apexCount = node.Apexes.Count + node.Highlights.Sum(h => h.Apexes.Count);
+        return string.Join(" · ", new[]
+        {
+            node.Highlights.Count > 0 ? Count(node.Highlights.Count, "highlight") : null,
+            apexCount > 0 ? Count(apexCount, "apex", "apexes") : null
+        }.OfType<string>());
+    }
+
+    private RenderFragment SceneRow(SceneNode node) => __builder =>
+    {
+        var scene = node.Scene;
+        <button type="button" class="scene-editor-row" @onclick="() => SeekToAsync(scene.StartSeconds)" title="Jump to this scene">
+            @Thumb(scene)
+            <span class="scene-editor-pos">@scene.Position</span>
+            <span class="scene-editor-name @(scene.Title is null ? "scene-editor-name-default" : null)" title="@scene.DisplayTitle">@scene.DisplayTitle</span>
+            <span class="scene-editor-meta">
+                @if (scene.IsHiddenFromOverview)
+                {
+                    <span class="scene-editor-hidden-badge" role="img" aria-label="Hidden from the Scenes overview" title="Hidden from the Scenes overview">
+                        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7.028 7.028 0 0 0-2.79.588l.77.771A5.944 5.944 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486l.708.709z"/><path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829l.822.822zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829z"/><path d="M3.35 5.47c-.18.16-.353.322-.518.487A13.134 13.134 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7.029 7.029 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .708-.708 12 12-.708.708z"/></svg>
+                    </span>
+                }
+                @if (collapsedSceneIds.Contains(scene.Id) && HasChildren(node))
+                {
+                    <span class="clip-editor-collapsed-badge">@CollapsedSummary(node)</span>
+                }
+                <span class="scene-editor-range">@SceneTimeFormat.Format(scene.StartSeconds)–@(scene.EffectiveEndSeconds is { } end ? SceneTimeFormat.Format(end) : "end")</span>
+                @if (scene.Actors.Count > 0)
+                {
+                    <span class="scene-editor-meta-actors">@string.Join(", ", scene.Actors.Select(a => a.Name))</span>
+                }
+                <ImplicitChips Items="@ImplicitChip.ForActors(node.Actors)" />
+                @foreach (var tag in scene.Tags)
+                {
+                    <span class="scene-editor-meta-tag">@ImplicitChip.TagLabel(tag)</span>
+                }
+                <ImplicitChips Items="@ImplicitChip.ForTags(node.ImplicitTags)" />
+            </span>
+        </button>
+        <button type="button" class="scene-editor-icon-btn scene-editor-fav-btn @(scene.IsFavorite ? "scene-editor-fav-on" : null)" @onclick="() => ToggleSceneFavoriteAsync(scene)" disabled="@busy"
+                aria-pressed="@(scene.IsFavorite ? "true" : "false")" aria-label="@(scene.IsFavorite ? "Unfavorite" : "Favorite") @scene.DisplayTitle" title="@(scene.IsFavorite ? "Remove from favorite scenes" : "Add to favorite scenes")">
+            <FavoriteHeartIcon Filled="scene.IsFavorite" Size="12" />
+        </button>
+        <button type="button" class="scene-editor-icon-btn scene-editor-edit-btn" @onclick="() => StartEditSceneAsync(scene)" disabled="@busy" aria-label="Edit @scene.DisplayTitle" title="Edit">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5z" /></svg>
+        </button>
+        <button type="button" class="scene-editor-icon-btn scene-editor-delete-btn" @onclick="() => pendingDelete = scene" disabled="@busy" aria-label="Delete @scene.DisplayTitle" title="Delete">×</button>
+    };
+
+    private RenderFragment Children(IReadOnlyList<HighlightNode> highlightNodes, IReadOnlyList<ApexNode> apexNodes) => __builder =>
+    {
+        if (highlightNodes.Count == 0 && apexNodes.Count == 0) return;
+        <ol class="clip-editor-children">
+            @foreach (var child in ClipTree.InTimeOrder(highlightNodes, apexNodes))
+            {
+                if (child.Apex is { } directApex)
+                {
+                    @ApexListItem(directApex)
+                    continue;
+                }
+                var node = child.Highlight!;
+                <li class="highlight-editor-item" @key="node.Highlight.Id">
+                    @if (highlightForm?.HighlightId == node.Highlight.Id)
+                    {
+                        @HighlightFormFragment(highlightForm)
+                    }
+                    else
+                    {
+                        <div class="clip-editor-line">
+                        <ClipHighlightRow Node="node" Busy="busy"
+                                          OnSeek="() => SeekToAsync(node.Highlight.StartSeconds)"
+                                          OnPlay="() => PlayHighlightAsync(node.Highlight)"
+                                          OnToggleFavorite="() => ToggleHighlightFavoriteAsync(node.Highlight)"
+                                          OnEdit="() => StartEditHighlightAsync(node.Highlight)"
+                                          OnDelete="() => pendingDelete = node.Highlight" />
+                        </div>
+                    }
+                    @if (node.Apexes.Count > 0)
+                    {
+                        <ol class="clip-editor-children">
+                            @foreach (var apexNode in node.Apexes)
+                            {
+                                @ApexListItem(apexNode)
+                            }
+                        </ol>
+                    }
+                </li>
+            }
+        </ol>
+    };
+
+    private RenderFragment ApexListItem(ApexNode node) =>
+        @<li class="apex-editor-item" @key="node.Apex.Id">
+            @if (apexForm?.ApexId == node.Apex.Id)
+            {
+                @ApexFormFragment(apexForm)
+            }
+            else
+            {
+                <div class="clip-editor-line">
+                <ClipApexRow Node="node" Busy="busy"
+                             OnSeek="() => SeekToAsync(ApexRanges.StartFor(node.Apex))"
+                             OnToggleFavorite="() => ToggleApexFavoriteAsync(node.Apex)"
+                             OnEdit="() => StartEditApexAsync(node.Apex)"
+                             OnDelete="() => pendingDelete = node.Apex" />
+                </div>
+            }
+        </li>;
+
+    private RenderFragment HighlightFormFragment(HighlightFormModel model) =>
+        @<ClipHighlightForm Model="model" Cast="cast" Scenes="scenes" Busy="busy" RolledUpTags="RolledUpTags(model.HighlightId)"
+                            Position="@(model.HighlightId is { } id ? highlights.FirstOrDefault(h => h.Id == id)?.Position ?? 1 : highlights.Count + 1)"
+                            OnSave="SaveHighlightAsync" OnCancel="() => { highlightForm = null; error = null; }"
+                            OnNow="end => SetHighlightTimeFromPlayerAsync(end)" />;
+
+    // Every tag an edited highlight's apexes roll up to it, its own included: the form
+    // grays the ones it doesn't hold and marks the ones it does as redundant.
+    private IReadOnlyList<ImplicitTag> RolledUpTags(int? highlightId) =>
+        highlightId is { } id && tree.Scenes.SelectMany(s => s.Highlights).Concat(tree.OutsideHighlights).FirstOrDefault(h => h.Highlight.Id == id) is { } node
+            ? [.. node.ImplicitTags.Concat(node.RedundantTags)
+                .OrderBy(t => t.Tag.ParentName ?? t.Tag.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(t => t.Tag.Name, StringComparer.OrdinalIgnoreCase)]
+            : [];
+
+    private RenderFragment ApexFormFragment(ApexFormModel model) =>
+        @<ClipApexForm Model="model" Cast="cast" Scenes="scenes" Highlights="highlights" Apexes="apexes" DefaultWindow="defaultApexWindow" Busy="busy"
+                       OnSave="SaveApexAsync" OnCancel="() => { apexForm = null; error = null; }"
+                       OnNow="SetApexTimeFromPlayerAsync" OnWindowNow="tail => SetApexWindowFromPlayerAsync(tail)" />;
+
+    // Without a screenshot or a trickplay tile, it shimmers while one is generated, like the scene
+    // cards.
+    private RenderFragment Thumb(SceneItem scene) => @<span class="scene-editor-thumb @(ThumbGenerating(scene) ? "scene-editor-thumb-generating" : null)" aria-hidden="true">
+        @if (scene.ThumbVersion is { } thumbVersion)
+        {
+            // The preview is a WebM video, played over the screenshot.
+            <ScenePreviewMedia ThumbUrl="@($"/scene-image/{scene.Id}/thumb?v={thumbVersion}")"
+                               PreviewUrl="@(hoveredSceneId == scene.Id && scene.PreviewVersion is { } previewVersion ? $"/scene-image/{scene.Id}/preview?v={previewVersion}" : null)" />
+        }
+        else if (Trickplay is { } trickplay)
+        {
+            <span class="scene-editor-thumb-tile" style="@TrickplayTiles.Style(trickplay, scene.StartSeconds, ThumbWidth)"></span>
+        }
+        else if (ThumbGenerating(scene))
+        {
+            <ScenePreviewPlaceholder Generating="true" />
+        }
+    </span>;
+
+    private bool ThumbGenerating(SceneItem scene) =>
+        scene.ThumbVersion is null && Trickplay is null && HasLocalVideo && SceneMedia.ServesVariant(SceneMediaService.VariantThumb);
+
+    // --- Chapters ---
+
+    // In the background: ffprobe over a network share can take a moment, and the scene list
+    // shouldn't wait for it.
+    private async Task ProbeChaptersAsync(int movieId)
+    {
+        FileChapters? found;
+        try
+        {
+            found = await ChapterImportService.GetFileChaptersAsync(movieId);
+        }
+        catch (Exception)
+        {
+            // Optional convenience; an unreadable file just means no import offer.
+            return;
+        }
+
+        if (disposed || movieId != MovieId) return;
+        fileChapters = found;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task ImportChaptersAsync() =>
+        RunAsync(async () =>
+        {
+            var result = await ChapterImportService.ImportFileChaptersAsync(MovieId);
+            return (result.Success, result.ErrorMessage, false);
+        });
+
+    private static string ImportTooltip(FileChapters found) =>
+        $"{found.FileName}: {string.Join(", ", found.Chapters.Select((c, i) => c.Title ?? $"Chapter {i + 1}"))}";
+
+    // --- Scenes ---
+
+    // Applied at once, like the scene's tags; none goes back to inheriting the cast.
+    private Task SetSceneActorsAsync(int sceneId, SceneActorFormModel form) =>
+        RunSceneAsync(() => SceneService.SetSceneActorsAsync(sceneId, form.ActorIds ?? []));
+
+    private Task ToggleSceneFavoriteAsync(SceneItem scene) =>
+        RunSceneAsync(async () =>
+        {
+            await SceneService.ToggleFavoriteAsync(scene.Id);
+            return SceneOperationResult.Ok(scene.Id);
+        });
+
+    private Task SetHiddenFromOverviewAsync(int sceneId, bool hidden) =>
+        RunSceneAsync(() => SceneService.SetHiddenFromOverviewAsync(sceneId, hidden));
+
+    // A scene tag rolls up to the movie.
+    private Task AddSceneTagAsync(int sceneId, int tagId) =>
+        RunSceneAsync(() => SceneService.AddSceneTagAsync(sceneId, tagId), movieTagsMayChange: true);
+
+    private Task RemoveSceneTagAsync(int sceneId, int tagId) =>
+        RunSceneAsync(() => SceneService.RemoveSceneTagAsync(sceneId, tagId), movieTagsMayChange: true);
+
+    private async Task StartAddSceneAsync()
+    {
+        error = null;
+        var time = await CurrentTimeAsync();
+        sceneForm = new SceneForm { Start = time is { } t ? SceneTimeFormat.FormatPrecise(t) : string.Empty };
+    }
+
+    private async Task StartEditSceneAsync(SceneItem scene)
+    {
+        error = null;
+        await ReloadCastAsync();
+        sceneForm = new SceneForm
+        {
+            SceneId = scene.Id,
+            Title = scene.Title ?? string.Empty,
+            Start = SceneTimeFormat.FormatPrecise(scene.StartSeconds),
+            End = scene.EndSeconds is { } end ? SceneTimeFormat.FormatPrecise(end) : string.Empty
+        };
+    }
+
+    private async Task SetSceneTimeFromPlayerAsync(bool end)
+    {
+        if (sceneForm is null || await TimeFromPlayerAsync() is not { } text) return;
+        if (end)
+        {
+            sceneForm.End = text;
+        }
+        else
+        {
+            sceneForm.Start = text;
+        }
+    }
+
+    private async Task SaveSceneAsync()
+    {
+        if (sceneForm is not { } form || busy) return;
+
+        if (!SceneTimeFormat.TryParse(form.Start, out var start))
+        {
+            error = "Enter the start as m:ss or h:mm:ss.";
+            return;
+        }
+        double? end = null;
+        if (!string.IsNullOrWhiteSpace(form.End))
+        {
+            if (!SceneTimeFormat.TryParse(form.End, out var parsedEnd))
+            {
+                error = "Enter the end as m:ss or h:mm:ss, or leave it empty.";
+                return;
+            }
+            end = parsedEnd;
+        }
+
+        await RunSceneAsync(() => form.SceneId is { } sceneId
+            ? SceneService.UpdateSceneAsync(sceneId, start, end, form.Title)
+            : SceneService.AddSceneAsync(MovieId, start, end, form.Title),
+            closeForm: () => sceneForm = null);
+    }
+
+    /// <summary>m: a new, untitled scene starting at the player's current time.</summary>
+    [JSInvokable]
+    public Task AddSceneAtAsync(double seconds) =>
+        RunShortcutAsync(() => RunSceneAsync(() => SceneService.AddSceneAsync(MovieId, Clamp(seconds), null, null)));
+
+    /// <summary>Shift+M: ends the scene the playhead is in (the last one starting before it) here.</summary>
+    [JSInvokable]
+    public Task EndSceneAtAsync(double seconds)
+    {
+        var time = Clamp(seconds);
+        var current = scenes.LastOrDefault(s => s.StartSeconds < time);
+        if (current is null)
+        {
+            error = $"No scene starts before {SceneTimeFormat.Format(time)}.";
+            StateHasChanged();
+            return Task.CompletedTask;
+        }
+        return RunShortcutAsync(() => RunSceneAsync(() => SceneService.UpdateSceneAsync(current.Id, current.StartSeconds, time, current.Title)));
+    }
+
+    // --- Highlights ---
+
+    private async Task StartAddHighlightAsync()
+    {
+        error = null;
+        await ReloadCastAsync();
+        var time = await CurrentTimeAsync();
+        highlightForm = new HighlightFormModel { Start = time is { } t ? SceneTimeFormat.FormatPrecise(t) : string.Empty };
+    }
+
+    private async Task StartEditHighlightAsync(HighlightItem highlight)
+    {
+        error = null;
+        await ReloadCastAsync();
+        highlightForm = new HighlightFormModel
+        {
+            HighlightId = highlight.Id,
+            Title = highlight.Title ?? string.Empty,
+            Start = SceneTimeFormat.FormatPrecise(highlight.StartSeconds),
+            End = SceneTimeFormat.FormatPrecise(highlight.EndSeconds),
+            Tags = [.. highlight.Tags],
+            // Inheriting until it has actors of its own.
+            ActorIds = highlight.Actors.Count > 0 ? [.. highlight.Actors.Select(a => a.ActorId)] : null
+        };
+    }
+
+    private async Task SetHighlightTimeFromPlayerAsync(bool end)
+    {
+        if (highlightForm is null || await TimeFromPlayerAsync() is not { } text) return;
+        if (end)
+        {
+            highlightForm.End = text;
+        }
+        else
+        {
+            highlightForm.Start = text;
+        }
+    }
+
+    private async Task SaveHighlightAsync()
+    {
+        if (highlightForm is not { } form || busy) return;
+
+        if (!SceneTimeFormat.TryParse(form.Start, out var start))
+        {
+            error = "Enter the start as m:ss or h:mm:ss.";
+            return;
+        }
+        if (!SceneTimeFormat.TryParse(form.End, out var end))
+        {
+            error = "Enter the end as m:ss or h:mm:ss.";
+            return;
+        }
+
+        var tagIds = form.Tags.Select(t => t.TagId).ToList();
+        // None of its own: it inherits; an update clears to that with an empty list.
+        var actorIds = form.ActorIds?.ToList() ?? [];
+        await RunAsync(async () =>
+        {
+            var result = form.HighlightId is { } highlightId
+                ? await HighlightService.UpdateHighlightAsync(highlightId, start, end, form.Title, tagIds, actorIds)
+                : await HighlightService.AddHighlightAsync(MovieId, start, end, form.Title, tagIds, actorIds);
+            return (result.Success, result.ErrorMessage, result.MovieTagsChanged);
+        }, closeForm: () => highlightForm = null);
+    }
+
+    private Task ToggleHighlightFavoriteAsync(HighlightItem highlight) =>
+        RunAsync(async () =>
+        {
+            await HighlightService.ToggleFavoriteAsync(highlight.Id);
+            return (true, null, false);
+        });
+
+    /// <summary>h: starts a highlight at the player's current time — the add form opens with it as
+    /// the start (or the open add form's start moves there), in progress until Shift+H ends it.</summary>
+    [JSInvokable]
+    public Task StartHighlightAtAsync(double seconds)
+    {
+        if (highlightForm is { HighlightId: not null })
+        {
+            error = "Save or cancel the highlight being edited first.";
+        }
+        else
+        {
+            error = null;
+            var start = SceneTimeFormat.FormatPrecise(Clamp(seconds));
+            if (highlightForm is null)
+            {
+                highlightForm = new HighlightFormModel { Start = start };
+            }
+            else
+            {
+                highlightForm.Start = start;
+            }
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Shift+H: ends the in-progress highlight (the open add form) at the player's current
+    /// time and saves it.</summary>
+    [JSInvokable]
+    public async Task EndHighlightAtAsync(double seconds)
+    {
+        if (highlightForm is not { HighlightId: null } adding)
+        {
+            error = "Press H to start a highlight first.";
+            StateHasChanged();
+            return;
+        }
+
+        adding.End = SceneTimeFormat.FormatPrecise(Clamp(seconds));
+        await SaveHighlightAsync();
+        StateHasChanged();
+    }
+
+    // --- Apexes ---
+
+    private async Task StartAddApexAsync()
+    {
+        error = null;
+        await ReloadCastAsync();
+        var time = await CurrentTimeAsync();
+        apexForm = new ApexFormModel { Time = time is { } t ? SceneTimeFormat.FormatPrecise(t) : string.Empty };
+    }
+
+    private async Task StartEditApexAsync(ApexItem apex)
+    {
+        error = null;
+        await ReloadCastAsync();
+        apexForm = new ApexFormModel
+        {
+            ApexId = apex.Id,
+            Time = SceneTimeFormat.FormatPrecise(apex.Seconds),
+            LeadIn = ApexWindowText.Format(apex.OwnLeadInSeconds),
+            Tail = ApexWindowText.Format(apex.OwnTailSeconds),
+            Tags = [.. apex.Tags],
+            ActorIds = apex.Actors.Count > 0 ? [.. apex.Actors.Select(a => a.ActorId)] : null
+        };
+    }
+
+    private async Task SetApexTimeFromPlayerAsync()
+    {
+        if (apexForm is not null && await TimeFromPlayerAsync() is { } text) apexForm.Time = text;
+    }
+
+    /// <summary>A lead-in/tail Now button: the playhead's distance before (lead-in) or after
+    /// (tail) the form's apex time.</summary>
+    private async Task SetApexWindowFromPlayerAsync(bool tail)
+    {
+        if (apexForm is not { } form) return;
+        if (!SceneTimeFormat.TryParse(form.Time, out var apexSeconds))
+        {
+            error = "Enter the apex's time first.";
+            return;
+        }
+        if (await CurrentTimeAsync() is not { } playhead)
+        {
+            error = "Start playback to use the player's time.";
+            return;
+        }
+        if (ApexRanges.OffsetFromPlayhead(apexSeconds, playhead, tail) is not { } offset)
+        {
+            error = tail ? "Move the player after the apex to set its tail." : "Move the player before the apex to set its lead-in.";
+            return;
+        }
+
+        error = null;
+        if (tail) form.Tail = ApexWindowText.Format(offset);
+        else form.LeadIn = ApexWindowText.Format(offset);
+    }
+
+    private async Task SaveApexAsync()
+    {
+        if (apexForm is not { } form || busy) return;
+
+        if (!SceneTimeFormat.TryParse(form.Time, out var seconds))
+        {
+            error = "Enter the time as m:ss or h:mm:ss.";
+            return;
+        }
+        if (!ApexWindowText.TryParse(form.LeadIn, out var leadIn) || !ApexWindowText.TryParse(form.Tail, out var tail))
+        {
+            error = "Enter the lead-in and tail as seconds, or leave them blank.";
+            return;
+        }
+
+        var tagIds = form.Tags.Select(t => t.TagId).ToList();
+        var actorIds = form.ActorIds?.ToList() ?? [];
+        var window = new ApexWindowOverride(leadIn, tail);
+        await RunAsync(async () =>
+        {
+            var result = form.ApexId is { } apexId
+                ? await ApexService.UpdateApexAsync(apexId, seconds, tagIds, actorIds, window)
+                : await ApexService.AddApexAsync(MovieId, seconds, tagIds, actorIds, window);
+            return (result.Success, result.ErrorMessage, result.MovieTagsChanged);
+        }, closeForm: () => apexForm = null);
+    }
+
+    private Task ToggleApexFavoriteAsync(ApexItem apex) =>
+        RunAsync(async () =>
+        {
+            await ApexService.ToggleFavoriteAsync(apex.Id);
+            return (true, null, false);
+        });
+
+    /// <summary>a: opens the Mark apex form at the player's current time with the previous
+    /// apex's tags and its own actors — without any, the new apex inherits.
+    /// Pressing it again while adding moves the time; ignored while an existing apex is being edited.</summary>
+    [JSInvokable]
+    public Task StartApexAtAsync(double seconds)
+    {
+        if (apexForm is { ApexId: not null })
+        {
+            error = "Save or cancel the apex being edited first.";
+        }
+        else
+        {
+            error = null;
+            var time = Clamp(seconds);
+            if (apexForm is null)
+            {
+                var previous = ApexRanges.PreviousFor(apexes, time);
+                apexForm = new ApexFormModel
+                {
+                    Time = SceneTimeFormat.FormatPrecise(time),
+                    Tags = previous is null ? [] : [.. previous.Tags],
+                    ActorIds = previous is { Actors.Count: > 0 } ? [.. previous.Actors.Select(a => a.ActorId)] : null
+                };
+            }
+            else
+            {
+                apexForm.Time = SceneTimeFormat.FormatPrecise(time);
+            }
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    // --- Deleting ---
+
+    private async Task ConfirmDeleteAsync()
+    {
+        switch (pendingDelete)
+        {
+            // A scene's tag links go with it.
+            case SceneItem scene:
+                await RunSceneAsync(() => SceneService.DeleteSceneAsync(scene.Id), movieTagsMayChange: true,
+                    closeForm: sceneForm?.SceneId == scene.Id ? () => sceneForm = null : null);
+                break;
+            case HighlightItem highlight:
+                await RunAsync(async () =>
+                {
+                    var result = await HighlightService.DeleteHighlightAsync(highlight.Id);
+                    return (result.Success, result.ErrorMessage, result.MovieTagsChanged);
+                }, closeForm: highlightForm?.HighlightId == highlight.Id ? () => highlightForm = null : null);
+                break;
+            case ApexItem apex:
+                await RunAsync(async () =>
+                {
+                    var result = await ApexService.DeleteApexAsync(apex.Id);
+                    return (result.Success, result.ErrorMessage, result.MovieTagsChanged);
+                }, closeForm: apexForm?.ApexId == apex.Id ? () => apexForm = null : null);
+                break;
+        }
+        pendingDelete = null;
+    }
+
+    private void CancelDelete()
+    {
+        if (!busy) pendingDelete = null;
+    }
+
+    // --- Running changes ---
+
+    private async Task RunShortcutAsync(Func<Task> operation)
+    {
+        await operation();
+        StateHasChanged();
+    }
+
+    private Task RunSceneAsync(Func<Task<SceneOperationResult>> operation, bool movieTagsMayChange = false, Action? closeForm = null) =>
+        RunAsync(async () =>
+        {
+            var result = await operation();
+            return (result.Success, result.ErrorMessage, movieTagsMayChange);
+        }, closeForm);
+
+    /// <summary>Runs one change, then reloads the whole tree; closeForm runs on success.</summary>
+    private async Task RunAsync(Func<Task<(bool Success, string? Error, bool MovieTagsChanged)>> operation, Action? closeForm = null)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var (success, failure, movieTagsChanged) = await operation();
+            if (!success)
+            {
+                error = failure;
+                return;
+            }
+
+            error = null;
+            closeForm?.Invoke();
+            await ReloadAsync();
+            if (movieTagsChanged) await OnMovieTagsMayHaveChanged.InvokeAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    // --- Player ---
+
+    private Task SeekToAsync(double seconds) => InvokePlayerAsync("seek", seconds);
+
+    private Task PlayHighlightAsync(HighlightItem highlight) => InvokePlayerAsync("playClip", highlight.StartSeconds, highlight.EndSeconds);
+
+    // Re-read whenever a form opens: the cast may have changed since (e.g. Edit Cast on the Review card).
+    private async Task ReloadCastAsync() => cast = await SceneService.GetCastOptionsAsync(MovieId);
+
+    private async Task InvokePlayerAsync(string function, params object[] args)
+    {
+        try
+        {
+            if (await GetModuleAsync() is { } module)
+            {
+                await module.InvokeAsync<bool>(function, [VideoSelector, .. args]);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    /// <summary>The player's time formatted for a form, or null (with an error shown) when it isn't playing.</summary>
+    private async Task<string?> TimeFromPlayerAsync()
+    {
+        var time = await CurrentTimeAsync();
+        if (time is null)
+        {
+            error = "Start playback to use the player's time.";
+            return null;
+        }
+
+        error = null;
+        return SceneTimeFormat.FormatPrecise(time.Value);
+    }
+
+    private async Task<double?> CurrentTimeAsync()
+    {
+        try
+        {
+            if (await GetModuleAsync() is not { } module) return null;
+            var time = await module.InvokeAsync<double?>("currentTime", VideoSelector);
+            return time is { } t ? Clamp(t) : null;
+        }
+        catch (JSDisconnectedException)
+        {
+            return null;
+        }
+    }
+
+    private double Clamp(double seconds) =>
+        DurationSeconds is { } duration ? Math.Min(seconds, duration) : seconds;
+
+    /// <summary>The JS module, or null when it can't be loaded (circuit gone, script error) — player
+    /// features then quietly do nothing rather than failing the circuit.</summary>
+    private async Task<IJSObjectReference?> GetModuleAsync()
+    {
+        try
+        {
+            return jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or JSException)
+        {
+            return null;
+        }
+    }
+
+    private RenderFragment SceneFormFragment() => @<div class="scene-editor-form-wrap">
+    <form class="scene-editor-form" @onsubmit="SaveSceneAsync" @onsubmit:preventDefault>
+        <label class="scene-editor-field">
+            <span class="scene-editor-label">Title</span>
+            <input class="scene-editor-input scene-editor-title-input" type="text" maxlength="200" placeholder="Scene @(sceneForm?.SceneId is { } id ? scenes.FirstOrDefault(s => s.Id == id)?.Position : scenes.Count + 1)" @bind="sceneForm!.Title" @bind:event="oninput" />
+        </label>
+        <div class="scene-editor-times">
+            <label class="scene-editor-field">
+                <span class="scene-editor-label">Start</span>
+                <span class="scene-editor-time-row">
+                    <input class="scene-editor-input scene-editor-start-input" type="text" inputmode="decimal" placeholder="m:ss" @bind="sceneForm!.Start" @bind:event="oninput" />
+                    <button type="button" class="scene-editor-btn scene-editor-now-btn scene-editor-start-now-btn" @onclick="() => SetSceneTimeFromPlayerAsync(end: false)" title="Set from the player's current time">Now</button>
+                </span>
+            </label>
+            <label class="scene-editor-field">
+                <span class="scene-editor-label">End <span class="scene-editor-hint">(optional)</span></span>
+                <span class="scene-editor-time-row">
+                    <input class="scene-editor-input scene-editor-end-input" type="text" inputmode="decimal" placeholder="next scene" @bind="sceneForm!.End" @bind:event="oninput" />
+                    <button type="button" class="scene-editor-btn scene-editor-now-btn scene-editor-end-now-btn" @onclick="() => SetSceneTimeFromPlayerAsync(end: true)" title="Set from the player's current time">Now</button>
+                    @if (!string.IsNullOrEmpty(sceneForm!.End))
+                    {
+                        <button type="button" class="scene-editor-icon-btn scene-editor-clear-end-btn" @onclick="() => sceneForm!.End = string.Empty" aria-label="Clear end" title="Clear end (run to the next scene)">×</button>
+                    }
+                </span>
+            </label>
+        </div>
+        <div class="scene-editor-form-actions">
+            <button type="submit" class="scene-editor-btn scene-editor-save-btn" disabled="@busy">@(sceneForm!.SceneId is null ? "Add" : "Save")</button>
+            <button type="button" class="scene-editor-btn scene-editor-cancel-btn" @onclick="() => { sceneForm = null; error = null; }" disabled="@busy">Cancel</button>
+        </div>
+    </form>
+    @* Outside the <form>: Enter in the tag search must not submit the scene's times/title.
+       Actor and tag changes apply immediately, independent of Save. *@
+    @if (sceneForm?.SceneId is { } editingId && scenes.FirstOrDefault(s => s.Id == editingId) is { } editing)
+    {
+        <div class="scene-editor-links">
+            <label class="scene-editor-hidden-toggle" title="Keep the scene (and its chapter) but leave it out of the Scenes overview, e.g. an intro or outro">
+                <input type="checkbox" class="scene-editor-hidden-input" checked="@editing.IsHiddenFromOverview" disabled="@busy"
+                       @onchange="e => SetHiddenFromOverviewAsync(editing.Id, e.Value is true)" />
+                <span>Hide from Scenes overview</span>
+            </label>
+            <div class="scene-editor-field">
+                <span class="scene-editor-label">Actors</span>
+                @{ var actorForm = new SceneActorFormModel(editing.Actors); }
+                <ClipActorChips Form="actorForm" Cast="cast" Inherited="ClipActors.ForNewScene(cast)" ClassPrefix="scene-editor" Busy="busy"
+                                OnChanged="() => SetSceneActorsAsync(editing.Id, actorForm)" />
+            </div>
+            <div class="scene-editor-field">
+                <span class="scene-editor-label">Scene tags</span>
+                @{
+                    // What the scene's highlights and apexes roll up to it, grayed beside its own.
+                    // Its own tags they carry anyway are marked redundant.
+                    var editingNode = tree.Scenes.FirstOrDefault(n => n.Scene.Id == editing.Id);
+                    var rolledUp = ImplicitChip.ForTags(editingNode?.ImplicitTags ?? []);
+                    var redundant = editingNode?.RedundantTags ?? [];
+                }
+                @if (editing.Tags.Count > 0 || rolledUp.Count > 0)
+                {
+                    <div class="scene-editor-chips">
+                        @foreach (var tag in editing.Tags)
+                        {
+                            <span class="scene-editor-chip scene-editor-chip-on scene-editor-tag-chip">
+                                @ImplicitChip.TagLabel(tag)
+                                @if (redundant.FirstOrDefault(r => r.Tag.TagId == tag.TagId) is { } carried)
+                                {
+                                    <RedundantMark Tooltip="@ImplicitChip.RedundantTagTooltip(carried.Sources)" />
+                                }
+                                <button type="button" class="scene-editor-chip-remove" disabled="@busy" aria-label="Remove @tag.Name" @onclick="() => RemoveSceneTagAsync(editing.Id, tag.TagId)">×</button>
+                            </span>
+                        }
+                        <ImplicitChips Items="rolledUp" />
+                    </div>
+                }
+                <TagSearchAdd ExcludedTagIds="@editing.Tags.Select(t => t.TagId).ToHashSet()" OnAdd="tagId => AddSceneTagAsync(editing.Id, tagId)" />
+            </div>
+        </div>
+    }
+    else if (sceneForm is { SceneId: null })
+    {
+        <p class="scene-editor-hint scene-editor-links-hint">Add the scene first, then edit it to set actors and tags.</p>
+    }
+    </div>;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (disposed) return;
+        disposed = true;
+        if (subscribed)
+        {
+            SceneMediaQueue.Generated -= OnMediaGenerated;
+        }
+        if (shortcuts is not null)
+        {
+            await shortcuts.DisposeAsync(jsModule);
+        }
+        try
+        {
+            if (jsModule is not null)
+            {
+                await jsModule.InvokeVoidAsync("unwatchTopFit", topBlock);
+                await jsModule.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

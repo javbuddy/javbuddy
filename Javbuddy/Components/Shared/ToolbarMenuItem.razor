@@ -1,0 +1,19 @@
+<button type="button" class="toolbar-menu-item" role="menuitem" disabled="@Disabled" title="@Title" @onclick="OnClickAsync">
+    @ChildContent
+</button>
+
+@code {
+    /// <summary>One action inside a <see cref="ToolbarMenuButton"/>. Picking it closes the menu,
+    /// then runs <see cref="OnClick"/>.</summary>
+    [CascadingParameter] public ToolbarMenuButton? Menu { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private async Task OnClickAsync()
+    {
+        Menu?.Close();
+        await OnClick.InvokeAsync();
+    }
+}

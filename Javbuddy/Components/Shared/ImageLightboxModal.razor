@@ -1,0 +1,168 @@
+@* Full-screen single-image viewer. Shared by ActorDetail.razor's hero avatar (with an optional
+   Original/Cropped variant toggle) and MovieDetail.razor's main poster (single image, no toggle). *@
+
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (Show)
+{
+    <div class="image-lightbox-backdrop" tabindex="0" data-zoom-container @ref="backdropRef" @onclick="CloseAsync">
+        <div class="image-lightbox-topbar" @onclick:stopPropagation="true">
+            <div class="image-lightbox-title-area">
+                <span class="image-lightbox-name" title="@Title">@Title</span>
+                @if (AlternateImageUrl is not null)
+                {
+                    <span class="image-lightbox-badge">@(showAlternate ? AlternateLabelText : PrimaryLabelText)</span>
+                }
+            </div>
+            <div class="image-lightbox-actions">
+                <ImageZoomControls ResetKey="showAlternate" />
+                @if (AlternateImageUrl is not null)
+                {
+                    <div class="btn-group btn-group-sm" role="group" aria-label="Image variant">
+                        <button type="button"
+                                class="btn @(showAlternate ? "btn-light" : "btn-outline-light")"
+                                @onclick="() => showAlternate = true">
+                            @AlternateLabelText
+                        </button>
+                        <button type="button"
+                                class="btn @(!showAlternate ? "btn-light" : "btn-outline-light")"
+                                @onclick="() => showAlternate = false">
+                            @PrimaryLabelText
+                        </button>
+                    </div>
+                }
+                @if (OnCropRequested.HasDelegate)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-light ms-2 image-lightbox-crop-btn" @onclick="HandleCropClick" title="Crop Cover">
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true" class="me-1"><path d="M3.5.5A.5.5 0 0 1 4 1v13h10a.5.5 0 0 1 0 1h-2v1.5a.5.5 0 0 1-1 0V15H4a1 1 0 0 1-1-1V4H1.5a.5.5 0 0 1 0-1H3V1.5a.5.5 0 0 1 .5-.5z"/><path d="M12.5 2a.5.5 0 0 1 .5.5V12h-9.5a.5.5 0 0 1 0-1H12V2.5a.5.5 0 0 1 .5-.5z"/></svg>
+                        Crop Cover
+                    </button>
+                }
+                <button type="button" class="image-lightbox-close-btn" @onclick="CloseAsync" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
+                        <path d="M2.146 2.146a.5.5 0 0 1 .708 0L8 7.293l5.146-5.147a.5.5 0 1 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="image-lightbox-content" @onclick:stopPropagation="true">
+            <img class="image-lightbox-image" data-zoom-image src="@CurrentImageUrl" alt="@Title" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string ImageUrl { get; set; } = string.Empty;
+    [Parameter] public string? AlternateImageUrl { get; set; }
+    [Parameter] public string? PrimaryLabel { get; set; }
+    [Parameter] public string? AlternateLabel { get; set; }
+    [Parameter] public bool DefaultToAlternate { get; set; } = true;
+    [Parameter] public EventCallback OnCropRequested { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string PrimaryLabelText => PrimaryLabel ?? "Cropped portrait";
+    private string AlternateLabelText => AlternateLabel ?? "Original photo";
+
+    private bool showAlternate = true;
+    private bool prevShow;
+    private bool shouldFocus;
+    private ElementReference backdropRef;
+    private readonly string key = Guid.NewGuid().ToString("N");
+    private DotNetObjectReference<ImageLightboxModal>? selfRef;
+    private IJSObjectReference? jsModule;
+    private bool disposed;
+
+    private string CurrentImageUrl => (AlternateImageUrl is not null && showAlternate) ? AlternateImageUrl : ImageUrl;
+
+    protected override void OnParametersSet()
+    {
+        if (Show && !prevShow)
+        {
+            showAlternate = AlternateImageUrl is not null && DefaultToAlternate;
+            shouldFocus = true;
+        }
+        prevShow = Show;
+    }
+
+    private async Task HandleCropClick()
+    {
+        await CloseAsync();
+        if (OnCropRequested.HasDelegate)
+        {
+            await OnCropRequested.InvokeAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ImageLightboxModal.razor.js");
+                if (disposed)
+                {
+                    // Disposed while the import was pending: DisposeAsync had no module to release
+                    // yet, and an init call would hand JS a DotNetObjectReference it already
+                    // disposed, an ObjectDisposedException that ends the circuit.
+                    await jsModule.DisposeAsync();
+                    return;
+                }
+                selfRef = DotNetObjectReference.Create(this);
+                await jsModule.InvokeVoidAsync("init", key, selfRef);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        if (shouldFocus)
+        {
+            shouldFocus = false;
+            try
+            {
+                await backdropRef.FocusAsync();
+            }
+            catch
+            {
+                // In headless testing or unmounted elements, focus may not be supported
+            }
+        }
+    }
+
+    [JSInvokable]
+    public async Task HandleEscape()
+    {
+        if (Show)
+        {
+            await CloseAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        selfRef?.Dispose();
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("dispose", key);
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+}

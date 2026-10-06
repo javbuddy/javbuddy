@@ -1,0 +1,114 @@
+@* The Movie Detail page's Cast section: the cast as avatars (tracked actors link to their page),
+   plus adding and removing cast. OnChanged asks the page to reload the movie. *@
+@using Javbuddy.Models
+@inject IMovieService MovieService
+
+<div class="movie-detail-section">
+    <div class="movie-detail-section-header">
+        <h2>Cast</h2>
+        <button type="button" class="movie-detail-edit-tags-btn movie-detail-edit-cast-btn" @onclick="ToggleCastEdit">@(editingCast ? "Done" : "Edit Cast")</button>
+    </div>
+    @if (castEditError is not null)
+    {
+        <p class="movie-detail-cast-error">@castEditError</p>
+    }
+    @if (Cast.Count > 0)
+    {
+        <div class="movie-detail-cast-grid">
+            @foreach (var cast in Cast)
+            {
+                <div class="movie-detail-cast-item @(cast.ActorId is not null ? "movie-detail-cast-item-tracked" : "")">
+                    @if (cast.ActorId is not null)
+                    {
+                        <div class="movie-detail-cast-avatar-wrap">
+                            <a class="movie-detail-cast-avatar @(cast.HasImage ? "movie-detail-cast-avatar-photo" : "")" href="@($"/actors/{Uri.EscapeDataString(cast.Name)}")">
+                                @if (cast.HasImage)
+                                {
+                                    <img src="@MovieDetailText.ActorThumbUrl(cast.ActorId, cast.ImageVersion)" alt="@cast.Name" loading="lazy" />
+                                }
+                                else
+                                {
+                                    @ActorMatching.Initials(cast.Name)
+                                }
+                            </a>
+                            @if (editingCast)
+                            {
+                                <button type="button" class="movie-detail-cast-remove-btn" @onclick="() => RemoveCastActorAsync(cast.ActorId!.Value)" aria-label="Remove @cast.Name">×</button>
+                            }
+                        </div>
+                        <a class="movie-detail-cast-name" href="@($"/actors/{Uri.EscapeDataString(cast.Name)}")">@cast.Name<BirthdayIndicator BirthDate="cast.BirthDate" /></a>
+                        @if (cast.IsUnderage)
+                        {
+                            <span class="movie-detail-cast-age movie-detail-cast-age-underage" title="@MovieDetailText.UnderageAgeTooltip" aria-label="Age @cast.Age. @MovieDetailText.UnderageAgeTooltip">⚠ Age @cast.Age</span>
+                        }
+                        else if (cast.Age is not null)
+                        {
+                            <span class="movie-detail-cast-age">Age @cast.Age</span>
+                        }
+                    }
+                    else
+                    {
+                        <div class="movie-detail-cast-avatar-wrap">
+                            <div class="movie-detail-cast-avatar @(cast.HasImage ? "movie-detail-cast-avatar-photo" : "")">
+                                @if (cast.HasImage)
+                                {
+                                    <img src="@MovieDetailText.ActorThumbUrl(cast.ActorId, cast.ImageVersion)" alt="@cast.Name" loading="lazy" />
+                                }
+                                else
+                                {
+                                    @ActorMatching.Initials(cast.Name)
+                                }
+                            </div>
+                            @if (editingCast)
+                            {
+                                <button type="button" class="movie-detail-cast-remove-btn" @onclick="() => RemoveCastActorByNameAsync(cast.Name)" aria-label="Remove @cast.Name">×</button>
+                            }
+                            else
+                            {
+                                <div class="movie-detail-cast-warning-badge" title="Not matched to a tracked actor" aria-label="Not matched to a tracked actor">
+                                    <svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor" aria-hidden="true"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.891 0 1.439-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" /></svg>
+                                </div>
+                            }
+                        </div>
+                        <span class="movie-detail-cast-name">@cast.Name</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+    @if (editingCast)
+    {
+        <CastSearchAdd ExcludedActorIds="@Cast.Where(c => c.ActorId is not null).Select(c => c.ActorId!.Value).ToHashSet()" OnAdd="AddCastActorAsync" />
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<MovieCastEntry> Cast { get; set; } = [];
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool editingCast;
+    private string? castEditError;
+
+    private void ToggleCastEdit()
+    {
+        editingCast = !editingCast;
+        castEditError = null;
+    }
+
+    private Task AddCastActorAsync(int actorId) =>
+        ApplyAsync(MovieService.AddActorToMovieAsync(Movie.Id, actorId));
+
+    private Task RemoveCastActorAsync(int actorId) =>
+        ApplyAsync(MovieService.RemoveActorFromMovieAsync(Movie.Id, actorId));
+
+    private Task RemoveCastActorByNameAsync(string actorName) =>
+        ApplyAsync(MovieService.RemoveActorFromMovieAsync(Movie.Id, actorName));
+
+    private async Task ApplyAsync(Task<OperationResult> change)
+    {
+        var result = await change;
+        castEditError = result.Success ? null : result.ErrorMessage;
+        await OnChanged.InvokeAsync();
+    }
+}

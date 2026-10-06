@@ -1,0 +1,950 @@
+@page "/movies/cleanup"
+@page "/movies/review"
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Trickplay
+@using Javbuddy.Services.VideoRepair
+@using Javbuddy.Components.Pages.MovieCleanupSections
+@inject IMovieCleanupService CleanupService
+@inject IActorService ActorService
+@inject IMovieStreamService StreamService
+@inject ITrickplayService TrickplayService
+@inject IVideoRepairService RepairService
+@inject MovieChangeNotifier MovieChangeNotifier
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<PageTitle>@ModeTitle · Javbuddy</PageTitle>
+
+<div class="cleanup-container">
+    <div class="cleanup-top-bar">
+        <div class="cleanup-top-heading">
+            <h1 class="cleanup-page-title">@ModeTitle</h1>
+            <span class="cleanup-subtitle">@(reviewMode
+                ? "Step through your library one movie at a time — check the cast, tags and video, then move on."
+                : "Review your library one movie at a time — keep, snooze, or remove.")</span>
+            <nav class="cleanup-mode-toggle" aria-label="Mode">
+                <a class="cleanup-mode-link @(reviewMode ? "cleanup-mode-link-active" : null)" href="@ModeUrl(CleanupMode.Review)">Review</a>
+                <a class="cleanup-mode-link @(reviewMode ? null : "cleanup-mode-link-active")" href="@ModeUrl(CleanupMode.Cleanup)">Cleanup</a>
+            </nav>
+            @if (scopeActorId is not null)
+            {
+                <div class="cleanup-scope">
+                    <span class="cleanup-scope-label">
+                        Reviewing:
+                        @if (scopeActor is not null)
+                        {
+                            <a href="@($"/actors/{Uri.EscapeDataString(scopeActor.DisplayName)}")">@scopeActor.DisplayName</a>
+                        }
+                        else
+                        {
+                            <span>one actor</span>
+                        }
+                    </span>
+                    <button type="button" class="cleanup-btn cleanup-btn-outline cleanup-scope-clear" @onclick="ClearScopeAsync" disabled="@acting" title="Stop scoping to this actor and review the whole library">All movies</button>
+                </div>
+            }
+        </div>
+        @if (queue is not null && !sessionEnded)
+        {
+            <div class="cleanup-controls">
+                @if (brokenBFrameCount > 0)
+                {
+                    <button type="button" class="cleanup-btn cleanup-batch-repair-btn" @onclick="BatchRepairBrokenBFramesAsync" disabled="@(acting || batchRepairing)" title="Repair all movies flagged with broken B-frames in background">
+                        @(batchRepairing ? "Repairing…" : $"Repair Broken B-Frames ({brokenBFrameCount})")
+                    </button>
+                }
+                @if (availableLibraries is { Count: > 0 })
+                {
+                    <label class="cleanup-order-label" for="cleanup-library">
+                        Library
+                        <select id="cleanup-library" @bind="selectedLibrary" @bind:after="OnLibraryChangedAsync">
+                            <option value="">All libraries</option>
+                            @foreach (var library in availableLibraries)
+                            {
+                                <option value="@library">@library</option>
+                            }
+                        </select>
+                    </label>
+                }
+                <label class="cleanup-order-label" for="cleanup-order">
+                    Queue order
+                    <select id="cleanup-order" @bind="selectedOrder" @bind:after="OnOrderChangedAsync">
+                        <option value="Random">Random</option>
+                        <option value="ByActress">By actress</option>
+                        <option value="OldestAdded">Oldest added first</option>
+                        <option value="LargestFirst">Largest first</option>
+                    </select>
+                </label>
+                @if (reviewMode)
+                {
+                    <label class="cleanup-unreviewed-label" for="cleanup-unreviewed">
+                        <input id="cleanup-unreviewed" type="checkbox" @bind="unreviewedOnly" @bind:after="OnUnreviewedOnlyChangedAsync" disabled="@acting" />
+                        Unreviewed only
+                    </label>
+                }
+                <button type="button" class="cleanup-btn cleanup-btn-outline cleanup-restart-btn" @onclick="RestartSessionAsync" disabled="@acting" title="Discard current session and generate a fresh queue">Restart</button>
+                <div class="cleanup-counts">
+                    <span class="cleanup-session-count">Session: @sessionReviewedCount reviewed</span>
+                    <span class="cleanup-eligible-pill">@queue.Count eligible</span>
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (queue is null)
+    {
+        <LoadingIndicator />
+    }
+    else if (sessionEnded)
+    {
+        <MovieCleanupSummary Summary="summary" ReviewMode="reviewMode" OnFinish="Finish" OnStartNewSession="StartNewSessionAsync" />
+    }
+    else if (currentMovie is null)
+    {
+        <p class="cleanup-empty">No movies eligible for @(reviewMode ? "review" : "cleanup") right now.</p>
+    }
+    else
+    {
+        <div class="cleanup-card">
+            <VideoPlayerColumn @key="currentMovie.Id"
+                               VideoClass="cleanup-video"
+                               Class="cleanup-player-column"
+                               Src="@(showPlayer ? streamUrl : null)"
+                               Trickplay="trickplay"
+                               DurationSeconds="currentMovie.MediaDurationSeconds"
+                               ShowTimeline="true"
+                               Scenes="currentScenes"
+                               Suggestions="currentSuggestions"
+                               Highlights="currentHighlights"
+                               Apexes="currentApexes"
+                               VrMode="vrMode"
+                               SeekKeys="reviewMode"
+                               ScrubBarShownChanged="shown => scrubBarShown = shown">
+                @if (showPlayer && streamUrl is not null)
+                {
+                    <button type="button" class="cleanup-vr-toggle @(vrMode ? "cleanup-vr-toggle-on" : null)" aria-pressed="@(vrMode ? "true" : "false")" title="Unwarp a side-by-side VR video into a draggable 2D view" @onclick="ToggleVrMode">VR 2D</button>
+                }
+                else
+                {
+                    @if (HasImage(currentMovie))
+                    {
+                        <img class="cleanup-poster-img" src="@PosterFullUrl(currentMovie.Code!)" alt="@currentMovie.DisplayName" />
+                    }
+                    else
+                    {
+                        <div class="cleanup-poster-placeholder">@currentMovie.Code</div>
+                    }
+
+                    @if (currentMovie.HasLocalVideo)
+                    {
+                        @if (!loadingPlayer)
+                        {
+                            <button type="button" class="cleanup-play-btn" @onclick="PlayAsync" aria-label="Play">
+                                <span class="cleanup-play-icon" aria-hidden="true"></span>
+                            </button>
+                        }
+                    }
+                    else
+                    {
+                        <div class="cleanup-not-linked-note">No local video file — no preview available</div>
+                    }
+                }
+            </VideoPlayerColumn>
+            <div class="cleanup-info">
+                <div class="cleanup-details">
+                    @if (!string.IsNullOrWhiteSpace(currentMovie.Code))
+                    {
+                        <button type="button" class="cleanup-cover cleanup-cover-clickable" @onclick="OpenCoverLightbox" title="Click to view full jacket image" aria-label="View cover image">
+                            <img class="cleanup-cover-img" src="@PosterFullUrl(currentMovie.Code)" alt="@currentMovie.DisplayName" loading="lazy" />
+                        </button>
+                    }
+                    <div class="cleanup-code">
+                        @if (!string.IsNullOrWhiteSpace(currentMovie.Code))
+                        {
+                            <a href="@($"/movies/{Uri.EscapeDataString(currentMovie.Code)}")" target="_blank" class="cleanup-code-link">@currentMovie.Code</a>
+                        }
+                        else
+                        {
+                            @currentMovie.Code
+                        }
+                    </div>
+                    <div class="cleanup-title" title="@currentMovie.DisplayName">@currentMovie.DisplayName</div>
+                    <MovieCleanupCastTags @key="editorGeneration"
+                                          Movie="currentMovie"
+                                          Actors="currentActors"
+                                          Tags="currentTags"
+                                          OnCastChanged="OnCastChangedAsync"
+                                          OnTagsChanged="OnTagsChangedAsync" />
+                    @if (reviewMode)
+                    {
+                        <div class="cleanup-scenes">
+                            <ClipEditor @key="currentMovie.Id"
+                                        @ref="clipEditor"
+                                        MovieId="currentMovie.Id"
+                                        VideoSelector="video.cleanup-video"
+                                        DurationSeconds="currentMovie.MediaDurationSeconds"
+                                        EnableShortcuts="true"
+                                        HasLocalVideo="currentMovie.HasLocalVideo"
+                                        Trickplay="trickplay"
+                                        OnScenesChanged="OnScenesChanged"
+                                        OnHighlightsChanged="changed => currentHighlights = changed"
+                                        OnApexesChanged="changed => currentApexes = changed"
+                                        OnSuggestionsChanged="OnSuggestionsChanged"
+                                        OnMovieTagsMayHaveChanged="OnMovieTagsMayHaveChangedAsync">
+                                <BeforeTools>
+                                    <MovieTagsEditor @ref="movieTagsEditor" MovieId="currentMovie.Id" OnChanged="LoadCurrentTagsAsync" />
+                                </BeforeTools>
+                            </ClipEditor>
+                        </div>
+                    }
+                    <div class="cleanup-meta">
+                        @if ((currentActors is null || currentActors.Count == 0) && !string.IsNullOrWhiteSpace(currentMovie.MetaActresses))
+                        {
+                            <span class="cleanup-meta-actresses">@currentMovie.MetaActresses</span>
+                        }
+                        <div class="cleanup-meta-props">
+                            @if (currentMovie.FileAddedAt is { } addedAt)
+                            {
+                                <span>Added @addedAt.ToString("MMM d, yyyy")</span>
+                            }
+                            @if (currentMovie.LocalFileSizeDisplay is { } size)
+                            {
+                                <span>@size</span>
+                            }
+                            @if (currentMovie.HasBrokenBFrames)
+                            {
+                                <span class="cleanup-bframe-badge">Broken B-Frames</span>
+                            }
+                        </div>
+                    </div>
+                    @if (actionError is not null)
+                    {
+                        <p class="cleanup-action-error">@actionError</p>
+                    }
+                </div>
+                <div class="cleanup-actions-group">
+                    <button type="button"
+                            class="cleanup-btn cleanup-bframe-btn @(currentMovie.HasBrokenBFrames ? "cleanup-bframe-btn-marked" : "cleanup-btn-outline")"
+                            @onclick="ToggleBrokenBFrameAsync"
+                            disabled="@acting"
+                            title="@(currentMovie.HasBrokenBFrames ? "Remove broken B-frame flag" : "Flag movie as having broken B-frames (repair later)")">
+                        @(currentMovie.HasBrokenBFrames ? "Unmark B-Frame" : "Broken B-Frame")
+                    </button>
+                    <div class="cleanup-actions">
+                        @if (reviewMode)
+                        {
+                            <button type="button" class="cleanup-btn cleanup-next-btn" @onclick="Next" disabled="@acting" title="Mark as reviewed and advance (N)">Next</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="cleanup-btn cleanup-btn-danger cleanup-delete-btn" @onclick="RequestDelete" disabled="@acting">Delete</button>
+                            <div class="cleanup-btn-row">
+                                <button type="button" class="cleanup-btn cleanup-btn-outline cleanup-snooze-btn" @onclick="SnoozeAsync" disabled="@acting">Snooze 90d</button>
+                                <button type="button" class="cleanup-btn cleanup-btn-outline cleanup-blacklist-btn" @onclick="BlacklistAsync" disabled="@acting">Blacklist</button>
+                            </div>
+                        }
+                        <div class="cleanup-btn-row">
+                            @if (!reviewMode)
+                            {
+                                <button type="button" class="cleanup-btn cleanup-btn-text cleanup-skip-btn" @onclick="Skip" disabled="@acting">Skip</button>
+                            }
+                            <button type="button" class="cleanup-btn cleanup-btn-text cleanup-stop-btn" @onclick="Stop" disabled="@acting">Stop</button>
+                        </div>
+                    </div>
+                    <p class="cleanup-footnote">@(reviewMode
+                        ? "Next marks this movie as reviewed and advances."
+                        : "Skip moves on without changes — this movie may reappear in a future session.")</p>
+                    @if (reviewMode)
+                    {
+                        <div class="cleanup-shortcuts">
+                            <ShortcutsInfo Shortcuts="ReviewShortcuts" Above="true" AlignStart="true" />
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @if (showDeleteConfirm && !reviewMode)
+        {
+            <div class="cleanup-modal-overlay">
+                <div class="cleanup-modal-box">
+                    <div class="cleanup-modal-head">Delete movie?</div>
+                    <div class="cleanup-modal-body">
+                        Delete <strong>@currentMovie.Code</strong> — @currentMovie.DisplayName — and its entire folder from disk? This can't be undone.
+                        @if (currentMovie.LocalFileSizeDisplay is { } freedSize)
+                        {
+                            <div class="cleanup-modal-freed">@freedSize will be freed.</div>
+                        }
+                    </div>
+                    <div class="cleanup-modal-foot">
+                        <button type="button" class="cleanup-btn cleanup-btn-outline cleanup-modal-cancel-btn" @onclick="CancelDelete" disabled="@acting">Cancel</button>
+                        <button type="button" class="cleanup-btn cleanup-btn-danger cleanup-modal-confirm-btn" @onclick="ConfirmDeleteAsync" disabled="@acting">Delete</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(currentMovie.Code))
+        {
+            <ImageLightboxModal Show="@showCoverLightbox"
+                                Title="@currentMovie.DisplayName"
+                                ImageUrl="@PosterFullUrl(currentMovie.Code)"
+                                AlternateImageUrl="@(HasImage(currentMovie) ? BackdropFullUrl(currentMovie.Code) : null)"
+                                PrimaryLabel="Poster"
+                                AlternateLabel="Full jacket"
+                                DefaultToAlternate="true"
+                                OnClose="CloseCoverLightbox" />
+        }
+    }
+</div>
+
+@code {
+    // Movie IDs only, shared with the tracked session; currentMovie is loaded on demand
+    // for queue[0].
+    private List<int>? queue;
+    private Movie? currentMovie;
+    private CleanupOrder selectedOrder = CleanupOrder.Random;
+    private CleanupMode mode;
+    private bool unreviewedOnly = true;
+    private List<string> availableLibraries = [];
+    private string? selectedLibrary;
+    private int sessionReviewedCount;
+    private bool showDeleteConfirm;
+    private bool showCoverLightbox;
+    private bool showPlayer;
+
+    // Listed in the Review card's shortcuts info icon; F only when the scrub bar or
+    // the VR viewer provides it.
+    private IReadOnlyList<KeyboardShortcut> ReviewShortcuts =>
+    [
+        KeyboardShortcut.PlayPause,
+        KeyboardShortcut.Seek,
+        KeyboardShortcut.FrameStep,
+        .. (showPlayer && streamUrl is not null && (scrubBarShown || vrMode) ? [KeyboardShortcut.Fullscreen] : Array.Empty<KeyboardShortcut>()),
+        new(["N"], "Next: mark this movie as reviewed and advance"),
+        KeyboardShortcut.NewScene,
+        KeyboardShortcut.EndScene,
+        KeyboardShortcut.StartHighlight,
+        KeyboardShortcut.EndHighlight,
+        KeyboardShortcut.MarkApex,
+    ];
+    private bool vrMode;
+    private bool loadingPlayer;
+    private string? streamUrl;
+    private TrickplayLayout? trickplay;
+    // Whether the VideoPlayerColumn shows its scrub bar.
+    private bool scrubBarShown;
+    private IReadOnlyList<SceneItem> currentScenes = [];
+    private IReadOnlyList<double> currentSuggestions = [];
+    private IReadOnlyList<HighlightItem> currentHighlights = [];
+    private IReadOnlyList<ApexItem> currentApexes = [];
+    private ClipEditor? clipEditor;
+    private MovieTagsEditor? movieTagsEditor;
+    private bool disposed;
+    private IJSObjectReference? jsModule;
+    private bool acting;
+    private string? actionError;
+    private List<CleanupActorItem> currentActors = [];
+    private List<CleanupTagItem> currentTags = [];
+    // Bumped whenever a card comes up, so the cast/tags editor starts over (not editing, no error).
+    private int editorGeneration;
+    private int brokenBFrameCount;
+    private bool batchRepairing;
+    private bool sessionEnded;
+    private MovieCleanupSessionSummary summary = MovieCleanupSessionSummary.Empty;
+
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    /// <summary>Launches the flow scoped to one actor's movies, from Actor Detail.</summary>
+    [SupplyParameterFromQuery(Name = "actorId")] public int? ActorId { get; set; }
+
+    private int? scopeActorId;
+    private Actor? scopeActor;
+
+    private bool reviewMode => mode == CleanupMode.Review;
+
+    private string ModeTitle => reviewMode ? "Review" : "Cleanup";
+
+    private static string ModeUrl(CleanupMode target) => target == CleanupMode.Review ? "/movies/review" : "/movies/cleanup";
+
+    /// <summary>The mode the current URL selects, or null once it points at some other page — the
+    /// location-changed handler fires for that navigation too, before this page is disposed.</summary>
+    private CleanupMode? ModeFromUrl() =>
+        Nav.ToBaseRelativePath(Nav.Uri).Split(['?', '#'])[0].TrimEnd('/').ToLowerInvariant() switch
+        {
+            "movies/review" => CleanupMode.Review,
+            "movies/cleanup" => CleanupMode.Cleanup,
+            _ => null
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        MovieChangeNotifier.Changed += OnMoviesChanged;
+        mode = ModeFromUrl() ?? CleanupMode.Cleanup;
+        unreviewedOnly = (mode == CleanupMode.Review);
+        Nav.LocationChanged += OnLocationChanged;
+
+        var resumed = await CleanupService.ResumeSessionAsync();
+
+        // A persisted session belongs to the mode it was started in — the other mode's queue has
+        // different eligibility rules and (for Cleanup) a Delete button the user didn't ask for here.
+        if (resumed is not null && resumed.Mode != mode)
+        {
+            CleanupService.DiscardSession();
+            resumed = null;
+        }
+
+        // An explicit ?actorId= that disagrees with the persisted session's scope wins; without one,
+        // whatever session is still active is resumed as-is (scope included), so navigating back to
+        // Cleanup from the menu keeps a scoped session going.
+        if (resumed is not null && ActorId is not null && resumed.ActorId != ActorId)
+        {
+            CleanupService.DiscardSession();
+            resumed = null;
+        }
+
+        scopeActorId = resumed is not null ? resumed.ActorId : ActorId;
+        await LoadScopeAsync();
+
+        if (resumed is not null)
+        {
+            selectedOrder = resumed.Order;
+            selectedLibrary = resumed.Library;
+            unreviewedOnly = resumed.UnreviewedOnly;
+            queue = resumed.Queue;
+            sessionReviewedCount = resumed.ReviewedCount;
+            if (resumed.EndedAt is not null)
+            {
+                sessionEnded = true;
+                summary = MovieCleanupSessionSummary.From(resumed);
+                return;
+            }
+            brokenBFrameCount = await CleanupService.GetBrokenBFrameCountAsync();
+            showDeleteConfirm = false;
+            showCoverLightbox = false;
+            showPlayer = false;
+            vrMode = false;
+            streamUrl = null;
+            actionError = null;
+            ResetEditing();
+            await LoadCurrentMovieAsync();
+            await LoadCurrentActorsAsync();
+            await LoadCurrentTagsAsync();
+            await PlayAsync();
+        }
+        else
+        {
+            await ReloadQueueAsync();
+        }
+    }
+
+    // The same component instance serves /movies/cleanup?actorId=5 → ?actorId=6 (a second Actor
+    // Detail launch while this page is open), which doesn't re-run OnInitializedAsync.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ActorId is { } requestedActorId && requestedActorId != scopeActorId)
+        {
+            CleanupService.DiscardSession();
+            scopeActorId = requestedActorId;
+            selectedLibrary = null;
+            await LoadScopeAsync();
+            await ReloadQueueAsync();
+        }
+    }
+
+    // The two routes share this component instance, so following a mode link doesn't re-run
+    // OnInitializedAsync — the switch has to be picked up from the URL change.
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(SwitchModeAsync);
+
+    private async Task SwitchModeAsync()
+    {
+        if (disposed || ModeFromUrl() is not { } newMode || newMode == mode) return;
+
+        CleanupService.DiscardSession();
+        mode = newMode;
+        unreviewedOnly = (mode == CleanupMode.Review);
+        selectedLibrary = null;
+        await LoadScopeAsync();
+        await ReloadQueueAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadScopeAsync()
+    {
+        availableLibraries = (await CleanupService.GetEligibleLibrariesAsync(scopeActorId, mode)) ?? [];
+        scopeActor = scopeActorId is { } id ? await ActorService.GetByIdAsync(id) : null;
+    }
+
+    private async Task ClearScopeAsync()
+    {
+        CleanupService.DiscardSession();
+        scopeActorId = null;
+        selectedLibrary = null;
+        await LoadScopeAsync();
+        await ReloadQueueAsync();
+        Nav.NavigateTo(ModeUrl(mode), replace: true);
+    }
+
+    // Repair jobs clear HasBrokenBFrames (and notify) only when they finish, long after the
+    // batch button handler returned, so the flagged count has to be refreshed from here.
+    private void OnMoviesChanged() => _ = InvokeAsync(async () =>
+    {
+        brokenBFrameCount = await CleanupService.GetBrokenBFrameCountAsync();
+        StateHasChanged();
+    });
+
+    // Review mode's keyboard shortcuts — see MovieCleanup.razor.js. Installed once for
+    // the page; the handler itself ignores keys unless a Review card is showing.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/MovieCleanup.razor.js");
+            await jsModule.InvokeVoidAsync("initReviewShortcuts");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        MovieChangeNotifier.Changed -= OnMoviesChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("disposeReviewShortcuts");
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task ReloadQueueAsync()
+    {
+        var library = string.IsNullOrWhiteSpace(selectedLibrary) ? null : selectedLibrary;
+        var unreviewed = reviewMode && unreviewedOnly;
+        queue = await CleanupService.BuildQueueAsync(selectedOrder, library, scopeActorId, mode, unreviewed);
+        CleanupService.StartSession(queue, selectedOrder, library, scopeActorId, mode, unreviewed);
+        await LoadCurrentMovieAsync();
+        brokenBFrameCount = await CleanupService.GetBrokenBFrameCountAsync();
+        sessionReviewedCount = 0;
+        sessionEnded = false;
+        summary = MovieCleanupSessionSummary.Empty;
+        showDeleteConfirm = false;
+        showCoverLightbox = false;
+        showPlayer = false;
+        vrMode = false;
+        streamUrl = null;
+        actionError = null;
+        ResetEditing();
+        await LoadCurrentActorsAsync();
+        await LoadCurrentTagsAsync();
+        await PlayAsync();
+    }
+
+    private async Task RestartSessionAsync()
+    {
+        CleanupService.DiscardSession();
+        await ReloadQueueAsync();
+    }
+
+    private async Task OnOrderChangedAsync()
+    {
+        CleanupService.DiscardSession();
+        await ReloadQueueAsync();
+    }
+
+    private async Task OnLibraryChangedAsync()
+    {
+        CleanupService.DiscardSession();
+        await ReloadQueueAsync();
+    }
+
+    private async Task OnUnreviewedOnlyChangedAsync()
+    {
+        CleanupService.DiscardSession();
+        await ReloadQueueAsync();
+    }
+
+    private void RequestDelete() => showDeleteConfirm = true;
+
+    private void CancelDelete() => showDeleteConfirm = false;
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (currentMovie is null) return;
+        acting = true;
+        actionError = null;
+        try
+        {
+            await ReleasePlayerAsync();
+            var result = await CleanupService.DeleteAsync(currentMovie.Id);
+            showDeleteConfirm = false;
+            if (!result.Success)
+            {
+                actionError = result.ErrorMessage;
+                return;
+            }
+            await AdvanceAsync(CleanupOutcome.Deleted);
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    /// <summary>Stops the card's video and ends its Jellyfin stream so Jellyfin closes the file before
+    /// the folder is deleted — see MovieCleanup.razor.js. The player stays stopped if the
+    /// delete then fails; Play brings it back.</summary>
+    private async Task ReleasePlayerAsync()
+    {
+        if (showPlayer)
+        {
+            try
+            {
+                await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/MovieCleanup.razor.js");
+                await module.InvokeVoidAsync("releaseVideo", "video.cleanup-video");
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (JSException)
+            {
+            }
+        }
+
+        showPlayer = false;
+        vrMode = false;
+        streamUrl = null;
+    }
+
+    private async Task SnoozeAsync()
+    {
+        if (currentMovie is null) return;
+        acting = true;
+        actionError = null;
+        try
+        {
+            var result = await CleanupService.SnoozeAsync(currentMovie.Id);
+            if (!result.Success)
+            {
+                actionError = result.ErrorMessage;
+                return;
+            }
+            await AdvanceAsync(CleanupOutcome.Snoozed);
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    private async Task BlacklistAsync()
+    {
+        if (currentMovie is null) return;
+        acting = true;
+        actionError = null;
+        try
+        {
+            var result = await CleanupService.BlacklistAsync(currentMovie.Id);
+            if (!result.Success)
+            {
+                actionError = result.ErrorMessage;
+                return;
+            }
+            await AdvanceAsync(CleanupOutcome.Blacklisted);
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    private async Task ToggleBrokenBFrameAsync()
+    {
+        if (currentMovie is null) return;
+        acting = true;
+        actionError = null;
+        try
+        {
+            var movieId = currentMovie.Id;
+            var isMarked = currentMovie.HasBrokenBFrames;
+            var result = isMarked
+                ? await CleanupService.UnmarkBrokenBFrameAsync(movieId)
+                : await CleanupService.MarkBrokenBFrameAsync(movieId);
+
+            if (!result.Success)
+            {
+                actionError = result.ErrorMessage;
+                return;
+            }
+
+            currentMovie.HasBrokenBFrames = !isMarked;
+            brokenBFrameCount = await CleanupService.GetBrokenBFrameCountAsync();
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    private async Task BatchRepairBrokenBFramesAsync()
+    {
+        batchRepairing = true;
+        try
+        {
+            var ids = await CleanupService.GetBrokenBFrameMovieIdsAsync();
+            await RepairService.StartBatchRepairAsync(ids);
+        }
+        finally
+        {
+            batchRepairing = false;
+        }
+    }
+
+    private async Task Skip()
+    {
+        acting = true;
+        try
+        {
+            await AdvanceAsync(CleanupOutcome.Kept);
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    // Review mode's advance: stamps LastReviewedAt before advancing.
+    private async Task Next()
+    {
+        if (currentMovie is null) return;
+        acting = true;
+        actionError = null;
+        try
+        {
+            var result = await CleanupService.StampReviewedAsync(currentMovie.Id);
+            if (!result.Success)
+            {
+                actionError = result.ErrorMessage;
+                return;
+            }
+            await AdvanceAsync(CleanupOutcome.Kept);
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    private void Stop() => EndSession();
+
+    private void Finish()
+    {
+        CleanupService.DiscardSession();
+        Nav.NavigateTo("/");
+    }
+
+    private async Task StartNewSessionAsync()
+    {
+        CleanupService.DiscardSession();
+        await ReloadQueueAsync();
+    }
+
+    private void EndSession()
+    {
+        summary = MovieCleanupSessionSummary.From(CleanupService.EndSession());
+        sessionEnded = true;
+        showDeleteConfirm = false;
+        showCoverLightbox = false;
+        showPlayer = false;
+        vrMode = false;
+        streamUrl = null;
+        actionError = null;
+    }
+
+    private void ToggleVrMode() => vrMode = !vrMode;
+
+    private async Task OnScenesChanged(IReadOnlyList<SceneItem> scenes)
+    {
+        currentScenes = scenes;
+
+        // Scene tags roll up to the movie and drop off it again with the scene, so a
+        // scene change can add or remove movie tags; re-read the tag chips.
+        await LoadCurrentTagsAsync();
+    }
+
+    // A clip's tags roll up to the movie.
+    private async Task OnMovieTagsMayHaveChangedAsync()
+    {
+        if (movieTagsEditor is not null) await movieTagsEditor.RefreshAsync();
+        await LoadCurrentTagsAsync();
+    }
+
+    private void OnSuggestionsChanged(IReadOnlyList<SceneSuggestionItem> suggestions) =>
+        currentSuggestions = suggestions.Select(s => s.Seconds).ToList();
+
+    private void OpenCoverLightbox() => showCoverLightbox = true;
+
+    private void CloseCoverLightbox() => showCoverLightbox = false;
+
+    private async Task AdvanceAsync(CleanupOutcome outcome)
+    {
+        if (currentMovie is not { } decided) return;
+        queue!.RemoveAt(0);
+        sessionReviewedCount++;
+        CleanupService.AdvanceSession(decided, outcome);
+        await LoadCurrentMovieAsync();
+        if (currentMovie is null)
+        {
+            EndSession();
+            return;
+        }
+        showPlayer = false;
+        vrMode = false;
+        showCoverLightbox = false;
+        streamUrl = null;
+        actionError = null;
+        ResetEditing();
+        await LoadCurrentActorsAsync();
+        await LoadCurrentTagsAsync();
+        await PlayAsync();
+    }
+
+    private void ResetEditing() => editorGeneration++;
+
+    private async Task OnCastChangedAsync(int movieId)
+    {
+        if (currentMovie?.Id != movieId) return;
+        await LoadCurrentActorsAsync();
+        // Highlights and apexes inherit from the cast, and leaving it drops clip actor links.
+        if (clipEditor is not null) await clipEditor.RefreshAsync();
+    }
+
+    private async Task OnTagsChangedAsync(int movieId)
+    {
+        if (currentMovie?.Id != movieId) return;
+        await LoadCurrentTagsAsync();
+    }
+
+    /// <summary>Loads queue[0]'s movie for the card. A queued movie deleted since the
+    /// queue was built is dropped without a decision, the same as resuming prunes it; currentMovie ends
+    /// up null once the queue is empty.</summary>
+    private async Task LoadCurrentMovieAsync()
+    {
+        // The next card's ClipEditor reports its own scenes once loaded; until then show none.
+        currentScenes = [];
+        currentSuggestions = [];
+        currentHighlights = [];
+        currentApexes = [];
+        while (queue is { Count: > 0 })
+        {
+            var movie = await CleanupService.GetQueueMovieAsync(queue[0]);
+            if (movie is not null)
+            {
+                currentMovie = movie;
+                return;
+            }
+            queue.RemoveAt(0);
+        }
+
+        currentMovie = null;
+    }
+
+    private async Task LoadCurrentTagsAsync()
+    {
+        if (currentMovie is null)
+        {
+            currentTags = [];
+            return;
+        }
+
+        var requestedMovieId = currentMovie.Id;
+        var tags = await CleanupService.GetMovieTagsAsync(requestedMovieId);
+        if (currentMovie?.Id == requestedMovieId)
+        {
+            currentTags = tags ?? [];
+        }
+    }
+
+    private async Task LoadCurrentActorsAsync()
+    {
+        if (currentMovie is null)
+        {
+            currentActors = [];
+            return;
+        }
+
+        var requestedMovieId = currentMovie.Id;
+        var actors = await CleanupService.GetMovieActorsAsync(currentMovie.Id, currentMovie.MetaActresses);
+        if (currentMovie?.Id == requestedMovieId)
+        {
+            currentActors = actors ?? [];
+        }
+    }
+
+    private async Task PlayAsync()
+    {
+        trickplay = null;
+        if (currentMovie is not { HasLocalVideo: true } movie) return;
+        var requestedMovieId = movie.Id;
+        loadingPlayer = true;
+        try
+        {
+            // The local file is streamed.
+            var path = await StreamService.GetMainFilePathAsync(requestedMovieId);
+            if (currentMovie?.Id != requestedMovieId) return;
+            streamUrl = path is not null ? MovieStreamService.StreamUrl(requestedMovieId) : null;
+            showPlayer = streamUrl is not null;
+            // The scrub bar is a nicety: load it in the background so a slow Jellyfin fallback
+            // round-trip never delays the video itself.
+            if (showPlayer)
+            {
+                _ = LoadTrickplayAsync(requestedMovieId);
+            }
+        }
+        finally
+        {
+            if (currentMovie?.Id == requestedMovieId)
+            {
+                loadingPlayer = false;
+            }
+        }
+    }
+
+    private async Task LoadTrickplayAsync(int requestedMovieId)
+    {
+        TrickplayLayout? loaded;
+        try
+        {
+            loaded = await TrickplayService.GetAsync(requestedMovieId);
+        }
+        catch (Exception)
+        {
+            // Trickplay is optional: any failure just means no scrub bar for this card.
+            return;
+        }
+
+        if (disposed || currentMovie?.Id != requestedMovieId) return;
+        trickplay = loaded;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static bool HasImage(Movie movie) =>
+        !string.IsNullOrWhiteSpace(movie.MetaSourceName) && !string.IsNullOrWhiteSpace(movie.Code);
+
+    private static string PosterFullUrl(string code) => $"/image-cache/{Uri.EscapeDataString(code)}/poster/full";
+
+    private static string BackdropFullUrl(string code) => $"/image-cache/{Uri.EscapeDataString(code)}/fanart/full";
+}

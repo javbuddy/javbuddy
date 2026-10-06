@@ -1,0 +1,453 @@
+.movie-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    background-color: #35394a;
+    border-radius: 4px 4px 0 0;
+    padding: 0.5rem 0.75rem;
+    margin: 0 -0.01px;
+}
+
+.movie-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    color: #cfd3de;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.4rem 0.6rem;
+    border-radius: 3px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+    .movie-toolbar-btn:hover:not(:disabled) {
+        background-color: #454a5e;
+        color: #ffffff;
+    }
+
+    .movie-toolbar-btn:disabled {
+        opacity: 0.45;
+        cursor: default;
+    }
+
+    .movie-toolbar-btn-danger:hover:not(:disabled) {
+        background-color: #7a2e33;
+        color: #ffffff;
+    }
+
+    .movie-toolbar-btn-favorite.active {
+        color: #e23b57;
+    }
+
+    .movie-toolbar-btn-favorite.active:hover:not(:disabled) {
+        background-color: rgba(226, 59, 87, 0.15);
+        color: #e23b57;
+    }
+
+.movie-conflict-icon-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
+}
+
+    .movie-conflict-icon-btn:hover {
+        opacity: 0.85;
+    }
+
+.movie-detail-badge-warning {
+    background-color: #ffc107;
+    color: #000000 !important;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+    .movie-detail-badge-warning:hover {
+        background-color: #ffd54f;
+        color: #000000 !important;
+    }
+
+/* Not clickable, unlike the warning badges above: it only explains via its tooltip.
+   Compound selector so it beats the base .movie-detail-badge rule declared further down. */
+.movie-detail-badge.movie-detail-badge-underage {
+    background-color: #ffc107;
+    color: #000000 !important;
+    border: none;
+    cursor: help;
+}
+
+.movie-detail-badge-danger {
+    background-color: #dc3545;
+    color: #ffffff !important;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+    .movie-detail-badge-danger:hover {
+        background-color: #bb2d3b;
+        color: #ffffff !important;
+    }
+
+.movie-toolbar-sep {
+    width: 1px;
+    align-self: stretch;
+    background-color: #454a5e;
+    margin: 0.25rem 0.25rem;
+}
+
+/* Owned-movie detail layout — sidebar (poster) beside a main content column, all metadata shown
+   as one row of badges rather than a separate facts list. Only used by the "movie is not null"
+   branch; the r18.dev preview branch keeps the full-bleed .movie-hero-* treatment (MoviePreviewDetails). */
+
+.movie-detail-layout {
+    /* position: relative (but deliberately no z-index) — needed as .movie-detail-backdrop's
+       containing block and to scope its overflow: hidden clip, but a numeric z-index here would
+       make this a stacking context, trapping the gallery lightbox's fixed-position overlay (see
+       GalleryLightbox.razor.css's .gallery-lightbox) below it — including below the app's own sticky
+       header, which sits in a sibling stacking context above this page's content. The
+       backdrop/sidebar/main stacking order below is achieved via plain paint order instead (see
+       .movie-detail-backdrop's comment), so no stacking context is needed here at all. */
+    position: relative;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 1.75rem;
+    background-color: #20232d;
+    border-radius: 0 0 4px 4px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    color: #dfe2e8;
+    overflow: hidden;
+}
+
+/* Off by default — see the "Show backdrop image on movie detail page" toggle in Settings → UI
+   (Components/App.razor's ls-movie-backdrop cookie, same client-side-preference pattern as
+   ls-theme/ls-sidebar-collapsed). Positioned descendants with z-index: auto paint in tree order
+   (CSS2.1 stacking order) — this is the first child of .movie-detail-layout, and
+   .movie-detail-sidebar/.movie-detail-main are also given position: relative below so they land in
+   that same paint step (rather than the earlier "non-positioned in-flow" step, which would paint
+   them before this element regardless of z-index), keeping them visually above the backdrop
+   without needing a negative z-index (and the stacking context that would require — see
+   .movie-detail-layout's comment).
+   Grid placement on an absolutely positioned grid child sets its containing block to that grid
+   area, so this spans only the poster/details row (auto = the layout's padding edge) and stops
+   above .movie-detail-wide instead of stretching over the whole page as Scenes/Images grow
+; the negative bottom carries it through the row gap to the Scenes heading. The
+   eased mask fades its bottom edge gradually into the panel background, which also hides the
+   blur's soft edge there now that overflow: hidden no longer clips it. */
+.movie-detail-backdrop {
+    position: absolute;
+    inset: 0 0 -1.75rem;
+    grid-column: auto / auto;
+    grid-row: auto / 2;
+    mask-image: linear-gradient(to bottom, #000 45%, rgba(0, 0, 0, 0.7) 68%, rgba(0, 0, 0, 0.35) 85%, rgba(0, 0, 0, 0.1) 95%, transparent);
+    background-size: cover;
+    background-position: center 20%;
+    opacity: 0;
+    /* blur(6px) softens the image into an ambient background instead of a legible secondary
+       image; scale(1.05) pushes the blur's own soft edge out past the box so .movie-detail-layout's
+       overflow: hidden clips it off instead of showing a lighter halo at the panel's edges. */
+    filter: blur(6px);
+    transform: scale(1.05);
+    transition: opacity 0.2s ease;
+}
+
+:root[data-movie-backdrop="true"] .movie-detail-backdrop {
+    opacity: 0.2;
+}
+
+.movie-detail-sidebar {
+    /* position: relative — see .movie-detail-backdrop's comment; keeps this painted above the
+       backdrop without a stacking context. */
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.movie-detail-poster {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    border-radius: 4px;
+    overflow: hidden;
+    /* Same neutral as the placeholder/PosterCard, so the box doesn't flash stark black while the
+       cover loads. */
+    background-color: #2b2f38;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+    .movie-detail-poster img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+.movie-detail-poster-clickable {
+    cursor: pointer;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+    .movie-detail-poster-clickable:hover {
+        opacity: 0.88;
+        transform: scale(1.02);
+    }
+
+.movie-detail-poster-placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #2b2f38;
+    font-weight: 600;
+    text-align: center;
+    padding: 0.5rem;
+    word-break: break-word;
+}
+
+.movie-detail-main {
+    /* position: relative — see .movie-detail-backdrop's comment; keeps this painted above the
+       backdrop without a stacking context. */
+    position: relative;
+    min-width: 0;
+    color: #dfe2e8;
+}
+
+/* Scenes and Images span both columns. */
+.movie-detail-wide {
+    /* position: relative — see .movie-detail-backdrop's comment. */
+    position: relative;
+    grid-column: 1 / -1;
+    min-width: 0;
+    color: #dfe2e8;
+}
+
+.movie-detail-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+}
+
+.movie-detail-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.9rem;
+}
+
+.movie-detail-badge {
+    display: inline-block;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 3px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+a.movie-detail-badge,
+button.movie-detail-badge {
+    color: #6ea8fe;
+    text-decoration: none;
+    cursor: pointer;
+    font-family: inherit;
+    line-height: inherit;
+}
+
+.movie-detail-code-prefix {
+    appearance: none;
+    background: none;
+    border: 0;
+    color: #6ea8fe;
+    cursor: pointer;
+    font: inherit;
+    margin: 0;
+    padding: 0;
+}
+
+    .movie-detail-code-prefix:hover {
+        color: #8fbcfe;
+        text-decoration: underline;
+    }
+
+    a.movie-detail-badge:hover,
+    button.movie-detail-badge:hover {
+        background-color: rgba(255, 255, 255, 0.16);
+        color: #8fbcfe;
+    }
+
+.movie-detail-badge-status-got {
+    background-color: rgba(47, 168, 79, 0.85);
+    border-color: transparent;
+    font-weight: 600;
+}
+
+.movie-detail-badge-status-missing {
+    background-color: rgba(217, 130, 43, 0.85);
+    border-color: transparent;
+    font-weight: 600;
+}
+
+.movie-detail-badge-play,
+.movie-detail-badge-jellyfin {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.movie-detail-overview,
+.movie-detail-notes {
+    max-width: 900px;
+    font-size: 0.9rem;
+    color: #c7cad3;
+    margin-bottom: 0.5rem;
+}
+
+/* Play's version menu and the Versions badge's primary picker */
+.movie-detail-version-anchor {
+    position: relative;
+    display: inline-block;
+}
+
+.movie-detail-versions-caret {
+    font-size: 0.7rem;
+    margin-left: 0.2rem;
+}
+
+.movie-detail-version-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+}
+
+.movie-detail-version-menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    left: 0;
+    z-index: 50;
+    width: max-content;
+    min-width: 280px;
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 0.35rem 0;
+    background-color: #35394a;
+    border-radius: 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+/* The Versions badge sits towards the end of its row, so its menu opens leftwards from it. */
+.movie-detail-version-menu-end {
+    left: auto;
+    right: 0;
+}
+
+/* On a phone the menu would run off the side from wherever its badge wraps to, so it docks at the bottom. */
+@media (max-width: 640.98px) {
+    .movie-detail-version-menu {
+        position: fixed;
+        top: auto;
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        width: auto;
+        min-width: 0;
+        max-width: none;
+    }
+}
+
+.movie-detail-version-heading {
+    padding: 0.2rem 0.75rem 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #9ea5b3;
+}
+
+.movie-detail-version-choice {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    min-width: 0;
+    padding: 0.4rem 0.75rem;
+    color: #e2e5ec;
+    font-size: 0.85rem;
+    text-align: left;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+    .movie-detail-version-choice:hover:not(:disabled) {
+        background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .movie-detail-version-choice:disabled {
+        cursor: default;
+        opacity: 0.7;
+    }
+
+.movie-detail-version-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.movie-detail-version-check {
+    flex: none;
+    width: 1rem;
+    color: #8bb9fe;
+    font-weight: 700;
+}
+
+.movie-detail-version-primary {
+    flex: none;
+    padding: 0.05rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #8bb9fe;
+    background-color: rgba(13, 110, 253, 0.25);
+    border-radius: 3px;
+}
+
+.movie-detail-version-error {
+    padding: 0.35rem 0.75rem 0.15rem;
+    font-size: 0.8rem;
+    color: #f8a5ad;
+}
+
+.movie-detail-badge-versions,
+button.movie-detail-badge-versions {
+    background-color: rgba(13, 110, 253, 0.25);
+    border-color: rgba(13, 110, 253, 0.4);
+    color: #8bb9fe;
+}
+
+    button.movie-detail-badge-versions:hover {
+        background-color: rgba(13, 110, 253, 0.38);
+        color: #b3d1ff;
+    }
+
+@media (max-width: 640.98px) {
+    .movie-detail-layout {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+    }
+
+    /* Single column stacks sidebar and main as rows 1 and 2, so end after main instead. */
+    .movie-detail-backdrop {
+        grid-row: auto / 3;
+    }
+}

@@ -1,0 +1,136 @@
+/* Copied from MovieCoverCropModal.razor.css (scoped CSS doesn't cross components). It sits above
+   the SlideOverDrawer (z-index 1050) that hosts the metadata editor. */
+.spc-backdrop {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1060;
+    padding: 1rem;
+    outline: none;
+}
+
+.spc-panel {
+    background-color: #222631;
+    color: #cfd3de;
+    border: 1px solid #3d4354;
+    border-radius: 6px;
+    width: 100%;
+    max-width: 880px;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.spc-header,
+.spc-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.25rem;
+    background-color: #2b303c;
+}
+
+.spc-header {
+    border-bottom: 1px solid #3d4354;
+}
+
+.spc-footer {
+    border-top: 1px solid #3d4354;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.spc-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.spc-close-btn {
+    background: none;
+    border: none;
+    color: #9aa1af;
+    padding: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+    .spc-close-btn:hover {
+        color: #ffffff;
+        background-color: #3d4354;
+    }
+
+.spc-body {
+    padding: 1.25rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.spc-workspace {
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-start;
+}
+
+.spc-viewport-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.spc-hint {
+    display: block;
+    margin-top: 0.25rem;
+    color: #8c93a4;
+    font-size: 0.8rem;
+}
+
+.spc-preview {
+    width: 160px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #1b1e27;
+    padding: 0.85rem;
+    border-radius: 4px;
+    border: 1px solid #35394a;
+}
+
+.spc-preview-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #9aa1af;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.spc-preview-wrapper {
+    width: 130px;
+    height: 195px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #14161d;
+    border: 1px solid #3d4354;
+}
+
+.spc-preview-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .spc-workspace {
+        flex-direction: column;
+    }
+}

@@ -1,0 +1,18 @@
+/* A muted amber pill: a nudge that the value can go, not an error. Dark by default like
+   the ClipEditor; a light host sets --redundant-mark-fg, as it does --scene-editor-*. */
+.redundant-mark {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.3rem;
+    padding: 0 0.35rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1.4;
+    text-transform: lowercase;
+    color: var(--redundant-mark-fg, #fbbf24);
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 999px;
+    white-space: nowrap;
+    cursor: help;
+}

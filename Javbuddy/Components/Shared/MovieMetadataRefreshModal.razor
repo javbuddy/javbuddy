@@ -1,0 +1,381 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Javinizer
+@inject IMovieService MovieService
+
+@if (Show && Movie is not null)
+{
+    <div class="metadata-refresh-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="metadata-refresh-panel" @onclick:stopPropagation="true">
+            <div class="metadata-refresh-header">
+                <h5 class="metadata-refresh-title">Refresh with Javinizer — @Movie.Code</h5>
+                <button type="button" class="metadata-refresh-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@isApplying">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+
+            <div class="metadata-refresh-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+                }
+
+                @if (isFetching)
+                {
+                    <div class="text-center py-4 text-muted">
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span> Querying javinizer-go for @Movie.Code...
+                    </div>
+                }
+                else if (scraped is not null)
+                {
+                    <div class="import-fields-card">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="fw-semibold text-white small">Select fields to apply:</span>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none field-toggle-btn" @onclick="InitializeImportOptions" disabled="@isApplying">Select All Changes</button>
+                                <span class="text-muted small">·</span>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none field-toggle-btn" @onclick="KeepAllCurrent" disabled="@isApplying">Keep All Current</button>
+                            </div>
+                        </div>
+
+                        <div class="import-fields-table">
+                            @{
+                                var hasTitle = !string.IsNullOrWhiteSpace(NewTitle);
+                                var hasOriginalTitle = !string.IsNullOrWhiteSpace(scraped.OriginalTitle);
+                                var hasReleaseDate = scraped.ReleaseDate.HasValue;
+                                var hasStudio = !string.IsNullOrWhiteSpace(scraped.Maker);
+                                var hasLabel = !string.IsNullOrWhiteSpace(scraped.Label);
+                                var hasSeries = !string.IsNullOrWhiteSpace(scraped.Series);
+                                var hasDirector = !string.IsNullOrWhiteSpace(scraped.Director);
+                                var hasRuntime = scraped.Runtime.HasValue;
+                                var hasDescription = !string.IsNullOrWhiteSpace(scraped.Description);
+                                var hasActresses = !string.IsNullOrWhiteSpace(NewActresses);
+                                var hasGenres = !string.IsNullOrWhiteSpace(NewGenres);
+                                var hasCover = !string.IsNullOrWhiteSpace(NewCoverUrl);
+                            }
+
+                            <div class="import-field-item @(hasTitle ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-title"
+                                           @bind="importOptions.ImportTitle" disabled="@(!hasTitle || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-title">Title</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value">@(hasTitle ? NewTitle : "—")</span>
+                                    <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Movie.MetaTitle) ? "None" : Movie.MetaTitle)</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasOriginalTitle ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-original-title"
+                                           @bind="importOptions.ImportOriginalTitle" disabled="@(!hasOriginalTitle || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-original-title">Original Title</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value">@(hasOriginalTitle ? scraped.OriginalTitle : "—")</span>
+                                    <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Movie.MetaOriginalTitle) ? "None" : Movie.MetaOriginalTitle)</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasReleaseDate ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-release-date"
+                                           @bind="importOptions.ImportReleaseDate" disabled="@(!hasReleaseDate || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-release-date">Release Date</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value">@(hasReleaseDate ? scraped.ReleaseDate!.Value.ToString("yyyy-MM-dd") : "—")</span>
+                                    <span class="field-current-value">Current: @(Movie.MetaReleaseDate.HasValue ? Movie.MetaReleaseDate.Value.ToString("yyyy-MM-dd") : "None")</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasStudio ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-studio"
+                                           @bind="importOptions.ImportStudio" disabled="@(!hasStudio || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-studio">Studio</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value">@(hasStudio ? scraped.Maker : "—")</span>
+                                    <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Movie.MetaStudio) ? "None" : Movie.MetaStudio)</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasLabel ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-label"
+                                           @bind="importOptions.ImportLabel" disabled="@(!hasLabel || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-label">Label</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value">@(hasLabel ? scraped.Label : "—")</span>
+                                    <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Movie.MetaLabel) ? "None" : Movie.MetaLabel)</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasSeries ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-series"
+                                           @bind="importOptions.ImportSeries" disabled="@(!hasSeries || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-series">Series</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value">@(hasSeries ? scraped.Series : "—")</span>
+                                    <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Movie.MetaSeries) ? "None" : Movie.MetaSeries)</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasDirector ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-director"
+                                           @bind="importOptions.ImportDirector" disabled="@(!hasDirector || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-director">Director</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value">@(hasDirector ? scraped.Director : "—")</span>
+                                    <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Movie.MetaDirector) ? "None" : Movie.MetaDirector)</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasRuntime ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-runtime"
+                                           @bind="importOptions.ImportRuntime" disabled="@(!hasRuntime || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-runtime">Runtime</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value">@(hasRuntime ? $"{scraped.Runtime} min" : "—")</span>
+                                    <span class="field-current-value">Current: @(Movie.MetaRuntimeMinutes.HasValue ? $"{Movie.MetaRuntimeMinutes} min" : "None")</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasDescription ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-description"
+                                           @bind="importOptions.ImportDescription" disabled="@(!hasDescription || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-description">Overview</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value field-value-truncate" title="@scraped.Description">@(hasDescription ? scraped.Description : "—")</span>
+                                    <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Movie.MetaDescription) ? "None" : "Set")</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasActresses ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-actresses"
+                                           @bind="importOptions.ImportActresses" disabled="@(!hasActresses || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-actresses">Actresses / Cast</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value field-value-truncate" title="@NewActresses">@(hasActresses ? NewActresses : "—")</span>
+                                    <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Movie.MetaActresses) ? "None" : Movie.MetaActresses)</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasGenres ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-genres"
+                                           @bind="importOptions.ImportGenres" disabled="@(!hasGenres || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-genres">Genres / Tags</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value field-value-truncate" title="@NewGenres">@(hasGenres ? NewGenres : "—")</span>
+                                    <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Movie.MetaGenres) ? "None" : Movie.MetaGenres)</span>
+                                </div>
+                            </div>
+
+                            <div class="import-field-item @(hasCover ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-cover"
+                                           @bind="importOptions.ImportCover" disabled="@(!hasCover || isApplying)" />
+                                    <label class="form-check-label fw-medium" for="field-cover">Poster / Cover Art</label>
+                                </div>
+                                <div class="field-cover-values">
+                                    @if (hasCover)
+                                    {
+                                        <div class="field-cover-preview">
+                                            <img src="@NewCoverUrl" alt="Incoming cover" class="field-cover-thumb" />
+                                            <span class="field-cover-caption">New</span>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(CurrentPosterUrl))
+                                    {
+                                        <div class="field-cover-preview">
+                                            <img src="@CurrentPosterUrl" alt="Current cover" class="field-cover-thumb" />
+                                            <span class="field-cover-caption">Current</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="metadata-refresh-footer">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@isApplying">Cancel</button>
+                @if (scraped is not null)
+                {
+                    var count = importOptions.SelectedCount(scraped);
+                    <button type="button" class="btn btn-primary" @onclick="ApplySelected" disabled="@(isApplying || count == 0)">
+                        @(isApplying ? "Applying…" : $"Apply Selected ({count})")
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public Movie? Movie { get; set; }
+    [Parameter] public string? CurrentPosterUrl { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnApplied { get; set; }
+
+    private bool isFetching;
+    private bool isApplying;
+    private string? errorMessage;
+    private MovieViewDto? scraped;
+    private int? lastMovieId;
+    private MovieMetadataImportOptions importOptions = new();
+
+    private string? NewTitle => scraped is null ? null : MovieMetadataMapper.ResolveTitle(scraped, Movie?.Code);
+    private string? NewActresses => scraped is null ? null : MovieMetadataMapper.FormatActresses(scraped.Actresses);
+    private string? NewGenres => scraped is null ? null : MovieMetadataMapper.FormatGenres(scraped.Genres);
+    private string? NewCoverUrl => scraped is null ? null : MovieMetadataMapper.ResolveCoverUrl(scraped);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && Movie is not null && lastMovieId != Movie.Id)
+        {
+            lastMovieId = Movie.Id;
+            errorMessage = null;
+            scraped = null;
+            importOptions = new MovieMetadataImportOptions();
+            await FetchAsync();
+        }
+        else if (!Show)
+        {
+            lastMovieId = null;
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && !isApplying)
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task FetchAsync()
+    {
+        if (Movie is null) return;
+
+        isFetching = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await MovieService.FetchJavinizerMetadataAsync(Movie.Id);
+            if (result.Success)
+            {
+                scraped = result.Scraped;
+                InitializeImportOptions();
+            }
+            else
+            {
+                errorMessage = result.ErrorMessage;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Fetch failed: {ex.Message}";
+        }
+        finally
+        {
+            isFetching = false;
+        }
+    }
+
+    /// <summary>Also used as the "Select All Changes" button handler — selects every field that
+    /// both has an incoming value and differs from the movie's current value.</summary>
+    private void InitializeImportOptions()
+    {
+        if (scraped is null || Movie is null) return;
+
+        importOptions = new MovieMetadataImportOptions
+        {
+            ImportTitle = Differs(Movie.MetaTitle, NewTitle),
+            ImportOriginalTitle = Differs(Movie.MetaOriginalTitle, scraped.OriginalTitle),
+            ImportReleaseDate = DiffersDate(Movie.MetaReleaseDate, scraped.ReleaseDate),
+            ImportStudio = Differs(Movie.MetaStudio, scraped.Maker),
+            ImportLabel = Differs(Movie.MetaLabel, scraped.Label),
+            ImportSeries = Differs(Movie.MetaSeries, scraped.Series),
+            ImportDirector = Differs(Movie.MetaDirector, scraped.Director),
+            ImportRuntime = DiffersInt(Movie.MetaRuntimeMinutes, scraped.Runtime),
+            ImportDescription = Differs(Movie.MetaDescription, scraped.Description),
+            ImportActresses = Differs(Movie.MetaActresses, NewActresses),
+            ImportGenres = Differs(Movie.MetaGenres, NewGenres),
+            ImportCover = Differs(Movie.MetaCoverUrl, NewCoverUrl)
+        };
+    }
+
+    private void KeepAllCurrent() => importOptions = new MovieMetadataImportOptions();
+
+    private static bool Differs(string? current, string? incoming) =>
+        !string.IsNullOrWhiteSpace(incoming) && !string.Equals(current?.Trim(), incoming.Trim(), StringComparison.Ordinal);
+
+    private static bool DiffersDate(DateTime? current, DateTime? incoming) =>
+        incoming.HasValue && (!current.HasValue || current.Value.Date != incoming.Value.Date);
+
+    private static bool DiffersInt(int? current, int? incoming) =>
+        incoming.HasValue && current != incoming;
+
+    private async Task ApplySelected()
+    {
+        if (scraped is null || Movie is null) return;
+
+        isApplying = true;
+        errorMessage = null;
+        var succeeded = false;
+
+        try
+        {
+            var result = await MovieService.ApplyJavinizerMetadataAsync(Movie.Id, scraped, importOptions);
+            if (result.Success)
+            {
+                succeeded = true;
+            }
+            else
+            {
+                errorMessage = result.ErrorMessage;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Apply failed: {ex.Message}";
+        }
+        finally
+        {
+            isApplying = false;
+        }
+
+        if (succeeded)
+        {
+            await OnApplied.InvokeAsync();
+            await CloseAsync();
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (!isApplying)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+}

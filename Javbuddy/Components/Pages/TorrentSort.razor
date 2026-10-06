@@ -1,0 +1,674 @@
+@page "/activity/sort/{TorrentDownloadId:int}"
+@using Javbuddy.Components.Pages.TorrentSortSections
+@using Javbuddy.Components.Shared
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Javinizer
+@implements IAsyncDisposable
+@inject TorrentSortWizardState State
+@rendermode InteractiveServer
+
+<PageTitle>Sort @(State.Torrent?.MovieCode) · Javbuddy</PageTitle>
+
+@if (State.Torrent is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <div class="sort-toolbar">
+        <BackButton Href="/activity/queue" CssClass="sort-toolbar-btn">Back to Queue</BackButton>
+    </div>
+
+    <h1 class="sort-title">Sort <a href="@($"/movies/{Uri.EscapeDataString(State.Torrent.MovieCode)}")">@State.Torrent.MovieCode</a></h1>
+    <p class="text-muted">@State.Torrent.ReleaseTitle</p>
+
+    <ol class="sort-steps">
+        <li class="@State.StepClass(WizardStep.Merge)">1. Merge</li>
+        <li class="@State.StepClass(WizardStep.Scan)">2. Scan</li>
+        <li class="@State.StepClass(WizardStep.Destination)">3. Destination</li>
+        <li class="@State.StepClass(WizardStep.Scraping)">4. Scrape</li>
+        <li class="@State.StepClass(WizardStep.Review)">5. Review</li>
+        <li class="@State.StepClass(WizardStep.Preview)">6. Preview</li>
+        <li class="@State.StepClass(WizardStep.Done)">7. Organize</li>
+    </ol>
+
+    @if (State.Step == WizardStep.Merge)
+    {
+        <div class="sort-panel">
+            @if (!State.Merge.FfmpegAvailable)
+            {
+                <div class="alert alert-warning">ffmpeg is not available on this instance, so multi-part VR merging is disabled.</div>
+                <button class="btn btn-primary mt-3" @onclick="State.Merge.SkipMerge">Continue to Scan</button>
+            }
+            else if (State.Merge.Merging)
+            {
+                <p>Merging @State.Merge.MergeIncludedPartsInOrder.Count part(s)…</p>
+                <div class="sort-progress">
+                    <div class="sort-progress-bar" style="width: @((State.Merge.MergeProgress?.PercentComplete ?? 0).ToString("0"))%"></div>
+                </div>
+                <p class="text-muted">@((State.Merge.MergeProgress?.PercentComplete ?? 0).ToString("0"))% complete</p>
+                <button class="btn btn-outline-danger btn-sm" @onclick="State.Merge.CancelMerge">Cancel Merge</button>
+            }
+            else
+            {
+                <label class="sort-label" for="mergeSourcePath">Folder to scan for VR parts (as Javbuddy's own process sees it)</label>
+                <input id="mergeSourcePath" class="form-control sort-input" @bind="State.Merge.MergeSourcePath" @bind:event="oninput" placeholder="e.g. D:\scratch\torrent\javbuddy\devr-041" />
+                @if (State.Merge.MergeSourcePathAttempts.Count > 0 && State.Merge.MergeCandidate is null)
+                {
+                    <p class="text-muted sort-hint">
+                        Tried: @string.Join(", ", State.Merge.MergeSourcePathAttempts.Select(p => $"\"{p}\"")) — none exist on disk. Enter the path yourself,
+                        or add an <a href="/settings/connections">app-side path mapping</a> so this pre-fills correctly next time.
+                    </p>
+                }
+                <button class="btn btn-outline-secondary mt-2" @onclick="() => State.Merge.DetectMergeCandidateAsync()" disabled="@(State.Merge.DetectingMergeCandidate || string.IsNullOrWhiteSpace(State.Merge.MergeSourcePath))">
+                    @(State.Merge.DetectingMergeCandidate ? "Scanning…" : "Detect Parts")
+                </button>
+
+                @if (State.Merge.MergeError is not null)
+                {
+                    <div class="alert alert-danger mt-3" style="max-width: 640px;">@State.Merge.MergeError</div>
+                }
+
+                @if (State.Merge.MergeCandidate is not null)
+                {
+                    <div class="mt-3" style="max-width: 640px;">
+                        <label class="sort-label" for="mergeCodeBase">Chapter title base</label>
+                        <input id="mergeCodeBase" class="form-control sort-input" @bind="State.Merge.MergeCodeBase" @bind:event="oninput" style="max-width: 260px;" />
+
+                        @foreach (var warning in State.Merge.MergeCandidate.Warnings)
+                        {
+                            <div class="alert alert-warning mt-2 mb-0 py-2">@warning</div>
+                        }
+
+                        <div class="sort-file-list mt-3">
+                            @for (var i = 0; i < State.Merge.MergeAllParts.Count; i++)
+                            {
+                                var part = State.Merge.MergeAllParts[i];
+                                var index = i;
+                                var isExcluded = State.Merge.MergeExcludedPaths.Contains(part.Path);
+                                var chapterTitle = State.Merge.ChapterTitleFor(part.Path);
+                                <div class="sort-merge-file-row @(isExcluded ? "sort-file-row-unselected" : "")">
+                                    <span>
+                                        <input type="checkbox" checked="@(!isExcluded)" @onchange="() => State.Merge.ToggleMergePart(part.Path)" />
+                                    </span>
+                                    <span class="sort-merge-file-name" title="@part.Name">@part.Name</span>
+                                    <span class="text-muted">@(chapterTitle ?? "excluded")</span>
+                                    <span class="text-muted">@ByteSizeFormatter.Format(part.SizeBytes)</span>
+                                    <span class="text-muted">@(part.DurationSeconds > 0 ? TimeSpan.FromSeconds(part.DurationSeconds).ToString(@"hh\:mm\:ss") : "—")</span>
+                                    <span class="text-muted">@(part.Width is > 0 && part.Height is > 0 ? $"{part.Width}x{part.Height}" : "—")</span>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(index == 0)" @onclick="() => State.Merge.MoveMergePart(index, index - 1)">↑</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@(index == State.Merge.MergeAllParts.Count - 1)" @onclick="() => State.Merge.MoveMergePart(index, index + 1)">↓</button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="d-flex gap-2 mt-3">
+                            <button class="btn btn-outline-secondary" @onclick="State.Merge.SkipMerge">Skip Merge</button>
+                            <button class="btn btn-primary" @onclick="() => State.Merge.StartMergeAsync()" disabled="@(State.Merge.MergeIncludedPartsInOrder.Count < 2 || string.IsNullOrWhiteSpace(State.Merge.MergeCodeBase))">
+                                Merge @State.Merge.MergeIncludedPartsInOrder.Count Part(s)
+                            </button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="mt-3">
+                        <button class="btn btn-outline-secondary" @onclick="State.Merge.SkipMerge">Skip Merge</button>
+                    </div>
+                }
+            }
+        </div>
+    }
+    else if (State.Step == WizardStep.Scan)
+    {
+        <div class="sort-panel">
+            @if (State.Merge.MergedFilePath is not null)
+            {
+                <div class="alert alert-success">Merged parts into <code>@State.Merge.MergedFilePath</code>. Exclude the original source parts below before continuing.</div>
+            }
+            <label class="sort-label" for="scanPath">Folder or file to scan (as javinizer-go sees it)</label>
+            <input id="scanPath" class="form-control sort-input" @bind="State.Scan.ScanPath" @bind:event="oninput" placeholder="e.g. /scratch/torrent/javinizarr/SNOS-100" />
+            @if (State.Scan.ScanPathMapped)
+            {
+                <p class="text-muted sort-hint">Pre-filled from qBittorrent's content path, translated using your configured <a href="/settings/connections">path mapping</a>. Edit it if the scan below comes back empty or wrong.</p>
+            }
+            else
+            {
+                <p class="text-muted sort-hint">Pre-filled from qBittorrent's content path — this may not be the same path javinizer-go's own process sees. Edit it if the scan below comes back empty or wrong, or add a <a href="/settings/connections">path mapping</a> so future torrents pre-fill correctly.</p>
+            }
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary" @onclick="() => State.Step = WizardStep.Merge">Back</button>
+                <button class="btn btn-primary" @onclick="() => State.Scan.ScanAsync()" disabled="@(State.Scan.Scanning || string.IsNullOrWhiteSpace(State.Scan.ScanPath))">
+                    @(State.Scan.Scanning ? "Scanning…" : "Scan")
+                </button>
+            </div>
+
+            @if (State.Scan.ScanError is not null)
+            {
+                <div class="alert alert-danger mt-3" style="max-width: 640px;">@State.Scan.ScanError</div>
+            }
+
+            @if (State.Scan.ScannedFiles is not null)
+            {
+                var nonDirFiles = State.Scan.ScannedFiles.Where(f => !f.IsDir).ToList();
+                @if (nonDirFiles.Count == 0)
+                {
+                    <div class="alert alert-info mt-3" style="max-width: 640px;">No files found at this path.</div>
+                }
+                else
+                {
+                    var filteredFiles = string.IsNullOrWhiteSpace(State.Scan.ScanFileFilter)
+                        ? nonDirFiles
+                        : nonDirFiles.Where(f => (f.Name ?? "").Contains(State.Scan.ScanFileFilter, StringComparison.OrdinalIgnoreCase) || (f.Path ?? "").Contains(State.Scan.ScanFileFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                    <div class="sort-file-header-toolbar mt-3">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="text-muted small"><strong>@State.Scan.SelectedFilePaths.Count</strong> of @nonDirFiles.Count file(s) selected</span>
+                            <input class="form-control form-control-sm sort-filter-input" placeholder="Filter files…" @bind="State.Scan.ScanFileFilter" @bind:event="oninput" />
+                        </div>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="State.Scan.SelectMatchedFiles">Select matched</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="State.Scan.SelectVideoFiles">Video files only</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="State.Scan.SelectAllFiles">Select all</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="State.Scan.DeselectAllFiles">Deselect all</button>
+                        </div>
+                    </div>
+
+                    <div class="sort-file-list">
+                        @foreach (var f in filteredFiles)
+                        {
+                            var path = f.Path ?? "";
+                            var isSelected = State.Scan.SelectedFilePaths.Contains(path);
+                            <div class="sort-file-row @(isSelected ? "" : "sort-file-row-unselected")">
+                                <span>
+                                    <input type="checkbox" checked="@isSelected" @onchange="e => State.Scan.ToggleFileSelection(path, (bool)e.Value!)" />
+                                </span>
+                                <span class="sort-file-name" title="@f.Name">@f.Name</span>
+                                <span class="sort-badge @(f.Matched ? "sort-badge-matched" : "sort-badge-unmatched")">@(f.Matched ? "Matched" : "Unmatched")</span>
+                                <span class="text-muted">@(f.MovieId ?? "—")</span>
+                                <span class="text-muted">@ByteSizeFormatter.Format(f.Size)</span>
+                            </div>
+                        }
+                    </div>
+
+                    <button class="btn btn-primary mt-3" @onclick="State.Scan.GoToDestination" disabled="@(State.Scan.SelectedFilePaths.Count == 0)">
+                        Continue (@State.Scan.SelectedFilePaths.Count file@(State.Scan.SelectedFilePaths.Count == 1 ? "" : "s") selected)
+                    </button>
+                }
+            }
+        </div>
+    }
+    else if (State.Step == WizardStep.Destination)
+    {
+        <div class="sort-panel">
+            @if (State.Scrape.NoDestinationAliasesConfigured)
+            {
+                <div class="alert alert-warning" style="max-width: 640px;">No destination aliases are configured. Set <code>Javinizer__DestinationAliases</code> environment variables before sorting.</div>
+            }
+            else
+            {
+                <label class="sort-label">Destination</label>
+                <div class="d-flex gap-2 flex-wrap sort-input" style="max-width: 640px;">
+                    @foreach (var alias in State.Scrape.DestinationAliases)
+                    {
+                        <button type="button" class="btn @(alias.Name == State.Scrape.SelectedDestinationAliasName ? "btn-outline-primary" : "btn-outline-secondary")" title="@alias.Path" @onclick="() => State.Scrape.SelectDestinationAlias(alias.Name)">
+                            @alias.Name
+                        </button>
+                    }
+                </div>
+                @if (State.LocalRootHint is not null)
+                {
+                    <p class="text-muted sort-hint">This movie's local library folder lives under <code>@State.LocalRootHint</code> on this app's own filesystem view — javinizer-go's destination should point at wherever that resolves to on its own filesystem view instead.</p>
+                }
+            }
+
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-outline-secondary" @onclick="() => State.Step = WizardStep.Scan">Back</button>
+                <button class="btn btn-primary" @onclick="() => State.StartBatchScrapeAsync()" disabled="@(State.Scrape.StartingScrape || string.IsNullOrWhiteSpace(State.Destination))">
+                    @(State.Scrape.StartingScrape ? "Starting…" : "Start Sorting")
+                </button>
+            </div>
+
+            @if (State.Scrape.StartError is not null)
+            {
+                <div class="alert alert-danger mt-3" style="max-width: 640px;">@State.Scrape.StartError</div>
+            }
+        </div>
+    }
+    else if (State.Step == WizardStep.Scraping)
+    {
+        <div class="sort-panel">
+            <p>Scraping @(State.JobData?.TotalFiles ?? State.Scan.SelectedFilePaths.Count) file(s)…</p>
+            <div class="sort-progress">
+                <div class="sort-progress-bar" style="width: @((State.JobData?.Progress ?? 0).ToString("0"))%"></div>
+            </div>
+            <p class="text-muted">@(State.JobData?.Completed ?? 0) completed, @(State.JobData?.Failed ?? 0) failed</p>
+
+            @if (State.Scrape.ScrapeError is not null)
+            {
+                <div class="alert alert-danger mt-3" style="max-width: 640px;">
+                    @State.Scrape.ScrapeError
+                    <div class="mt-2"><button class="btn btn-outline-danger btn-sm" @onclick="State.Scrape.RetryPolling">Retry</button></div>
+                </div>
+            }
+        </div>
+    }
+    else if (State.Step == WizardStep.Review)
+    {
+        <div class="sort-panel">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <h4 class="mb-0">Review Matched Movies</h4>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="() => State.Review.RefreshReviewAsync()" disabled="@State.Review.RefreshingJobData">
+                        <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" class="me-1" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+                        @(State.Review.RefreshingJobData ? "Refreshing…" : "Refresh")
+                    </button>
+                    @if (!string.IsNullOrWhiteSpace(State.JavinizerBaseUrl) && !string.IsNullOrWhiteSpace(State.JobData?.Id))
+                    {
+                        <a class="btn btn-sm btn-outline-info" href="@State.GetJavinizerJobUrl(State.JobData.Id)" target="_blank" rel="noopener noreferrer">
+                            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" class="me-1" aria-hidden="true"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg>
+                            Edit in javinizer-go
+                        </a>
+                    }
+                </div>
+            </div>
+
+            @if (State.JobData?.Results is { Count: > 0 })
+            {
+                var activeResults = State.JobData.Results.Values.Where(r => !State.Session.IsExcluded(r)).ToList();
+                var excludedResults = State.JobData.Results.Values.Where(r => State.Session.IsExcluded(r)).ToList();
+                var failedActiveCount = activeResults.Count(r => r.Status == JavinizerJobStatus.Failed || r.Movie is null);
+
+                @if (failedActiveCount > 0)
+                {
+                    <div class="alert alert-warning mb-3">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <span><strong>@failedActiveCount file(s)</strong> could not be matched. Fix the match code or exclude them before continuing.</span>
+                            <button class="btn btn-outline-dark btn-sm" @onclick="() => State.Review.ExcludeAllFailedAsync()" disabled="@State.Review.BulkExcluding">
+                                @(State.Review.BulkExcluding ? "Excluding…" : "Exclude all failed")
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                @if (activeResults.Count == 0)
+                {
+                    <div class="alert alert-info">All files in this batch have been excluded.</div>
+                }
+                else
+                {
+                    @foreach (var result in activeResults)
+                    {
+                        var resultId = result.ResultId;
+                        var movie = result.Movie;
+                        var isMatched = movie is not null && result.Status != JavinizerJobStatus.Failed;
+
+                        <div class="sort-movie-card mb-4">
+                            <div class="sort-movie-header">
+                                <div class="sort-movie-header-info">
+                                    <span class="sort-badge @TorrentSortWizardState.StatusBadgeClass(result.Status)">@result.Status</span>
+                                    @if (!string.IsNullOrWhiteSpace(movie?.Id))
+                                    {
+                                        <span class="sort-badge sort-badge-matched">@movie.Id</span>
+                                    }
+                                    @if (isMatched && movie is not null && SortMetadataQuality.Check(movie) is { Count: > 0 } cardIssues)
+                                    {
+                                        <span class="sort-badge sort-quality-badge" title="@string.Join("\n", cardIssues.Select(SortMetadataQuality.Describe))">⚠ @cardIssues.Count to check</span>
+                                    }
+                                    <span class="text-muted small text-break ms-2" title="@result.FilePath">@TorrentSortPreviewHelper.GetFileName(result.FilePath)</span>
+                                </div>
+                                <div class="sort-movie-header-actions">
+                                    @if (isMatched)
+                                    {
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => State.EditModal.OpenEditModal(resultId, movie)">
+                                            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" class="me-1" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z" /></svg>
+                                            Edit metadata
+                                        </button>
+                                    }
+                                    <div class="d-inline-flex align-items-center gap-1">
+                                        <input class="form-control form-control-sm sort-fix-input"
+                                               placeholder="e.g. IPX-535"
+                                               value="@State.Review.GetFixMatchInput(resultId)"
+                                               @oninput="e => State.Review.SetFixMatchInput(resultId, e.Value?.ToString() ?? string.Empty)" />
+                                        <button class="btn btn-outline-secondary btn-sm" @onclick="() => State.Review.FixMatchAsync(resultId)" disabled="@(State.Review.Rescraping.Contains(resultId) || string.IsNullOrWhiteSpace(State.Review.GetFixMatchInput(resultId)))">
+                                            @(State.Review.Rescraping.Contains(resultId) ? "Fixing…" : "Fix")
+                                        </button>
+                                    </div>
+                                    <button class="btn btn-outline-danger btn-sm" @onclick="() => State.Review.ExcludeAsync(resultId)" disabled="@State.Review.Excluding.Contains(resultId)">
+                                        @(State.Review.Excluding.Contains(resultId) ? "Excluding…" : "Exclude")
+                                    </button>
+                                </div>
+                            </div>
+
+                            @if (isMatched && movie is not null)
+                            {
+                                <div class="sort-movie-body">
+                                    <div class="sort-movie-poster-col">
+                                        @if (!string.IsNullOrWhiteSpace(movie.PosterUrl))
+                                        {
+                                            <img class="sort-movie-poster-img @(TorrentSortEditingHelper.HasCustomPoster(movie) ? "sort-poster-uncropped" : null)" src="@movie.PosterUrl" alt="Poster" />
+                                        }
+                                        else
+                                        {
+                                            <div class="sort-movie-poster-placeholder">@(movie.Id ?? "No Art")</div>
+                                        }
+                                    </div>
+
+                                    <div class="sort-movie-info-col">
+                                        <h4 class="sort-movie-title" title="@(movie.DisplayTitle ?? movie.Title)">
+                                            @(movie.DisplayTitle ?? movie.Title ?? movie.Id)
+                                        </h4>
+                                        @if (!string.IsNullOrWhiteSpace(movie.OriginalTitle) && movie.OriginalTitle != movie.Title)
+                                        {
+                                            <p class="text-muted small mb-2">@movie.OriginalTitle</p>
+                                        }
+
+                                        <div class="sort-movie-meta-row">
+                                            @if (movie.ReleaseDate is not null)
+                                            {
+                                                <span>@movie.ReleaseDate.Value.ToString("yyyy-MM-dd")</span>
+                                            }
+                                            else if (movie.ReleaseYear is not null)
+                                            {
+                                                <span>@movie.ReleaseYear</span>
+                                            }
+                                            @if (movie.Runtime is not null and > 0)
+                                            {
+                                                <span>@(movie.Runtime) min</span>
+                                            }
+                                            @if (movie.RatingScore is not null and > 0)
+                                            {
+                                                <span class="text-warning">★ @movie.RatingScore.Value.ToString("0.0")</span>
+                                            }
+                                        </div>
+
+                                        <div class="sort-movie-badges-row">
+                                            @if (!string.IsNullOrWhiteSpace(movie.Id))
+                                            {
+                                                <span class="sort-badge-pill sort-badge-pill-code">@movie.Id</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(movie.Maker))
+                                            {
+                                                <span class="sort-badge-pill">@movie.Maker</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(movie.Label) && movie.Label != movie.Maker)
+                                            {
+                                                <span class="sort-badge-pill">@movie.Label</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(movie.Series))
+                                            {
+                                                <span class="sort-badge-pill">@movie.Series</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(movie.Director))
+                                            {
+                                                <span class="sort-badge-pill">Director: @movie.Director</span>
+                                            }
+                                        </div>
+
+                                        @if (movie.Actresses is { Count: > 0 })
+                                        {
+                                            <div class="sort-movie-cast-row">
+                                                <strong>Cast:</strong>
+                                                <span class="ms-1">
+                                                    @string.Join(", ", movie.Actresses.Select(TorrentSortEditingHelper.FormatActressName).Where(s => !string.IsNullOrWhiteSpace(s)))
+                                                </span>
+                                            </div>
+                                        }
+
+                                        @if (movie.Genres is { Count: > 0 })
+                                        {
+                                            <div class="sort-movie-genres-row">
+                                                @foreach (var g in movie.Genres.Where(g => !string.IsNullOrWhiteSpace(g.Name)))
+                                                {
+                                                    <span class="sort-genre-tag">@g.Name</span>
+                                                }
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(movie.Description))
+                                        {
+                                            <p class="sort-movie-description">@movie.Description</p>
+                                        }
+                                    </div>
+                                </div>
+
+                                <SortMediaGallery ResultId="@resultId" Movie="@movie" Review="@State.Review" />
+                            }
+                            else
+                            {
+                                <div class="sort-movie-body p-3">
+                                    <div class="text-danger">
+                                        <strong>Unmatched file:</strong> @(result.Error ?? "No matching movie found. Enter a code above and click Fix, or exclude this file.")
+                                    </div>
+                                    <div class="text-muted small text-break mt-1">@result.FilePath</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+
+                @if (excludedResults.Count > 0)
+                {
+                    <div class="sort-excluded-section mt-4 mb-3">
+                        <button type="button" class="btn btn-sm btn-link text-muted p-0 text-decoration-none" @onclick="() => State.Review.ShowExcludedList = !State.Review.ShowExcludedList">
+                            @(State.Review.ShowExcludedList ? "▼" : "▶") Excluded files (@excludedResults.Count)
+                        </button>
+                        @if (State.Review.ShowExcludedList)
+                        {
+                            <div class="sort-excluded-list mt-2">
+                                @foreach (var ex in excludedResults)
+                                {
+                                    <div class="sort-excluded-row">
+                                        <span class="text-muted small text-break">@ex.FilePath</span>
+                                        <span class="sort-badge sort-badge-unmatched">Excluded</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="alert alert-info">No results to review.</div>
+            }
+
+            @if (State.ReviewError is not null)
+            {
+                <div class="alert alert-danger mt-3">@State.ReviewError</div>
+            }
+
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-outline-secondary" @onclick="State.RestartScan">Start Over</button>
+                <button class="btn btn-primary" @onclick="() => State.Preview.GoToPreviewAsync()" disabled="@(State.Preview.Previewing || !State.Review.HasReviewableActiveResults())">
+                    @(State.Preview.Previewing ? "Loading previews…" : "Continue to Preview")
+                </button>
+            </div>
+        </div>
+    }
+    else if (State.Step == WizardStep.Preview)
+    {
+        <div class="sort-panel">
+            <h4 class="mb-3">Organize Preview</h4>
+            <p class="text-muted">Review the target destination paths and file names before applying changes.</p>
+
+            @foreach (var (resultId, preview) in State.Preview.Previews)
+            {
+                var result = State.JobData?.Results?.Values.FirstOrDefault(r => r.ResultId == resultId);
+                var movie = result?.Movie;
+
+                <div class="sort-preview-card mb-3">
+                    <div class="d-flex gap-3 align-items-start">
+                        @if (!string.IsNullOrWhiteSpace(movie?.PosterUrl))
+                        {
+                            <img class="sort-preview-thumb @(TorrentSortEditingHelper.HasCustomPoster(movie) ? "sort-poster-uncropped" : null)" src="@movie.PosterUrl" alt="Poster" />
+                        }
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1">@(movie?.DisplayTitle ?? movie?.Title ?? preview.FolderName)</h5>
+                            <div class="sort-preview-tree small mb-2">
+                                <div class="sort-preview-tree-root"><code>@preview.FolderName</code>/</div>
+                                @{
+                                    var treeEntries = TorrentSortPreviewHelper.BuildFileTree(preview);
+                                }
+                                @if (treeEntries.Count == 0)
+                                {
+                                    <div class="text-muted sort-preview-tree-item">No files to preview.</div>
+                                }
+                                else
+                                {
+                                    var printedNestedHeader = false;
+                                    @foreach (var entry in treeEntries)
+                                    {
+                                        @if (entry.IsNested && !printedNestedHeader)
+                                        {
+                                            printedNestedHeader = true;
+                                            <div class="sort-preview-tree-item"><code>extrafanart</code>/</div>
+                                        }
+                                        <div class="sort-preview-tree-item @(entry.IsNested ? "sort-preview-tree-item-nested" : "")"><code>@entry.RelativePath</code></div>
+                                    }
+                                }
+                            </div>
+
+                            @if (movie?.Id is { } matchedCode && !string.Equals(preview.FolderName, matchedCode, StringComparison.OrdinalIgnoreCase))
+                            {
+                                <div class="alert alert-warning mt-2 mb-0 py-2">
+                                    This won't match your local library's expected <code>@matchedCode</code> folder naming — check javinizer-go's <code>output.folder_format</code> setting.
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+
+            @if (State.Preview.PreviewError is not null)
+            {
+                <div class="alert alert-danger mt-3">@State.Preview.PreviewError</div>
+            }
+
+            @if (State.Organize.Organizing)
+            {
+                <div class="sort-organize-progress">
+                    <div class="sort-progress">
+                        <div class="sort-progress-bar sort-progress-bar-indeterminate"></div>
+                    </div>
+                    <p class="text-muted">
+                        Organizing… @(State.Organize.OrganizeElapsed?.ToString(@"mm\:ss") ?? "00:00") elapsed. This can take up to ~30 minutes depending on your setup — javinizer-go handles the move independently, so it's safe to close this tab.
+                    </p>
+                </div>
+            }
+
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-outline-secondary" @onclick="() => State.Step = WizardStep.Review" disabled="@State.Organize.Organizing">Back to Review</button>
+                <button class="btn btn-primary" @onclick="() => State.Organize.OrganizeAsync()" disabled="@State.Organize.Organizing">
+                    @(State.Organize.Organizing ? "Organizing…" : "Organize")
+                </button>
+            </div>
+
+            @if (State.Organize.OrganizeError is not null)
+            {
+                <div class="alert alert-danger mt-3">
+                    @State.Organize.OrganizeError
+                    <div class="mt-2"><button class="btn btn-outline-danger btn-sm" @onclick="() => State.Organize.OrganizeAsync()">Retry</button></div>
+                </div>
+            }
+        </div>
+    }
+    else if (State.Step == WizardStep.Done)
+    {
+        <div class="sort-panel">
+            <div class="alert alert-success">Successfully organized and added to your library!</div>
+            @foreach (var preview in State.Preview.Previews.Values)
+            {
+                <p class="text-muted"><code>@preview.FullPath</code></p>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(State.Torrent.Hash))
+            {
+                <div class="mt-3">
+                    @if (State.Cleanup.CleanupSucceeded)
+                    {
+                        <div class="alert alert-success mb-0">Source cleaned up.</div>
+                    }
+                    else if (!State.Cleanup.CleanupPreviewActive)
+                    {
+                        <button class="btn btn-outline-danger" @onclick="() => State.Cleanup.StartCleanupPreviewAsync()">
+                            Delete via qBittorrent
+                        </button>
+                    }
+                    else if (State.Cleanup.PreviewingCleanup)
+                    {
+                        <p class="text-muted">Listing files…</p>
+                    }
+                    else if (State.Cleanup.CleanupPreviewError is not null)
+                    {
+                        <div class="alert alert-danger">
+                            @State.Cleanup.CleanupPreviewError
+                            <div class="mt-2"><button class="btn btn-outline-secondary btn-sm" @onclick="State.Cleanup.CancelCleanupPreview">Back</button></div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-muted mb-1">
+                            This will permanently delete the torrent and @State.Cleanup.CleanupPreviewEntries!.Count file(s)/folder(s) under
+                            <code>@State.Cleanup.CleanupPreviewResolvedPath</code>:
+                        </p>
+                        <div class="sort-file-list mb-2">
+                            @foreach (var entry in State.Cleanup.CleanupPreviewEntries!)
+                            {
+                                <div><code>@entry</code></div>
+                            }
+                        </div>
+                        @if (State.Cleanup.CleanupError is not null)
+                        {
+                            <div class="alert alert-danger">@State.Cleanup.CleanupError</div>
+                        }
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-danger" @onclick="() => State.Cleanup.ConfirmCleanupAsync()" disabled="@State.Cleanup.CleaningUp">
+                                @(State.Cleanup.CleaningUp ? "Deleting…" : "Confirm Delete")
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="State.Cleanup.CancelCleanupPreview" disabled="@State.Cleanup.CleaningUp">Cancel</button>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="d-flex gap-2 mt-3">
+                <a class="btn btn-primary" href="@($"/movies/{Uri.EscapeDataString(State.Torrent.MovieCode)}")">Go to Movie</a>
+                <a class="btn btn-outline-secondary" href="/activity/queue">Back to Queue</a>
+            </div>
+        </div>
+    }
+}
+
+@* Metadata editor drawer *@
+@if (State.EditModal.EditingResultId is not null && State.EditModal.EditingMovie is not null)
+{
+    <SlideOverDrawer Show="true" Wide="true"
+                     Title="@($"Edit Metadata · {State.EditModal.EditingMovie.Id ?? State.EditModal.EditingMovie.Code ?? "Movie"}")"
+                     OnClose="State.EditModal.RequestClose"
+                     OnCtrlEnter="() => State.EditModal.SaveEditedMovieAsync()">
+        <SortMetadataEditor Editor="State.EditModal" Review="State.Review" TorrentDownloadId="State.TorrentDownloadId" Result="@State.JobData?.Results?.Values.FirstOrDefault(r => r.ResultId == State.EditModal.EditingResultId)" />
+    </SlideOverDrawer>
+}
+
+@code {
+    [Parameter] public int TorrentDownloadId { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.OnChange += OnStateChanged;
+        await State.InitializeAsync(TorrentDownloadId);
+    }
+
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    public async ValueTask DisposeAsync()
+    {
+        State.OnChange -= OnStateChanged;
+        await State.DisposeAsync();
+    }
+}

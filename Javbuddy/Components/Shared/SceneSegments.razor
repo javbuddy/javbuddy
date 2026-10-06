@@ -1,0 +1,48 @@
+@using Javbuddy.Services
+
+@* Scene ranges drawn over a timeline track: a tinted band per scene plus a tick at
+   each scene start. Fills its positioned parent. Inert to the pointer unless OnSegmentClick is set,
+   so hosting it inside the ScrubBar track leaves that bar's own hover/seek handling alone. Each
+   segment carries its range and name as data-* attributes for ScrubBar.razor.js's hover label
+. *@
+@if (DurationSeconds is > 0 && (Scenes is { Count: > 0 } || Suggestions is { Count: > 0 }))
+{
+    <div class="scene-segments @(OnSegmentClick.HasDelegate ? "scene-segments-clickable" : null)">
+        @foreach (var seconds in Suggestions ?? [])
+        {
+            <span class="scene-suggestion-tick" style="@FormattableString.Invariant($"left:{Percent(seconds):0.###}%")" title="Suggested boundary (@SceneTimeFormat.Format(seconds))"></span>
+        }
+        @foreach (var scene in Scenes ?? [])
+        {
+            var end = Math.Min(scene.EffectiveEndSeconds ?? DurationSeconds.Value, DurationSeconds.Value);
+            var left = Percent(scene.StartSeconds);
+            var width = Math.Max(Percent(end) - left, 0);
+            var label = $"{scene.DisplayTitle} ({SceneTimeFormat.Format(scene.StartSeconds)})";
+            var style = FormattableString.Invariant($"left:{left:0.###}%;width:{width:0.###}%");
+            var dataStart = scene.StartSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var dataEnd = end.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            @if (OnSegmentClick.HasDelegate)
+            {
+                <button type="button" class="scene-segment scene-segment-@(scene.Position % 2)" style="@style" data-start="@dataStart" data-end="@dataEnd" data-scene-name="@scene.DisplayTitle" title="@label" aria-label="Jump to @label" @onclick="() => OnSegmentClick.InvokeAsync(scene)"></button>
+            }
+            else
+            {
+                <span class="scene-segment scene-segment-@(scene.Position % 2)" style="@style" data-start="@dataStart" data-end="@dataEnd" data-scene-name="@scene.DisplayTitle" title="@label"></span>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<SceneItem>? Scenes { get; set; }
+
+    /// <summary>The timeline's full length; nothing renders while it's unknown.</summary>
+    [Parameter] public double? DurationSeconds { get; set; }
+
+    [Parameter] public EventCallback<SceneItem> OnSegmentClick { get; set; }
+
+    /// <summary>Detected but not yet accepted boundaries, drawn as ghost ticks.</summary>
+    [Parameter] public IReadOnlyList<double>? Suggestions { get; set; }
+
+    private double Percent(double seconds) => Math.Clamp(seconds / DurationSeconds!.Value * 100, 0, 100);
+}

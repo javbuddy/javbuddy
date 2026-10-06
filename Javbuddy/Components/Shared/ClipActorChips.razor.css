@@ -1,0 +1,55 @@
+/* Copied from the editors' actor chips (CSS isolation doesn't share them); reads the same --scene-editor-*
+   custom properties. */
+.clip-actor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.clip-actor-hint {
+    font-size: 0.75rem;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.clip-actor-chip {
+    appearance: none;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background: transparent;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.clip-actor-chip-on {
+    background-color: rgba(47, 143, 214, 0.18);
+    border-color: #2f8fd6;
+}
+
+/* Inherited: selected, but dashed and muted like ImplicitChips. */
+.clip-actor-chip-inherited {
+    font-style: italic;
+    color: var(--scene-editor-muted, #94a3b8);
+    background-color: rgba(47, 143, 214, 0.06);
+    border-style: dashed;
+    border-color: rgba(47, 143, 214, 0.6);
+}
+
+.clip-actor-chip:disabled,
+.clip-actor-link:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.clip-actor-link {
+    appearance: none;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.7rem;
+    color: var(--scene-editor-muted, #94a3b8);
+    background: transparent;
+    border: none;
+    text-decoration: underline;
+    cursor: pointer;
+}

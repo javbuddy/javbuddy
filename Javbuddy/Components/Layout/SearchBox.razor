@@ -1,0 +1,254 @@
+@using Javbuddy.Models
+@using Javbuddy.Components.Pages.MoviesSections
+@using Javbuddy.Services
+@using Javbuddy.Services.R18Dev
+@inject ISearchService SearchService
+@inject IR18DevReleaseBrowseService ReleaseBrowseService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+@implements IDisposable
+
+<div class="search-box">
+    <svg class="search-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+        <circle cx="6.5" cy="6.5" r="5" fill="none" stroke="white" stroke-width="1.3" />
+        <line x1="10.3" y1="10.3" x2="14.5" y2="14.5" stroke="white" stroke-width="1.3" stroke-linecap="round" />
+    </svg>
+    <input class="search-input"
+           type="search"
+           placeholder="Search"
+           autocomplete="off"
+           value="@query"
+           @oninput="OnInput"
+           @onkeydown="OnKeyDown"
+           @onfocus="OnFocus"
+           @onfocusout="OnFocusOut" />
+
+    @if (showDropdown && !string.IsNullOrWhiteSpace(query))
+    {
+        @* Keeps focus on the input when a result is pressed, so focusout can't hide the dropdown
+           between mousedown and the click that follows on mouseup. *@
+        <div class="search-dropdown" @onmousedown:preventDefault>
+            <div class="search-dropdown-heading">Existing Movies</div>
+            @if (results is null)
+            {
+                <div class="search-dropdown-empty">Searching…</div>
+            }
+            else if (results.Count == 0)
+            {
+                <div class="search-dropdown-empty">No matches.</div>
+            }
+            else
+            {
+                @foreach (var movie in results)
+                {
+                    var hasImage = !string.IsNullOrWhiteSpace(movie.MetaSourceName) && !string.IsNullOrWhiteSpace(movie.Code);
+                    <a class="search-result" href="@($"/movies/{Uri.EscapeDataString(movie.Code ?? string.Empty)}")">
+                        @if (hasImage)
+                        {
+                            <img class="search-result-poster" src="@MoviePosterText.ThumbUrl(movie.Code!, movie.PosterVersion)" alt="" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="search-result-poster search-result-poster-placeholder">@(string.IsNullOrEmpty(movie.Code) ? "?" : movie.Code[..Math.Min(2, movie.Code.Length)])</span>
+                        }
+                        <span class="search-result-text">
+                            <span class="search-result-code">@movie.Code</span>
+                            @if (!string.IsNullOrWhiteSpace(movie.MetaTitle) && movie.MetaTitle != movie.Code)
+                            {
+                                <span class="search-result-title">@movie.MetaTitle</span>
+                            }
+                        </span>
+                    </a>
+                }
+                <a class="search-result search-result-add" href="@SeeAllUrl(query)">
+                    See all matches for "@query"
+                </a>
+            }
+
+            <div class="search-dropdown-heading">Existing Actors</div>
+            @if (actorResults is null)
+            {
+                <div class="search-dropdown-empty">Searching…</div>
+            }
+            else if (actorResults.Count == 0)
+            {
+                <div class="search-dropdown-empty">No matches.</div>
+            }
+            else
+            {
+                @foreach (var actor in actorResults)
+                {
+                    <a class="search-result" href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}")">
+                        @if (actor.HasImage)
+                        {
+                            <img class="search-result-avatar search-result-avatar-image"
+                                 src="@ActorThumbUrl(actor.Id)"
+                                 alt="@actor.DisplayName"
+                                 loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="search-result-avatar">@Initials(actor.DisplayName)</span>
+                        }
+                        <span class="search-result-text">
+                            <span class="search-result-code">@actor.DisplayName</span>
+                        </span>
+                    </a>
+                }
+            }
+
+            @* Releases the r18.dev dump knows by that code but the library doesn't track;
+               tracked ones are already under Existing Movies. Hidden while there are none. *@
+            @if (catalogResults is { Count: > 0 })
+            {
+                <div class="search-dropdown-heading">r18.dev Catalog</div>
+                @foreach (var release in catalogResults)
+                {
+                    <a class="search-result" href="@release.LinkUrl">
+                        @if (!string.IsNullOrWhiteSpace(release.Movie.PosterUrl))
+                        {
+                            <img class="search-result-poster" src="@release.Movie.PosterUrl" alt="" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="search-result-poster search-result-poster-placeholder">@release.Movie.DvdId[..Math.Min(2, release.Movie.DvdId.Length)]</span>
+                        }
+                        <span class="search-result-text">
+                            <span class="search-result-code">@release.Movie.DvdId</span>
+                            @if (release.Movie.DisplayTitle != release.Movie.DvdId)
+                            {
+                                <span class="search-result-title">@release.Movie.DisplayTitle</span>
+                            }
+                        </span>
+                    </a>
+                }
+            }
+
+            <div class="search-dropdown-heading">Add New Movie</div>
+            <a class="search-result search-result-add" href="@($"/add/new?code={Uri.EscapeDataString(query)}")">
+                Search for "@query"
+            </a>
+        </div>
+    }
+</div>
+
+@code {
+    private string query = "";
+    private bool showDropdown;
+    private List<Movie>? results;
+    private List<ActorSearchResult>? actorResults;
+    private List<R18DevReleaseRow>? catalogResults;
+    private const int CatalogResultCount = 5;
+    private CancellationTokenSource? debounceCts;
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnFocus()
+    {
+        showDropdown = true;
+    }
+
+    private void OnFocusOut() => Clear();
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || string.IsNullOrWhiteSpace(query)) return;
+        var url = SeeAllUrl(query);
+        Clear();
+        Nav.NavigateTo(url);
+    }
+
+    // The search box lives in the layout and survives navigation, and pressing a result no longer
+    // blurs the input — so once a result (or Enter) has taken us somewhere, close the dropdown and
+    // drop the query rather than leave it sitting in the header.
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (!showDropdown && query.Length == 0) return;
+        _ = InvokeAsync(() =>
+        {
+            Clear();
+            StateHasChanged();
+        });
+    }
+
+    // Also cancels a pending debounced search, so it can't bring the results back after the clear.
+    private void Clear()
+    {
+        debounceCts?.Cancel();
+        query = "";
+        results = null;
+        actorResults = null;
+        catalogResults = null;
+        showDropdown = false;
+    }
+
+    private static string SeeAllUrl(string term) => $"/?q={Uri.EscapeDataString(term)}";
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        query = e.Value?.ToString() ?? "";
+        showDropdown = true;
+
+        debounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        debounceCts = cts;
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            results = null;
+            actorResults = null;
+            catalogResults = null;
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(250, cts.Token);
+            await SearchAsync(query, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer keystroke superseded this search.
+        }
+    }
+
+    private async Task SearchAsync(string term, CancellationToken ct)
+    {
+        var found = await SearchService.SearchAsync(term, ct: ct);
+
+        if (ct.IsCancellationRequested) return;
+
+        results = found.Movies;
+        actorResults = found.Actors;
+        await InvokeAsync(StateHasChanged);
+
+        // After the library results, which shouldn't wait on the dump. Off the circuit's sync
+        // context, since Microsoft.Data.Sqlite's async calls complete synchronously.
+        var catalog = await Task.Run(() => ReleaseBrowseService.SuggestAsync(term, CatalogResultCount * 2, ct), ct);
+        if (ct.IsCancellationRequested) return;
+
+        catalogResults = catalog.Where(r => !r.InLibrary).Take(CatalogResultCount).ToList();
+        await InvokeAsync(StateHasChanged);
+    }
+
+
+    private static string ActorThumbUrl(int actorId) => $"/actor-image/{actorId}/thumb";
+
+    private static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant()
+        };
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        debounceCts?.Cancel();
+    }
+}

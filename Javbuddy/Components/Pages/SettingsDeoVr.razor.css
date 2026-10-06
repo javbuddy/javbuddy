@@ -1,0 +1,28 @@
+.deovr-card {
+    max-width: 900px;
+}
+
+.deovr-name {
+    max-width: 300px;
+}
+
+.deovr-address {
+    user-select: all;
+}
+
+.deovr-editor {
+    border-top: 1px solid #dee2e6;
+    padding-top: 1rem;
+}
+
+.deovr-match-count {
+    color: #6c757d;
+}
+
+:root[data-theme="dark"] .deovr-editor {
+    border-top-color: #3a3f4b;
+}
+
+:root[data-theme="dark"] .deovr-match-count {
+    color: #9aa0ab;
+}

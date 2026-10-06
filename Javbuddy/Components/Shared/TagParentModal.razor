@@ -1,0 +1,130 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@inject ITagService TagService
+
+@if (Show && Tag is not null)
+{
+    <div class="tag-parent-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="tag-parent-modal-panel" @onclick:stopPropagation="true">
+            <div class="tag-parent-modal-header">
+                <h5 class="tag-parent-modal-title">Set Parent — @Tag.Name</h5>
+                <button type="button" class="tag-parent-modal-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@isSaving">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+
+            <div class="tag-parent-modal-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+                }
+
+                @if (Tag.SubtagCount > 0)
+                {
+                    <div class="alert alert-info py-2 mb-3">
+                        <strong>@Tag.Name</strong> has @Tag.SubtagCount subtag@(Tag.SubtagCount == 1 ? "" : "s").
+                        Because tag hierarchy is limited to 2 levels (Category &rarr; Subtag), parent categories cannot be assigned a parent.
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold mb-1" for="parent-select">Parent Category</label>
+                        <select id="parent-select" class="form-select" @bind="selectedParentId" disabled="@isSaving">
+                            <option value="">None (Top-level Tag)</option>
+                            @foreach (var parent in eligibleParents)
+                            {
+                                <option value="@parent.Id">@parent.Name</option>
+                            }
+                        </select>
+                        <div class="form-text mt-1">
+                            Assigning a parent groups this tag under that category. Tag filters on the parent category will automatically include this subtag.
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="tag-parent-modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isSaving">Cancel</button>
+                @if (Tag.SubtagCount == 0)
+                {
+                    <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@isSaving">
+                        @(isSaving ? "Saving…" : "Save")
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public TagListItem? Tag { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnUpdated { get; set; }
+
+    private int? selectedParentId;
+    private List<TagListItem> eligibleParents = [];
+    private string? errorMessage;
+    private bool isSaving;
+    private bool wasShown;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && !wasShown && Tag is not null)
+        {
+            selectedParentId = Tag.ParentTagId;
+            errorMessage = null;
+            isSaving = false;
+
+            var all = await TagService.GetTagsAsync();
+            eligibleParents = all
+                .Where(t => t.Id != Tag.Id && t.ParentTagId == null && !t.NeedsReview)
+                .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        wasShown = Show;
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (isSaving) return;
+        errorMessage = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Tag is null) return;
+
+        isSaving = true;
+        errorMessage = null;
+
+        var result = await TagService.SetParentAsync(Tag.Id, selectedParentId);
+        isSaving = false;
+
+        if (result.Success)
+        {
+            await OnUpdated.InvokeAsync();
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage ?? "Failed to update parent.";
+        }
+    }
+}

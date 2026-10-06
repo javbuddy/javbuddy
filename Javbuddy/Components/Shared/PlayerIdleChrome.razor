@@ -1,0 +1,46 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Hides a player's chrome after a few idle seconds of playback: toggles the
+   `player-idle` class on Root, which the host's CSS uses to fade out the header, scrub bar and cursor.
+   Renders nothing; the timer and listeners live in PlayerIdleChrome.razor.js so activity doesn't
+   cost a SignalR round-trip. *@
+
+@code {
+    /// <summary>The element that gets the <c>player-idle</c> class: an ancestor of everything that hides.</summary>
+    [Parameter, EditorRequired] public ElementReference Root { get; set; }
+
+    /// <summary>CSS selector of the <c>&lt;video&gt;</c>; chrome only hides while it's playing.</summary>
+    [Parameter, EditorRequired] public string VideoSelector { get; set; } = default!;
+
+    private readonly string key = Guid.NewGuid().ToString("N");
+    private IJSObjectReference? jsModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/PlayerIdleChrome.razor.js");
+            await jsModule.InvokeVoidAsync("init", key, Root, VideoSelector);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("dispose", key);
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

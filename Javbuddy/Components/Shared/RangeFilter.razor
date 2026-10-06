@@ -1,0 +1,108 @@
+@using System.Globalization
+
+<button type="button" class="sort-dropdown-item @(IsActive ? "active" : "")" @onclick="ToggleExpanded">
+    <span>@HeaderText</span>
+    <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
+</button>
+@if (expanded)
+{
+    <div class="height-range-panel">
+        <div class="height-range-values">@FormatRange(LiveMin, LiveMax, Unit)</div>
+        <div class="range-slider-track">
+            <div class="range-track-bg"></div>
+            <div class="range-track-fill" style="@FillStyle"></div>
+            <input type="range" class="range-thumb-input"
+                   min="@BoundsMin" max="@BoundsMax" value="@thumbA"
+                   @oninput="OnThumbAInput" @onchange="OnThumbAChange" />
+            <input type="range" class="range-thumb-input"
+                   min="@BoundsMin" max="@BoundsMax" value="@thumbB"
+                   @oninput="OnThumbBInput" @onchange="OnThumbBChange" />
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Dual-handle range slider for the Actors page's Height filter — two
+    /// overlapping native &lt;input type="range"&gt; elements sharing one visual track (CSS-only,
+    /// no JS interop). Each thumb updates a local "live" value continuously while dragging (for the
+    /// on-screen label), but only commits the range into the caller's filter state on release
+    /// (native `change`, not `input`) — filtering rebuilds the actor grid, so committing on every
+    /// drag tick would force a full re-render per pixel of drag (same reasoning as Actors.razor's
+    /// debounced text filter). The thumbs aren't tied to an end: the range is whichever
+    /// is lower to whichever is higher, so they can meet for a single exact value and be dragged past
+    /// each other. Clamping one against the other instead would trap the lower thumb
+    /// under the upper one once they meet, and leave the browser's thumb out of step with the value.</summary>
+    /// <summary>What the slider filters and in which unit ("Height"/"cm", "Age"/"yrs", …). Generalised from the
+    /// Actors page's Height slider for the Actress Attributes filters.</summary>
+    [Parameter] public string Label { get; set; } = "Height";
+    [Parameter] public string Unit { get; set; } = "cm";
+    [Parameter, EditorRequired] public int BoundsMin { get; set; }
+    [Parameter, EditorRequired] public int BoundsMax { get; set; }
+    [Parameter, EditorRequired] public int SelectedMin { get; set; }
+    [Parameter, EditorRequired] public int SelectedMax { get; set; }
+    [Parameter, EditorRequired] public EventCallback<(int Min, int Max)> OnRangeCommitted { get; set; }
+
+    private bool expanded;
+    private int thumbA;
+    private int thumbB;
+
+    protected override void OnParametersSet()
+    {
+        thumbA = SelectedMin;
+        thumbB = SelectedMax;
+    }
+
+    private int LiveMin => Math.Min(thumbA, thumbB);
+    private int LiveMax => Math.Max(thumbA, thumbB);
+
+    private bool IsActive => SelectedMin > BoundsMin || SelectedMax < BoundsMax;
+
+    private string HeaderText => IsActive ? $"{Label} ({FormatRange(SelectedMin, SelectedMax, Unit)})" : Label;
+
+    /// <summary>"150–165 cm", or just "25 yrs" when both ends are the same value.</summary>
+    private static string FormatRange(int min, int max, string unit) =>
+        min == max ? $"{min} {unit}" : $"{min}–{max} {unit}";
+
+    private string FillStyle
+    {
+        get
+        {
+            var span = BoundsMax - BoundsMin;
+            if (span <= 0) return "left:0;right:0;";
+            var leftPct = (LiveMin - BoundsMin) / (double)span * 100;
+            var rightPct = (BoundsMax - LiveMax) / (double)span * 100;
+            return FormattableString.Invariant($"left:{leftPct}%;right:{rightPct}%;");
+        }
+    }
+
+    private void ToggleExpanded() => expanded = !expanded;
+
+    private bool TryParseThumb(ChangeEventArgs e, out int value)
+    {
+        if (!int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value)) return false;
+        value = Math.Clamp(value, BoundsMin, Math.Max(BoundsMin, BoundsMax));
+        return true;
+    }
+
+    private void OnThumbAInput(ChangeEventArgs e)
+    {
+        if (TryParseThumb(e, out var v)) thumbA = v;
+    }
+
+    private void OnThumbBInput(ChangeEventArgs e)
+    {
+        if (TryParseThumb(e, out var v)) thumbB = v;
+    }
+
+    private Task OnThumbAChange(ChangeEventArgs e)
+    {
+        OnThumbAInput(e);
+        return OnRangeCommitted.InvokeAsync((LiveMin, LiveMax));
+    }
+
+    private Task OnThumbBChange(ChangeEventArgs e)
+    {
+        OnThumbBInput(e);
+        return OnRangeCommitted.InvokeAsync((LiveMin, LiveMax));
+    }
+}

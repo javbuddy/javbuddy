@@ -1,0 +1,85 @@
+.sort-dropdown-arrow {
+    font-size: 0.65rem;
+    margin-left: 0.35rem;
+}
+
+.sort-dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 0.5rem 1rem;
+    color: #e7e9ee;
+    font-size: 0.9rem;
+}
+
+    .sort-dropdown-item:hover {
+        background-color: #3d4256;
+        color: #ffffff;
+    }
+
+    .sort-dropdown-item.active {
+        color: #4fc3e0;
+        font-weight: 600;
+    }
+
+.sort-dropdown-subitem {
+    padding-left: 2rem;
+}
+
+.multiselect-search-row {
+    padding: 0.4rem 1rem 0.25rem;
+}
+
+.multiselect-search-input {
+    width: 100%;
+    background-color: #2b2f38;
+    color: #e7e9ee;
+    border: 1px solid #4a5064;
+    border-radius: 4px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+    .multiselect-search-input::placeholder {
+        color: #8a90a2;
+    }
+
+    .multiselect-search-input:focus {
+        outline: none;
+        border-color: #4fc3e0;
+    }
+
+.multiselect-actions-row {
+    display: flex;
+    gap: 1rem;
+    padding: 0 1rem 0.4rem;
+}
+
+.multiselect-action-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #4fc3e0;
+    font-size: 0.8rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+    .multiselect-action-link:hover {
+        color: #7ad7ee;
+    }
+
+.multiselect-scroll-area {
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.multiselect-empty {
+    padding: 0.5rem 1rem;
+    color: #8a90a2;
+    font-size: 0.85rem;
+}

@@ -1,0 +1,174 @@
+@using Javbuddy.Services
+@inject IActorPhotoService ActorPhotoService
+
+@if (Show)
+{
+    <div class="actor-photo-upload-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="actor-photo-upload-panel" role="dialog" aria-modal="true" aria-labelledby="actor-photo-upload-title" @onclick:stopPropagation="true">
+            <div class="actor-photo-upload-header">
+                <h2 id="actor-photo-upload-title">Add Photos — @ActorName</h2>
+                <button type="button" class="actor-photo-upload-close" @onclick="CloseAsync" aria-label="Close">×</button>
+            </div>
+            <div class="actor-photo-upload-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2">@errorMessage</div>
+                }
+                <InputFile OnChange="SelectFiles" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-control" />
+                <p class="text-muted small mt-2 mb-3">JPEG, PNG, or WebP; up to @UploadSettings.MaxSizeMb MB per image, up to @UploadSettings.MaxBatchFiles photos per batch.</p>
+                @if (files.Count > 0)
+                {
+                    <p class="small mb-3">@files.Count image@(files.Count == 1 ? string.Empty : "s") selected.</p>
+                }
+                @if (uploading)
+                {
+                    <div class="actor-photo-upload-progress" role="status">
+                        <div class="progress"><div class="progress-bar" style="width: @UploadPercent%"></div></div>
+                        <span>Uploading @uploadIndex of @files.Count…</span>
+                    </div>
+                }
+                else if (uploadedCount > 0)
+                {
+                    <div class="alert alert-success py-2">Uploaded @uploadedCount photo@(uploadedCount == 1 ? string.Empty : "s").</div>
+                }
+                <label class="form-label" for="actor-photo-album">Album</label>
+                <select id="actor-photo-album" class="form-select" @bind="selectedAlbumId">
+                    <option value="">Uncategorized</option>
+                    @foreach (var album in Albums)
+                    {
+                        <option value="@album.Id">@album.Name</option>
+                    }
+                </select>
+                <div class="actor-photo-upload-divider"><span>or create an album</span></div>
+                <input class="form-control" @bind="newAlbumName" placeholder="Album name" maxlength="100" />
+            </div>
+            <div class="actor-photo-upload-footer">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@uploading">@(uploadedCount > 0 ? "Done" : "Cancel")</button>
+                <button type="button" class="btn btn-primary" @onclick="UploadAsync" disabled="@(uploading || files.Count == 0)">@(uploading ? "Uploading…" : "Upload photos")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public int ActorId { get; set; }
+    [Parameter] public string ActorName { get; set; } = string.Empty;
+    [Parameter] public IReadOnlyList<ActorPhotoAlbumSummary> Albums { get; set; } = [];
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnUploaded { get; set; }
+    [Inject] private IServiceProvider Sp { get; set; } = default!;
+    private ImageUploadSettings UploadSettings => Sp.GetService<ImageUploadSettings>() ?? ImageUploadSettings.Default;
+
+    private readonly List<IBrowserFile> files = [];
+    private int? selectedAlbumId;
+    private string newAlbumName = string.Empty;
+    private string? errorMessage;
+    private bool uploading;
+    private int uploadIndex;
+    private int uploadedCount;
+
+    private int UploadPercent => files.Count == 0 ? 0 : 100 * uploadIndex / files.Count;
+
+    private void SelectFiles(InputFileChangeEventArgs e)
+    {
+        errorMessage = null;
+        files.Clear();
+        uploadedCount = 0;
+        IReadOnlyList<IBrowserFile> selectedFiles;
+        try
+        {
+            selectedFiles = e.GetMultipleFiles(UploadSettings.MaxBatchFiles);
+        }
+        catch (InvalidOperationException)
+        {
+            errorMessage = $"You can select at most {UploadSettings.MaxBatchFiles} photos at a time.";
+            return;
+        }
+
+        foreach (var file in selectedFiles)
+        {
+            var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+            if (extension is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+            {
+                errorMessage = "Only JPEG, PNG, and WebP images are supported.";
+                files.Clear();
+                return;
+            }
+            if (file.Size > UploadSettings.MaxSizeBytes)
+            {
+                errorMessage = $"Each image must be no larger than {UploadSettings.MaxSizeMb} MB.";
+                files.Clear();
+                return;
+            }
+            files.Add(file);
+        }
+    }
+
+    private async Task UploadAsync()
+    {
+        uploading = true;
+        uploadIndex = 0;
+        uploadedCount = 0;
+        errorMessage = null;
+        try
+        {
+            var albumId = selectedAlbumId;
+            if (!string.IsNullOrWhiteSpace(newAlbumName))
+            {
+                var created = await ActorPhotoService.CreateAlbumAsync(ActorId, newAlbumName);
+                if (!created.Result.Success)
+                {
+                    errorMessage = created.Result.ErrorMessage;
+                    return;
+                }
+                albumId = created.Album!.Id;
+            }
+
+            var items = files.Select(file => new ActorPhotoUploadItem(
+                () => file.OpenReadStream(UploadSettings.MaxSizeBytes),
+                file.Size)).ToList();
+
+            var progress = new Progress<int>(count =>
+            {
+                uploadIndex = count;
+                _ = InvokeAsync(StateHasChanged);
+            });
+
+            var result = await ActorPhotoService.UploadAsync(ActorId, items, albumId, progress);
+            if (!result.Success)
+            {
+                errorMessage = result.ErrorMessage;
+                return;
+            }
+            uploadedCount = files.Count;
+            await OnUploaded.InvokeAsync();
+            files.Clear();
+        }
+        catch (IOException)
+        {
+            errorMessage = "One or more selected files could not be read.";
+        }
+        finally
+        {
+            uploading = false;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (uploading) return;
+        files.Clear();
+        uploadIndex = 0;
+        uploadedCount = 0;
+        selectedAlbumId = null;
+        newAlbumName = string.Empty;
+        errorMessage = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CloseAsync();
+    }
+}

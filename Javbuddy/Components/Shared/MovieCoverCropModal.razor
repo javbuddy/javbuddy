@@ -1,0 +1,533 @@
+@using Javbuddy.Services
+@using Javbuddy.Services.LocalLibrary
+@using Microsoft.Extensions.DependencyInjection
+@inject IMovieCoverCropService CoverCropService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (Show)
+{
+    <div class="crop-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="crop-modal-panel" @onclick:stopPropagation="true">
+            <div class="crop-modal-header">
+                <h5 class="crop-modal-title">Crop Cover — @(string.IsNullOrWhiteSpace(Title) ? Code : Title)</h5>
+                <button type="button" class="crop-modal-close-btn" @onclick="CloseAsync" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+
+            <div class="crop-modal-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+                }
+
+                @* Source selection bar *@
+                <div class="source-selection-bar">
+                    @foreach (var src in availableSources)
+                    {
+                        <button type="button"
+                                class="source-tab-btn @(activeTab == src.Key ? "active" : "")"
+                                @onclick="() => SelectSourceTabAsync(src.Key)"
+                                disabled="@(loadingSource || saving)">
+                            @src.Label
+                        </button>
+                    }
+                    <button type="button"
+                            class="source-tab-btn @(activeTab == "upload" ? "active" : "")"
+                            @onclick='() => SelectSourceTabAsync("upload")'
+                            disabled="@(loadingSource || saving)">
+                        Upload File
+                    </button>
+                    <button type="button"
+                            class="source-tab-btn @(activeTab == "url" ? "active" : "")"
+                            @onclick='() => SelectSourceTabAsync("url")'
+                            disabled="@(loadingSource || saving)">
+                        Import URL
+                    </button>
+                </div>
+
+                @if (loadingSource)
+                {
+                    <div class="text-center py-5 text-muted">
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Loading image...
+                    </div>
+                }
+                else if (activeTab == "upload" && selectedImageBytes is null)
+                {
+                    <div class="upload-dropzone">
+                        <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
+                        <div class="upload-icon">
+                            <svg viewBox="0 0 16 16" width="48" height="48" fill="currentColor" aria-hidden="true">
+                                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                                <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                            </svg>
+                        </div>
+                        <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
+                        <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
+                    </div>
+                }
+                else if (activeTab == "url" && selectedImageBytes is null)
+                {
+                    <div class="upload-url-section">
+                        <label class="form-label text-light small mb-1" for="cover-image-url-input">Import from URL</label>
+                        <div class="input-group">
+                            <input id="cover-image-url-input"
+                                   type="url"
+                                   class="form-control form-control-sm url-input"
+                                   placeholder="https://example.com/cover.jpg"
+                                   @bind="imageUrlInput"
+                                   @bind:event="oninput"
+                                   @onkeydown="HandleUrlKeyDown"
+                                   disabled="@fetchingUrl" />
+                            <button type="button"
+                                    class="btn btn-primary btn-sm fetch-btn"
+                                    @onclick="FetchFromUrlAsync"
+                                    disabled="@(fetchingUrl || string.IsNullOrWhiteSpace(imageUrlInput))">
+                                @(fetchingUrl ? "Fetching…" : "Fetch")
+                            </button>
+                        </div>
+                    </div>
+                }
+                else if (selectedImageBytes is not null)
+                {
+                    <div class="cropper-toolbar">
+                        <div class="ratio-group">
+                            <button type="button" class="btn-tool @(IsRatioActive(1.0 / 1.42) ? "active" : "")" @onclick="() => SetAspectRatio(1.0 / 1.42)" title="Standard DVD front cover ratio (~1:1.42)">
+                                DVD Case (1:1.42)
+                            </button>
+                            <button type="button" class="btn-tool @(IsRatioActive(2.0 / 3.0) ? "active" : "")" @onclick="() => SetAspectRatio(2.0 / 3.0)" title="Standard 2:3 media poster ratio">
+                                2:3 Poster
+                            </button>
+                            <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)" title="Free-form unconstrained crop">
+                                Free-form
+                            </button>
+                        </div>
+
+                        <div class="zoom-controls">
+                            <button type="button" class="btn-tool" @onclick="() => AdjustZoom(-0.1)" title="Zoom out">-</button>
+                            <input type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom" @oninput="HandleZoomInput" />
+                            <button type="button" class="btn-tool" @onclick="() => AdjustZoom(0.1)" title="Zoom in">+</button>
+                            <button type="button" class="btn-tool ms-2" @onclick="ResetCrop" title="Reset crop box to proposed front cover">Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="cropper-workspace">
+                        <div class="cropper-viewport-wrapper">
+                            <CropperViewport HeightPx="400" @ref="viewport" />
+                            <small class="text-muted d-block mt-1">Drag inside box to pan • Drag handles to resize • Scroll to zoom</small>
+                        </div>
+
+                        <div class="cropper-previews">
+                            <span class="preview-title">Cover Preview</span>
+                            <div class="preview-poster-wrapper" title="Poster Card Preview">
+                                <canvas width="130" height="185" class="preview-canvas" @ref="previewPosterCanvasRef"></canvas>
+                            </div>
+                            <span class="preview-hint">Proposed front cover crop</span>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="crop-modal-footer">
+                @if (selectedImageBytes is not null)
+                {
+                    <div class="footer-actions-right">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@saving">
+                            Cancel
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm crop-save-btn" @onclick="SaveCroppedAsync" disabled="@saving" title="@SaveDestinationHint">
+                            @(saving ? "Saving…" : "Save Cropped Cover")
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync">
+                        Cancel
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter, EditorRequired] public string Code { get; set; } = string.Empty;
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<MovieCoverCropSaveResult> OnCoverChanged { get; set; }
+
+    [Inject] private IServiceProvider Sp { get; set; } = default!;
+    private ImageUploadSettings UploadSettings => Sp.GetService<ImageUploadSettings>() ?? ImageUploadSettings.Default;
+
+    private List<MovieCropSource> availableSources = [];
+    private string activeTab = string.Empty;
+    private bool loadingSource;
+    private string? selectedImageContentType;
+    private byte[]? selectedImageBytes;
+    private double? currentAspectRatio = 1.0 / 1.42;
+    private double currentZoom = 1.0;
+    private bool saving;
+    private string? errorMessage;
+    private bool hasLocalFolder;
+
+    private string SaveDestinationHint => hasLocalFolder
+        ? "Saving writes poster.jpg to the movie folder and removes any other poster/folder images there."
+        : "This movie has no local folder, so the crop is kept in Javbuddy's image cache only. Once the movie is imported, the library's own poster replaces it.";
+    private bool shouldInitCropper;
+    private string imageUrlInput = string.Empty;
+    private bool fetchingUrl;
+    private string? loadedCode;
+
+    private CropperViewport? viewport;
+    private ElementReference previewPosterCanvasRef;
+
+    private IJSObjectReference? jsModule;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && !string.IsNullOrWhiteSpace(Code) && Code != loadedCode)
+        {
+            loadedCode = Code;
+            await LoadSourcesAndDefaultImageAsync();
+        }
+        else if (!Show && loadedCode is not null)
+        {
+            ResetSelection();
+            loadedCode = null;
+            availableSources.Clear();
+            activeTab = string.Empty;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (shouldInitCropper && selectedImageBytes is not null && selectedImageContentType is not null)
+        {
+            shouldInitCropper = false;
+            try
+            {
+                jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/MovieCoverCropModal.razor.js");
+                // Stream the bytes to the browser as a blob URL instead of rendering a base64
+                // data: URL, which kept a multi-MB string in the render tree and SignalR frame.
+                using var streamRef = new DotNetStreamReference(new MemoryStream(selectedImageBytes, writable: false));
+                await jsModule.InvokeVoidAsync("setImageSource", viewport!.Image, streamRef, selectedImageContentType);
+                await jsModule.InvokeVoidAsync("initCropper", viewport!.Container, viewport.Image, previewPosterCanvasRef);
+                if (currentAspectRatio.HasValue)
+                {
+                    await jsModule.InvokeVoidAsync("setAspectRatio", currentAspectRatio.Value);
+                }
+                else
+                {
+                    await jsModule.InvokeVoidAsync("setAspectRatio", (object?)null);
+                }
+            }
+            catch (JSException ex)
+            {
+                errorMessage = $"Could not initialize cropper: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task LoadSourcesAndDefaultImageAsync()
+    {
+        loadingSource = true;
+        errorMessage = null;
+        try
+        {
+            var sourcesDto = await CoverCropService.GetCropSourcesAsync(Code);
+            availableSources = sourcesDto.Sources.ToList();
+            hasLocalFolder = sourcesDto.HasLocalFolder;
+
+            var defaultKey = sourcesDto.DefaultSourceKey;
+            if (!string.IsNullOrWhiteSpace(defaultKey))
+            {
+                activeTab = defaultKey;
+                await LoadImageFromSourceKeyAsync(defaultKey);
+            }
+            else
+            {
+                activeTab = "upload";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error discovering image sources: {ex.Message}";
+        }
+        finally
+        {
+            loadingSource = false;
+        }
+    }
+
+    private async Task SelectSourceTabAsync(string tabKey)
+    {
+        if (activeTab == tabKey && selectedImageBytes is not null) return;
+        activeTab = tabKey;
+        errorMessage = null;
+
+        if (tabKey == "upload" || tabKey == "url")
+        {
+            selectedImageContentType = null;
+            selectedImageBytes = null;
+            return;
+        }
+
+        loadingSource = true;
+        await LoadImageFromSourceKeyAsync(tabKey);
+        loadingSource = false;
+    }
+
+    private async Task LoadImageFromSourceKeyAsync(string sourceKey)
+    {
+        try
+        {
+            var bytes = await CoverCropService.GetSourceBytesAsync(Code, sourceKey);
+            if (bytes is { Length: > 0 })
+            {
+                LoadSelectedImage(bytes, "image/jpeg");
+            }
+            else
+            {
+                errorMessage = "Could not load image bytes for the selected source.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading source image: {ex.Message}";
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        errorMessage = null;
+        var file = e.File;
+        if (file is null) return;
+
+        if (file.Size > UploadSettings.MaxSizeBytes)
+        {
+            errorMessage = $"Image size exceeds {UploadSettings.MaxSizeMb} MB limit.";
+            return;
+        }
+
+        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+        {
+            errorMessage = "Unsupported image format. Please select a JPEG, PNG, or WebP image.";
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(UploadSettings.MaxSizeBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType;
+            LoadSelectedImage(ms.ToArray(), contentType);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error reading uploaded file: {ex.Message}";
+        }
+    }
+
+    private void LoadSelectedImage(byte[] bytes, string contentType)
+    {
+        selectedImageBytes = bytes;
+        selectedImageContentType = contentType;
+        currentZoom = 1.0;
+        currentAspectRatio = 1.0 / 1.42;
+        shouldInitCropper = true;
+    }
+
+    private bool IsRatioActive(double target) =>
+        currentAspectRatio.HasValue && Math.Abs(currentAspectRatio.Value - target) < 0.01;
+
+    private async Task SetAspectRatio(double? ratio)
+    {
+        currentAspectRatio = ratio;
+        if (jsModule is not null)
+        {
+            try
+            {
+                if (ratio.HasValue)
+                {
+                    await jsModule.InvokeVoidAsync("setAspectRatio", ratio.Value);
+                }
+                else
+                {
+                    await jsModule.InvokeVoidAsync("setAspectRatio", (object?)null);
+                }
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+
+    private async Task HandleZoomInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var z))
+        {
+            currentZoom = Math.Clamp(z, 1.0, 3.0);
+            if (jsModule is not null)
+            {
+                try
+                {
+                    await jsModule.InvokeVoidAsync("setZoom", currentZoom);
+                }
+                catch (JSDisconnectedException) { }
+                catch (InvalidOperationException) { }
+            }
+        }
+    }
+
+    private async Task AdjustZoom(double delta)
+    {
+        currentZoom = Math.Clamp(currentZoom + delta, 1.0, 3.0);
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("setZoom", currentZoom);
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+
+    private async Task ResetCrop()
+    {
+        currentZoom = 1.0;
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("setZoom", 1.0);
+                await jsModule.InvokeVoidAsync("resetCrop");
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+
+    private void ResetSelection()
+    {
+        selectedImageContentType = null;
+        selectedImageBytes = null;
+        errorMessage = null;
+        shouldInitCropper = false;
+        currentZoom = 1.0;
+        currentAspectRatio = 1.0 / 1.42;
+        imageUrlInput = string.Empty;
+        fetchingUrl = false;
+    }
+
+    private async Task HandleUrlKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !fetchingUrl && !string.IsNullOrWhiteSpace(imageUrlInput))
+        {
+            await FetchFromUrlAsync();
+        }
+    }
+
+    private async Task FetchFromUrlAsync()
+    {
+        if (string.IsNullOrWhiteSpace(imageUrlInput) || fetchingUrl) return;
+
+        fetchingUrl = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await CoverCropService.DownloadImageFromUrlAsync(imageUrlInput);
+            if (!result.Success || result.Bytes is null)
+            {
+                errorMessage = result.ErrorMessage ?? "Failed to download image.";
+                return;
+            }
+
+            var contentType = string.IsNullOrWhiteSpace(result.ContentType) ? "image/jpeg" : result.ContentType;
+            LoadSelectedImage(result.Bytes, contentType);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error downloading image: {ex.Message}";
+        }
+        finally
+        {
+            fetchingUrl = false;
+        }
+    }
+
+    private record CropRectDto(double x, double y, double width, double height);
+
+    private async Task SaveCroppedAsync()
+    {
+        if (selectedImageBytes is null || jsModule is null) return;
+        saving = true;
+        errorMessage = null;
+
+        try
+        {
+            var dto = await jsModule.InvokeAsync<CropRectDto>("getCropRect");
+            var cropRect = new NormalizedCropRect(dto.x, dto.y, dto.width, dto.height);
+            var result = await CoverCropService.SaveCroppedCoverAsync(Code, selectedImageBytes, cropRect);
+            if (!result.Success)
+            {
+                errorMessage = result.ErrorMessage ?? "Failed to save cropped cover.";
+                return;
+            }
+
+            await OnCoverChanged.InvokeAsync(result);
+            await CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to save cover: {ex.Message}";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        ResetSelection();
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("destroyCropper");
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+        await OnClose.InvokeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("destroyCropper");
+                await jsModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+}

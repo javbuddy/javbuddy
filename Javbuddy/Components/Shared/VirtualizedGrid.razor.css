@@ -1,0 +1,4 @@
+.virtualized-grid-spacer {
+    width: 100%;
+    pointer-events: none;
+}

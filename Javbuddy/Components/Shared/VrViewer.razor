@@ -1,0 +1,63 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Best-effort 2D view of a side-by-side VR video. Draws the left eye of the <video>
+   selected by VideoSelector onto a WebGL canvas, unwarped through a draggable virtual camera, and
+   overlays it on the video (the host hides the video's own picture but keeps its native controls).
+   All rendering and pointer handling live in VrViewer.razor.js — a redraw per drag event over a
+   SignalR round-trip would lag — so this component only renders the markup. The canvas is hidden
+   from assistive tech: the host's toggle button and the video's native controls are the accessible
+   surface. *@
+<div class="vr-viewer" @ref="root">
+    <canvas class="vr-viewer-canvas" aria-hidden="true"></canvas>
+    <select class="vr-viewer-projection" aria-label="VR projection" title="How the VR video was encoded (equirectangular is the common one)">
+        <option value="equirect">Equirectangular 180°</option>
+        <option value="fisheye">Fisheye 180°</option>
+    </select>
+    <button type="button" class="vr-viewer-fullscreen" aria-label="Toggle fullscreen" title="Toggle fullscreen (or double-click video)">
+        <svg class="vr-viewer-fs-icon-enter" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0V2h3.5a.5.5 0 0 0 0-1h-4zm13 0h-4a.5.5 0 0 0 0 1H14v3.5a.5.5 0 0 0 1 0v-4a.5.5 0 0 0-.5-.5zM1 10.5a.5.5 0 0 0 .5.5H5a.5.5 0 0 0 0-1H2v-3.5a.5.5 0 0 0-1 0v4zm14 0a.5.5 0 0 0-1 0V14h-3.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 .5-.5v-4z" />
+        </svg>
+        <svg class="vr-viewer-fs-icon-exit" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10.5 4.5v-4a.5.5 0 0 1 .5-.5zM0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zm10.5 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4z" />
+        </svg>
+    </button>
+    <div class="vr-viewer-error" role="alert" hidden></div>
+</div>
+
+@code {
+    /// <summary>CSS selector of the <c>&lt;video&gt;</c> to unwarp. Must already be in the DOM when
+    /// this component first renders.</summary>
+    [Parameter, EditorRequired] public string VideoSelector { get; set; } = default!;
+
+    private ElementReference root;
+    private IJSObjectReference? jsModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/VrViewer.razor.js");
+            await jsModule.InvokeVoidAsync("init", root, VideoSelector);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("dispose", root);
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

@@ -1,0 +1,89 @@
+@* A scene's, highlight's or apex's actor chips. While the form has no actors of its own, the
+   ones the clip inherits show dimmed and selected, labelled with where they come from; clicking a chip picks
+   just that actor as the clip's own, and "Customize" copies all the inherited ones to remove some from
+. Once it has its own, chips toggle, and "Use inherited" goes back. An own set equal to the
+   inherited one is marked "same as inherited". ClassPrefix keeps the
+   editors' old chip classes (apex-editor-actor-chip, …) as hooks. *@
+
+@if (Cast.Count == 0)
+{
+    <span class="clip-actor-hint">The movie has no matched cast to pick from.</span>
+}
+else
+{
+    <div class="clip-actor-chips">
+        @foreach (var actor in Cast)
+        {
+            var own = Form.ActorIds?.Contains(actor.ActorId) == true;
+            var inherited = Form.ActorIds is null && Inherited.Actors.Any(a => a.ActorId == actor.ActorId);
+            <button type="button"
+                    class="clip-actor-chip @ClassPrefix-actor-chip @(own ? $"clip-actor-chip-on {ClassPrefix}-actor-chip-on" : null) @(inherited ? "clip-actor-chip-inherited" : null)"
+                    aria-pressed="@(own || inherited ? "true" : "false")"
+                    title="@(inherited ? $"Inherited from {Inherited.From}" : null)"
+                    disabled="@Busy"
+                    @onclick="() => Toggle(actor.ActorId)">@actor.Name</button>
+        }
+        @if (Form.ActorIds is null)
+        {
+            @if (Inherited.Actors.Count > 1)
+            {
+                <button type="button" class="clip-actor-link clip-actor-customize" disabled="@Busy" @onclick="Customize" title="Start from all the inherited actors and remove the ones not in it">Customize</button>
+            }
+        }
+        else
+        {
+            @if (SameAsInherited)
+            {
+                <RedundantMark Label="same as inherited" Tooltip="@($"These are the actors it would inherit from {Inherited.From}. Use inherited to follow them instead.")" />
+            }
+            <button type="button" class="clip-actor-link clip-actor-use-inherited" disabled="@Busy" @onclick="UseInherited" title="Drop its own actors and inherit them again">Use inherited</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IClipActorForm Form { get; set; } = null!;
+
+    [Parameter, EditorRequired] public IReadOnlyList<SceneActorItem> Cast { get; set; } = [];
+
+    /// <summary>What the clip inherits at the form's current time (ClipActors).</summary>
+    [Parameter, EditorRequired] public EffectiveActors Inherited { get; set; } = EffectiveActors.None;
+
+    [Parameter, EditorRequired] public string ClassPrefix { get; set; } = string.Empty;
+
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Raised after any change, so a form showing a derived label (the title placeholder) re-renders.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    // Own actors that only repeat what the clip would inherit.
+    private bool SameAsInherited =>
+        Form.ActorIds is { Count: > 0 } own && own.SetEquals(Inherited.Actors.Select(a => a.ActorId));
+
+    // While inheriting, a click picks that actor alone; after that it toggles. Unpicking the
+    // last own actor leaves an empty set, which saves as inheriting again.
+    private async Task Toggle(int actorId)
+    {
+        if (Form.ActorIds is not { } chosen)
+        {
+            Form.ActorIds = [actorId];
+        }
+        else if (!chosen.Remove(actorId))
+        {
+            chosen.Add(actorId);
+        }
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task Customize()
+    {
+        Form.ActorIds = [.. Inherited.Actors.Select(a => a.ActorId)];
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task UseInherited()
+    {
+        Form.ActorIds = null;
+        await OnChanged.InvokeAsync();
+    }
+}

@@ -1,0 +1,221 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Movies
+@inject IMovieService MovieService
+
+@if (show)
+{
+    <div class="metadata-editor-modal-backdrop" tabindex="0" @onclick="Close">
+        <div class="metadata-editor-modal-panel" @onclick:stopPropagation="true">
+            <div class="metadata-editor-modal-header">
+                <h5 class="metadata-editor-modal-title">Edit Metadata</h5>
+                <button class="metadata-editor-modal-close-btn" @onclick="Close" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+            <EditForm Model="model" OnValidSubmit="SaveAsync">
+                <div class="metadata-editor-modal-body">
+                    @if (saveError is not null)
+                    {
+                        <div class="alert alert-danger mb-3">@saveError</div>
+                    }
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="metadata-title">Title</label>
+                            <InputText id="metadata-title" class="form-control" @bind-Value="model.Title" maxlength="300" disabled="@saving" />
+                            <small class="text-muted">Manual override display name. Rarely needed — Display Title below takes precedence.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="metadata-meta-title">Display Title</label>
+                            <InputText id="metadata-meta-title" class="form-control" @bind-Value="model.MetaTitle" disabled="@saving" />
+                            <small class="text-muted">The title shown throughout the app and written to the .nfo.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="metadata-original-title">Original Title</label>
+                            <InputText id="metadata-original-title" class="form-control" @bind-Value="model.MetaOriginalTitle" disabled="@saving" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="metadata-release-date">Release Date</label>
+                            <InputDate id="metadata-release-date" class="form-control" @bind-Value="model.MetaReleaseDate" disabled="@saving" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="metadata-studio">Studio</label>
+                            <InputText id="metadata-studio" class="form-control" @bind-Value="model.MetaStudio" disabled="@saving" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="metadata-label">Label</label>
+                            <InputText id="metadata-label" class="form-control" @bind-Value="model.MetaLabel" disabled="@saving" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="metadata-series">Series</label>
+                            <InputText id="metadata-series" class="form-control" @bind-Value="model.MetaSeries" disabled="@saving" />
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label" for="metadata-director">Director</label>
+                            <InputText id="metadata-director" class="form-control" @bind-Value="model.MetaDirector" disabled="@saving" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="metadata-runtime">Runtime (minutes)</label>
+                            <InputNumber id="metadata-runtime" class="form-control" @bind-Value="model.MetaRuntimeMinutes" min="0" disabled="@saving" />
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="metadata-description">Overview</label>
+                            <InputTextArea id="metadata-description" class="form-control" rows="4" @bind-Value="model.MetaDescription" disabled="@saving" />
+                        </div>
+                        @if (model.VrFormats.Count > 0)
+                        {
+                            @* Each version's VR / 3D format. Javbuddy's own data only:
+                               the file isn't renamed. *@
+                            <div class="col-12">
+                                <span class="form-label d-block">VR format</span>
+                                @foreach (var vr in model.VrFormats)
+                                {
+                                    <div class="metadata-editor-vr-row">
+                                        @if (model.VrFormats.Count > 1)
+                                        {
+                                            <label class="metadata-editor-vr-version" for="metadata-vr-@vr.FileId">@vr.VersionLabel</label>
+                                        }
+                                        <select id="metadata-vr-@vr.FileId" class="form-select metadata-editor-vr-select" aria-label="VR format of @vr.VersionLabel"
+                                                @bind="vr.Choice" disabled="@saving">
+                                            <option value="@VrChoice.Auto">@vr.AutoLabel</option>
+                                            <option value="@VrChoice.None">None (flat)</option>
+                                            @foreach (var format in VrFormat.All)
+                                            {
+                                                <option value="@format">@(format == VrFormat.Vr180Sbs ? $"{format} (most common)" : format)</option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
+                                <small class="text-muted">Auto detects it from the file name and the picture's shape. Only Javbuddy's own data changes; the video file isn't renamed.</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="metadata-editor-modal-footer">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="Close" disabled="@saving">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary" disabled="@saving">@(saving ? "Saving…" : "Save")</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>MovieDetail's "Edit Metadata" modal — edits the core Movie fields NfoEditor
+    /// and the Genres/Cast section editors don't cover. Opened imperatively via @ref/OpenAsync,
+    /// mirroring NfoEditor/MediaInfoModal. Copies Movie's current values into a local edit model on
+    /// open so Cancel is a true discard — nothing touches <see cref="Movie"/> until Save succeeds.</summary>
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private sealed class EditModel
+    {
+        public string? Title { get; set; }
+        public string? MetaTitle { get; set; }
+        public string? MetaOriginalTitle { get; set; }
+        public DateTime? MetaReleaseDate { get; set; }
+        public string? MetaStudio { get; set; }
+        public string? MetaLabel { get; set; }
+        public string? MetaSeries { get; set; }
+        public string? MetaDirector { get; set; }
+        public int? MetaRuntimeMinutes { get; set; }
+        public string? MetaDescription { get; set; }
+        public List<VrChoice> VrFormats { get; set; } = [];
+    }
+
+    /// <summary>One version's VR format choice: Auto (detected), None, or a VrFormat value.</summary>
+    private sealed class VrChoice
+    {
+        public const string Auto = "auto";
+        public const string None = "none";
+
+        public int FileId { get; init; }
+        public string VersionLabel { get; init; } = "";
+        public string AutoLabel { get; init; } = "";
+        public string Original { get; init; } = Auto;
+        public string Choice { get; set; } = Auto;
+
+        public static VrChoice From(MovieFile file)
+        {
+            var current = !file.VrTypePinned ? Auto : file.VrType ?? None;
+            return new VrChoice
+            {
+                FileId = file.Id,
+                VersionLabel = file.VersionTag,
+                AutoLabel = file.VrTypePinned ? "Auto (detect again)" : $"Auto ({file.VrType ?? "none detected"})",
+                Original = current,
+                Choice = current,
+            };
+        }
+    }
+
+    private bool show;
+    private bool saving;
+    private string? saveError;
+    private EditModel model = new();
+
+    public Task OpenAsync()
+    {
+        model = new EditModel
+        {
+            Title = Movie.Title,
+            MetaTitle = Movie.MetaTitle,
+            MetaOriginalTitle = Movie.MetaOriginalTitle,
+            MetaReleaseDate = Movie.MetaReleaseDate,
+            MetaStudio = Movie.MetaStudio,
+            MetaLabel = Movie.MetaLabel,
+            MetaSeries = Movie.MetaSeries,
+            MetaDirector = Movie.MetaDirector,
+            MetaRuntimeMinutes = Movie.MetaRuntimeMinutes,
+            MetaDescription = Movie.MetaDescription,
+            VrFormats = Movie.MovieFiles
+                .OrderByDescending(f => f.IsPrimary)
+                .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
+                .Select(VrChoice.From)
+                .ToList(),
+        };
+        saveError = null;
+        show = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void Close() => show = false;
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        saveError = null;
+
+        var update = new MovieMetadataUpdate(
+            model.Title,
+            model.MetaTitle,
+            model.MetaOriginalTitle,
+            model.MetaReleaseDate,
+            model.MetaStudio,
+            model.MetaLabel,
+            model.MetaSeries,
+            model.MetaDirector,
+            model.MetaRuntimeMinutes,
+            model.MetaDescription);
+
+        var result = await MovieService.UpdateMetadataAsync(Movie.Id, update);
+        foreach (var vr in model.VrFormats.Where(v => v.Choice != v.Original))
+        {
+            if (!result.Success) break;
+            result = await MovieService.SetVrTypeAsync(Movie.Id, vr.FileId,
+                vr.Choice is VrChoice.Auto or VrChoice.None ? null : vr.Choice, detect: vr.Choice == VrChoice.Auto);
+        }
+        saving = false;
+
+        if (!result.Success)
+        {
+            saveError = result.ErrorMessage;
+            return;
+        }
+
+        show = false;
+        await OnSaved.InvokeAsync();
+    }
+}

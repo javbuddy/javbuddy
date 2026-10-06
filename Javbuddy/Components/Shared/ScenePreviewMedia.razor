@@ -1,0 +1,43 @@
+@using System.Net
+<div class="scene-preview-media">
+    @if (ThumbUrl is not null)
+    {
+        <img src="@ThumbUrl" alt="" loading="lazy" />
+    }
+    else if (StillUrl is not null)
+    {
+        @StillMarkup(StillUrl)
+    }
+    @if (PreviewUrl is not null)
+    {
+        @VideoMarkup(PreviewUrl)
+    }
+</div>
+
+@code {
+    /// <summary>A scene or highlight card's picture: the screenshot, with the hover
+    /// preview video playing over it (muted, looping) while PreviewUrl is set — the caller sets it
+    /// only while the card is hovered. The screenshot stays underneath as the poster and fallback.
+    /// Fills the card's positioned 16:9 frame. Without a screenshot (an apex) the
+    /// video plays alone over the frame's background.</summary>
+    [Parameter] public string? ThumbUrl { get; set; }
+
+    [Parameter] public string? PreviewUrl { get; set; }
+
+    /// <summary>A video whose first frame stands in for the screenshot when there's none: an apex card's
+    /// own preview. It stays under the playing preview, like the screenshot, so hovering
+    /// doesn't flash the frame's background while the playing copy loads.</summary>
+    [Parameter] public string? StillUrl { get; set; }
+
+    private static MarkupString StillMarkup(string stillUrl) =>
+        new($"""<video src="{WebUtility.HtmlEncode(stillUrl)}" preload="auto" muted playsinline disablepictureinpicture></video>""");
+
+    // Markup rather than a Razor element: Blazor adds attributes to an element it already created,
+    // and a muted attribute added that way leaves the video's muted property false, so Chrome refuses
+    // to autoplay it. Parsed markup mutes the video as it's created.
+    private MarkupString VideoMarkup(string previewUrl)
+    {
+        var poster = ThumbUrl is null ? "" : $" poster=\"{WebUtility.HtmlEncode(ThumbUrl)}\"";
+        return new($"""<video src="{WebUtility.HtmlEncode(previewUrl)}"{poster} autoplay muted loop playsinline disablepictureinpicture></video>""");
+    }
+}

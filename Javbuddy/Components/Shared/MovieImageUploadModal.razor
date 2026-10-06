@@ -1,0 +1,191 @@
+@* Adds images to a movie's local extrafanart folder: several files via the picker
+   or by dropping them on the drop zone (the full-size InputFile accepts drops natively), or one
+   image by URL. Shown by Movie Detail's Images section. *@
+@using Javbuddy.Services.Images
+@using Javbuddy.Services.Movies
+@inject IMovieExtraFanartService ExtraFanartService
+
+@if (Show)
+{
+    <div class="movie-image-upload-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="movie-image-upload-panel" role="dialog" aria-modal="true" aria-labelledby="movie-image-upload-title" @onclick:stopPropagation="true">
+            <div class="movie-image-upload-header">
+                <h2 id="movie-image-upload-title">Add Images — @Code</h2>
+                <button type="button" class="movie-image-upload-close" @onclick="CloseAsync" aria-label="Close">×</button>
+            </div>
+            <div class="movie-image-upload-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2">@errorMessage</div>
+                }
+                else if (addedCount > 0)
+                {
+                    <div class="alert alert-success py-2">Added @addedCount image@(addedCount == 1 ? string.Empty : "s").</div>
+                }
+                <div class="upload-dropzone">
+                    <InputFile OnChange="SelectFiles" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" disabled="@Busy" />
+                    <h6 class="mb-1">Choose images or drag &amp; drop here</h6>
+                    <p class="upload-dropzone-hint small mb-0">JPEG, PNG, or WebP; up to @UploadSettings.MaxSizeMb MB each, @UploadSettings.MaxBatchFiles per batch.</p>
+                </div>
+                @if (files.Count > 0)
+                {
+                    <p class="small mt-2 mb-0">@files.Count image@(files.Count == 1 ? string.Empty : "s") selected.</p>
+                }
+                @if (uploading)
+                {
+                    <div class="movie-image-upload-progress" role="status">
+                        <div class="progress"><div class="progress-bar" style="width: @UploadPercent%"></div></div>
+                        <span>Uploading @uploadIndex of @files.Count…</span>
+                    </div>
+                }
+                <div class="movie-image-upload-divider"><span>or</span></div>
+                <label class="form-label small mb-1" for="movie-image-url-input">Import from URL</label>
+                <div class="input-group">
+                    <input id="movie-image-url-input" type="url" class="form-control form-control-sm"
+                           placeholder="https://example.com/image.jpg"
+                           @bind="imageUrl" @bind:event="oninput" @onkeydown="HandleUrlKeyDown" disabled="@Busy" />
+                    <button type="button" class="btn btn-primary btn-sm fetch-btn" @onclick="FetchFromUrlAsync"
+                            disabled="@(Busy || string.IsNullOrWhiteSpace(imageUrl))">
+                        @(fetchingUrl ? "Fetching…" : "Fetch")
+                    </button>
+                </div>
+            </div>
+            <div class="movie-image-upload-footer">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@Busy">@(addedCount > 0 ? "Done" : "Cancel")</button>
+                <button type="button" class="btn btn-primary upload-btn" @onclick="UploadAsync" disabled="@(Busy || files.Count == 0)">@(uploading ? "Uploading…" : "Upload images")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public int MovieId { get; set; }
+    [Parameter] public string Code { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Raised after each successful add, so the caller can reload its gallery while
+    /// the modal stays open for more.</summary>
+    [Parameter] public EventCallback OnUploaded { get; set; }
+
+    [Inject] private IServiceProvider Sp { get; set; } = default!;
+    private ImageUploadSettings UploadSettings => Sp.GetService<ImageUploadSettings>() ?? ImageUploadSettings.Default;
+
+    private readonly List<IBrowserFile> files = [];
+    private string imageUrl = string.Empty;
+    private string? errorMessage;
+    private bool uploading;
+    private bool fetchingUrl;
+    private int uploadIndex;
+    private int addedCount;
+
+    private bool Busy => uploading || fetchingUrl;
+
+    private int UploadPercent => files.Count == 0 ? 0 : 100 * uploadIndex / files.Count;
+
+    private void SelectFiles(InputFileChangeEventArgs e)
+    {
+        errorMessage = null;
+        files.Clear();
+        IReadOnlyList<IBrowserFile> selected;
+        try
+        {
+            selected = e.GetMultipleFiles(UploadSettings.MaxBatchFiles);
+        }
+        catch (InvalidOperationException)
+        {
+            errorMessage = $"You can select at most {UploadSettings.MaxBatchFiles} images at a time.";
+            return;
+        }
+
+        foreach (var file in selected)
+        {
+            if (Path.GetExtension(file.Name).ToLowerInvariant() is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+            {
+                errorMessage = "Only JPEG, PNG, and WebP images are supported.";
+                files.Clear();
+                return;
+            }
+            if (file.Size > UploadSettings.MaxSizeBytes)
+            {
+                errorMessage = $"Each image must be no larger than {UploadSettings.MaxSizeMb} MB.";
+                files.Clear();
+                return;
+            }
+            files.Add(file);
+        }
+    }
+
+    private async Task UploadAsync()
+    {
+        uploading = true;
+        uploadIndex = 0;
+        errorMessage = null;
+        try
+        {
+            var items = files.Select(file => new ExtraFanartUploadItem(() => file.OpenReadStream(UploadSettings.MaxSizeBytes), file.Size)).ToList();
+            var progress = new Progress<int>(count =>
+            {
+                uploadIndex = count;
+                _ = InvokeAsync(StateHasChanged);
+            });
+            var result = await ExtraFanartService.AddAsync(MovieId, items, progress);
+            if (await HandleResultAsync(result)) files.Clear();
+        }
+        finally
+        {
+            uploading = false;
+        }
+    }
+
+    private async Task FetchFromUrlAsync()
+    {
+        if (Busy || string.IsNullOrWhiteSpace(imageUrl)) return;
+
+        fetchingUrl = true;
+        errorMessage = null;
+        try
+        {
+            var result = await ExtraFanartService.AddFromUrlAsync(MovieId, imageUrl);
+            if (await HandleResultAsync(result)) imageUrl = string.Empty;
+        }
+        finally
+        {
+            fetchingUrl = false;
+        }
+    }
+
+    private async Task<bool> HandleResultAsync(ExtraFanartResult result)
+    {
+        if (!result.Success)
+        {
+            errorMessage = result.ErrorMessage;
+            return false;
+        }
+
+        addedCount += result.AddedCount;
+        await OnUploaded.InvokeAsync();
+        return true;
+    }
+
+    private async Task HandleUrlKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await FetchFromUrlAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        if (Busy) return;
+        files.Clear();
+        imageUrl = string.Empty;
+        errorMessage = null;
+        uploadIndex = 0;
+        addedCount = 0;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CloseAsync();
+    }
+}

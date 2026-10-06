@@ -1,0 +1,28 @@
+.settings-links {
+    max-width: 700px;
+}
+
+.settings-link {
+    display: inline-block;
+    font-size: 1.5rem;
+    color: #333;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    margin-top: 1.5rem;
+}
+
+.settings-link:first-child {
+    margin-top: 0.5rem;
+}
+
+.settings-link:hover {
+    color: #1c9fc4;
+}
+
+:root[data-theme="dark"] .settings-link {
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .settings-link:hover {
+    color: #4fc3e0;
+}

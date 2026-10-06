@@ -1,0 +1,625 @@
+@using System.Globalization
+@using Javbuddy.Services
+@using Javbuddy.Services.SceneMedia
+@using Javbuddy.Services.Trickplay
+@inject IMovieSceneService SceneService
+@inject IMovieHighlightService HighlightService
+@inject SceneMediaQueue SceneMediaQueue
+@inject ISceneMediaService SceneMedia
+@inject IHighlightMediaService HighlightMedia
+@inject IMovieApexService ApexService
+@inject IApexMediaService ApexMedia
+@inject ITrickplayService TrickplayService
+@inject IHighlightTrickplayService HighlightTrickplay
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Movie Detail's Scenes section: a timeline of the movie's scenes with its highlights
+   pinned below, a shelf of highlight cards and a grid of scene cards. A card, segment or pin plays
+   that clip in the ClipPlayerModal, stepping through the rest of its kind with Next / Previous —
+   an apex marker plays its own few seconds the same way;
+   the player's Edit button (and Edit scenes) opens the full player with the editor instead.
+   Favorite and rating are set right on the cards. Hovering the timeline previews the movie's
+   trickplay at that moment and, once the pointer rests, plays on through the frames; a highlight pin
+   previews from the highlight's own denser set when it has one.
+   Hovering an apex marker instead pops up its own clip, tags and time. *@
+<div class="movie-detail-section movie-scenes">
+    <div class="movie-scenes-header">
+        <h2>Scenes@(Scenes.Count > 0 ? $" ({Scenes.Count})" : null)</h2>
+        @if (CanPlay)
+        {
+            <button type="button" class="movie-scenes-edit-btn" @onclick="() => OnEdit.InvokeAsync((null, null))" title="Open the player with the scene editor">Edit scenes</button>
+        }
+    </div>
+
+    @if (TimelineShown && DurationSeconds is > 0 and var duration)
+    {
+        <div class="movie-scenes-timeline" @ref="timelineRef">
+            <div class="movie-scenes-timeline-preview" aria-hidden="true">
+                @if (trickplay is not null || highlightTrickplay.Count > 0)
+                {
+                    <div class="movie-scenes-timeline-thumb"></div>
+                }
+                <span class="movie-scenes-timeline-time"></span>
+            </div>
+            @if (Apexes.Count > 0)
+            {
+                <div class="movie-scenes-timeline-apexes">
+                    @foreach (var apex in Apexes)
+                    {
+                        var label = $"{apex.DisplayLabel} ({SceneTimeFormat.Format(apex.Seconds)})";
+                        <button type="button" class="movie-scenes-timeline-apex @(apex.IsFavorite ? "movie-scenes-timeline-apex-fav" : null)"
+                                style="@FormattableString.Invariant($"left:{Percent(apex.Seconds, duration):0.###}%")"
+                                data-start="@apex.Seconds.ToString(CultureInfo.InvariantCulture)" data-highlight-name="@apex.DisplayLabel"
+                                aria-label="Play @label" disabled="@(!CanPlay)"
+                                @onmouseenter="() => hoveredApexId = apex.Id" @onmouseleave="() => hoveredApexId = null"
+                                @onclick="() => PlayApex(apex)"></button>
+                    }
+                    @if (Apexes.FirstOrDefault(a => a.Id == hoveredApexId) is { } hovered)
+                    {
+                        var preview = hovered.PreviewVersion is { } previewVersion ? $"/apex-image/{hovered.Id}/preview?v={previewVersion}" : null;
+                        <div class="movie-scenes-timeline-apex-popover" aria-hidden="true"
+                             style="@FormattableString.Invariant($"--x:{Percent(hovered.Seconds, duration) / 100:0.#####}")">
+                            <div class="movie-scenes-timeline-apex-popover-at">
+                                <ApexPreviewPopover PreviewUrl="@preview" Generating="Movie.HasLocalVideo && ApexMedia.ServesPreview"
+                                                    Actors="hovered.Actors" Tags="hovered.Tags" Seconds="hovered.Seconds" />
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            <div class="movie-scenes-timeline-bar @(CanPlay ? "movie-scenes-timeline-bar-playable" : null)">
+                @foreach (var scene in Scenes)
+                {
+                    var end = Math.Min(scene.EffectiveEndSeconds ?? duration, duration);
+                    var left = Percent(scene.StartSeconds, duration);
+                    var width = Math.Max(Percent(end, duration) - left, 0);
+                    var label = $"{scene.DisplayTitle} ({SceneTimeFormat.Format(scene.StartSeconds)}–{SceneTimeFormat.Format(end)})";
+                    <button type="button" class="movie-scenes-timeline-segment movie-scenes-color-@((scene.Position - 1) % SegmentColors)"
+                            style="@FormattableString.Invariant($"left:{left:0.###}%;width:{width:0.###}%")"
+                            data-start="@scene.StartSeconds.ToString(CultureInfo.InvariantCulture)" data-end="@end.ToString(CultureInfo.InvariantCulture)" data-scene-name="@scene.DisplayTitle"
+                            aria-label="Play @label" disabled="@(!CanPlay)"
+                            @onclick="() => PlayScene(scene)">
+                        <span class="movie-scenes-timeline-segment-name">@scene.DisplayTitle</span>
+                    </button>
+                }
+            </div>
+            <div class="movie-scenes-timeline-axis" aria-hidden="true">
+                @foreach (var (tick, i) in Ticks(duration).Select((t, i) => (t, i)))
+                {
+                    var left = Percent(tick, duration);
+                    <span class="movie-scenes-timeline-tick @(tick == 0 ? "movie-scenes-timeline-tick-first" : tick >= duration ? "movie-scenes-timeline-tick-last" : i % 2 == 1 ? "movie-scenes-timeline-tick-minor" : null)"
+                          style="@FormattableString.Invariant($"left:{left:0.###}%")">@SceneTimeFormat.Format(tick)</span>
+                }
+            </div>
+            @if (Highlights.Count > 0)
+            {
+                var lanes = PinLanes(duration);
+                <div class="movie-scenes-timeline-pins" style="@($"height:{lanes.Max() * PinLanePx + 32}px")">
+                    @foreach (var (highlight, i) in Highlights.Select((h, i) => (h, i)))
+                    {
+                        var left = Percent(highlight.StartSeconds, duration);
+                        var anchor = left < PinWidthPercent / 2 ? "start" : left > 100 - PinWidthPercent / 2 ? "end" : "center";
+                        var label = $"{highlight.DisplayTitle} ({SceneTimeFormat.Format(highlight.StartSeconds)}–{SceneTimeFormat.Format(highlight.EndSeconds)})";
+                        <span class="movie-scenes-timeline-stem" style="@FormattableString.Invariant($"left:{left:0.###}%;height:calc(1.5rem + {lanes[i] * PinLanePx + 12}px)")"></span>
+                        <button type="button" class="movie-scenes-timeline-pin movie-scenes-timeline-pin-@anchor"
+                                style="@FormattableString.Invariant($"left:{left:0.###}%;top:{lanes[i] * PinLanePx + 10}px")"
+                                data-start="@highlight.StartSeconds.ToString(CultureInfo.InvariantCulture)" data-end="@highlight.EndSeconds.ToString(CultureInfo.InvariantCulture)" data-highlight-id="@highlight.Id" data-highlight-name="@highlight.DisplayTitle"
+                                aria-label="Play @label" disabled="@(!CanPlay)"
+                                @onclick="() => PlayHighlight(highlight)">
+                            @SparkleIcon(10)
+                            <span class="movie-scenes-timeline-pin-name">@highlight.DisplayTitle</span>
+                            <span class="movie-scenes-timeline-pin-time">@SceneTimeFormat.Format(highlight.StartSeconds)</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @if (!HasClips)
+    {
+        <p class="movie-scenes-empty">No scenes yet.</p>
+    }
+    else
+    {
+        @if (Highlights.Count > 0)
+        {
+            <div class="movie-scenes-subheader">
+                <h3>Highlights (@Highlights.Count)</h3>
+                <div class="movie-scenes-shelf-nav">
+                    <button type="button" class="movie-scenes-shelf-arrow" aria-label="Scroll highlights left" @onclick="() => ScrollShelfAsync(-1)">
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z" /></svg>
+                    </button>
+                    <button type="button" class="movie-scenes-shelf-arrow" aria-label="Scroll highlights right" @onclick="() => ScrollShelfAsync(1)">
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z" /></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="movie-scenes-shelf" @ref="shelfRef">
+                @foreach (var highlight in Highlights)
+                {
+                    <div class="movie-scenes-card movie-scenes-card-highlight" @key="highlight.Id"
+                         @onmouseenter="() => hoveredHighlightId = highlight.Id" @onmouseleave="() => hoveredHighlightId = null">
+                        @{
+                            var thumb = highlight.ThumbVersion is { } thumbVersion ? $"/highlight-image/{highlight.Id}/thumb?v={thumbVersion}" : null;
+                            var preview = hoveredHighlightId == highlight.Id && highlight.PreviewVersion is { } previewVersion
+                                ? $"/highlight-image/{highlight.Id}/preview?v={previewVersion}"
+                                : null;
+                        }
+                        @Media(thumb, preview, HighlightMedia.ServesVariant(SceneMediaService.VariantThumb), () => PlayHighlight(highlight), $"Play {highlight.DisplayTitle}", @<text>
+                            <span class="movie-scenes-duration">@SceneTimeFormat.Format(highlight.DurationSeconds)</span>
+                        </text>)
+                        <div class="movie-scenes-card-body">
+                            <div class="movie-scenes-card-title-row">
+                                <span class="movie-scenes-card-title @(highlight.Title is null ? "movie-scenes-card-title-default" : null)" title="@highlight.DisplayTitle">@highlight.DisplayTitle</span>
+                                @FavoriteButton(highlight.IsFavorite, "highlight", () => ToggleHighlightFavoriteAsync(highlight))
+                            </div>
+                            <div class="movie-scenes-card-meta">
+                                <span class="movie-scenes-range">@SceneTimeFormat.Format(highlight.StartSeconds)–@SceneTimeFormat.Format(highlight.EndSeconds)</span>
+                            </div>
+                            @if (highlightActors.GetValueOrDefault(highlight.Id) is { } actors)
+                            {
+                                @ActorList(actors.Actors, actors.From)
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (Scenes.Count > 0)
+        {
+            <div class="movie-scenes-subheader">
+                <h3>All scenes (@Scenes.Count)</h3>
+            </div>
+            <div class="movie-scenes-grid">
+                @foreach (var scene in Scenes)
+                {
+                    <div class="movie-scenes-card" @key="scene.Id"
+                         @onmouseenter="() => hoveredSceneId = scene.Id" @onmouseleave="() => hoveredSceneId = null">
+                        @{
+                            var thumb = scene.ThumbVersion is { } thumbVersion ? $"/scene-image/{scene.Id}/thumb?v={thumbVersion}" : null;
+                            var preview = hoveredSceneId == scene.Id && scene.PreviewVersion is { } previewVersion
+                                ? $"/scene-image/{scene.Id}/preview?v={previewVersion}"
+                                : null;
+                            var highlightCount = HighlightCounts.GetValueOrDefault(scene.Id);
+                            var apexCount = ApexCounts.GetValueOrDefault(scene.Id);
+                        }
+                        @Media(thumb, preview, SceneMedia.ServesVariant(SceneMediaService.VariantThumb), () => PlayScene(scene), $"Play {scene.DisplayTitle}", @<text>
+                            @if (highlightCount > 0)
+                            {
+                                var label = highlightCount == 1 ? "1 highlight" : $"{highlightCount} highlights";
+                                <span class="movie-scenes-highlight-count" title="@label" aria-label="@label">@SparkleIcon(10) @highlightCount</span>
+                            }
+                            @if (apexCount > 0)
+                            {
+                                var label = ApexLabel(apexCount);
+                                <span class="movie-scenes-apex-count" title="@label" aria-label="@label"><ApexIcon Size="8" /> @apexCount</span>
+                            }
+                            @if (scene.EffectiveEndSeconds is { } end)
+                            {
+                                <span class="movie-scenes-duration">@SceneTimeFormat.Format(end - scene.StartSeconds)</span>
+                            }
+                        </text>)
+                        <div class="movie-scenes-card-body">
+                            <div class="movie-scenes-card-title-row">
+                                <span class="movie-scenes-card-title @(scene.Title is null ? "movie-scenes-card-title-default" : null)" title="@scene.DisplayTitle">@scene.Position. @scene.DisplayTitle</span>
+                                @FavoriteButton(scene.IsFavorite, "scene", () => ToggleSceneFavoriteAsync(scene))
+                            </div>
+                            <div class="movie-scenes-card-meta">
+                                <span class="movie-scenes-range">@SceneTimeFormat.Format(scene.StartSeconds)–@(scene.EffectiveEndSeconds is { } end ? SceneTimeFormat.Format(end) : "end")</span>
+                            </div>
+                            @if (sceneActors.GetValueOrDefault(scene.Id) is { } actors)
+                            {
+                                @ActorList(actors.Actors, actors.From)
+                            }
+                            @if (scene.Tags.Count > 0)
+                            {
+                                <div class="movie-scenes-tags">
+                                    @foreach (var tag in scene.Tags)
+                                    {
+                                        <span class="movie-scenes-tag">@(tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}")</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+<ClipPlayerModal Clip="playingClip"
+                 Position="@(playlist is null ? null : playlistIndex + 1)"
+                 Count="playlist?.Length"
+                 OnEnded="NextClip"
+                 OnNext="EventCallback.Factory.Create(this, NextClip)"
+                 OnPrevious="EventCallback.Factory.Create(this, PreviousClip)"
+                 OnEdit="EditClipAsync"
+                 OnClose="ClosePlayer" />
+
+@code {
+    private const int SegmentColors = 8;
+    private const int PinLanePx = 24;
+
+    /// <summary>Room a timeline pin's label takes, as a share of the bar, when deciding whether two
+    /// pins would collide and need separate lanes.</summary>
+    private const double PinWidthPercent = 22;
+
+    [Parameter, EditorRequired] public Javbuddy.Models.Movie Movie { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<SceneItem> Scenes { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<HighlightItem> Highlights { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<ApexItem> Apexes { get; set; } = [];
+
+    [Parameter] public IReadOnlyDictionary<int, int> HighlightCounts { get; set; } = new Dictionary<int, int>();
+
+    /// <summary>How many apexes fall inside each scene, keyed by scene id.</summary>
+    [Parameter] public IReadOnlyDictionary<int, int> ApexCounts { get; set; } = new Dictionary<int, int>();
+
+    [Parameter] public bool CanPlay { get; set; }
+
+    /// <summary>The movie's cast, which a highlight inherits when neither it nor its scene has actors.</summary>
+    [Parameter] public IReadOnlyList<SceneActorItem> Cast { get; set; } = [];
+
+    /// <summary>The actor's avatar URL, or null to show their initial.</summary>
+    [Parameter] public Func<int, string?> ActorImageUrl { get; set; } = _ => null;
+
+    /// <summary>Opens the full player with the editor, at a start (and, for a highlight, end) time.</summary>
+    [Parameter] public EventCallback<(double? Start, double? End)> OnEdit { get; set; }
+
+    /// <summary>Opens the full player where the bare timeline bar was clicked.</summary>
+    [Parameter] public EventCallback<double> OnPlayAt { get; set; }
+
+    [Parameter] public EventCallback<IReadOnlyList<SceneItem>> OnScenesChanged { get; set; }
+
+    [Parameter] public EventCallback<IReadOnlyList<HighlightItem>> OnHighlightsChanged { get; set; }
+
+    /// <summary>Reports the apexes reloaded once one's preview was generated.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<ApexItem>> OnApexesChanged { get; set; }
+
+    private double? DurationSeconds => Movie.MediaDurationSeconds;
+
+    private bool HasClips => Scenes.Count > 0 || Highlights.Count > 0 || Apexes.Count > 0;
+
+    // Without any scenes yet the timeline still shows when there's something to do on it: scrub the
+    // trickplay preview or click into the player.
+    private bool TimelineShown => DurationSeconds is > 0 && (HasClips || CanPlay || trickplay is not null);
+
+    private ElementReference shelfRef;
+    private ElementReference timelineRef;
+    private IJSObjectReference? module;
+    private DotNetObjectReference<MovieScenesSection>? selfRef;
+    private TrickplayLayout? trickplay;
+    private int? trickplayMovieId;
+    // The highlights' own sets by highlight id; replaced whole on each load, so the init below can
+    // tell a new one by reference.
+    private IReadOnlyDictionary<int, TrickplayLayout> highlightTrickplay = new Dictionary<int, TrickplayLayout>();
+    private int[] highlightTrickplayLoadedFor = [];
+    private (string Id, TrickplayLayout? Trickplay, IReadOnlyDictionary<int, TrickplayLayout> Highlights, double Duration)? timelineInitialisedWith;
+    private Task timelineInitialising = Task.CompletedTask;
+    // Each highlight's own actors, else what it inherits, by highlight id.
+    private IReadOnlyDictionary<int, EffectiveActors> highlightActors = new Dictionary<int, EffectiveActors>();
+    private IReadOnlyDictionary<int, EffectiveActors> sceneActors = new Dictionary<int, EffectiveActors>();
+    private int? hoveredSceneId;
+    private int? hoveredHighlightId;
+    private int? hoveredApexId;
+    private PlayerClip? playingClip;
+    private PlayerClip[]? playlist;
+    private int playlistIndex;
+    private bool disposed;
+
+    protected override void OnInitialized() => SceneMediaQueue.Generated += OnMediaGenerated;
+
+    // Raised on the queue's worker thread once a scene's, highlight's or apex's screenshot/preview was
+    // written: reload the cards so media that was missing shows up without a refresh.
+    private void OnMediaGenerated(int movieId)
+    {
+        if (disposed || movieId != Movie.Id) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed || movieId != Movie.Id) return;
+            // What was generated may be a highlight's trickplay set: load them again.
+            highlightTrickplayLoadedFor = [];
+            await OnScenesChanged.InvokeAsync(await SceneService.GetScenesAsync(movieId));
+            await OnHighlightsChanged.InvokeAsync(await HighlightService.GetHighlightsAsync(movieId));
+            await OnApexesChanged.InvokeAsync(await ApexService.GetApexesAsync(movieId));
+        });
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var clipActors = ClipActors.Compute(Cast, Scenes, Highlights, Apexes);
+        highlightActors = clipActors.Highlights;
+        sceneActors = clipActors.Scenes;
+        await LoadTrickplayAsync();
+        await LoadHighlightTrickplayAsync();
+    }
+
+    private async Task LoadTrickplayAsync()
+    {
+        if (trickplayMovieId == Movie.Id) return;
+        var movieId = Movie.Id;
+        trickplayMovieId = movieId;
+        trickplay = null;
+        try
+        {
+            var loaded = await TrickplayService.GetAsync(movieId);
+            if (Movie.Id == movieId) trickplay = loaded;
+        }
+        catch
+        {
+            // Trickplay is optional: without it the timeline preview shows just the time and name.
+        }
+    }
+
+    // A highlight without a set of its own (none yet, or long enough for the movie's) previews from
+    // the movie's.
+    private async Task LoadHighlightTrickplayAsync()
+    {
+        var ids = Highlights.Select(h => h.Id).ToArray();
+        if (ids.SequenceEqual(highlightTrickplayLoadedFor)) return;
+        highlightTrickplayLoadedFor = ids;
+        var loaded = new Dictionary<int, TrickplayLayout>();
+        foreach (var id in ids)
+        {
+            try
+            {
+                if (await HighlightTrickplay.GetAsync(id) is { } layout) loaded[id] = layout;
+            }
+            catch (Exception)
+            {
+                // Optional, like the movie's.
+            }
+        }
+        // Newer highlights may have come in meanwhile; their load replaces this one.
+        if (highlightTrickplayLoadedFor == ids) highlightTrickplay = loaded;
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The timeline comes and goes with the runtime and the scenes, and trickplay loads after it's
+        // up: (re)initialise its hover preview whenever either changed. Chained, like ScrubBar, so an
+        // init still waiting on the module import can't land after a newer one.
+        if (!TimelineShown || timelineRef.Id is null) return Task.CompletedTask;
+        var duration = DurationSeconds!.Value;
+        if (timelineInitialisedWith is { } previous && previous.Id == timelineRef.Id && Equals(previous.Trickplay, trickplay)
+            && ReferenceEquals(previous.Highlights, highlightTrickplay) && previous.Duration == duration)
+        {
+            return Task.CompletedTask;
+        }
+        timelineInitialisedWith = (timelineRef.Id, trickplay, highlightTrickplay, duration);
+        timelineInitialising = InitTimelineAsync(timelineInitialising, timelineRef, trickplay, highlightTrickplay, duration);
+        return timelineInitialising;
+    }
+
+    private async Task InitTimelineAsync(Task previous, ElementReference timeline, TrickplayLayout? layout,
+        IReadOnlyDictionary<int, TrickplayLayout> highlightLayouts, double duration)
+    {
+        await previous;
+        if (disposed) return;
+        try
+        {
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            selfRef ??= DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("initTimeline", timeline, layout, highlightLayouts, duration, selfRef);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    /// <summary>A click on the timeline bar outside any scene segment.</summary>
+    [JSInvokable]
+    public Task PlayFromTimelineAsync(double seconds) => CanPlay ? OnPlayAt.InvokeAsync(seconds) : Task.CompletedTask;
+
+    private const string ModulePath = "./Components/Pages/MovieDetailSections/MovieScenesSection.razor.js";
+
+    private static double Percent(double seconds, double duration) => Math.Clamp(seconds / duration * 100, 0, 100);
+
+    // 0, then a round step that gives at most ~7 marks, then the movie's end.
+    private static IEnumerable<double> Ticks(double duration)
+    {
+        double[] steps = [60, 300, 600, 900, 1200, 1800, 3600];
+        var step = steps.FirstOrDefault(s => duration / s <= 7, 3600);
+        for (var t = 0.0; t < duration - step * 0.4; t += step) yield return t;
+        yield return duration;
+    }
+
+    // Greedy lanes for the pins: a pin drops to the next lane while its label would overlap one
+    // already placed there (highlights are ordered by start).
+    private int[] PinLanes(double duration)
+    {
+        var laneEnds = new List<double>();
+        var lanes = new int[Highlights.Count];
+        for (var i = 0; i < Highlights.Count; i++)
+        {
+            var center = Percent(Highlights[i].StartSeconds, duration);
+            var from = Math.Clamp(center - PinWidthPercent / 2, 0, 100 - PinWidthPercent);
+            var lane = laneEnds.FindIndex(end => end <= from);
+            if (lane < 0)
+            {
+                lane = laneEnds.Count;
+                laneEnds.Add(0);
+            }
+            laneEnds[lane] = from + PinWidthPercent;
+            lanes[i] = lane;
+        }
+        return lanes;
+    }
+
+    private PlayerClip SceneClip(SceneItem scene) =>
+        new(PlayerClipKind.Scene, scene.Id, Movie.Id, Movie.Code ?? "", scene.DisplayTitle, scene.StartSeconds, scene.EffectiveEndSeconds,
+            Movie.JellyfinItemId, Movie.JellyfinServerId, DurationSeconds);
+
+    private PlayerClip HighlightClip(HighlightItem highlight) =>
+        new(PlayerClipKind.Highlight, highlight.Id, Movie.Id, Movie.Code ?? "", highlight.DisplayTitle, highlight.StartSeconds, highlight.EndSeconds,
+            Movie.JellyfinItemId, Movie.JellyfinServerId, DurationSeconds);
+
+    // The few seconds around an apex by its effective window.
+    private PlayerClip ApexClip(ApexItem apex)
+    {
+        var (start, end) = ApexRanges.ClipFor(apex.Seconds, apex.Window, DurationSeconds);
+        return new(PlayerClipKind.Apex, apex.Id, Movie.Id, Movie.Code ?? "", apex.DisplayLabel, start, end,
+            Movie.JellyfinItemId, Movie.JellyfinServerId, DurationSeconds);
+    }
+
+    // A scene plays among the movie's scenes, a highlight among its highlights, an apex among its
+    // apexes.
+    private void PlayScene(SceneItem scene)
+    {
+        if (!CanPlay) return;
+        playlist = Scenes.Select(SceneClip).ToArray();
+        PlayAt(Scenes.ToList().FindIndex(s => s.Id == scene.Id));
+    }
+
+    private void PlayHighlight(HighlightItem highlight)
+    {
+        if (!CanPlay) return;
+        playlist = Highlights.Select(HighlightClip).ToArray();
+        PlayAt(Highlights.ToList().FindIndex(h => h.Id == highlight.Id));
+    }
+
+    private void PlayApex(ApexItem apex)
+    {
+        if (!CanPlay) return;
+        playlist = Apexes.Select(ApexClip).ToArray();
+        PlayAt(Apexes.ToList().FindIndex(a => a.Id == apex.Id));
+    }
+
+    private void PlayAt(int index)
+    {
+        playlistIndex = Math.Max(index, 0);
+        playingClip = playlist![playlistIndex];
+    }
+
+    private void NextClip()
+    {
+        if (playlist is not null && playlistIndex + 1 < playlist.Length)
+        {
+            PlayAt(playlistIndex + 1);
+        }
+        else
+        {
+            ClosePlayer();
+        }
+    }
+
+    private void PreviousClip()
+    {
+        if (playlist is not null && playlistIndex > 0) PlayAt(playlistIndex - 1);
+    }
+
+    private void ClosePlayer()
+    {
+        playingClip = null;
+        playlist = null;
+    }
+
+    private async Task EditClipAsync(PlayerClip clip)
+    {
+        ClosePlayer();
+        await OnEdit.InvokeAsync(clip.Kind == PlayerClipKind.Highlight ? (clip.StartSeconds, clip.EndSeconds) : (clip.StartSeconds, null));
+    }
+
+    private async Task ToggleSceneFavoriteAsync(SceneItem scene)
+    {
+        var isFavorite = await SceneService.ToggleFavoriteAsync(scene.Id);
+        await OnScenesChanged.InvokeAsync(Scenes.Select(s => s.Id == scene.Id ? s with { IsFavorite = isFavorite } : s).ToList());
+    }
+
+    private async Task ToggleHighlightFavoriteAsync(HighlightItem highlight)
+    {
+        var isFavorite = await HighlightService.ToggleFavoriteAsync(highlight.Id);
+        await OnHighlightsChanged.InvokeAsync(Highlights.Select(h => h.Id == highlight.Id ? h with { IsFavorite = isFavorite } : h).ToList());
+    }
+
+    private async Task ScrollShelfAsync(int direction)
+    {
+        try
+        {
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", ModulePath);
+            await module.InvokeVoidAsync("scrollShelf", shelfRef, direction);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        SceneMediaQueue.Generated -= OnMediaGenerated;
+        // An init still in flight would otherwise bind its listeners after this dispose.
+        await timelineInitialising;
+        if (module is null) return;
+        try
+        {
+            if (timelineInitialisedWith is not null) await module.InvokeVoidAsync("disposeTimeline", timelineRef);
+            await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        selfRef?.Dispose();
+    }
+
+    // The 16:9 picture shared by both card kinds; clicking it plays the clip when the movie can play.
+    // Without a screenshot yet it shimmers while one is generated.
+    private RenderFragment Media(string? thumbUrl, string? previewUrl, bool servesThumb, Action play, string playLabel, RenderFragment overlay) => @<div class="movie-scenes-media">
+        @if (thumbUrl is not null)
+        {
+            <ScenePreviewMedia ThumbUrl="@thumbUrl" PreviewUrl="@previewUrl" />
+        }
+        else
+        {
+            <ScenePreviewPlaceholder Generating="Movie.HasLocalVideo && servesThumb" />
+        }
+        @if (CanPlay)
+        {
+            <button type="button" class="movie-scenes-play" aria-label="@playLabel" title="@playLabel" @onclick="play"></button>
+        }
+        @overlay
+    </div>;
+
+    private RenderFragment FavoriteButton(bool isFavorite, string kind, Func<Task> toggle) => @<button type="button"
+            class="movie-scenes-fav-btn @(isFavorite ? "movie-scenes-fav-on" : null)"
+            aria-pressed="@(isFavorite ? "true" : "false")"
+            title="@(isFavorite ? $"Remove from favorite {kind}s" : $"Favorite {kind}")"
+            @onclick="toggle">
+        <FavoriteHeartIcon Filled="isFavorite" Size="14" />
+    </button>;
+
+    // A card's actors with their avatars; inheritedFrom (a highlight's "scene 2" / "the cast")
+    // grays them out, as the editor does.
+    private RenderFragment ActorList(IReadOnlyList<SceneActorItem> actors, string? inheritedFrom) => __builder =>
+    {
+        if (actors.Count == 0) return;
+        <div class="movie-scenes-actors @(inheritedFrom is null ? null : "movie-scenes-actors-inherited")"
+             title="@(inheritedFrom is null ? null : $"From {inheritedFrom}")">
+            @foreach (var actor in actors)
+            {
+                <span class="movie-scenes-actor">
+                    @if (ActorImageUrl(actor.ActorId) is { } imageUrl)
+                    {
+                        <img class="movie-scenes-actor-avatar" src="@imageUrl" alt="" loading="lazy" />
+                    }
+                    else
+                    {
+                        <span class="movie-scenes-actor-avatar movie-scenes-actor-initial" aria-hidden="true">@actor.Name[..1]</span>
+                    }
+                    @actor.Name
+                </span>
+            }
+        </div>
+    };
+
+    private static string ApexLabel(int count) => count == 1 ? "1 apex" : $"{count} apexes";
+
+    private static RenderFragment SparkleIcon(int size) =>
+        @<svg viewBox="0 0 16 16" width="@size" height="@size" fill="currentColor" aria-hidden="true"><path d="M8 0 9.8 6.2 16 8 9.8 9.8 8 16 6.2 9.8 0 8 6.2 6.2z" /></svg>;
+}

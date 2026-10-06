@@ -1,0 +1,86 @@
+.actor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    background-color: #35394a;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.actor-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    color: #cfd3de;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.4rem 0.6rem;
+    border-radius: 3px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+    .actor-toolbar-btn:hover {
+        background-color: #454a5e;
+        color: #ffffff;
+    }
+
+.actor-edit-header {
+    margin-bottom: 1.5rem;
+}
+
+.actor-edit-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.actor-preview-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: #2b2f38;
+    border: 2px dashed #454a5e;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.actor-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+:root[data-theme="dark"] .card {
+    background-color: #21252f;
+    border-color: #2e3442;
+}
+
+:root[data-theme="dark"] .card-header {
+    background-color: #282d39;
+    border-color: #2e3442;
+    color: #ffffff;
+}
+
+:root[data-theme="dark"] .form-label {
+    color: #cfd3de;
+}
+
+:root[data-theme="dark"] .text-muted {
+    color: #9aa1af !important;
+}
+
+.actor-cup-period input[type="date"] {
+    max-width: 12rem;
+}
+
+.actor-cup-period select {
+    max-width: 8rem;
+}

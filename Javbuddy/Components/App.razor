@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <script>
+        (function () {
+            function resolve(pref) {
+                if (pref === 'dark' || pref === 'light') return pref;
+                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            function getPref() {
+                var m = document.cookie.match(/(?:^|; )ls-theme=([^;]*)/);
+                return m ? decodeURIComponent(m[1]) : 'auto';
+            }
+            function apply() {
+                document.documentElement.setAttribute('data-theme', resolve(getPref()));
+            }
+            apply();
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+                if (getPref() === 'auto') apply();
+            });
+            window.lsTheme = {
+                set: function (pref) {
+                    document.cookie = 'ls-theme=' + encodeURIComponent(pref) + ';path=/;max-age=31536000;samesite=lax';
+                    apply();
+                },
+                get: getPref,
+                apply: apply
+            };
+        })();
+    </script>
+    <script>
+        (function () {
+            function getPref() {
+                var m = document.cookie.match(/(?:^|; )ls-sidebar-collapsed=([^;]*)/);
+                return m ? decodeURIComponent(m[1]) === 'true' : false;
+            }
+            function apply() {
+                document.documentElement.setAttribute('data-sidebar-collapsed', getPref() ? 'true' : 'false');
+            }
+            apply();
+            window.lsSidebar = {
+                toggle: function () {
+                    var next = !getPref();
+                    document.cookie = 'ls-sidebar-collapsed=' + next + ';path=/;max-age=31536000;samesite=lax';
+                    apply();
+                },
+                apply: apply
+            };
+        })();
+    </script>
+    <script>
+        (function () {
+            function getPref() {
+                var m = document.cookie.match(/(?:^|; )ls-movie-backdrop=([^;]*)/);
+                return m ? decodeURIComponent(m[1]) === 'true' : false;
+            }
+            function apply() {
+                document.documentElement.setAttribute('data-movie-backdrop', getPref() ? 'true' : 'false');
+            }
+            apply();
+            window.lsMovieBackdrop = {
+                set: function (pref) {
+                    document.cookie = 'ls-movie-backdrop=' + pref + ';path=/;max-age=31536000;samesite=lax';
+                    apply();
+                },
+                get: getPref,
+                apply: apply
+            };
+        })();
+    </script>
+    <script>
+        (function () {
+            // Seconds before an apex the player starts counting down; 0 = off.
+            var DEFAULT = 10, MAX = 60;
+            function get() {
+                var m = document.cookie.match(/(?:^|; )ls-apex-countdown=([^;]*)/);
+                var n = m ? parseInt(decodeURIComponent(m[1]), 10) : NaN;
+                return isNaN(n) ? DEFAULT : Math.min(Math.max(n, 0), MAX);
+            }
+            window.lsApexCountdown = {
+                get: get,
+                set: function (seconds) {
+                    document.cookie = 'ls-apex-countdown=' + seconds + ';path=/;max-age=31536000;samesite=lax';
+                }
+            };
+        })();
+    </script>
+    <script>
+        (function () {
+            // Actor Detail's section order, comma-separated section names; "" = default.
+            window.lsActorDetailSections = {
+                get: function () {
+                    var m = document.cookie.match(/(?:^|; )ls-actor-detail-sections=([^;]*)/);
+                    return m ? decodeURIComponent(m[1]) : '';
+                },
+                set: function (order) {
+                    document.cookie = 'ls-actor-detail-sections=' + encodeURIComponent(order) + ';path=/;max-age=31536000;samesite=lax';
+                }
+            };
+            // The Movies page's poster options (MoviePosterOptions), also used by Actor Detail's grid.
+            window.lsPosterOptions = {
+                get: function () {
+                    var m = document.cookie.match(/(?:^|; )poster-options=([^;]*)/);
+                    return m ? decodeURIComponent(m[1]) : null;
+                }
+            };
+        })();
+    </script>
+    <ResourcePreloader />
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["Javbuddy.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/webp" href="favicon.webp" />
+    <link rel="manifest" href="manifest.json" crossorigin="use-credentials" />
+    <link rel="apple-touch-icon" href="icon-192.png" />
+    <meta name="theme-color" content="#1b6ec2" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script>
+        if (window.Blazor && window.Blazor.addEventListener) {
+            window.Blazor.addEventListener('enhancedload', function () {
+                window.lsTheme.apply();
+                window.lsSidebar.apply();
+                window.lsMovieBackdrop.apply();
+                restoreGridScrollEarly();
+            });
+            // A back-navigation's markup arrives with spacers of height 0 (the server can't know the
+            // row height), so the page is too short to scroll until VirtualizedGrid.razor.js has
+            // loaded and measured — and the viewport sat at the top meanwhile. Reuse
+            // the spacer heights and scroll position that module saved last time to restore at once;
+            // it still re-measures and corrects both when it starts.
+            function restoreGridScrollEarly() {
+                try {
+                    var leading = document.querySelector('.virtualized-grid-spacer[data-scroll-storage-key]');
+                    if (!leading) return;
+                    var key = leading.getAttribute('data-scroll-storage-key');
+                    var saved = Number(sessionStorage.getItem(key));
+                    var spacers = JSON.parse(sessionStorage.getItem(key + ':spacers'));
+                    if (!saved || !spacers || String(spacers.windowStart) !== leading.getAttribute('data-window-start')) return;
+                    var trailing = leading.parentElement.querySelector('.virtualized-grid-spacer:last-child');
+                    leading.style.height = spacers.leading;
+                    trailing.style.height = spacers.trailing;
+                    window.scrollTo({ top: saved, behavior: 'instant' });
+                } catch (e) { }
+            }
+        }
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('/service-worker.js');
+            });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,67 @@
+/* Colors come from the host's --scene-editor-* custom properties (the SceneEditor's pattern);
+   the fallbacks are the player modal's dark look. */
+.movie-tags-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    min-width: 0;
+    color: var(--scene-editor-fg, #e2e8f0);
+    font-size: 0.85rem;
+}
+
+.movie-tags-toggle {
+    appearance: none;
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.movie-tags-hint,
+.movie-tags-error {
+    margin: 0;
+    font-size: 0.75rem;
+}
+
+.movie-tags-hint {
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.movie-tags-error {
+    color: #f87171;
+}
+
+.movie-tags-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.movie-tags-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.75rem;
+    background-color: rgba(47, 143, 214, 0.18);
+    border: 1px solid #2f8fd6;
+    border-radius: 999px;
+}
+
+.movie-tags-chip-remove {
+    appearance: none;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+}

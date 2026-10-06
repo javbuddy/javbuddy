@@ -1,0 +1,178 @@
+@using Javbuddy.Services
+@using Javbuddy.Services.VideoRepair
+@inject ISceneChapterWriteService ChapterWriter
+@implements IDisposable
+
+@* "Write chapters to file" for the scene editor: an explicit confirmation step that
+   says what will be written — and what gets replaced — then follows the background remux job. *@
+<div class="scene-chapter-writer @(runningJob is not null || plan is not null || message is not null ? "scene-chapter-writer-expanded" : null)">
+    @if (runningJob is not null)
+    {
+        <p class="scene-chapter-writer-status" role="status">
+            Writing chapters into @runningJob.FileName…
+            @if (runningJob.LatestProgress is { } progress)
+            {
+                <span>@($"{progress.PercentComplete:0}%")</span>
+            }
+        </p>
+    }
+    else if (plan is not null)
+    {
+        <div class="scene-chapter-writer-confirm">
+            <p class="scene-chapter-writer-summary">
+                Write <strong>@plan.Chapters.Count @(plan.Chapters.Count == 1 ? "chapter" : "chapters")</strong>
+                (@(plan.Chapters.Count - plan.GapCount) from scenes@(plan.GapCount > 0 ? $", {plan.GapCount} untitled for the gaps" : null))
+                into <strong>@plan.FileName</strong>? The file is rewritten losslessly; nothing else changes.
+            </p>
+            @if (plan.ReplacesDifferentChapters)
+            {
+                <p class="scene-chapter-writer-warning">
+                    Its current @plan.CurrentChapters.Count @(plan.CurrentChapters.Count == 1 ? "chapter" : "chapters")
+                    (@string.Join(", ", plan.CurrentChapters.Select((c, i) => string.IsNullOrWhiteSpace(c.Title) ? $"#{i + 1}" : c.Title)))
+                    will be replaced.
+                </p>
+            }
+            <div class="scene-chapter-writer-actions">
+                <button type="button" class="scene-editor-btn scene-chapter-writer-confirm-btn" @onclick="StartAsync" disabled="@busy">Write chapters</button>
+                <button type="button" class="scene-editor-btn scene-chapter-writer-cancel-btn" @onclick="Cancel" disabled="@busy">Cancel</button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <button type="button" class="scene-editor-btn scene-chapter-writer-open-btn" @onclick="LoadPlanAsync" disabled="@(busy || SceneCount == 0)" title="Write these scenes into the video file as chapters, so Jellyfin and other players show them">
+            Write chapters to file…
+        </button>
+    }
+    @if (message is not null)
+    {
+        <p class="@(failed ? "scene-editor-error" : "scene-chapter-writer-done")" role="status">@message</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int MovieId { get; set; }
+
+    /// <summary>Number of scenes; the action is disabled while there are none.</summary>
+    [Parameter] public int SceneCount { get; set; }
+
+    private ChapterWritePlan? plan;
+    private VideoRepairJob? runningJob;
+    private bool busy;
+    private string? message;
+    private bool failed;
+    private CancellationTokenSource? pollCts;
+
+    protected override void OnInitialized()
+    {
+        // Reattach to a write that's still running (e.g. the player was closed and reopened).
+        if (ChapterWriter.GetRunningJob(MovieId) is { } job)
+        {
+            Follow(job);
+        }
+    }
+
+    private async Task LoadPlanAsync()
+    {
+        busy = true;
+        message = null;
+        try
+        {
+            var result = await ChapterWriter.GetPlanAsync(MovieId);
+            plan = result.Plan;
+            if (plan is null)
+            {
+                Show(result.ErrorMessage ?? "Chapters can't be written for this movie.", isError: true);
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Cancel() => plan = null;
+
+    private async Task StartAsync()
+    {
+        busy = true;
+        try
+        {
+            var job = await ChapterWriter.StartAsync(MovieId);
+            plan = null;
+            Follow(job);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Show(ex.Message, isError: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Follow(VideoRepairJob job)
+    {
+        runningJob = job;
+        message = null;
+        pollCts?.Cancel();
+        pollCts = new CancellationTokenSource();
+        _ = PollAsync(job, pollCts.Token);
+    }
+
+    // Progress lives on the job (written from the ffmpeg thread), so re-render once a second
+    // until the job's Task finishes.
+    private async Task PollAsync(VideoRepairJob job, CancellationToken ct)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (job.Task is { IsCompleted: false } && await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+            if (ct.IsCancellationRequested || job.Task is null) return;
+
+            string text;
+            bool isError;
+            try
+            {
+                var result = await job.Task;
+                (text, isError) = result.Success
+                    ? ($"Chapters written into {job.FileName}.", false)
+                    : (result.ErrorMessage ?? "Writing chapters failed.", true);
+            }
+            catch (OperationCanceledException)
+            {
+                (text, isError) = ("Writing chapters was cancelled.", true);
+            }
+            catch (Exception)
+            {
+                (text, isError) = ("Writing chapters failed; see the server log.", true);
+            }
+
+            await InvokeAsync(() =>
+            {
+                runningJob = null;
+                Show(text, isError);
+                StateHasChanged();
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void Show(string text, bool isError)
+    {
+        message = text;
+        failed = isError;
+    }
+
+    public void Dispose()
+    {
+        pollCts?.Cancel();
+        pollCts?.Dispose();
+    }
+}

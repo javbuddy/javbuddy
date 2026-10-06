@@ -1,0 +1,142 @@
+@using Javbuddy.Services.Trickplay
+
+@* Movie Detail's player: the shared VideoPlayerShell, with the scene and highlight
+   editors in its side panel when opened for editing. *@
+<VideoPlayerShell Show="Show"
+                  Title="@Title"
+                  Code="@Code"
+                  MovieId="MovieId"
+                  FileId="FileId"
+                  ShowVersions="true"
+                  ExternalWebUrl="@ExternalWebUrl"
+                  DurationSeconds="DurationSeconds"
+                  StartAtSeconds="StartAtSeconds"
+                  EndAtSeconds="EndAtSeconds"
+                  ShowTimeline="MovieId is not null"
+                  Scenes="@(EditorShown ? scenes : Scenes)"
+                  Suggestions="suggestions"
+                  Highlights="@(EditorShown ? highlights : Highlights)"
+                  Apexes="@(EditorShown ? apexes : Apexes)"
+                  SidePanel="@(EditorShown ? EditorPanel(MovieId!.Value) : null)"
+                  Shortcuts="@(EditorShown ? SceneShortcuts : [])"
+                  MarkerJumpKeys="!EditorShown"
+                  OnClose="CloseAsync" />
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Code { get; set; }
+    [Parameter] public string? ExternalWebUrl { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>The movie played.</summary>
+    [Parameter] public int? MovieId { get; set; }
+
+    /// <summary>The version played; the movie's primary when null. The header lets
+    /// the viewer switch to any other version mid-playback.</summary>
+    [Parameter] public int? FileId { get; set; }
+
+    /// <summary>Whether the scene and highlight editors show in the side panel, for
+    /// Movie Detail's Edit actions; plain Play leaves them out. Needs a MovieId.</summary>
+    [Parameter] public bool ShowEditor { get; set; }
+
+    /// <summary>The movie's scenes and highlights drawn on the scrub bar while the editor isn't shown;
+    /// the editor reports its own.</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.SceneItem>? Scenes { get; set; }
+
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem>? Highlights { get; set; }
+
+    [Parameter] public double? DurationSeconds { get; set; }
+
+    /// <summary>Where playback starts when the modal opens (e.g. a scene picked on Movie Detail).</summary>
+    [Parameter] public double? StartAtSeconds { get; set; }
+
+    /// <summary>Where playback pauses, for playing just a highlight's clip; sent as the
+    /// media fragment's end.</summary>
+    [Parameter] public double? EndAtSeconds { get; set; }
+
+    [Parameter] public EventCallback<IReadOnlyList<Javbuddy.Services.Scenes.SceneItem>> OnScenesChanged { get; set; }
+
+    [Parameter] public EventCallback<IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem>> OnHighlightsChanged { get; set; }
+
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? Apexes { get; set; }
+
+    [Parameter] public EventCallback<IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>> OnApexesChanged { get; set; }
+
+    private bool EditorShown => ShowEditor && MovieId is not null;
+
+    // The scene editor's M / Shift+M and the highlight and apex editors' H / Shift+H / A
+    //, on whenever they're shown.
+    private static readonly IReadOnlyList<KeyboardShortcut> SceneShortcuts =
+        [KeyboardShortcut.NewScene, KeyboardShortcut.EndScene, KeyboardShortcut.StartHighlight, KeyboardShortcut.EndHighlight, KeyboardShortcut.MarkApex];
+
+    private IReadOnlyList<Javbuddy.Services.Scenes.SceneItem> scenes = [];
+    private IReadOnlyList<double> suggestions = [];
+    private IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem> highlights = [];
+    private IReadOnlyList<Javbuddy.Services.Scenes.ApexItem> apexes = [];
+
+    private MovieTagsEditor? movieTagsEditor;
+
+    private RenderFragment<TrickplayLayout?> EditorPanel(int movieId) => trickplay => @<ClipEditor MovieId="movieId"
+                                                                      VideoSelector="video.video-player-video"
+                                                                      DurationSeconds="DurationSeconds"
+                                                                      Trickplay="trickplay"
+                                                                      EnableShortcuts="true"
+                                                                      OnScenesChanged="OnSceneEditorChangedAsync"
+                                                                      OnHighlightsChanged="OnHighlightEditorChangedAsync"
+                                                                      OnApexesChanged="OnApexEditorChangedAsync"
+                                                                      OnSuggestionsChanged="OnSuggestionsChanged"
+                                                                      OnMovieTagsMayHaveChanged="OnMovieTagsMayHaveChangedAsync">
+        <BeforeTools>
+            <MovieTagsEditor @ref="movieTagsEditor" MovieId="movieId" />
+            <MovieActorsEditor MovieId="movieId" />
+        </BeforeTools>
+    </ClipEditor>;
+
+    private void OnSuggestionsChanged(IReadOnlyList<Javbuddy.Services.Scenes.SceneSuggestionItem> changed) =>
+        suggestions = changed.Select(s => s.Seconds).ToList();
+
+    protected override void OnParametersSet()
+    {
+        if (!Show)
+        {
+            scenes = [];
+            suggestions = [];
+            highlights = [];
+            apexes = [];
+        }
+    }
+
+    private async Task OnSceneEditorChangedAsync(IReadOnlyList<Javbuddy.Services.Scenes.SceneItem> changed)
+    {
+        scenes = changed;
+        await OnScenesChanged.InvokeAsync(changed);
+    }
+
+    private async Task OnHighlightEditorChangedAsync(IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem> changed)
+    {
+        highlights = changed;
+        await OnHighlightsChanged.InvokeAsync(changed);
+    }
+
+    private async Task OnApexEditorChangedAsync(IReadOnlyList<Javbuddy.Services.Scenes.ApexItem> changed)
+    {
+        apexes = changed;
+        await OnApexesChanged.InvokeAsync(changed);
+    }
+
+    // A clip's tags roll up to the movie.
+    private async Task OnMovieTagsMayHaveChangedAsync()
+    {
+        if (movieTagsEditor is not null) await movieTagsEditor.RefreshAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        scenes = [];
+        suggestions = [];
+        highlights = [];
+        apexes = [];
+        await OnClose.InvokeAsync();
+    }
+}

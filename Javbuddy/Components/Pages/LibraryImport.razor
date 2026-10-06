@@ -1,0 +1,173 @@
+@page "/add/import"
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Services.Tasks
+@using Microsoft.EntityFrameworkCore
+@inject IScheduledTaskOverviewService TaskOverview
+@inject IEnumerable<IScheduledTask> ScheduledTasks
+@inject ScheduledTaskLauncher TaskLauncher
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>Library Import · Javbuddy</PageTitle>
+
+<h1 class="import-title">Import movies you already have</h1>
+
+<div class="import-tips">
+    <h2>Some tips to ensure the import goes smoothly:</h2>
+    <ul>
+        <li>Scans the root directories configured on the <a href="settings/connections">Connections</a> page (or the <code>LocalLibrary__RootPaths</code> environment variable) — nothing happens until at least one is set.</li>
+        <li>Each immediate subfolder of a root is treated as one movie, named after its release code, e.g. <code>D:\media\movies\vr\SIVR-505\</code> → <code>SIVR-505</code>.</li>
+        <li>Every discovered movie is added as <strong>Got</strong>, since the file is already sitting on disk — its .nfo/poster/fanart are picked up the same way as the movie page's "Fetch from local" button.</li>
+        <li>This does not touch anything already on your list — matches are counted as "already tracked" and skipped.</li>
+        <li>This runs the same Library Rescan task as System &gt; Tasks, so it also probes MediaInfo and syncs subtitles/trailers across your whole library, not just newly discovered movies.</li>
+    </ul>
+</div>
+
+<h2 class="import-section-title">Last Rescan</h2>
+
+@if (lastCompletedRun is null)
+{
+    <p class="text-muted">No rescan has run yet.</p>
+}
+else
+{
+    <div class="import-stats-table">
+        <div class="import-stats-row import-stats-header">
+            <span>When</span>
+            <span>Result</span>
+        </div>
+        <div class="import-stats-row">
+            <span>@lastCompletedRun.EndedAt!.Value.ToLocalTime().ToString("g")</span>
+            <span class="@(lastCompletedRun.Success ? "import-stats-highlight" : "import-stats-error")">
+                @(lastCompletedRun.Success ? MoviesScannedText(lastCompletedRun) : lastCompletedRun.ErrorMessage)
+            </span>
+        </div>
+    </div>
+}
+
+<button class="btn btn-primary import-btn" @onclick="Start" disabled="@isRunning">
+    <svg class="import-btn-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z" />
+        <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z" />
+    </svg>
+    @ButtonLabel
+</button>
+
+@code {
+    private const string TaskName = "Library Rescan";
+
+    private ScheduledTaskRun? runningRun;
+    private ScheduledTaskRun? lastCompletedRun;
+    private bool isRunning;
+    private CancellationTokenSource? pollCts;
+
+    // Set when Start() fires the background run, cleared once LoadAsync observes that run's own
+    // queued row has ended. Guards against a race right after clicking: the first LoadAsync (500ms
+    // later) can run before ScheduledTaskRunner has written the new row at all — without this,
+    // that reads as "nothing running" and the button re-enables before the rescan actually
+    // finished, since a bare "no row found" and "the run I started already finished" look the
+    // same to LoadAsync's naive latest-row check.
+    private DateTime? pendingSinceUtc;
+
+    private string ButtonLabel
+    {
+        get
+        {
+            if (!isRunning) return "Run Library Rescan";
+            if (runningRun?.ProgressStage is { } stage)
+            {
+                return runningRun.ProgressTotal is { } total
+                    ? $"{stage}… ({runningRun.ProgressCurrent}/{total})"
+                    : $"{stage}…";
+            }
+            return "Running…";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        StartPollingIfNeeded();
+    }
+
+    private async Task LoadAsync()
+    {
+        var (latest, lastCompleted) = await TaskOverview.GetRunStateAsync(TaskName);
+
+        if (pendingSinceUtc is { } since && (latest is null || latest.QueuedAt < since))
+        {
+            // Our own just-triggered run hasn't shown up as a row yet — stay "running" rather
+            // than reading the absence of a row as "nothing to do."
+            runningRun = null;
+            isRunning = true;
+        }
+        else
+        {
+            runningRun = latest?.EndedAt is null ? latest : null;
+            isRunning = runningRun is not null;
+            if (!isRunning) pendingSinceUtc = null;
+        }
+
+        lastCompletedRun = lastCompleted;
+    }
+
+    // Library Rescan's own ResultSummary spells out every phase (imported/reverted/subtitles/
+    // trailers/MediaInfo/nfo/images) — accurate, but too dense for this page (see the request:
+    // "I don't want all separate scan results"). Its *last* phase (SyncImagesAsync) walks every
+    // Got movie in the library, so the ProgressTotal it leaves behind once the run ends already
+    // is the total movie count that run scanned — reusing that avoids parsing the free-text
+    // summary just to pull one number back out of it.
+    private static string MoviesScannedText(ScheduledTaskRun run) =>
+        run.ProgressTotal is { } total ? $"{total} movie{(total == 1 ? "" : "s")} scanned" : "0 movies scanned";
+
+    private async Task Start()
+    {
+        pendingSinceUtc = DateTime.UtcNow;
+        isRunning = true;
+
+        // Queued on application-owned background execution so the run keeps going (and gets
+        // recorded) even after this click handler returns or the user navigates away — a full
+        // rescan can take minutes. Mirrors System > Tasks' own "Run now" button (see SystemTasks.razor).
+        _ = TaskLauncher.Queue(TaskName);
+
+        // Give the runner a moment to write the "queued" row, then refresh.
+        await Task.Delay(500);
+        await LoadAsync();
+        StartPollingIfNeeded();
+    }
+
+    private void StartPollingIfNeeded()
+    {
+        if (pollCts is not null || !isRunning) return;
+
+        pollCts = new CancellationTokenSource();
+        _ = PollLoopAsync(pollCts.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                await InvokeAsync(async () =>
+                {
+                    await LoadAsync();
+                    StateHasChanged();
+                });
+                if (!isRunning) break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            pollCts = null;
+        }
+    }
+
+    public void Dispose() => pollCts?.Cancel();
+}

@@ -1,0 +1,44 @@
+.cropper-viewport {
+    position: relative;
+    width: 100%;
+    background-color: #14161d;
+    border: 1px solid #3d4354;
+    border-radius: 4px;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+}
+
+.cropper-viewport img {
+    position: absolute;
+    pointer-events: none;
+    user-select: none;
+    max-width: none;
+    display: block;
+}
+
+.cropper-crop-box {
+    position: absolute;
+    border: 2px solid #2f8fd6;
+    box-shadow: 0 0 0 9999px rgba(15, 17, 23, 0.65);
+    cursor: move;
+    touch-action: none;
+}
+
+.crop-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: #ffffff;
+    border: 1.5px solid #2f8fd6;
+    border-radius: 2px;
+}
+
+.handle-nw { top: -5px; left: -5px; cursor: nw-resize; }
+.handle-ne { top: -5px; right: -5px; cursor: ne-resize; }
+.handle-sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+.handle-se { bottom: -5px; right: -5px; cursor: se-resize; }
+.handle-n  { top: -5px; left: calc(50% - 5px); cursor: n-resize; }
+.handle-s  { bottom: -5px; left: calc(50% - 5px); cursor: s-resize; }
+.handle-w  { top: calc(50% - 5px); left: -5px; cursor: w-resize; }
+.handle-e  { top: calc(50% - 5px); right: -5px; cursor: e-resize; }

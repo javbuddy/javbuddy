@@ -1,0 +1,160 @@
+/* An apex's add/edit form, moved from ApexEditor.razor.css (CSS isolation doesn't
+   share it); reads the same --scene-editor-* custom properties. */
+
+.apex-editor-btn {
+    appearance: none;
+    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    color: var(--scene-editor-accent, #6ea8fe);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    white-space: nowrap;
+}
+
+.apex-editor-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.apex-editor-save-btn {
+    background-color: #2f8fd6;
+    border-color: #2f8fd6;
+    color: #fff;
+}
+
+.apex-editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.5rem;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 6px;
+    background-color: var(--scene-editor-form-bg, rgba(255, 255, 255, 0.03));
+}
+
+.apex-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.apex-editor-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.apex-editor-hint {
+    font-weight: 400;
+}
+
+.apex-editor-time-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.apex-editor-input {
+    width: 100%;
+    min-width: 0;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.8rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background-color: var(--scene-editor-input-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.apex-editor-window-row {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.apex-editor-window-row > .apex-editor-time-row {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.apex-editor-time-row .apex-editor-input {
+    flex: 1 1 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.apex-editor-form-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
+.apex-editor-chip {
+    padding: 0 0.35rem;
+    font-size: 0.75rem;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+}
+
+.apex-editor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.apex-editor-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.5rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background-color: rgba(47, 143, 214, 0.18);
+    border-color: #2f8fd6;
+}
+
+.apex-editor-chip-remove {
+    appearance: none;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+/* The previous apex's tags offered when adding one, dashed "+ Tag" chips like Sort
+   review's genre palette. */
+
+.apex-editor-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.apex-editor-suggestion {
+    appearance: none;
+    padding: 0.1rem 0.5rem;
+    background: transparent;
+    border: 1px dashed var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+    color: var(--scene-editor-fg, #e2e8f0);
+    cursor: pointer;
+    font-size: 0.75rem;
+}
+
+.apex-editor-suggestion::before {
+    content: "+ ";
+    opacity: 0.6;
+}
+
+.apex-editor-suggestion:hover:not(:disabled) {
+    background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.08));
+}
+
+.apex-editor-suggestion:disabled {
+    opacity: 0.5;
+    cursor: default;
+}

@@ -1,0 +1,234 @@
+@using Javbuddy.Services.SceneMedia
+@inject ISceneWallQueryService SceneWall
+@inject ISceneMediaService SceneMedia
+@inject IHighlightMediaService HighlightMedia
+@inject IApexMediaService ApexMedia
+@inject SceneMediaQueue SceneMediaQueue
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* One of Actor Detail's Scenes, Highlights and Apexes sections: the actor's clips as the
+   Scenes wall shows them with its Actor filter on this actor — scenes, highlights and
+   apexes the actor is tagged in — newest release first. A page at a time, with Show more for the next;
+   hidden while there are none. A card plays its clip in the ClipPlayerModal. *@
+<div class="actor-clips-host" @ref="hostRef">
+    @if (total > 0)
+    {
+        <section class="actor-clips card mb-4" data-kind="@Kind.ToString().ToLowerInvariant()">
+            <div class="card-body">
+                <div class="actor-clips-header">
+                    <h2 class="card-title">@Title <span class="actor-clips-count">(@total)</span></h2>
+                </div>
+                <div class="actor-clips-grid">
+                    @switch (Kind)
+                    {
+                        case PlayerClipKind.Apex:
+                            @foreach (var card in apexCards)
+                            {
+                                <ClipCard @key="card.ApexId" Apex="card" OnPlay="Play" />
+                            }
+                            break;
+                        case PlayerClipKind.Highlight:
+                            @foreach (var card in highlightCards)
+                            {
+                                <ClipCard @key="card.HighlightId" Highlight="card" OnPlay="Play" />
+                            }
+                            break;
+                        default:
+                            @foreach (var card in sceneCards)
+                            {
+                                <ClipCard @key="card.SceneId" Scene="card" OnPlay="Play" />
+                            }
+                            break;
+                    }
+                </div>
+                @if (LoadedCount < total)
+                {
+                    <div class="actor-clips-more">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@loading" @onclick="ShowMoreAsync">
+                            Show more (@(total - LoadedCount) more)
+                        </button>
+                    </div>
+                }
+            </div>
+        </section>
+
+        <ClipPlayerModal Clip="playingClip" OnEnded="ClosePlayer" OnClose="ClosePlayer" />
+    }
+</div>
+
+@code {
+    public const int PageSize = 24;
+
+    [Parameter, EditorRequired] public int ActorId { get; set; }
+
+    [Parameter, EditorRequired] public PlayerClipKind Kind { get; set; }
+
+    private List<SceneWallCard> sceneCards = [];
+    private List<HighlightWallCard> highlightCards = [];
+    private List<ApexWallCard> apexCards = [];
+    private int total;
+    private bool loading;
+    private bool disposed;
+    // Bumped by every reload, so a page still loading for the previous actor is dropped when it lands.
+    private int generation;
+    private (int ActorId, PlayerClipKind Kind)? loadedFor;
+    private PlayerClip? playingClip;
+    private ElementReference hostRef;
+    private IJSObjectReference? clipCardModule;
+
+    private string Title => Kind switch
+    {
+        PlayerClipKind.Highlight => "Highlights",
+        PlayerClipKind.Apex => "Apexes",
+        _ => "Scenes",
+    };
+
+    private int LoadedCount => Kind switch
+    {
+        PlayerClipKind.Highlight => highlightCards.Count,
+        PlayerClipKind.Apex => apexCards.Count,
+        _ => sceneCards.Count,
+    };
+
+    private SceneWallFilter Filter => new(ActorIds: [ActorId]);
+
+    protected override void OnInitialized() => SceneMediaQueue.Generated += OnMediaGenerated;
+
+    // Actor Detail reuses its instance when navigating between two actors, so a new ActorId reloads.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedFor == (ActorId, Kind)) return;
+        loadedFor = (ActorId, Kind);
+        generation++;
+        sceneCards = [];
+        highlightCards = [];
+        apexCards = [];
+        total = 0;
+        playingClip = null;
+        await LoadAsync(0, PageSize, append: false);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            clipCardModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
+            await clipCardModule.InvokeVoidAsync("preventPlainCardClicks", hostRef);
+            await clipCardModule.InvokeVoidAsync("measureTagOverflow", hostRef);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (JSException)
+        {
+        }
+    }
+
+    private async Task ShowMoreAsync()
+    {
+        loading = true;
+        try
+        {
+            await LoadAsync(LoadedCount, PageSize, append: true);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    /// <summary>Loads the cards at [skip, skip + take), appended to the loaded ones or replacing them.
+    /// Returns false when a reload for another actor started meanwhile. A refresh after generated
+    /// media skips queueing generation for the cards still missing some, as the Scenes wall does.</summary>
+    private async Task<bool> LoadAsync(int skip, int take, bool append, bool queueMissingMedia = true)
+    {
+        var current = generation;
+        switch (Kind)
+        {
+            case PlayerClipKind.Apex:
+            {
+                var page = await SceneWall.GetApexPageAsync(Filter, SceneWallSort.ReleaseDate, 0, skip, take);
+                if (current != generation) return false;
+                total = page.TotalCount;
+                apexCards = append ? [.. apexCards, .. page.Cards] : [.. page.Cards];
+                if (!queueMissingMedia) break;
+                foreach (var movieId in page.Cards.Where(c => c.PreviewVersion is null).Select(c => c.MovieId).Distinct())
+                {
+                    await ApexMedia.EnsureQueuedAsync(movieId);
+                }
+                break;
+            }
+            case PlayerClipKind.Highlight:
+            {
+                var page = await SceneWall.GetHighlightPageAsync(Filter, SceneWallSort.ReleaseDate, 0, skip, take);
+                if (current != generation) return false;
+                total = page.TotalCount;
+                highlightCards = append ? [.. highlightCards, .. page.Cards] : [.. page.Cards];
+                if (!queueMissingMedia) break;
+                foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion))))
+                {
+                    await HighlightMedia.EnsureQueuedAsync(movieId);
+                }
+                break;
+            }
+            default:
+            {
+                var page = await SceneWall.GetPageAsync(Filter, SceneWallSort.ReleaseDate, 0, skip, take);
+                if (current != generation) return false;
+                total = page.TotalCount;
+                sceneCards = append ? [.. sceneCards, .. page.Cards] : [.. page.Cards];
+                if (!queueMissingMedia) break;
+                foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion))))
+                {
+                    await SceneMedia.EnsureQueuedAsync(movieId);
+                }
+                break;
+            }
+        }
+        return true;
+    }
+
+    private static IEnumerable<int> MoviesMissingMedia(IEnumerable<(int MovieId, long? Thumb, long? Preview)> loadedCards) =>
+        loadedCards.Where(c => c.Thumb is null || c.Preview is null).Select(c => c.MovieId).Distinct();
+
+    // Refresh the loaded cards when one of their movies got new screenshots/previews.
+    private void OnMediaGenerated(int movieId)
+    {
+        if (disposed) return;
+        var shown = Kind switch
+        {
+            PlayerClipKind.Highlight => highlightCards.Select(c => c.MovieId),
+            PlayerClipKind.Apex => apexCards.Select(c => c.MovieId),
+            _ => sceneCards.Select(c => c.MovieId),
+        };
+        if (!shown.Contains(movieId)) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed) return;
+            if (await LoadAsync(0, Math.Max(LoadedCount, PageSize), append: false, queueMissingMedia: false))
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void Play(PlayerClip clip) => playingClip = clip;
+
+    private void ClosePlayer() => playingClip = null;
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        SceneMediaQueue.Generated -= OnMediaGenerated;
+        if (clipCardModule is null) return;
+        try
+        {
+            await clipCardModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

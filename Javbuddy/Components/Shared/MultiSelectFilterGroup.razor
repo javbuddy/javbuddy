@@ -1,0 +1,76 @@
+<button type="button" class="sort-dropdown-item @(SelectedCount > 0 ? "active" : "")" @onclick="ToggleExpanded">
+    <span>@GroupLabel@(SelectedCount > 0 ? $" ({SelectedCount})" : "")</span>
+    <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
+</button>
+@if (expanded)
+{
+    @if (Searchable)
+    {
+        <div class="multiselect-search-row">
+            <input type="text" class="multiselect-search-input" placeholder="@($"Search {GroupLabel.ToLowerInvariant()}…")" value="@searchTerm" @oninput="OnSearchInput" />
+        </div>
+        <div class="multiselect-actions-row">
+            <button type="button" class="multiselect-action-link" @onclick="SelectAllVisible">Select All</button>
+            <button type="button" class="multiselect-action-link" @onclick="SelectNone">None</button>
+        </div>
+    }
+    <div class="@(Searchable ? "multiselect-scroll-area" : null)">
+        @foreach (var option in FilteredOptions)
+        {
+            <button type="button" class="sort-dropdown-item sort-dropdown-subitem @(option.IsSelected ? "active" : "")" @onclick="option.OnClick">
+                @option.Label
+                @if (option.IsSelected)
+                {
+                    <span class="ms-2">✓</span>
+                }
+            </button>
+        }
+        @if (Searchable && !FilteredOptions.Any())
+        {
+            <div class="multiselect-empty">No matches.</div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>A collapsible, multi-select group inside a filter dropdown — a header row (label +
+    /// selected count + expand arrow) that reveals a checkable list of options underneath when
+    /// clicked. Used for Movies.razor's Resolution/Codec/Genre filters and ActorMissing.razor's
+    /// Studio/Year filters. Owns its own expand/collapse state (and, when Searchable, its own search
+    /// text); selection itself stays entirely in the caller (each MultiSelectOption's
+    /// IsSelected/OnClick already reflects the caller's own filter set).
+    ///
+    /// Searchable also turns on the search box, Select All/None links, and a capped-height scroll
+    /// area for the option list — bundled together since they're only meaningful for a long list
+    /// (Genre), not the short fixed ones (Resolution, Codec, Studio, Year), which leave this false
+    /// and render exactly as before.</summary>
+    [Parameter, EditorRequired] public string GroupLabel { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<MultiSelectOption> Options { get; set; } = Array.Empty<MultiSelectOption>();
+    [Parameter] public bool Searchable { get; set; }
+
+    /// <summary>Passed the labels of whatever's currently visible under the active search (all of
+    /// Options if there's no search term) — deliberately not "toggle each visible item's own
+    /// OnClick in a loop", which would fire one full reload per item instead of one bulk update.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<string>> OnSelectAll { get; set; }
+
+    /// <summary>Clears the whole selection, not just what's currently visible under the active
+    /// search — matches how a "None"/reset action is conventionally scoped.</summary>
+    [Parameter] public EventCallback OnSelectNone { get; set; }
+
+    private bool expanded;
+    private string searchTerm = "";
+
+    private int SelectedCount => Options.Count(o => o.IsSelected);
+
+    private IEnumerable<MultiSelectOption> FilteredOptions => string.IsNullOrWhiteSpace(searchTerm)
+        ? Options
+        : Options.Where(o => o.Label.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+
+    private void ToggleExpanded() => expanded = !expanded;
+
+    private void OnSearchInput(ChangeEventArgs e) => searchTerm = e.Value?.ToString() ?? "";
+
+    private Task SelectAllVisible() => OnSelectAll.InvokeAsync(FilteredOptions.Select(o => o.Label).ToList());
+
+    private Task SelectNone() => OnSelectNone.InvokeAsync();
+}

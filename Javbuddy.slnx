@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Javbuddy/Javbuddy.csproj" />
+  <Project Path="Javbuddy.Tests/Javbuddy.Tests.csproj" />
+  <Project Path="Javbuddy.E2ETests/Javbuddy.E2ETests.csproj" />
+</Solution>

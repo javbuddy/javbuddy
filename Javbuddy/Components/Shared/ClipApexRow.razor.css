@@ -1,0 +1,90 @@
+/* An apex's row in ClipEditor's tree, moved from ApexEditor.razor.css. */
+
+.apex-editor-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.apex-editor-icon-btn {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--scene-editor-muted, #94a3b8);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.apex-editor-icon-btn:hover:not(:disabled) {
+    background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.08));
+    color: var(--scene-editor-fg, #e2e8f0);
+}
+
+.apex-editor-row {
+    appearance: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: baseline;
+    column-gap: 0.5rem;
+    row-gap: 0.15rem;
+    padding: 0.25rem 0.4rem;
+    background: transparent;
+    border: none;
+    border-left: 3px solid #f76707;
+    border-radius: 4px;
+    color: inherit;
+    cursor: pointer;
+    font-size: inherit;
+    text-align: left;
+}
+
+.apex-editor-row:hover {
+    background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.08));
+}
+
+.apex-editor-pos {
+    min-width: 1.1rem;
+    color: var(--scene-editor-muted, #94a3b8);
+    font-variant-numeric: tabular-nums;
+}
+
+.apex-editor-time {
+    font-variant-numeric: tabular-nums;
+}
+
+.apex-editor-actors {
+    grid-column: 3;
+    min-width: 0;
+}
+
+.apex-editor-tags {
+    grid-column: 3;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.apex-editor-tag {
+    padding: 0 0.35rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-muted, #94a3b8);
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+}
+
+/* Favorite toggle, red like the highlight, scene and movie favorite hearts. */
+.apex-editor-fav-on,
+.apex-editor-fav-on:hover:not(:disabled) {
+    color: #e03131;
+}

@@ -1,0 +1,29 @@
+.trickplay-generating {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+/* The trickplay thumbnail's frame (ScrubBar's .scrub-bar-thumb), 200 px wide at 16:9. */
+.trickplay-generating-frame {
+    position: relative;
+    width: 200px;
+    height: 112px;
+    background-color: #000;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    box-sizing: content-box;
+    overflow: hidden;
+}
+
+.trickplay-generating-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    background-color: rgba(0, 0, 0, 0.75);
+    border-radius: 3px;
+    padding: 0 0.35rem;
+}

@@ -1,0 +1,81 @@
+@page "/settings/connections"
+@using Javbuddy.Components.Pages.SettingsConnectionSections
+@using Javbuddy.Services
+@rendermode InteractiveServer
+@inject IConnectionStatusService ConnectionStatusService
+
+<PageTitle>Connections · Javbuddy</PageTitle>
+
+<h1>Connections</h1>
+<p class="text-muted connections-intro">External services Javbuddy talks to. Click a tile to configure.</p>
+
+@if (statuses is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <div class="connections-grid">
+        @foreach (var tile in Tiles)
+        {
+            var status = Get(tile.Key);
+            <StatusTile Title="@tile.Title" Description="@tile.Description" Configured="status.Configured" Summary="@status.Summary" EnvConfigured="status.EnvConfigured" OnOpen="() => Open(tile.Key)" />
+        }
+    </div>
+}
+
+<SlideOverDrawer Show="@(activeKey is not null)" Title="@DrawerTitle" OnClose="Close">
+    @switch (activeKey)
+    {
+        case "javinizer":
+            <JavinizerConnectionSection />
+            break;
+        case "prowlarr":
+            <ProwlarrConnectionSection />
+            break;
+        case "jellyfin":
+            <JellyfinConnectionSection />
+            break;
+        case "qbittorrent":
+            <QBittorrentConnectionSection />
+            break;
+        case "pathmappings":
+            <PathMappingsSection />
+            break;
+    }
+</SlideOverDrawer>
+
+@code {
+    private record TileInfo(string Key, string Title, string Description);
+
+    private static readonly List<TileInfo> Tiles =
+    [
+        new("javinizer", "javinizer-go", "Fetches movie metadata by release code."),
+        new("prowlarr", "Prowlarr", "Searches indexers for a release code."),
+        new("jellyfin", "Jellyfin", "Checks whether a movie is already in your library."),
+        new("qbittorrent", "qBittorrent", "Download client for grabbed releases."),
+        new("pathmappings", "Path Mappings", "Maps a download folder between qBittorrent, javinizer-go and Javbuddy paths.")
+    ];
+
+    private List<ConnectionStatus>? statuses;
+    private string? activeKey;
+
+    private string DrawerTitle => Tiles.FirstOrDefault(t => t.Key == activeKey)?.Title ?? "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        statuses = await ConnectionStatusService.GetStatusesAsync();
+    }
+
+    private ConnectionStatus Get(string key) =>
+        statuses!.FirstOrDefault(s => s.Key == key) ?? new ConnectionStatus(key, false, false, "Not configured");
+
+    private void Open(string key) => activeKey = key;
+
+    private async Task Close()
+    {
+        activeKey = null;
+        // Re-fetch so the grid reflects anything saved while the drawer was open.
+        statuses = await ConnectionStatusService.GetStatusesAsync();
+    }
+}

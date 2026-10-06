@@ -1,0 +1,72 @@
+/* Panel chrome copied from ActorPhotoUploadModal.razor.css, drop zone from
+   ActorImageUploadModal.razor.css — CSS isolation doesn't share them. */
+.movie-image-upload-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+.movie-image-upload-panel {
+    width: min(100%, 34rem);
+    overflow: hidden;
+    color: #cfd3de;
+    background: #222631;
+    border: 1px solid #3d4354;
+    border-radius: 6px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.movie-image-upload-header, .movie-image-upload-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.25rem;
+    background: #2b303c;
+}
+
+.movie-image-upload-header { border-bottom: 1px solid #3d4354; }
+.movie-image-upload-footer { border-top: 1px solid #3d4354; justify-content: flex-end; gap: 0.5rem; }
+.movie-image-upload-header h2 { margin: 0; color: #fff; font-size: 1.15rem; }
+.movie-image-upload-body { padding: 1.25rem; }
+.movie-image-upload-close { border: 0; color: #9aa1af; background: transparent; font-size: 1.5rem; line-height: 1; }
+.movie-image-upload-close:hover { color: #fff; }
+.movie-image-upload-divider { display: flex; align-items: center; gap: 0.75rem; margin: 1.25rem 0; color: #9aa1af; font-size: 0.8rem; }
+.movie-image-upload-divider::before, .movie-image-upload-divider::after { content: ""; flex: 1; border-top: 1px solid #3d4354; }
+.movie-image-upload-progress { display: grid; gap: 0.35rem; margin-top: 1rem; font-size: 0.85rem; }
+:root[data-theme="dark"] .movie-image-upload-panel .form-control { color: #fff; background: #14161d; border-color: #3d4354; }
+
+.upload-dropzone {
+    position: relative;
+    padding: 2rem 1.5rem;
+    text-align: center;
+    color: #fff;
+    background-color: #1b1e27;
+    border: 2px dashed #454a5e;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.upload-dropzone-hint { color: #9aa1af; }
+
+.upload-dropzone:hover {
+    border-color: #2f8fd6;
+    background-color: #1e2430;
+}
+
+/* The <input> is rendered by the InputFile component, so it doesn't carry this component's
+   scope attribute — ::deep reaches it through the drop zone. */
+::deep .upload-dropzone-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}

@@ -1,0 +1,244 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Prowlarr
+@inject IProwlarrClient ProwlarrClient
+@inject ITorrentGrabService TorrentGrabService
+@inject IMovieAddService MovieAddService
+
+@if (Show && !string.IsNullOrWhiteSpace(SearchCode))
+{
+    <div class="prowlarr-modal-backdrop" tabindex="0" @ref="backdropRef" @onkeydown="OnKeyDown" @onclick="Close">
+        <div class="prowlarr-modal-panel" @onclick:stopPropagation="true">
+            <div class="prowlarr-modal-header">
+                <h5 class="prowlarr-modal-title">Search results — @SearchCode</h5>
+                <button class="prowlarr-modal-close-btn" @onclick="Close" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+            <div class="prowlarr-modal-body">
+                @if (searching)
+                {
+                    <p class="text-muted mb-0">Searching…</p>
+                }
+                else if (searchError is not null)
+                {
+                    <div class="alert alert-danger mb-0">@searchError</div>
+                }
+                else if (results is not null && results.Count == 0)
+                {
+                    <p class="text-muted mb-0">No releases found.</p>
+                }
+                else if (results is not null)
+                {
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Indexer</th>
+                                <th>Size</th>
+                                <th>Seeds/Peers</th>
+                                <th>Age</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var release in results)
+                            {
+                                <tr>
+                                    <td class="text-break">@release.Title</td>
+                                    <td>@release.Indexer</td>
+                                    <td>@ByteSizeFormatter.Format(release.Size)</td>
+                                    <td><span class="seeds-badge @SeedsBadgeClass(release.Seeders)">@(release.Seeders?.ToString() ?? "—") / @(release.Leechers?.ToString() ?? "—")</span></td>
+                                    <td>@(release.Age)d</td>
+                                    <td class="text-end">
+                                        @if (Movie is not null)
+                                        {
+                                            <button class="btn btn-sm btn-primary" @onclick="() => Grab(release)" disabled="@IsGrabbing(release)">
+                                                @(IsGrabbing(release) ? "Grabbing…" : "Grab")
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button class="btn btn-sm btn-primary" @onclick="() => AddAndGrab(release)" disabled="@IsGrabbing(release)">
+                                                @(IsGrabbing(release) ? "Adding…" : "Add & Download")
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+
+                @if (grabError is not null)
+                {
+                    <div class="alert alert-danger mt-3 mb-0">@grabError</div>
+                }
+                @if (grabSuccessMessage is not null)
+                {
+                    <div class="alert alert-success mt-3 mb-0">@grabSuccessMessage</div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Movie? Movie { get; set; }
+    /// <summary>Code to search when the movie is not tracked yet. A release row then offers
+    /// "Add & Download" instead of "Grab", which adds the movie via <see cref="IMovieAddService"/>
+    /// before grabbing.</summary>
+    [Parameter] public string? Code { get; set; }
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    /// <summary>Raised after "Add & Download" adds the movie (before the grab step runs), so a
+    /// parent showing this modal over an untracked/preview movie can update without a full reload.</summary>
+    [Parameter] public EventCallback<Movie> OnMovieAdded { get; set; }
+
+    private ElementReference backdropRef;
+    private bool shouldFocusBackdrop;
+    private string? searchedCode;
+    private bool searching;
+    private string? searchError;
+    private List<ReleaseResourceDto>? results;
+    private readonly HashSet<string> grabbingKeys = new();
+    private string? grabError;
+    private string? grabSuccessMessage;
+
+    private string? SearchCode => Movie?.Code ?? Code;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Code is not null && Movie is not null && !string.Equals(Movie.Code, Code, StringComparison.OrdinalIgnoreCase))
+        {
+            // "Add & Download" tracks this modal instance to the movie it just added by setting
+            // Movie internally (see AddAndGrab) — a page like ActorMissing.razor that only ever
+            // binds Code (never Movie) reuses one modal instance across searches, so a new Code
+            // here means the parent moved on to a different release. Drop that stale tracking so
+            // SearchCode/Search() go back to following the new Code instead of the old Movie.
+            Movie = null;
+        }
+
+        if (Show && SearchCode is { } code && !string.Equals(searchedCode, code, StringComparison.OrdinalIgnoreCase))
+        {
+            shouldFocusBackdrop = true;
+            await Search();
+        }
+        else if (!Show)
+        {
+            // Reset so reopening the same movie searches again rather than showing stale results.
+            searchedCode = null;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (shouldFocusBackdrop)
+        {
+            shouldFocusBackdrop = false;
+            await backdropRef.FocusAsync();
+        }
+    }
+
+    private async Task Search()
+    {
+        if (string.IsNullOrWhiteSpace(SearchCode)) return;
+
+        searchedCode = SearchCode;
+        searching = true;
+        searchError = null;
+        results = null;
+        grabError = null;
+        grabSuccessMessage = null;
+        StateHasChanged();
+
+        var result = await ProwlarrClient.SearchAsync(SearchCode);
+        if (!result.Success || result.Releases is null)
+        {
+            searchError = result.ErrorMessage ?? "Search failed.";
+        }
+        else
+        {
+            results = result.Releases.OrderByDescending(r => r.Seeders ?? 0).ToList();
+        }
+
+        searching = false;
+    }
+
+    private static string SeedsBadgeClass(int? seeders) => seeders switch
+    {
+        null or 0 => "seeds-badge-none",
+        > 0 and < 5 => "seeds-badge-low",
+        _ => "seeds-badge-good"
+    };
+
+    private static string GrabKey(ReleaseResourceDto release) => release.Guid ?? release.Title ?? release.GetHashCode().ToString();
+
+    private bool IsGrabbing(ReleaseResourceDto release) => grabbingKeys.Contains(GrabKey(release));
+
+    private async Task Grab(ReleaseResourceDto release)
+    {
+        if (string.IsNullOrWhiteSpace(SearchCode)) return;
+
+        var key = GrabKey(release);
+        grabbingKeys.Add(key);
+        grabError = null;
+        grabSuccessMessage = null;
+        StateHasChanged();
+
+        if (Movie is null) return;
+
+        var result = await TorrentGrabService.GrabAsync(Movie, release);
+        if (result.Success)
+        {
+            grabSuccessMessage = $"Grabbed \"{release.Title}\".";
+        }
+        else
+        {
+            grabError = result.ErrorMessage;
+        }
+
+        grabbingKeys.Remove(key);
+    }
+
+    private async Task AddAndGrab(ReleaseResourceDto release)
+    {
+        if (string.IsNullOrWhiteSpace(Code)) return;
+
+        var key = GrabKey(release);
+        grabbingKeys.Add(key);
+        grabError = null;
+        grabSuccessMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var addResult = await MovieAddService.AddAsync(Code);
+            Movie = addResult.Movie;
+            await OnMovieAdded.InvokeAsync(Movie);
+
+            var grabResult = await TorrentGrabService.GrabAsync(Movie, release);
+            if (grabResult.Success)
+            {
+                grabSuccessMessage = $"Added {Code} to library and grabbed \"{release.Title}\".";
+            }
+            else
+            {
+                grabError = grabResult.ErrorMessage;
+            }
+        }
+        catch (Exception ex)
+        {
+            grabError = ex.Message;
+        }
+
+        grabbingKeys.Remove(key);
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await Close();
+    }
+}

@@ -1,0 +1,93 @@
+.video-player-column {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.video-player-area {
+    flex: 1 1 0;
+    min-width: 0;
+    width: 100%;
+    min-height: 0;
+    position: relative;
+    background-color: #000;
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.video-player-media {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    background-color: #000;
+}
+
+/* When the scrub bar is shown under the player it is the single seek bar, so hide the browser's own.
+   Blink/WebKit only — Firefox exposes no pseudo-element for its timeline and keeps both. */
+.video-player-scrub::-webkit-media-controls-timeline {
+    display: none !important;
+}
+
+/* VR 2D mode: the unwarped canvas from VrViewer replaces the video's picture, so push the
+   picture itself out of the element's box while keeping the element transparent on top (z-index: 1)
+   so the native controls dynamically overlay the full-height canvas without a persistent black bar.
+   Drags on the video pan the view, so it must not scroll the page on touch. */
+.video-player-vr {
+    position: relative;
+    z-index: 1;
+    background-color: transparent;
+    object-fit: none;
+    object-position: -100000px 0;
+    cursor: grab;
+    touch-action: none;
+}
+
+/* Hide native fullscreen button in VR mode so fullscreen requests use the player container (which
+   includes the unwarped canvas, virtual camera, and projection controls) instead of full-screening
+   the raw <video> element. Blink/WebKit only. */
+.video-player-vr::-webkit-media-controls-fullscreen-button {
+    display: none !important;
+}
+
+/* Fallback if the <video> element enters fullscreen directly (e.g. Firefox or browser context menu):
+   reset object-position and background so the screen is never blank. */
+.video-player-vr:fullscreen {
+    object-fit: contain;
+    object-position: 50% 50%;
+    background-color: #000;
+}
+
+.video-player-area:fullscreen {
+    border-radius: 0;
+}
+
+.video-player-column:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    margin: 0;
+    gap: 0;
+    box-sizing: border-box;
+}
+
+.video-player-column:fullscreen .video-player-area {
+    border-radius: 0;
+    flex: 1 1 0;
+    height: 100%;
+}
+
+.video-player-scrub::-webkit-media-controls-fullscreen-button {
+    display: none !important;
+}

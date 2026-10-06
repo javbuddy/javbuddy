@@ -1,0 +1,132 @@
+@* The Review / Cleanup page's end-of-session summary: totals, then each decision and edit list. *@
+@using Javbuddy.Models
+
+<div class="cleanup-summary">
+    <h2 class="cleanup-summary-title">Session summary</h2>
+    <div class="cleanup-summary-stats">
+        @if (!ReviewMode)
+        {
+            <div class="cleanup-stat cleanup-stat-freed">
+                <span class="cleanup-stat-value">@ByteSizeFormatter.Format(Summary.BytesFreed)</span>
+                <span class="cleanup-stat-label">Storage freed</span>
+            </div>
+        }
+        <div class="cleanup-stat cleanup-stat-duration">
+            <span class="cleanup-stat-value">@MovieCleanupSessionSummary.FormatDuration(Summary.Duration)</span>
+            <span class="cleanup-stat-label">Session duration</span>
+        </div>
+        <div class="cleanup-stat cleanup-stat-average">
+            <span class="cleanup-stat-value">@MovieCleanupSessionSummary.FormatAverage(Summary.AverageDecisionTime)</span>
+            <span class="cleanup-stat-label">Avg. decision time</span>
+        </div>
+        <div class="cleanup-stat cleanup-stat-reviewed">
+            <span class="cleanup-stat-value">@Summary.ReviewedCount</span>
+            <span class="cleanup-stat-label">Movies reviewed</span>
+        </div>
+        <div class="cleanup-stat cleanup-stat-tags-added">
+            <span class="cleanup-stat-value">@Summary.TagsAddedCount</span>
+            <span class="cleanup-stat-label">Tags added</span>
+        </div>
+        <div class="cleanup-stat cleanup-stat-tags-removed">
+            <span class="cleanup-stat-value">@Summary.TagsRemovedCount</span>
+            <span class="cleanup-stat-label">Tags removed</span>
+        </div>
+        <div class="cleanup-stat cleanup-stat-actors-added">
+            <span class="cleanup-stat-value">@Summary.ActorsAddedCount</span>
+            <span class="cleanup-stat-label">Actors added</span>
+        </div>
+        <div class="cleanup-stat cleanup-stat-actors-removed">
+            <span class="cleanup-stat-value">@Summary.ActorsRemovedCount</span>
+            <span class="cleanup-stat-label">Actors removed</span>
+        </div>
+    </div>
+
+    @if (Summary.ReviewedCount == 0)
+    {
+        <p class="cleanup-summary-empty">No movies were reviewed in this session.</p>
+    }
+    @if (!ReviewMode)
+    {
+        @SummarySection("Deleted", "deleted", Summary.Deleted, showSize: true)
+        @SummarySection("Snoozed", "snoozed", Summary.Snoozed)
+        @SummarySection("Blacklisted", "blacklisted", Summary.Blacklisted)
+    }
+    @SummarySection("Flagged for broken B-frames", "flagged", Summary.Flagged)
+    @SummarySection(ReviewMode ? "Reviewed" : "Kept / skipped", "kept", Summary.Kept)
+    @EditSection("Tags added", "tags-added", Summary.TagsAdded, "added to")
+    @EditSection("Tags removed", "tags-removed", Summary.TagsRemoved, "removed from")
+    @EditSection("Actors added", "actors-added", Summary.ActorsAdded, "added to")
+    @EditSection("Actors removed", "actors-removed", Summary.ActorsRemoved, "removed from")
+
+    <div class="cleanup-summary-actions">
+        <button type="button" class="cleanup-btn cleanup-btn-outline cleanup-finish-btn" @onclick="OnFinish">Finish / Return to Movies</button>
+        <button type="button" class="cleanup-btn cleanup-new-session-btn" @onclick="OnStartNewSession">Start New Session</button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public MovieCleanupSessionSummary Summary { get; set; } = MovieCleanupSessionSummary.Empty;
+    [Parameter] public bool ReviewMode { get; set; }
+    [Parameter] public EventCallback OnFinish { get; set; }
+    [Parameter] public EventCallback OnStartNewSession { get; set; }
+
+    private static RenderFragment SummarySection(string title, string cssClass, IReadOnlyList<CleanupDecision> decisions, bool showSize = false) => @<text>
+        @if (decisions.Count > 0)
+        {
+            <section class="cleanup-summary-section cleanup-summary-@cssClass">
+                <h3 class="cleanup-summary-heading">@title <span class="cleanup-summary-count">@decisions.Count</span></h3>
+                <ul class="cleanup-summary-list">
+                    @foreach (var decision in decisions)
+                    {
+                        <li class="cleanup-summary-item">
+                            @if (decision.HasCover)
+                            {
+                                <img class="cleanup-summary-cover" src="@($"/image-cache/{Uri.EscapeDataString(decision.Code!)}/poster/thumb")" alt="@decision.DisplayName" loading="lazy" />
+                            }
+                            else
+                            {
+                                <div class="cleanup-summary-cover cleanup-summary-cover-placeholder">@decision.Code</div>
+                            }
+                            <div class="cleanup-summary-item-info">
+                                @if (!string.IsNullOrWhiteSpace(decision.Code) && decision.Outcome != CleanupOutcome.Deleted)
+                                {
+                                    <a class="cleanup-summary-code" href="@($"/movies/{Uri.EscapeDataString(decision.Code)}")" target="_blank">@decision.Code</a>
+                                }
+                                else
+                                {
+                                    <span class="cleanup-summary-code">@decision.Code</span>
+                                }
+                                <span class="cleanup-summary-item-title" title="@decision.DisplayName">@decision.DisplayName</span>
+                                @if (showSize && decision.FileSizeBytes is { } bytes)
+                                {
+                                    <span class="cleanup-summary-item-size">@ByteSizeFormatter.Format(bytes) freed</span>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    </text>;
+
+    private static RenderFragment EditSection(string title, string cssClass, IReadOnlyList<CleanupEditTally> tallies, string verb) => @<text>
+        @if (tallies.Count > 0)
+        {
+            <section class="cleanup-summary-section cleanup-summary-@cssClass">
+                <h3 class="cleanup-summary-heading">@title</h3>
+                <ul class="cleanup-summary-edits">
+                    @foreach (var tally in tallies)
+                    {
+                        <li class="cleanup-summary-edit" title="@($"{verb} {tally.MovieCount} movie{(tally.MovieCount == 1 ? "" : "s")}")">
+                            @tally.Name
+                            @if (tally.MovieCount > 1)
+                            {
+                                <span class="cleanup-summary-edit-count">×@tally.MovieCount</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+    </text>;
+}

@@ -1,0 +1,516 @@
+.sort-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    background-color: #35394a;
+    border-radius: 4px 4px 0 0;
+    padding: 0.5rem 0.75rem;
+    margin: 0 -0.01px 1rem;
+}
+
+.sort-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    color: #cfd3de;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.4rem 0.6rem;
+    border-radius: 3px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+    .sort-toolbar-btn:hover {
+        background-color: #454a5e;
+        color: #ffffff;
+    }
+
+.sort-title {
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: #333;
+    margin: 0.5rem 0 0;
+}
+
+.sort-steps {
+    display: flex;
+    flex-wrap: wrap;
+    list-style: none;
+    gap: 0.5rem;
+    padding: 0;
+    margin: 1rem 0 1.25rem;
+}
+
+.sort-steps li {
+    padding: 0.3rem 0.7rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background-color: #e9ecef;
+    color: #6c757d;
+}
+
+.sort-step-active {
+    background-color: #1c9fc4 !important;
+    color: #ffffff !important;
+}
+
+.sort-step-done {
+    background-color: #2fa84f !important;
+    color: #ffffff !important;
+}
+
+.sort-panel {
+    max-width: 960px;
+}
+
+.sort-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.sort-input {
+    margin-bottom: 0.4rem;
+    max-width: 640px;
+}
+
+.sort-hint {
+    font-size: 0.85rem;
+    margin-bottom: 0.75rem;
+    max-width: 640px;
+}
+
+.sort-filter-input {
+    width: 160px;
+}
+
+.sort-file-header-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.sort-file-list {
+    margin-top: 0.5rem;
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+}
+
+.sort-file-row {
+    display: grid;
+    grid-template-columns: auto 2fr auto auto auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.25rem;
+    border-bottom: 1px solid #eee;
+}
+
+.sort-file-row:last-child {
+    border-bottom: none;
+}
+
+.sort-file-row-unselected {
+    opacity: 0.5;
+}
+
+.sort-merge-file-row {
+    display: grid;
+    grid-template-columns: auto minmax(260px, 4fr) auto auto auto auto auto;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.4rem 0.25rem;
+    border-bottom: 1px solid #eee;
+}
+
+.sort-merge-file-row:last-child {
+    border-bottom: none;
+}
+
+.sort-file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Unlike .sort-file-name (Scan step's file list), part names here need to be fully readable to
+   confirm merge order is correct — wraps instead of truncating, capped at a sane width so one very
+   long filename can't blow out the row. */
+.sort-merge-file-name {
+    overflow-wrap: break-word;
+    max-width: 60ch;
+}
+
+.sort-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #ffffff;
+    white-space: nowrap;
+    background-color: #6c757d;
+}
+
+.sort-badge-matched {
+    background-color: #2fa84f;
+}
+
+.sort-badge-unmatched {
+    background-color: #dc3545;
+}
+
+.sort-quality-badge {
+    background-color: #ffc107;
+    color: #212529;
+    cursor: help;
+}
+
+.sort-progress {
+    margin: 0.5rem 0;
+    width: 100%;
+    max-width: 400px;
+    height: 8px;
+    border-radius: 4px;
+    background-color: #e9ecef;
+    overflow: hidden;
+}
+
+.sort-progress-bar {
+    height: 100%;
+    background-color: #1c9fc4;
+    transition: width 0.3s ease;
+}
+
+.sort-organize-progress {
+    max-width: 400px;
+}
+
+.sort-progress-bar-indeterminate {
+    width: 40%;
+    animation: sort-organize-indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes sort-organize-indeterminate {
+    0% {
+        margin-left: 0%;
+    }
+
+    50% {
+        margin-left: 60%;
+    }
+
+    100% {
+        margin-left: 0%;
+    }
+}
+
+/* Movie Review Cards */
+.sort-movie-card {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background-color: #ffffff;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.sort-movie-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.sort-movie-header-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.sort-movie-header-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.sort-fix-input {
+    width: 130px;
+}
+
+.sort-movie-body {
+    display: flex;
+    gap: 1.25rem;
+    padding: 1rem;
+}
+
+.sort-movie-poster-col {
+    flex-shrink: 0;
+    width: 150px;
+}
+
+.sort-movie-poster-img {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    border-radius: 4px;
+    object-fit: cover;
+    object-position: right center;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.sort-movie-poster-placeholder {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #e9ecef;
+    color: #6c757d;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 4px;
+    text-align: center;
+    padding: 0.5rem;
+}
+
+.sort-movie-info-col {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.sort-movie-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    line-height: 1.35;
+}
+
+.sort-movie-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+}
+
+.sort-movie-badges-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.6rem;
+}
+
+.sort-badge-pill {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background-color: #e9ecef;
+    color: #495057;
+}
+
+.sort-badge-pill-code {
+    background-color: #1c9fc4;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.sort-movie-cast-row {
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    color: #495057;
+}
+
+.sort-movie-genres-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.6rem;
+}
+
+.sort-genre-tag {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    background-color: #f1f3f5;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.sort-movie-description {
+    font-size: 0.85rem;
+    color: #6c757d;
+    line-height: 1.4;
+    margin-bottom: 0;
+    max-height: 80px;
+    overflow-y: auto;
+}
+
+/* Excluded Section */
+.sort-excluded-section {
+    border-top: 1px dashed #dee2e6;
+    padding-top: 0.75rem;
+}
+
+.sort-excluded-list {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+}
+
+.sort-excluded-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.sort-excluded-row:last-child {
+    border-bottom: none;
+}
+
+/* Preview Cards */
+.sort-preview-card {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 0.9rem;
+    background-color: #ffffff;
+}
+
+.sort-preview-thumb {
+    width: 80px;
+    aspect-ratio: 2 / 3;
+    border-radius: 4px;
+    object-fit: cover;
+    object-position: right center;
+    flex-shrink: 0;
+}
+
+.sort-movie-poster-img.sort-poster-uncropped,
+.sort-preview-thumb.sort-poster-uncropped {
+    object-fit: contain;
+    object-position: center;
+}
+
+.sort-preview-tree code {
+    font-size: 0.82rem;
+    word-break: break-all;
+}
+
+.sort-preview-tree-root {
+    margin-bottom: 0.15rem;
+}
+
+.sort-preview-tree-root code {
+    font-weight: 600;
+}
+
+.sort-preview-tree-item {
+    padding-left: 1.25rem;
+}
+
+.sort-preview-tree-item-nested {
+    padding-left: 2.5rem;
+}
+
+/* Dark theme overrides */
+:root[data-theme="dark"] .sort-title {
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .sort-steps li {
+    background-color: #363c4a;
+    color: #b9bfd1;
+}
+
+:root[data-theme="dark"] .sort-file-list {
+    border-color: #363c4a;
+}
+
+:root[data-theme="dark"] .sort-file-row {
+    border-bottom-color: #363c4a;
+}
+
+:root[data-theme="dark"] .sort-merge-file-row {
+    border-bottom-color: #363c4a;
+}
+
+:root[data-theme="dark"] .sort-progress {
+    background-color: #363c4a;
+}
+
+:root[data-theme="dark"] .sort-movie-card,
+:root[data-theme="dark"] .sort-preview-card {
+    background-color: #232733;
+    border-color: #363c4a;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .sort-movie-header {
+    background-color: #1b1e27;
+    border-bottom-color: #363c4a;
+}
+
+:root[data-theme="dark"] .sort-movie-poster-placeholder {
+    background-color: #363c4a;
+    color: #b9bfd1;
+}
+
+:root[data-theme="dark"] .sort-badge-pill {
+    background-color: #363c4a;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .sort-genre-tag {
+    background-color: #2b303e;
+    border-color: #363c4a;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .sort-movie-cast-row {
+    color: #cfd3de;
+}
+
+:root[data-theme="dark"] .sort-movie-description {
+    color: #a0a6b5;
+}
+
+:root[data-theme="dark"] .sort-excluded-list {
+    background-color: #1b1e27;
+    border-color: #363c4a;
+}
+
+:root[data-theme="dark"] .sort-excluded-row {
+    border-bottom-color: #363c4a;
+}
+
+@media (max-width: 640.98px) {
+    .sort-movie-body {
+        flex-direction: column;
+    }
+
+    .sort-movie-poster-col {
+        width: 100%;
+        max-width: 200px;
+    }
+}

@@ -1,0 +1,148 @@
+@using Javbuddy.Services.SceneMedia
+@inject ISceneMediaService SceneMedia
+@inject IHighlightMediaService HighlightMedia
+@inject IApexMediaService ApexMedia
+
+@* One scene, highlight or apex card, shared by the Scenes wall and Actor
+   Detail's clip sections. A plain left-click plays the clip through OnPlay; the card
+   still links to Movie Detail's player (the deep link) for a ctrl/middle-click into a new tab —
+   the host binds ClipCard.razor.js's preventPlainCardClicks to an element around its cards so the
+   plain click doesn't navigate too. Pass exactly one of Scene, Highlight and Apex. *@
+@if (Apex is { } apex)
+{
+    var clip = PlayerClip.FromApex(apex);
+    <a class="scene-wall-card scene-wall-card-apex" href="@clip.EditUrl"
+       @onclick="e => PlayAsync(e, clip)" @onmouseenter="() => hovered = true" @onmouseleave="() => hovered = false">
+        <div class="scene-wall-media">
+            @* No screenshot: the preview's first frame stands in for one. No
+               duration either: an apex clip is a few seconds around it. *@
+            @if (apex.PreviewVersion is { } previewVersion)
+            {
+                var previewUrl = $"/apex-image/{apex.ApexId}/preview?v={previewVersion}";
+                <ScenePreviewMedia StillUrl="@previewUrl" PreviewUrl="@(hovered ? previewUrl : null)" />
+            }
+            else
+            {
+                <ScenePreviewPlaceholder Generating="apex.HasLocalVideo && ApexMedia.ServesPreview" />
+            }
+            @if (apex.IsFavorite)
+            {
+                <span class="scene-wall-fav" title="Favorite apex"><FavoriteHeartIcon Filled="true" Size="14" /></span>
+            }
+        </div>
+        @CardBody(null, apex.Code, apex.MovieTitle, apex.Actors, apex.Tags, [])
+    </a>
+}
+else if (Highlight is { } highlight)
+{
+    var clip = PlayerClip.FromHighlight(highlight);
+    <a class="scene-wall-card scene-wall-card-highlight" href="@clip.EditUrl"
+       @onclick="e => PlayAsync(e, clip)" @onmouseenter="() => hovered = true" @onmouseleave="() => hovered = false">
+        <div class="scene-wall-media">
+            @if (highlight.ThumbVersion is { } thumbVersion)
+            {
+                <ScenePreviewMedia ThumbUrl="@($"/highlight-image/{highlight.HighlightId}/thumb?v={thumbVersion}")"
+                                   PreviewUrl="@(hovered && highlight.PreviewVersion is { } previewVersion ? $"/highlight-image/{highlight.HighlightId}/preview?v={previewVersion}" : null)" />
+            }
+            else
+            {
+                <ScenePreviewPlaceholder Generating="highlight.HasLocalVideo && HighlightMedia.ServesVariant(SceneMediaService.VariantThumb)" />
+            }
+            <span class="scene-wall-duration">@SceneTimeFormat.Format(highlight.EndSeconds - highlight.StartSeconds)</span>
+            @if (highlight.IsFavorite)
+            {
+                <span class="scene-wall-fav" title="Favorite highlight"><FavoriteHeartIcon Filled="true" Size="14" /></span>
+            }
+            @ApexCount(highlight.ApexCount)
+        </div>
+        @CardBody(highlight.DisplayTitle, highlight.Code, highlight.MovieTitle, highlight.Actors, highlight.Tags, highlight.ImplicitTags)
+    </a>
+}
+else if (Scene is { } scene)
+{
+    var clip = PlayerClip.FromScene(scene);
+    <a class="scene-wall-card" href="@clip.EditUrl"
+       @onclick="e => PlayAsync(e, clip)" @onmouseenter="() => hovered = true" @onmouseleave="() => hovered = false">
+        <div class="scene-wall-media">
+            @if (scene.ThumbVersion is { } thumbVersion)
+            {
+                <ScenePreviewMedia ThumbUrl="@($"/scene-image/{scene.SceneId}/thumb?v={thumbVersion}")"
+                                   PreviewUrl="@(hovered && scene.PreviewVersion is { } previewVersion ? $"/scene-image/{scene.SceneId}/preview?v={previewVersion}" : null)" />
+            }
+            else
+            {
+                <ScenePreviewPlaceholder Generating="scene.HasLocalVideo && SceneMedia.ServesVariant(SceneMediaService.VariantThumb)" />
+            }
+            @if (scene.EffectiveEndSeconds is { } end)
+            {
+                <span class="scene-wall-duration">@SceneTimeFormat.Format(end - scene.StartSeconds)</span>
+            }
+            @if (scene.IsFavorite)
+            {
+                <span class="scene-wall-fav" title="Favorite scene"><FavoriteHeartIcon Filled="true" Size="14" /></span>
+            }
+            @ApexCount(scene.ApexCount)
+        </div>
+        @CardBody(scene.DisplayTitle, scene.Code, scene.MovieTitle, scene.Actors, scene.Tags, scene.ImplicitTags)
+    </a>
+}
+
+@code {
+    [Parameter] public SceneWallCard? Scene { get; set; }
+
+    [Parameter] public HighlightWallCard? Highlight { get; set; }
+
+    [Parameter] public ApexWallCard? Apex { get; set; }
+
+    /// <summary>A plain left-click on the card; modifier and middle clicks follow its link instead.</summary>
+    [Parameter] public EventCallback<PlayerClip> OnPlay { get; set; }
+
+    // Only a hovered card plays its preview.
+    private bool hovered;
+
+    private Task PlayAsync(MouseEventArgs e, PlayerClip clip)
+    {
+        if (e.Button != 0 || e.CtrlKey || e.MetaKey || e.ShiftKey || e.AltKey) return Task.CompletedTask;
+        return OnPlay.InvokeAsync(clip);
+    }
+
+    // The part of a card every kind shares: title, movie, actors and tags, its own then those rolled up
+    // from its clips. An apex card has no title; as every card in its view
+    // lacks one, the cards still share a height.
+    private static RenderFragment CardBody(string? displayTitle, string movieCode, string movieTitle, IReadOnlyList<string> actors, IReadOnlyList<SceneTagItem> tags, IReadOnlyList<ImplicitTag> implicitTags) => @<div class="scene-wall-body">
+        @if (displayTitle is not null)
+        {
+            <div class="scene-wall-scene-title" title="@displayTitle">@displayTitle</div>
+        }
+        <div class="scene-wall-movie" title="@movieTitle"><span class="scene-wall-code">@movieCode</span> @movieTitle</div>
+        @* Every line is always there, empty or not, and the tags stay on one: the virtualized wall
+           needs every card the same height. The chips that don't fit give way to a +N
+           badge, and hovering the badge opens the row upward over the card to show them all;
+           ClipCard.razor.js's measureTagOverflow marks which. *@
+        <div class="scene-wall-actors" title="@(actors.Count > 0 ? string.Join(", ", actors) : null)">@string.Join(", ", actors)</div>
+        <div class="scene-wall-tags-slot">
+            <div class="scene-wall-tags">
+                @foreach (var tag in tags)
+                {
+                    <span class="scene-wall-tag">@TagLabel(tag)</span>
+                }
+                @foreach (var chip in ImplicitChip.ForTags(implicitTags))
+                {
+                    <span class="scene-wall-tag scene-wall-tag-implicit" title="@chip.Tooltip" aria-label="@chip.Label, implied">@chip.Label</span>
+                }
+                <span class="scene-wall-tags-more"></span>
+            </div>
+        </div>
+    </div>;
+
+    // How many apexes a scene or highlight contains, like Movie Detail's scene cards.
+    private static RenderFragment ApexCount(int count) => @<text>
+        @if (count > 0)
+        {
+            var label = count == 1 ? "Contains 1 apex" : $"Contains {count} apexes";
+            <span class="scene-wall-apex-count" title="@label" aria-label="@label"><ApexIcon Size="8" /> @count</span>
+        }
+    </text>;
+
+    private static string TagLabel(SceneTagItem tag) => tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}";
+}

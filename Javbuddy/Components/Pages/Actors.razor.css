@@ -1,0 +1,547 @@
+.sort-dropdown-wrapper {
+    position: relative;
+    z-index: 40;
+}
+
+.sort-dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 0.5rem 1rem;
+    color: #e7e9ee;
+    font-size: 0.9rem;
+}
+
+    .sort-dropdown-item:hover {
+        background-color: #3d4256;
+        color: #ffffff;
+    }
+
+    .sort-dropdown-item.active {
+        color: #4fc3e0;
+        font-weight: 600;
+    }
+
+.sort-dropdown-arrow {
+    font-size: 0.65rem;
+    margin-left: 0.35rem;
+}
+
+.sort-dropdown-divider {
+    height: 1px;
+    background: #3d4256;
+    margin: 0.35rem 0;
+}
+
+.dropdown-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 35;
+    background: transparent;
+}
+
+.actor-grid-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.actor-grid {
+    --actor-avatar-size: 168px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 1.25rem;
+}
+
+    /* Size slider steps (grid view). Step 0 is the compact card: name + owned/missing only. */
+    .actor-grid.size-0 {
+        --actor-avatar-size: 80px;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .actor-grid.size-1 {
+        --actor-avatar-size: 120px;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+
+    .actor-grid.size-3 {
+        --actor-avatar-size: 200px;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    }
+
+    .actor-grid.size-0 .actor-card {
+        padding: 0.7rem 0.4rem 0.6rem;
+    }
+
+    .actor-grid.size-0 .actor-avatar {
+        font-size: 1.6rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .actor-grid.size-1 .actor-avatar {
+        font-size: 2rem;
+    }
+
+    .actor-grid.size-0 .actor-name {
+        font-size: 0.8rem;
+    }
+
+    .actor-grid.size-0 .actor-meta {
+        font-size: 0.68rem;
+    }
+
+    .actor-grid.size-0 .actor-pills {
+        display: none;
+    }
+
+    .actor-grid.size-3 .actor-avatar {
+        font-size: 3rem;
+    }
+
+    /* A real one-column grid rather than display: block — VirtualizedGrid reads the resolved column
+       count and row gap from the computed style, and a non-grid element reports the specified
+       repeat(auto-fill, ...) track list and the card gap instead. */
+    .actor-grid.actor-table {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 0;
+    }
+
+.actor-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    padding: 0.8rem 0.5rem 0.6rem;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+    .actor-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+    }
+
+.actor-card-link {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    color: inherit;
+    text-decoration: none;
+    width: 100%;
+}
+
+    .actor-card-link:hover {
+        color: inherit;
+    }
+
+.actor-card-favorite {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    line-height: 1;
+    color: #6c757d;
+    cursor: pointer;
+    border-radius: 50%;
+    opacity: 0;
+    pointer-events: none;
+    transition: color 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+    z-index: 2;
+}
+
+    .actor-card:hover .actor-card-favorite {
+        opacity: 0.75;
+        pointer-events: auto;
+    }
+
+    .actor-card-favorite:hover {
+        transform: scale(1.15);
+        color: #e23b57;
+        opacity: 1;
+    }
+
+    .actor-card-favorite.active {
+        opacity: 1;
+        pointer-events: auto;
+        color: #e23b57;
+    }
+
+:root[data-theme="dark"] .actor-card-favorite {
+    color: #9aa1af;
+}
+
+    :root[data-theme="dark"] .actor-card-favorite.active,
+    :root[data-theme="dark"] .actor-card-favorite:hover {
+        color: #e23b57;
+    }
+
+.actor-avatar {
+    width: var(--actor-avatar-size, 72px);
+    height: var(--actor-avatar-size, 72px);
+    flex-shrink: 0;
+    border-radius: 50%;
+    background: #2f8fd6;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.6rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+}
+
+.actor-avatar-photo {
+    background: #2b2f38;
+}
+
+    .actor-avatar-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+.actor-info {
+    min-width: 0;
+    width: 100%;
+}
+
+/* Fixed-height card lines: VirtualizedGrid measures one card for every row, so a card
+   must not grow with its content — the name line, the sort-value line and the pills all reserve a
+   constant height whatever they hold. */
+.actor-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1.5;
+    height: 1.5em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+}
+
+.actor-name-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.actor-retired-pill {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    background-color: #3b2a2d;
+    color: #e2858b;
+    border: 1px solid #5c3b40;
+    margin-left: 0.35rem;
+    flex-shrink: 0;
+}
+
+.actor-sort-value-row {
+    display: flex;
+    justify-content: center;
+    height: calc(0.98rem + 2px);
+    margin-top: 0.35rem;
+}
+
+/* The value the list is sorted by (age / height / cup size): the same size as the state pills
+   (.actor-pill), distinguished by its colour. */
+.actor-sort-value-pill {
+    display: inline-block;
+    font-size: 0.65rem;
+    line-height: 1.2;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background-color: #1f2f38;
+    color: #4fc3e0;
+    border: 1px solid #2f4550;
+    white-space: nowrap;
+}
+
+
+.actor-meta {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 0.2rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Needs-attention chips */
+.actor-attention-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.actor-attention-chip {
+    border: 1px solid #4a4f5e;
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.8rem;
+    padding: 0.15rem 0.75rem;
+}
+
+    .actor-attention-chip b {
+        color: #f0b429;
+        margin-left: 0.25rem;
+    }
+
+    .actor-attention-chip:hover {
+        border-color: #f0b429;
+    }
+
+    .actor-attention-chip.active {
+        background: rgba(240, 180, 41, 0.15);
+        border-color: #f0b429;
+    }
+
+.actor-attention-dot {
+    position: absolute;
+    top: 0.5rem;
+    left: 0.5rem;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #f0b429;
+    display: none;
+}
+
+.actor-grid.size-0 .actor-attention-dot {
+    display: block;
+}
+
+/* State pills */
+.actor-pills {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+    margin-top: 0.4rem;
+}
+
+    /* Two lines of pills (0.98rem each) whether a card has none or several. */
+    .actor-card .actor-pills {
+        align-content: flex-start;
+        height: calc(2 * 0.98rem + 0.25rem);
+        overflow: hidden;
+    }
+
+.actor-pill {
+    display: inline-block;
+    font-size: 0.65rem;
+    line-height: 1.2;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(140, 148, 170, 0.22);
+    color: inherit;
+    white-space: nowrap;
+}
+
+.actor-pill-jellyfin {
+    background: rgba(170, 92, 195, 0.25);
+    color: #b48cf5;
+}
+
+.actor-pill-ok {
+    background: rgba(76, 194, 122, 0.2);
+    color: #2f9e5f;
+}
+
+.actor-pill-warn {
+    background: rgba(240, 180, 41, 0.22);
+    color: #b8860b;
+}
+
+:root[data-theme="dark"] .actor-pill-ok {
+    color: #4cc27a;
+}
+
+:root[data-theme="dark"] .actor-pill-warn {
+    color: #f0b429;
+}
+
+/* Actor Options' card-size slider, in RangeFilter.razor.css's palette instead of the
+   browser's default range input. */
+.actor-size-control {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+    .actor-size-control input[type="range"] {
+        flex: 1;
+        min-width: 0;
+        height: 1.5rem;
+        margin: 0;
+        background: transparent;
+        -webkit-appearance: none;
+        appearance: none;
+        cursor: pointer;
+    }
+
+    .actor-size-control input[type="range"]::-webkit-slider-runnable-track {
+        height: 4px;
+        border-radius: 2px;
+        background: #4a5064;
+    }
+
+    .actor-size-control input[type="range"]::-moz-range-track {
+        height: 4px;
+        border-radius: 2px;
+        background: #4a5064;
+    }
+
+    .actor-size-control input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        margin-top: -6px;
+        border: none;
+        border-radius: 50%;
+        background: #4fc3e0;
+    }
+
+    .actor-size-control input[type="range"]::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        border: none;
+        border-radius: 50%;
+        background: #4fc3e0;
+    }
+
+    .actor-size-control input[type="range"]:hover::-webkit-slider-thumb,
+    .actor-size-control input[type="range"]:active::-webkit-slider-thumb {
+        background: #1c9fc4;
+    }
+
+    .actor-size-control input[type="range"]:hover::-moz-range-thumb,
+    .actor-size-control input[type="range"]:active::-moz-range-thumb {
+        background: #1c9fc4;
+    }
+
+    .actor-size-control input[type="range"]:focus {
+        outline: none;
+    }
+
+    .actor-size-control input[type="range"]:focus-visible::-webkit-slider-thumb {
+        box-shadow: 0 0 0 3px rgba(79, 195, 224, 0.4);
+    }
+
+    .actor-size-control input[type="range"]:focus-visible::-moz-range-thumb {
+        box-shadow: 0 0 0 3px rgba(79, 195, 224, 0.4);
+    }
+
+/* Table view: rows are single-column grid items so the grid's windowing measures them like cards. */
+.actor-row {
+    display: grid;
+    align-items: center;
+    column-gap: 0.75rem;
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid rgba(140, 148, 170, 0.25);
+    font-size: 0.85rem;
+}
+
+.actor-table-header {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #9aa1af;
+    border-bottom-width: 2px;
+}
+
+.actor-table-sort {
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    color: inherit;
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+}
+
+button.actor-table-sort:hover,
+.actor-table-sort.active {
+    color: #4fc3e0;
+}
+
+.actor-row-name {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+    .actor-row-name:hover {
+        color: #4fc3e0;
+    }
+
+.actor-row-avatar {
+    --actor-avatar-size: 32px;
+    font-size: 0.7rem;
+    margin-bottom: 0;
+}
+
+.actor-row-cell {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+    /* One line only, so every table row is the same height. */
+    .actor-row-cell.actor-pills {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        margin-top: 0;
+    }
+
+.actor-row-favorite {
+    background: none;
+    border: none;
+    padding: 0;
+    line-height: 1;
+    color: #6c757d;
+    font-size: 1rem;
+}
+
+    .actor-row-favorite.active,
+    .actor-row-favorite:hover {
+        color: #e23b57;
+    }
+
+:root[data-theme="dark"] .actor-card {
+    background: #242833;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme="dark"] .actor-meta {
+    color: #9aa1af;
+}

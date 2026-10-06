@@ -1,0 +1,281 @@
+@using Microsoft.EntityFrameworkCore
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Services
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="nav flex-column">
+        <div class="nav-item">
+            <a class="nav-link @(MoviesSectionActive ? "active" : null)" href="" aria-current="@(MoviesSectionActive ? "page" : null)">
+                <span class="nav-icon nav-icon-movies" aria-hidden="true"></span> <span class="nav-label">Movies</span>
+            </a>
+            @if (MoviesSectionActive)
+            {
+                <div class="nav-subitems">
+                    <NavLink class="nav-sublink" href="add/new">Add New</NavLink>
+                    <NavLink class="nav-sublink" href="add/import">Library Import</NavLink>
+                    <NavLink class="nav-sublink" href="movies/discover">Discover</NavLink>
+                    <NavLink class="nav-sublink" href="movies/tags">Tags</NavLink>
+                    <NavLink class="nav-sublink" href="movies/scenes">Scenes</NavLink>
+                    <NavLink class="nav-sublink" href="movies/review">Review</NavLink>
+                </div>
+            }
+        </div>
+
+        <div class="nav-item">
+            <a class="nav-link @(ActorsSectionActive ? "active" : null)" href="actors" aria-current="@(ActorsSectionActive ? "page" : null)">
+                <span class="nav-icon nav-icon-actors" aria-hidden="true"></span> <span class="nav-label">Actors</span>
+            </a>
+            @if (ActorsSectionActive)
+            {
+                <div class="nav-subitems">
+                    <NavLink class="nav-sublink" href="actors/photos">Photos</NavLink>
+                    <NavLink class="nav-sublink" href="actors/add/new">Add New</NavLink>
+                    <NavLink class="nav-sublink" href="actors/add/import">Import</NavLink>
+                </div>
+            }
+        </div>
+
+        <div class="nav-item">
+            <a class="nav-link @(MissingSectionActive ? "active" : null)" href="missing" aria-current="@(MissingSectionActive ? "page" : null)">
+                <span class="nav-icon nav-icon-missing" aria-hidden="true"></span> <span class="nav-label">Missing</span>
+            </a>
+            @if (MissingSectionActive)
+            {
+                <div class="nav-subitems">
+                    <NavLink class="nav-sublink" href="missing">Missing</NavLink>
+                </div>
+            }
+        </div>
+
+        <div class="nav-item">
+            <a class="nav-link @(ActivitySectionActive ? "active" : null)" href="activity/queue" aria-current="@(ActivitySectionActive ? "page" : null)">
+                <span class="nav-icon nav-icon-activity" aria-hidden="true"></span> <span class="nav-label">Activity</span>
+                @if (activeTorrentCount > 0)
+                {
+                    <span class="nav-badge">@activeTorrentCount</span>
+                }
+            </a>
+            @if (ActivitySectionActive)
+            {
+                <div class="nav-subitems">
+                    <NavLink class="nav-sublink" href="activity/queue">Queue</NavLink>
+                    <NavLink class="nav-sublink" href="activity/history">History</NavLink>
+                </div>
+            }
+        </div>
+
+        <div class="nav-item">
+            <a class="nav-link @(SettingsSectionActive ? "active" : null)" href="settings" aria-current="@(SettingsSectionActive ? "page" : null)">
+                <span class="nav-icon nav-icon-settings" aria-hidden="true"></span> <span class="nav-label">Settings</span>
+            </a>
+            @if (SettingsSectionActive)
+            {
+                <div class="nav-subitems">
+                    <NavLink class="nav-sublink" href="settings/connections">Connections</NavLink>
+                    <NavLink class="nav-sublink" href="settings/metadata">Metadata</NavLink>
+                    <NavLink class="nav-sublink" href="settings/deovr">DeoVR</NavLink>
+                    <NavLink class="nav-sublink" href="settings/ui">UI</NavLink>
+                </div>
+            }
+        </div>
+
+        <div class="nav-item">
+            <a class="nav-link @(SystemSectionActive ? "active" : null)" href="system/status" aria-current="@(SystemSectionActive ? "page" : null)">
+                <span class="nav-icon nav-icon-system" aria-hidden="true"></span> <span class="nav-label">System</span>
+            </a>
+            @if (SystemSectionActive)
+            {
+                <div class="nav-subitems">
+                    <NavLink class="nav-sublink" href="system/status">Status</NavLink>
+                    <NavLink class="nav-sublink" href="system/tasks">Tasks</NavLink>
+                    <NavLink class="nav-sublink" href="system/statistics">Statistics</NavLink>
+                </div>
+            }
+        </div>
+    </nav>
+
+    <div class="sidebar-bottom">
+        @if (manualActivity is not null || activeTask is not null)
+        {
+            <div class="active-task-status" title="@ActiveTaskTitle()" role="status">
+                @if (manualActivity is null || manualActivity.IsRunning)
+                {
+                    <span class="active-task-spinner" aria-hidden="true"></span>
+                }
+                else
+                {
+                    <span class="active-task-result @(manualActivity.Failed ? "active-task-result-error" : "")" aria-hidden="true">@(manualActivity.Failed ? "!" : "✓")</span>
+                }
+                <span class="nav-label active-task-text">
+                    @if (manualActivity is not null)
+                    {
+                        <span class="active-task-name">@manualActivity.Name</span>
+                        <span class="active-task-message">@manualActivity.Message</span>
+                    }
+                    else
+                    {
+                        <span class="active-task-name">@activeTask!.TaskName</span>
+                        @if (!string.IsNullOrWhiteSpace(activeTask!.ProgressStage))
+                        {
+                            <span class="active-task-stage">@activeTask.ProgressStage</span>
+                        }
+                        @if (ActiveTaskProgressText() is { Length: > 0 } progress)
+                        {
+                            <span class="active-task-progress">@progress</span>
+                        }
+                    }
+                </span>
+            </div>
+        }
+
+        <button type="button" class="sidebar-collapse-toggle" title="Toggle sidebar" onclick="window.lsSidebar.toggle(); event.stopPropagation();">
+            <span class="nav-icon nav-icon-collapse" aria-hidden="true"></span> <span class="nav-label">Collapse sidebar</span>
+        </button>
+    </div>
+</div>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] private ITorrentQueueService TorrentQueue { get; set; } = default!;
+    [Inject] private Javbuddy.Services.Tasks.IScheduledTaskOverviewService TaskOverview { get; set; } = default!;
+    [Inject] private TorrentChangeNotifier TorrentChangeNotifier { get; set; } = default!;
+    [Inject] private ScheduledTaskChangeNotifier ScheduledTaskChangeNotifier { get; set; } = default!;
+    [Inject] private TaskActivityTracker TaskActivities { get; set; } = default!;
+    [Inject] private ILogger<NavMenu> Logger { get; set; } = default!;
+
+    private int activeTorrentCount;
+    private ScheduledTaskRun? activeTask;
+    private TaskActivity? manualActivity;
+
+    protected override async Task OnInitializedAsync()
+    {
+        TorrentChangeNotifier.Changed += OnTorrentsChangedElsewhere;
+        ScheduledTaskChangeNotifier.Changed += OnScheduledTasksChangedElsewhere;
+        // NavMenu now persists across enhanced navigations as one interactive circuit component
+        // instead of being freshly re-rendered per request, so the section-active/sub-items
+        // computed properties below (which read Nav.Uri) go stale after a navigation unless we
+        // explicitly re-render on LocationChanged.
+        Nav.LocationChanged += OnLocationChanged;
+        await LoadActiveTorrentCountAsync();
+        await LoadActiveTaskAsync();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+
+    private async Task LoadActiveTorrentCountAsync()
+    {
+        activeTorrentCount = await TorrentQueue.GetActiveCountAsync();
+    }
+
+    // Raised by TorrentChangeNotifier whenever a torrent is grabbed, its status changes, or it's
+    // removed — keeps the sidebar badge accurate without the user needing to be on an Activity page.
+    private void OnTorrentsChangedElsewhere()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await LoadActiveTorrentCountAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                // Discarded Task by design, same hazard as Movies.razor's identically-named handler:
+                // an unlogged failure here would silently freeze the sidebar badge at a stale count
+                // until the next torrent-change notification happens to succeed.
+                Logger.LogError(ex, "Failed to refresh the sidebar active-torrent count after a change notification.");
+            }
+        });
+    }
+
+    // Both persisted scheduled runs and short-lived detail-page scans notify open circuits.
+    private void OnScheduledTasksChangedElsewhere()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await LoadActiveTaskAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to refresh the sidebar active-task indicator after a change notification.");
+            }
+        });
+    }
+
+    private async Task LoadActiveTaskAsync()
+    {
+        activeTask = await TaskOverview.GetActiveRunAsync();
+        manualActivity = TaskActivities.Current;
+    }
+
+    private string ActiveTaskText()
+    {
+        var run = activeTask!;
+        var progress = ActiveTaskProgressText();
+        return progress.Length == 0 ? run.TaskName : $"{run.TaskName} {progress}";
+    }
+
+    private string ActiveTaskProgressText()
+    {
+        var run = activeTask!;
+        return run.ProgressCurrent is { } current
+            ? run.ProgressTotal is { } total ? $"({current:N0}/{total:N0})" : $"({current:N0})"
+            : "";
+    }
+
+    private string ActiveTaskTitle()
+    {
+        if (manualActivity is not null) return $"{manualActivity.Name}: {manualActivity.Message}";
+        var run = activeTask!;
+        return string.IsNullOrWhiteSpace(run.ProgressStage) ? ActiveTaskText() : $"{run.ProgressStage} — {ActiveTaskText()}";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        TorrentChangeNotifier.Changed -= OnTorrentsChangedElsewhere;
+        ScheduledTaskChangeNotifier.Changed -= OnScheduledTasksChangedElsewhere;
+        Nav.LocationChanged -= OnLocationChanged;
+        await Task.CompletedTask;
+    }
+
+    private bool MoviesSectionActive
+    {
+        get
+        {
+            var path = Nav.ToBaseRelativePath(Nav.Uri).TrimEnd('/');
+            return path.Length == 0
+                || path.StartsWith("movies/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("add/", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private bool MissingSectionActive =>
+        Nav.ToBaseRelativePath(Nav.Uri).TrimEnd('/').StartsWith("missing", StringComparison.OrdinalIgnoreCase);
+
+    private bool ActivitySectionActive =>
+        Nav.ToBaseRelativePath(Nav.Uri).TrimEnd('/').StartsWith("activity", StringComparison.OrdinalIgnoreCase);
+
+    private bool ActorsSectionActive =>
+        Nav.ToBaseRelativePath(Nav.Uri).TrimEnd('/').StartsWith("actors", StringComparison.OrdinalIgnoreCase);
+
+    private bool SystemSectionActive =>
+        Nav.ToBaseRelativePath(Nav.Uri).TrimEnd('/').StartsWith("system/", StringComparison.OrdinalIgnoreCase);
+
+    private bool SettingsSectionActive
+    {
+        get
+        {
+            var path = Nav.ToBaseRelativePath(Nav.Uri).TrimEnd('/');
+            return path.Equals("settings", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("settings/", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+}

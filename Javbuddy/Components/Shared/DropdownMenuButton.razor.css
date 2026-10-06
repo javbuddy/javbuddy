@@ -1,0 +1,32 @@
+.sort-dropdown-arrow {
+    font-size: 0.65rem;
+    margin-left: 0.35rem;
+}
+
+.dropdown-arrow-btn .sort-dropdown-arrow {
+    margin-left: 0;
+}
+
+.dropdown-clear-btn {
+    padding-left: 0.35rem;
+    padding-right: 0.35rem;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.dropdown-arrow-btn {
+    padding-left: 0.3rem;
+    padding-right: 0.45rem;
+}
+
+.sort-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    left: 0;
+    min-width: 200px;
+    background-color: #35394a;
+    border-radius: 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 0.35rem 0;
+    z-index: 50;
+}

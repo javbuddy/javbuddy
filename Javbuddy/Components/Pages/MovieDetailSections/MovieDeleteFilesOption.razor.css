@@ -1,0 +1,74 @@
+.movie-delete-files-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.movie-delete-files-note,
+.movie-delete-files-error,
+.movie-delete-files-warning {
+    margin: 0.6rem 0 0;
+    font-size: 0.85rem;
+}
+
+.movie-delete-files-note {
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.movie-delete-files-error,
+.movie-delete-files-warning {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #dc3545;
+    border-radius: 4px;
+    background: rgba(220, 53, 69, 0.15);
+    color: #f1aeb5;
+}
+
+.movie-delete-files-warning {
+    font-weight: 600;
+}
+
+.movie-delete-files-folder {
+    margin-top: 0.6rem;
+    font-family: var(--bs-font-monospace, monospace);
+    font-size: 0.8rem;
+    overflow-wrap: anywhere;
+}
+
+.movie-delete-files-list {
+    max-height: 14rem;
+    overflow-y: auto;
+    margin: 0.35rem 0 0;
+    padding: 0.35rem 0.5rem;
+    list-style: none;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+    .movie-delete-files-list li {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.1rem 0;
+    }
+
+.movie-delete-files-name {
+    overflow-wrap: anywhere;
+}
+
+.movie-delete-files-size,
+.movie-delete-files-total {
+    color: var(--scene-editor-muted, #94a3b8);
+    white-space: nowrap;
+}
+
+.movie-delete-files-total {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    text-align: right;
+}

@@ -1,0 +1,252 @@
+.video-player-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    background-color: rgba(0, 0, 0, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    outline: none;
+    box-sizing: border-box;
+}
+
+/* Fills the whole viewport edge to edge. */
+.video-player-modal-panel {
+    background-color: #14161e;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.video-player-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1.25rem;
+    background-color: #1a1d27;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.video-player-modal-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.video-player-modal-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #e2e8f0;
+    background-color: rgba(255, 255, 255, 0.08);
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    flex-shrink: 0;
+    text-decoration: none;
+}
+
+.video-player-modal-code:hover,
+.video-player-modal-code:focus-visible {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.16);
+    text-decoration: underline;
+}
+
+.video-player-modal-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.video-player-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.video-player-vr-toggle {
+    padding: 0.25rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.video-player-vr-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.video-player-vr-toggle-on {
+    background-color: #2f8fd6;
+    border-color: #2f8fd6;
+}
+
+.video-player-vr-toggle-on:hover {
+    background-color: #2678b8;
+}
+
+.video-player-version-select {
+    max-width: 22rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    cursor: pointer;
+    text-overflow: ellipsis;
+}
+
+    .video-player-version-select option {
+        color: #fff;
+        background-color: #1f2230;
+    }
+
+.video-player-external-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 4px;
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.video-player-external-btn:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+    color: #fff;
+}
+
+.video-player-modal-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.video-player-modal-close-btn:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.video-player-modal-body {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background-color: #000;
+    position: relative;
+    padding: 0.75rem;
+}
+
+.video-player-loading,
+.video-player-error {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    color: #94a3b8;
+}
+
+.video-player-error-text {
+    font-size: 1rem;
+    color: #f87171;
+    margin: 0;
+}
+
+/* Player column plus, when a MovieId is given, the scene editor side panel. */
+.video-player-layout {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    gap: 0.75rem;
+}
+
+.video-player-side-panel {
+    flex: none;
+    width: 300px;
+    min-height: 0;
+    overflow-y: auto;
+    /* No top padding: the pinned editor top below carries it, so the scroll edge is its top edge. */
+    padding: 0 0.6rem 0.5rem;
+    background-color: #14161e;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+/* Pin the scene editor's header, add buttons and open add forms while the clip list scrolls.
+   Opaque, at the panel's (unpadded) top edge, so scrolled rows disappear under its bottom edge and never show
+   around it; z-index keeps it over the list's search dropdowns (z-index 5). ClipEditor.razor.js unpins it
+   while it's taller than the panel, so a long form's Save stays reachable. */
+.video-player-side-panel ::deep .clip-editor-top {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    padding: 0.5rem 0 0.4rem;
+    background-color: #14161e;
+}
+
+.video-player-side-panel ::deep .clip-editor-top.clip-editor-top-unpinned {
+    position: static;
+}
+
+@media (max-width: 900px) {
+    .video-player-layout {
+        flex-direction: column;
+    }
+
+    .video-player-side-panel {
+        width: auto;
+        max-height: 40%;
+    }
+}
+
+/* Idle chrome: PlayerIdleChrome adds .player-idle to the panel after a few seconds of
+   inactivity while playing. Opacity only, so nothing shifts and the video keeps its size. The scrub bar,
+   clip controls and video live in child components, hence ::deep. */
+.video-player-modal-header,
+.video-player-modal-panel ::deep .scrub-bar,
+.video-player-modal-panel ::deep .clip-controls {
+    transition: opacity 0.3s ease;
+}
+
+.video-player-modal-panel.player-idle .video-player-modal-header,
+.video-player-modal-panel.player-idle ::deep .scrub-bar,
+.video-player-modal-panel.player-idle ::deep .clip-controls {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.video-player-modal-panel.player-idle ::deep .video-player-area,
+.video-player-modal-panel.player-idle ::deep .video-player-media {
+    cursor: none !important;
+}

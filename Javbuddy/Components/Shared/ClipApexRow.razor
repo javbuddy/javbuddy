@@ -1,0 +1,47 @@
+@using Javbuddy.Services.Scenes
+
+@* An apex's row in ClipEditor's tree, moved from ApexEditor: its time, its own actors
+   or the ones it inherits (grayed, with where from), and its tags. Pure display; ClipEditor acts on the
+   callbacks. *@
+<button type="button" class="apex-editor-row" @onclick="OnSeek" title="Jump to 5 s before this apex">
+    <span class="apex-editor-pos">@Apex.Position</span>
+    <span class="apex-editor-time">@SceneTimeFormat.Format(Apex.Seconds)</span>
+    @if (Apex.Actors.Count > 0)
+    {
+        <span class="apex-editor-actors">@string.Join(", ", Apex.Actors.Select(a => a.Name))</span>
+    }
+    <ImplicitChips Items="@ImplicitChip.ForActors(Node.Actors)" />
+    @if (Apex.Tags.Count > 0)
+    {
+        <span class="apex-editor-tags">
+            @foreach (var tag in Apex.Tags)
+            {
+                <span class="apex-editor-tag">@ImplicitChip.TagLabel(tag)</span>
+            }
+        </span>
+    }
+</button>
+<button type="button" class="apex-editor-icon-btn apex-editor-fav-btn @(Apex.IsFavorite ? "apex-editor-fav-on" : null)" @onclick="OnToggleFavorite" disabled="@Busy"
+        aria-pressed="@(Apex.IsFavorite ? "true" : "false")" aria-label="@(Apex.IsFavorite ? "Unfavorite" : "Favorite") apex at @SceneTimeFormat.Format(Apex.Seconds)" title="@(Apex.IsFavorite ? "Remove from favorite apexes" : "Add to favorite apexes")">
+    <FavoriteHeartIcon Filled="Apex.IsFavorite" Size="12" />
+</button>
+<button type="button" class="apex-editor-icon-btn apex-editor-edit-btn" @onclick="OnEdit" disabled="@Busy" aria-label="Edit apex at @SceneTimeFormat.Format(Apex.Seconds)" title="Edit">
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5z" /></svg>
+</button>
+<button type="button" class="apex-editor-icon-btn apex-editor-delete-btn" @onclick="OnDelete" disabled="@Busy" aria-label="Delete apex at @SceneTimeFormat.Format(Apex.Seconds)" title="Delete">×</button>
+
+@code {
+    [Parameter, EditorRequired] public ApexNode Node { get; set; } = null!;
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback OnSeek { get; set; }
+
+    [Parameter] public EventCallback OnToggleFavorite { get; set; }
+
+    [Parameter] public EventCallback OnEdit { get; set; }
+
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    private ApexItem Apex => Node.Apex;
+}

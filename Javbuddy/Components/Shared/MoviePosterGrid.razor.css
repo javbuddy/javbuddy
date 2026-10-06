@@ -1,0 +1,37 @@
+/* Poster Options — grid appearance */
+
+.movie-poster-size-small ::deep .poster-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+
+.movie-poster-size-large ::deep .poster-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+/* Below this width, pin each size preset to a fixed column count instead of leaving it to
+   auto-fill, which could land on an oddly stretched column count depending on exact viewport
+   width (see .poster-grid's own mobile override in PosterGrid.razor.css for the medium default). */
+@media (max-width: 700px) {
+    .movie-poster-size-small ::deep .poster-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .movie-poster-size-large ::deep .poster-grid {
+        grid-template-columns: repeat(1, 1fr);
+    }
+}
+
+.movie-poster-hide-title ::deep .poster-title {
+    display: none;
+}
+
+.movie-poster-hide-status ::deep .poster-meta {
+    display: none;
+}
+
+/* When every toggle is off, .poster-info has nothing left to show — but its own padding
+   (PosterCard.razor.css) doesn't know that and stays reserved as dead space under the status bar
+   unless the whole block is collapsed here. */
+.movie-poster-hide-info ::deep .poster-info {
+    display: none;
+}

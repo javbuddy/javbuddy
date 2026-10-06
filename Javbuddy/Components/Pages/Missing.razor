@@ -1,0 +1,232 @@
+@page "/missing"
+@using Javbuddy.Models
+@using Javbuddy.Services.Infrastructure
+@using Microsoft.AspNetCore.Http
+@using System.Text.Json
+@inject IMovieGridQueryService MovieQuery
+@inject IJSRuntime JS
+@inject IServiceProvider ServiceProvider
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Missing · Javbuddy</PageTitle>
+
+<h1 class="missing-title">Missing</h1>
+
+@if (!loaded)
+{
+    <LoadingIndicator />
+}
+else if (total == 0)
+{
+    <p class="text-muted">Nothing missing — every tracked movie is marked Got.</p>
+}
+
+@* Every Missing movie in one scrollable list: only the window around the viewport is
+   loaded and rendered, with VirtualizedGrid reserving the height of the rest — rendering every row
+   cost tens of MB per request on a large library. Always rendered once loaded, even while empty, since
+   its JS holds on to it for the page's lifetime. Its row geometry needs every row to be the same
+   height, which is why each cell stays on one line (the full text is in the tooltip). *@
+<div class="missing-table @(loaded && total > 0 ? "" : "missing-table-hidden")">
+    <div class="missing-row missing-header">
+        <span>Code</span>
+        <span>Title</span>
+        <span>Studio</span>
+        <span class="missing-sortable" @onclick="ToggleSort">
+            Release Date
+            <span class="missing-sort-arrow">@(sortDescending ? "▼" : "▲")</span>
+        </span>
+        <span>Status</span>
+    </div>
+    <VirtualizedGrid @ref="grid"
+                     WindowStart="windowStart"
+                     WindowCount="movies.Count"
+                     TotalCount="total"
+                     GridSelector=".missing-rows"
+                     CardSelector=".missing-row-item"
+                     ActivePath="/missing"
+                     Ready="loaded"
+                     LoadRange="SetVisibleRange">
+        <div class="missing-rows">
+            @foreach (var movie in movies)
+            {
+                <div class="missing-row missing-row-item" @key="movie.Id">
+                    <span class="missing-code missing-cell" title="@movie.Code">@movie.Code</span>
+                    <a class="missing-title-link missing-cell" href="@($"/movies/{Uri.EscapeDataString(movie.Code ?? string.Empty)}")" title="@movie.DisplayName">@movie.DisplayName</a>
+                    <span class="missing-cell" title="@movie.MetaStudio">@(movie.MetaStudio ?? "—")</span>
+                    <span class="missing-cell">@(movie.MetaReleaseDate is { } d ? d.ToString("MMM d yyyy") : "—")</span>
+                    <span class="missing-status">
+                        @if (movie.MetaFetchedAt is null)
+                        {
+                            <span class="missing-icon missing-icon-warning" aria-hidden="true" title="No metadata fetched yet"></span>
+                        }
+                        <button class="missing-icon-btn" type="button" @onclick="() => OpenSearch(movie)" title="Search">
+                            <span class="missing-icon missing-icon-search" aria-hidden="true"></span>
+                        </button>
+                    </span>
+                </div>
+            }
+        </div>
+    </VirtualizedGrid>
+</div>
+
+<ProwlarrSearchModal Movie="selectedMovie" Show="showSearchModal" OnClose="CloseSearch" />
+
+@code {
+    // The window the list starts with, before the browser has reported real layout; from then on the
+    // grid asks for whatever the viewport needs, and MaxWindowItems only backstops a bogus request.
+    private const int InitialWindowSize = 48;
+    private const int MaxWindowItems = 1000;
+
+    private bool loaded;
+    private int total;
+    // The loaded window: the movies from windowStart on, in the current sort.
+    private int windowStart;
+    private IReadOnlyList<Movie> movies = [];
+    // Bumped by every reload, so a window still loading for the old sort is dropped when it lands.
+    private int windowGeneration;
+    private VirtualizedGrid? grid;
+    private bool sortDescending = true;
+    private Movie? selectedMovie;
+    private bool showSearchModal;
+    private Task<IJSObjectReference>? jsModuleTask;
+
+    private const string ViewStateCookieName = "javbuddy-missing-view";
+
+    private sealed record MissingViewState(bool SortDescending = true);
+
+    private void OpenSearch(Movie movie)
+    {
+        selectedMovie = movie;
+        showSearchModal = true;
+    }
+
+    private void CloseSearch() => showSearchModal = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        LoadViewStateFromCookie();
+
+        // The circuit's second OnInitializedAsync pass after an in-app navigation reads cookies from
+        // the HttpContext captured when the circuit first connected, which never sees one written
+        // since. The prerendered pass's state, round-tripped
+        // through PersistentComponentState, is the one to trust.
+        applicationState = ServiceProvider.GetService<PersistentComponentState>();
+        if (applicationState is not null)
+        {
+            persistingSubscription = applicationState.RegisterOnPersisting(PersistViewState);
+            if (applicationState.TryTakeFromJson<MissingViewState>(PersistStateKey, out var persisted) && persisted is not null)
+            {
+                sortDescending = persisted.SortDescending;
+            }
+        }
+
+        await LoadWindowAsync(0, InitialWindowSize);
+    }
+
+    private const string PersistStateKey = "missing-view-state";
+    private PersistentComponentState? applicationState;
+    private PersistingComponentStateSubscription persistingSubscription;
+
+    private Task PersistViewState()
+    {
+        applicationState!.PersistAsJson(PersistStateKey, new MissingViewState(sortDescending));
+        return Task.CompletedTask;
+    }
+
+    /// <summary>VirtualizedGrid's LoadRange: moves the window to the range the viewport needs. The grid
+    /// serializes these, so two never overlap.</summary>
+    private async Task SetVisibleRange(int start, int count, int gridColumns)
+    {
+        if (total <= 0) return;
+
+        start = Math.Clamp(start, 0, total - 1);
+        count = Math.Min(Math.Clamp(count, 1, MaxWindowItems), total - start);
+        if (start >= windowStart && start + count <= windowStart + movies.Count) return;
+
+        if (await LoadWindowAsync(start, count))
+        {
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Replaces the window with the movies at [skip, skip + take). Returns false when a reload
+    /// started meanwhile, leaving the newer window alone.</summary>
+    private async Task<bool> LoadWindowAsync(int skip, int take)
+    {
+        var generation = windowGeneration;
+        var page = await MovieQuery.GetMissingPageAsync(sortDescending, skip, take);
+        if (generation != windowGeneration) return false;
+        total = page.TotalCount;
+        movies = page.Movies;
+        windowStart = skip;
+        loaded = true;
+        return true;
+    }
+
+    /// <summary>Resolved defensively like every other per-browser cookie preference in this
+    /// codebase: bUnit's DI container doesn't register the real IHttpContextAccessor, so this
+    /// degrades to "no cookie, keep the default" rather than a hard DI failure.</summary>
+    private void LoadViewStateFromCookie()
+    {
+        var httpContextAccessor = ServiceProvider.GetService<IHttpContextAccessor>();
+        var state = JsonCookieState.TryLoad<MissingViewState>(httpContextAccessor, ViewStateCookieName);
+        if (state is not null) sortDescending = state.SortDescending;
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                jsModuleTask = JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/Missing.razor.js").AsTask();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task ToggleSort()
+    {
+        sortDescending = !sortDescending;
+        await SaveViewStateAsync();
+
+        windowGeneration++;
+        await LoadWindowAsync(0, InitialWindowSize);
+        if (grid is not null) await grid.ScrollToTopAsync();
+    }
+
+    private async Task SaveViewStateAsync()
+    {
+        if (jsModuleTask is null) return;
+        var json = JsonSerializer.Serialize(new MissingViewState(sortDescending));
+        try
+        {
+            var module = await jsModuleTask;
+            await module.InvokeVoidAsync("setJsonCookie", ViewStateCookieName, json, 31536000);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (applicationState is not null)
+        {
+            persistingSubscription.Dispose();
+        }
+        if (jsModuleTask is null) return;
+        try
+        {
+            var module = await jsModuleTask;
+            await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

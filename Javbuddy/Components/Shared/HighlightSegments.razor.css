@@ -1,0 +1,22 @@
+.highlight-segments {
+    position: relative;
+    width: 100%;
+    flex: none;
+}
+
+.highlight-segment {
+    position: absolute;
+    height: 5px;
+    min-width: 3px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 2px;
+    box-sizing: border-box;
+    background-color: #20c997;
+    cursor: pointer;
+}
+
+.highlight-segment:hover {
+    filter: brightness(1.3);
+}

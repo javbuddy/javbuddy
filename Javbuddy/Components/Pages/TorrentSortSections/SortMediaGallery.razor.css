@@ -1,0 +1,105 @@
+/* Gallery Section */
+.sort-movie-gallery-section {
+    border-top: 1px solid #eee;
+    padding: 0.75rem 1rem;
+    background-color: #fafbfc;
+}
+
+.sort-gallery-heading {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sort-gallery-grid {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.4rem;
+}
+
+.sort-gallery-thumb-link {
+    flex-shrink: 0;
+    display: block;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid #dee2e6;
+}
+
+    .sort-gallery-thumb-link:hover {
+        opacity: 0.85;
+    }
+
+.sort-gallery-thumb {
+    height: 70px;
+    width: auto;
+    display: block;
+    object-fit: cover;
+}
+
+/* Screenshot hover actions (poster/fanart/delete) */
+.sort-screenshot-action {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(20, 22, 28, 0.55);
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+    .sort-screenshot-action:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+
+    .sort-screenshot-action-poster:hover,
+    .sort-screenshot-action-fanart:hover,
+    .sort-screenshot-action-poster.is-active,
+    .sort-screenshot-action-fanart.is-active {
+        background: #1c9fc4;
+        color: #06222b;
+        border-color: #1c9fc4;
+    }
+
+    .sort-screenshot-action-delete:hover {
+        background: #dc3545;
+        color: #ffffff;
+        border-color: #dc3545;
+    }
+
+.sort-screenshot-badges {
+    position: absolute;
+    top: 5px;
+    left: 6px;
+    display: flex;
+    gap: 0.25rem;
+    z-index: 1;
+}
+
+.sort-screenshot-badge {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #06222b;
+    background: #1c9fc4;
+}
+
+:root[data-theme="dark"] .sort-movie-gallery-section {
+    background-color: #1b1e27;
+    border-top-color: #363c4a;
+}
+
+:root[data-theme="dark"] .sort-gallery-thumb-link {
+    border-color: #363c4a;
+}

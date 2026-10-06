@@ -1,0 +1,38 @@
+<button type="button" class="sort-dropdown-item @(SelectedCount > 0 ? "active" : "")" @onclick="ToggleExpanded">
+    <span>@GroupLabel@(SelectedCount > 0 ? $" ({SelectedCount})" : "")</span>
+    <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
+</button>
+@if (expanded)
+{
+    <div class="multiselect-actions-row">
+        <button type="button" class="multiselect-action-link" @onclick="() => OnSelectAll.InvokeAsync()">All</button>
+        <button type="button" class="multiselect-action-link" @onclick="() => OnSelectNone.InvokeAsync()">Clear</button>
+    </div>
+    <div class="chip-grid">
+        @foreach (var option in Options)
+        {
+            <button type="button" class="filter-chip @(option.IsSelected ? "active" : "")" @onclick="option.OnClick">
+                @option.Label
+            </button>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>A collapsible, multi-select group inside a filter dropdown for short, fixed-length
+    /// discrete option sets (e.g. cup size) — same header row (label + selected count + expand
+    /// arrow) as MultiSelectFilterGroup, but renders options as a compact flex-wrap chip grid
+    /// instead of a tall vertical list. No search box/scroll area: meant for option sets small
+    /// enough that a grid never needs scrolling.</summary>
+    [Parameter, EditorRequired] public string GroupLabel { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<MultiSelectOption> Options { get; set; } = Array.Empty<MultiSelectOption>();
+
+    [Parameter] public EventCallback OnSelectAll { get; set; }
+    [Parameter] public EventCallback OnSelectNone { get; set; }
+
+    private bool expanded;
+
+    private int SelectedCount => Options.Count(o => o.IsSelected);
+
+    private void ToggleExpanded() => expanded = !expanded;
+}

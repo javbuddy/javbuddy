@@ -1,0 +1,20 @@
+/* Implied tags and inherited actors: like the editors' chips, but dashed and muted so they
+   read as "comes from elsewhere" next to the solid, removable explicit ones. */
+.implicit-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.3rem;
+}
+
+.implicit-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.4rem;
+    font-size: 0.75rem;
+    font-style: italic;
+    color: var(--scene-editor-muted, #94a3b8);
+    background: transparent;
+    border: 1px dashed var(--scene-editor-border, rgba(255, 255, 255, 0.22));
+    border-radius: 999px;
+    cursor: help;
+}

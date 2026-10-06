@@ -1,0 +1,67 @@
+.section-info {
+    display: inline-flex;
+}
+
+.section-info-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--scene-editor-muted, #94a3b8);
+    cursor: help;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.section-info-btn:hover,
+.section-info-btn:focus-visible {
+    color: var(--scene-editor-fg, #fff);
+    background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.1));
+}
+
+/* Positioned against the host's section header (see the component comment), not the icon. */
+.section-info-popover {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    padding: 0.6rem 0.75rem;
+    background: var(--scene-editor-dialog-bg, #1f2430);
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    color: var(--scene-editor-fg, #e2e8f0);
+    font-size: 0.8rem;
+    font-weight: normal;
+    text-align: left;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.12s ease, visibility 0.12s ease;
+    pointer-events: none;
+}
+
+/* Unlike ShortcutsInfo's, this popover takes the pointer while shown: the editor sits in scroll
+   containers (Review card's info column, the player's side panel) that can cut off its bottom, and
+   hovering into it keeps it open so the wheel can scroll the container to the rest. */
+.section-info:hover .section-info-popover,
+.section-info:focus-within .section-info-popover {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Covers the few pixels between the icon and the header's bottom edge, where the popover starts, so
+   the pointer can travel from one to the other without the popover closing. */
+.section-info-popover::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 12px;
+}

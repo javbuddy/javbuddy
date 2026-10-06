@@ -1,0 +1,280 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.R18Dev
+@inject IR18DevReleaseBrowseService BrowseService
+@inject IMovieAddService MovieAddService
+@implements IDisposable
+
+@if (loading)
+{
+    <PosterGridSkeleton />
+}
+else if (!enabled)
+{
+    <p class="text-muted">
+        The r18.dev metadata source is disabled. Go to
+        <a href="/settings/metadata">Settings → Metadata</a> to enable it.
+    </p>
+}
+else if (availability == R18DevCatalogAvailability.NoDump)
+{
+    <p class="text-muted">
+        r18.dev metadata is enabled but hasn't been imported yet. Go to
+        <a href="/settings/metadata">Settings → Metadata</a> and click "Import now".
+    </p>
+}
+else if (availability == R18DevCatalogAvailability.NeedsReimport)
+{
+    <p class="text-muted">
+        The r18.dev dump was imported by an older version of Javbuddy and can't be browsed yet. Go to
+        <a href="/settings/metadata">Settings → Metadata</a> and click "Import now" to re-import it.
+    </p>
+}
+else
+{
+    <div class="releases-controls">
+        <StatusFilterButtonGroup Options="@StatusOptions" />
+        @if (Filter.Series is { } series)
+        {
+            <span class="releases-chip">
+                Series: @series.Name
+                <button type="button" class="releases-chip-remove" title="Remove series filter" aria-label="Remove series filter" @onclick="() => ChangeAsync(Filter with { Series = null })">×</button>
+            </span>
+        }
+        @if (Filter.Label is { } label)
+        {
+            <span class="releases-chip">
+                Label: @label.Name
+                <button type="button" class="releases-chip-remove" title="Remove label filter" aria-label="Remove label filter" @onclick="() => ChangeAsync(Filter with { Label = null })">×</button>
+            </span>
+        }
+    </div>
+
+    @if (rows.Count == 0)
+    {
+        <p class="text-muted">No releases on r18.dev match these filters.</p>
+    }
+    else
+    {
+        <p class="releases-summary">
+            Showing @rows.Count.ToString("N0") of @(counts is null ? "…" : counts.For(Filter.Status).ToString("N0")) releases, newest first
+            @if (counts is { PreviouslyDeleted: > 0 } && Filter.Status is R18DevCatalogStatus.All or R18DevCatalogStatus.Untracked)
+            {
+                @* Says what "Hide previously deleted" is holding back, or how many are mixed in. *@
+                <span> · @counts.PreviouslyDeleted.ToString("N0") previously deleted@(Filter.HidePreviouslyDeleted ? ", hidden" : "")</span>
+            }
+        </p>
+
+        @if (addError is not null)
+        {
+            <div class="alert alert-danger">@addError</div>
+        }
+
+        <PosterGrid>
+            @foreach (var row in rows)
+            {
+                <R18DevReleaseCard @key="row.CanonicalKey"
+                                   Release="row"
+                                   OnSearch="OpenSearchModal"
+                                   OnAdd="AddAsync"
+                                   AddInProgress="@addingCodes.Contains(row.Movie.DvdId)" />
+            }
+        </PosterGrid>
+
+        @if (hasMore)
+        {
+            <div class="releases-show-more-wrapper">
+                <button type="button" class="btn btn-outline-secondary releases-show-more" disabled="@loadingMore" @onclick="ShowMoreAsync">
+                    @(loadingMore ? "Loading…" : "Show more")
+                </button>
+            </div>
+        }
+
+        <ProwlarrSearchModal Code="@searchCode" Show="showSearchModal" OnClose="CloseSearchModal" OnMovieAdded="OnMovieAdded" />
+    }
+}
+
+@code {
+    /// <summary>What to browse: every filter that's set must match. An empty filter browses the whole
+    /// catalog, newest first.</summary>
+    [Parameter, EditorRequired] public R18DevCatalogFilter Filter { get; set; } = new();
+
+    /// <summary>Raised with a modified copy of <see cref="Filter"/> when the status buttons or a
+    /// series/label chip change it.</summary>
+    [Parameter] public EventCallback<R18DevCatalogFilter> FilterChanged { get; set; }
+
+    private List<R18DevReleaseRow> rows = new();
+    private readonly HashSet<string> shownKeys = new(StringComparer.Ordinal);
+    private bool loading = true;
+    private bool loadingMore;
+    private bool enabled;
+    private R18DevCatalogAvailability availability;
+    private int nextOffset;
+    private bool hasMore;
+    private R18DevCatalogCounts? counts;
+    private string? countedKey;
+    private string? loadedKey;
+    private CancellationTokenSource? loadCts;
+    private readonly HashSet<string> addingCodes = new(StringComparer.OrdinalIgnoreCase);
+    private string? addError;
+    private bool showSearchModal;
+    private string? searchCode;
+
+    // OnParametersSetAsync, not OnInitializedAsync: the parent re-renders this with a fresh filter
+    // on every render, so reloading is keyed on the filter's *content* — an unrelated parent
+    // re-render must not re-query the dump.
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = Filter.Key;
+        if (key == loadedKey) return;
+        loadedKey = key;
+        // The counts cover every status, so switching between them keeps the ones already shown.
+        await LoadAsync(reloadCounts: counts is null || CountKey(Filter) != countedKey);
+    }
+
+    private static string CountKey(R18DevCatalogFilter filter) => (filter with { Status = R18DevCatalogStatus.All }).Key;
+
+    private async Task LoadAsync(bool reloadCounts)
+    {
+        loadCts?.Cancel();
+        loadCts?.Dispose();
+        loadCts = new CancellationTokenSource();
+        var ct = loadCts.Token;
+
+        loading = true;
+        addError = null;
+        if (reloadCounts) counts = null;
+        try
+        {
+            // Off the circuit's sync context: Microsoft.Data.Sqlite's async calls complete
+            // synchronously, so awaiting BrowseAsync inline would hold the circuit for the whole
+            // dump query and the skeleton would never render before the results.
+            var filter = Filter;
+            var result = await Task.Run(() => BrowseService.BrowseAsync(filter, 0, null, ct), ct);
+            if (ct.IsCancellationRequested) return;
+
+            enabled = result.Enabled;
+            availability = result.Availability;
+            rows = result.Rows.ToList();
+            shownKeys.Clear();
+            shownKeys.UnionWith(rows.Select(r => r.CanonicalKey));
+            nextOffset = result.NextOffset;
+            hasMore = result.HasMore;
+            loading = false;
+
+            // The grid first, then the counts, which take a few more queries.
+            if (reloadCounts && enabled && availability == R18DevCatalogAvailability.Ready)
+            {
+                StateHasChanged();
+                await LoadCountsAsync(filter, ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer filter change started its own load — leave loading on for that one.
+        }
+    }
+
+    private async Task LoadCountsAsync(R18DevCatalogFilter filter, CancellationToken ct)
+    {
+        var loaded = await Task.Run(() => BrowseService.CountAsync(filter, ct), ct);
+        if (ct.IsCancellationRequested) return;
+        counts = loaded;
+        countedKey = CountKey(filter);
+    }
+
+    // Fetches the next page from the dump; releases already shown on an earlier page (another
+    // variant of the same code) are skipped.
+    private async Task ShowMoreAsync()
+    {
+        if (loadingMore || loadCts is null) return;
+        var ct = loadCts.Token;
+        loadingMore = true;
+        try
+        {
+            var filter = Filter;
+            var offset = nextOffset;
+            var alreadyShown = shownKeys.ToHashSet(StringComparer.Ordinal);
+            var result = await Task.Run(() => BrowseService.BrowseAsync(filter, offset, alreadyShown, ct), ct);
+            if (ct.IsCancellationRequested) return;
+
+            rows.AddRange(result.Rows);
+            shownKeys.UnionWith(result.Rows.Select(r => r.CanonicalKey));
+            nextOffset = result.NextOffset;
+            hasMore = result.HasMore;
+        }
+        catch (OperationCanceledException)
+        {
+            // A filter change replaced this page's results.
+        }
+        finally
+        {
+            loadingMore = false;
+        }
+    }
+
+    private IReadOnlyList<FilterButtonOption> StatusOptions =>
+    [
+        StatusOption("All", R18DevCatalogStatus.All),
+        StatusOption("Untracked", R18DevCatalogStatus.Untracked),
+        StatusOption("Wanted", R18DevCatalogStatus.Wanted),
+        StatusOption("Got", R18DevCatalogStatus.Got),
+    ];
+
+    private FilterButtonOption StatusOption(string label, R18DevCatalogStatus status) => new(
+        counts is null ? label : $"{label} ({counts.For(status):N0})",
+        Filter.Status == status,
+        EventCallback.Factory.Create(this, () => ChangeAsync(Filter with { Status = status })));
+
+    private Task ChangeAsync(R18DevCatalogFilter next) => FilterChanged.InvokeAsync(next);
+
+    private void OpenSearchModal(string code)
+    {
+        searchCode = code;
+        showSearchModal = true;
+    }
+
+    private void CloseSearchModal() => showSearchModal = false;
+
+    private Task OnMovieAdded(Movie movie) => ApplyAddedAsync(movie);
+
+    private async Task AddAsync(string code)
+    {
+        if (!addingCodes.Add(code)) return;
+        addError = null;
+        try
+        {
+            var result = await MovieAddService.AddAsync(code);
+            await ApplyAddedAsync(result.Movie);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            addError = $"Couldn't add {code}: {ex.Message}";
+        }
+        finally
+        {
+            addingCodes.Remove(code);
+        }
+    }
+
+    // The card flips to its new status in place, and the per-status counts are recounted.
+    private async Task ApplyAddedAsync(Movie movie)
+    {
+        rows = R18DevReleaseMatcher.ApplyAddedMovie(rows, movie);
+        if (loadCts is null) return;
+        try
+        {
+            await LoadCountsAsync(Filter, loadCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // A filter change is reloading the counts anyway.
+        }
+    }
+
+    public void Dispose()
+    {
+        loadCts?.Cancel();
+        loadCts?.Dispose();
+    }
+}

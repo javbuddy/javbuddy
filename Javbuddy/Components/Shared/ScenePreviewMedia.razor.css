@@ -1,0 +1,20 @@
+.scene-preview-media {
+    position: absolute;
+    inset: 0;
+}
+
+/* Absolutely positioned so a 4:3 or 1:1 (VR eye) screenshot can't stretch the 16:9 frame. The video
+   is markup (see the component), which CSS isolation doesn't tag, hence ::deep. */
+.scene-preview-media img,
+.scene-preview-media ::deep video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Clicks go to the card (or its play button) underneath. */
+.scene-preview-media ::deep video {
+    pointer-events: none;
+}

@@ -1,0 +1,63 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* A countdown over the video in the seconds before the next apex: a big number that
+   counts down and disappears once the apex is reached. It's hidden and a no-op when the browser's
+   Settings > UI preference turns it off. The timer and DOM updates live in ApexCountdown.razor.js so
+   a tick doesn't cost a SignalR round-trip; the rule is ApexRanges.CountdownFor. It sits in the video
+   area rather than in the auto-hiding chrome, so it stays visible while the chrome is faded out. *@
+<div @ref="element" class="apex-countdown" aria-hidden="true" hidden></div>
+
+@code {
+    /// <summary>The apexes to count down to, in the video's own time (a clip player passes the movie's).</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? Apexes { get; set; }
+
+    /// <summary>CSS selector of the <c>&lt;video&gt;</c> whose time is counted against.</summary>
+    [Parameter, EditorRequired] public string VideoSelector { get; set; } = default!;
+
+    private readonly string key = Guid.NewGuid().ToString("N");
+    private ElementReference element;
+    private IJSObjectReference? jsModule;
+    private double[]? sent;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ApexCountdown.razor.js");
+            }
+            if (jsModule is null) return;
+
+            var seconds = Apexes?.Select(a => a.Seconds).Order().ToArray() ?? [];
+            if (firstRender)
+            {
+                sent = seconds;
+                await jsModule.InvokeVoidAsync("init", key, element, VideoSelector, seconds);
+            }
+            else if (sent is null || !sent.AsSpan().SequenceEqual(seconds))
+            {
+                sent = seconds;
+                await jsModule.InvokeVoidAsync("update", key, seconds);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("dispose", key);
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

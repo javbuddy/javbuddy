@@ -1,0 +1,558 @@
+@page "/settings/metadata"
+@using Microsoft.EntityFrameworkCore
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.ActorEnrichment
+@using Javbuddy.Services.MediaInfo
+@using Javbuddy.Services.MovieDiscovery
+@using Javbuddy.Services.R18Dev
+@using Javbuddy.Services.Tasks
+@using Javbuddy.Services.Trickplay
+@using Javbuddy.Services.Warashi
+@using Javbuddy.Services.MinnanoAv
+@using Javbuddy.Components.Pages.SettingsMetadataSections
+@inject IR18DevSettingsService R18DevSettingsService
+@inject IDiscoverySettingsService DiscoverySettingsService
+@inject IMediaInfoSettingsService MediaInfoSettingsService
+@inject IConnectionStatusService ConnectionStatusService
+@inject IR18DevDumpStore DumpStore
+@inject IConfiguration Configuration
+@inject IWarashiSettingsService WarashiSettingsService
+@inject IMinnanoAvSettingsService MinnanoAvSettingsService
+@inject ITrickplaySettingsService TrickplaySettingsService
+@inject ScheduledTaskLauncher TaskLauncher
+@inject ActorBatchEnrichmentLauncher EnrichmentLauncher
+@rendermode InteractiveServer
+
+<PageTitle>Metadata · Javbuddy</PageTitle>
+
+<h1>Metadata</h1>
+
+@if (settings is null || mediaInfoSettings is null || warashiSettings is null || minnanoAvSettings is null || localLibraryStatus is null || discoverySources is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <div class="metadata-sections">
+        <section class="metadata-section">
+            <h2 class="metadata-section-title">Movies</h2>
+            <div class="metadata-grid">
+                <StatusTile Title="Local Library" Description="Folder-based metadata source, checked before javinizer-go." Configured="localLibraryStatus.Configured" Summary="@localLibraryStatus.Summary" EnvConfigured="localLibraryStatus.EnvConfigured" OnOpen="OpenLocalLibraryModal" />
+                <StatusTile Title="MediaInfo" Description="Probes local video files for technical info (resolution, codec, bitrate)." Configured="mediaInfoSettings.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenMediaInfoModal" />
+                <StatusTile Title="Trickplay" Description="Scrub-bar preview thumbnails for the player." Configured="trickplaySettings?.GenerateForNewFiles == true" ConfiguredLabel="Generating for new files" NotConfiguredLabel="Not generating for new files" EnvConfigured="trickplayFromEnv" OnOpen="OpenTrickplayModal" />
+            </div>
+        </section>
+
+        <section class="metadata-section">
+            <h2 class="metadata-section-title">Actors</h2>
+            <div class="metadata-grid">
+                <StatusTile Title="WAPdB (warashi-asian-pornstars.fr)" Description="Search, match, and import actor metadata (measurements, cup size, height, birthdate, aliases) from warashi-asian-pornstars.fr." Configured="warashiSettings.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenWarashiModal" />
+                <StatusTile Title="minnano-av.com" Description="Search, match, and import actor metadata (measurements, cup size, height, birthdate, kana, aliases) from minnano-av.com." Configured="minnanoAvSettings.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenMinnanoAvModal" />
+            </div>
+        </section>
+
+        <section class="metadata-section">
+            <h2 class="metadata-section-title">Discovery</h2>
+            <div class="metadata-grid">
+                <StatusTile Title="Studio sources" Description="The studio sites Movies &gt; Discover scans for new and upcoming releases." Configured="discoverySources.Any(x => x.Enabled)" ConfiguredLabel="Enabled" NotConfiguredLabel="All disabled" Summary="@DiscoverySummary" OnOpen="OpenDiscoveryModal" />
+            </div>
+        </section>
+
+        <section class="metadata-section">
+            <h2 class="metadata-section-title">Sources</h2>
+            <div class="metadata-grid">
+                <StatusTile Title="r18.dev" Description="Imports r18.dev's public database dump: actor filmographies, the Missing pages and Movies &gt; All releases." Configured="settings.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenModal" />
+            </div>
+        </section>
+    </div>
+}
+
+<SlideOverDrawer Show="showLocalLibraryModal" Title="Local Library" OnClose="CloseLocalLibraryModal">
+    <LocalLibrarySection />
+</SlideOverDrawer>
+
+<SlideOverDrawer Show="showTrickplayModal" Title="Trickplay" OnClose="CloseTrickplayModal">
+    @if (showTrickplayModal)
+    {
+        <TrickplaySection OnSaved="LoadTrickplayTileAsync" />
+    }
+</SlideOverDrawer>
+
+@if (settings is not null)
+{
+    <SlideOverDrawer Show="showModal" Title="r18.dev" OnClose="CloseModal">
+        <p class="text-muted">
+            Imports r18.dev's public database dump into a local cache, weekly, so an actor's
+            full filmography can be looked up offline — powers the "Missing" section on actor
+            pages. Entirely optional: leave this disabled and nothing is downloaded or shown.
+        </p>
+
+        <EditForm Model="settings" OnValidSubmit="Save" FormName="r18dev-settings">
+            <DataAnnotationsValidator />
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="r18dev-enabled" @bind="settings.Enabled" />
+                <label class="form-check-label" for="r18dev-enabled">Enable the r18.dev metadata source</label>
+            </div>
+
+            @if (envOverrideConfigured)
+            {
+                <div class="alert alert-info">
+                    Dump source is set via the <code>R18Dev__DumpSourceOverride</code> environment
+                    variable. That takes precedence over the field below.
+                </div>
+            }
+            <div class="mb-3">
+                <label class="form-label">Dump source override</label>
+                <InputText class="form-control" @bind-Value="settings.DumpSourceOverride" placeholder="Default: https://r18.dev/dumps/latest" disabled="@envOverrideConfigured" />
+                <div class="form-text">A URL, or a local file path to an already-downloaded dump (plain or gzipped SQL). Leave blank to use r18.dev's own "latest" endpoint.</div>
+            </div>
+
+            <div class="metadata-modal-status">
+                @if (settings.LastImportedAt is null)
+                {
+                    <span class="text-muted">Never imported.</span>
+                }
+                else
+                {
+                    <div class="text-muted">Last imported: @settings.LastImportedAt.Value.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")</div>
+                    <div class="text-muted">Dump dated: @FormatDumpDate(settings.LastImportSourceDate) · @settings.LastImportSummary</div>
+                }
+            </div>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save</button>
+                <button class="btn btn-outline-secondary" type="button" @onclick="ImportNow" disabled="@importing">
+                    @(importing ? "Importing…" : "Import now")
+                </button>
+                <button class="btn btn-outline-danger" type="button" @onclick="DeleteDumpNow" disabled="@(!DumpStore.IsAvailable())">
+                    Delete dump
+                </button>
+            </div>
+
+            @if (importMessage is not null)
+            {
+                <div class="alert alert-info mt-3 mb-0">@importMessage</div>
+            }
+            @if (saved)
+            {
+                <div class="alert alert-success mt-3 mb-0">Saved.</div>
+            }
+        </EditForm>
+    </SlideOverDrawer>
+}
+
+@if (discoverySources is not null)
+{
+    <SlideOverDrawer Show="showDiscoveryModal" Title="Studio sources" OnClose="CloseDiscoveryModal">
+        <p class="text-muted">
+            Movies &gt; Discover scans each enabled studio site for new and upcoming releases. Switching a
+            source off only stops it being scanned; releases already found stay listed.
+        </p>
+
+        <EditForm Model="discoveryEdits" OnValidSubmit="SaveDiscovery" FormName="discovery-sources">
+            @foreach (var source in discoverySources)
+            {
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="@($"discovery-{source.SourceName}")"
+                           checked="@discoveryEdits[source.SourceName]"
+                           @onchange="e => discoveryEdits[source.SourceName] = (bool)e.Value!" />
+                    <label class="form-check-label" for="@($"discovery-{source.SourceName}")">@source.SourceName</label>
+                </div>
+            }
+
+            <button class="btn btn-primary mt-2" type="submit">Save</button>
+            @if (discoverySaved)
+            {
+                <div class="alert alert-success mt-3 mb-0">Saved.</div>
+            }
+        </EditForm>
+    </SlideOverDrawer>
+}
+
+@if (mediaInfoSettings is not null)
+{
+    <SlideOverDrawer Show="showMediaInfoModal" Title="MediaInfo" OnClose="CloseMediaInfoModal">
+        <p class="text-muted">
+            Probes each movie's local video file with MediaInfo for technical info — resolution,
+            codec, bitrate, duration, and similar — as part of every local scan/refresh. No
+            external service is involved; the library ships with the app.
+        </p>
+        <EditForm Model="mediaInfoSettings" OnValidSubmit="SaveMediaInfo" FormName="mediainfo-settings">
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="mediainfo-enabled" @bind="mediaInfoSettings.Enabled" />
+                <label class="form-check-label" for="mediainfo-enabled">Enable MediaInfo probing</label>
+            </div>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save</button>
+            </div>
+            @if (mediaInfoSaved)
+            {
+                <div class="alert alert-success mt-3 mb-0">Saved.</div>
+            }
+        </EditForm>
+    </SlideOverDrawer>
+}
+
+@if (warashiSettings is not null)
+{
+    <SlideOverDrawer Show="showWarashiModal" Title="WAPdB (warashi-asian-pornstars.fr)" OnClose="CloseWarashiModal">
+        <p class="text-muted">
+            Warashi Asian Pornstars Database (WAPdB) provides detailed biographical and physical attributes for
+            Japanese AV performers (measurements, bra cup size, height, birthdate, retirement status, and alternative names).
+            Run batch enrichment for all actors below, or search and enrich individual performers directly from their actor detail page.
+        </p>
+
+        <EditForm Model="warashiSettings" OnValidSubmit="SaveWarashi" FormName="warashi-settings">
+            <DataAnnotationsValidator />
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="warashi-enabled" @bind="warashiSettings.Enabled" />
+                <label class="form-check-label" for="warashi-enabled">Enable the WAPdB metadata provider</label>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="warashi-overwrite" @bind="warashiSettings.OverwriteExisting" />
+                <label class="form-check-label" for="warashi-overwrite">Overwrite existing physical attributes when enriching</label>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="warashi-delay">Request throttling delay (ms)</label>
+                <InputNumber id="warashi-delay" class="form-control" @bind-Value="warashiSettings.RequestDelayMs" min="200" max="5000" />
+                <div class="form-text">Delay between consecutive web requests during batch lookups (default: 750 ms).</div>
+            </div>
+
+            <div class="metadata-modal-status">
+                @if (warashiSettings.LastEnrichedAt is null)
+                {
+                    <span class="text-muted">Never enriched in batch.</span>
+                }
+                else
+                {
+                    <div class="text-muted">Last batch enrichment: @warashiSettings.LastEnrichedAt.Value.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")</div>
+                    @if (!string.IsNullOrWhiteSpace(warashiSettings.LastEnrichSummary))
+                    {
+                        <div class="text-muted">@warashiSettings.LastEnrichSummary</div>
+                    }
+                }
+            </div>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save settings</button>
+                <button class="btn btn-outline-secondary" type="button" @onclick="BatchEnrichNow" disabled="@(batchEnriching || !warashiSettings.Enabled)">
+                    @(batchEnriching ? "Enriching…" : "Enrich all actors now")
+                </button>
+            </div>
+
+            @if (warashiSaved)
+            {
+                <div class="alert alert-success mt-3 mb-0">Saved.</div>
+            }
+
+            @if (batchEnrichMessage is not null)
+            {
+                <div class="alert alert-info mt-3 mb-0">@batchEnrichMessage</div>
+            }
+        </EditForm>
+    </SlideOverDrawer>
+}
+
+@if (minnanoAvSettings is not null)
+{
+    <SlideOverDrawer Show="showMinnanoAvModal" Title="minnano-av.com" OnClose="CloseMinnanoAvModal">
+        <p class="text-muted">
+            minnano-av.com provides detailed biographical and physical attributes for
+            Japanese AV performers (measurements, bra cup size, height, birthdate, retirement status, and alternative names).
+            Run batch enrichment for all actors below, or search and enrich individual performers directly from their actor detail page.
+        </p>
+
+        <EditForm Model="minnanoAvSettings" OnValidSubmit="SaveMinnanoAv" FormName="minnano-av-settings">
+            <DataAnnotationsValidator />
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="minnano-av-enabled" @bind="minnanoAvSettings.Enabled" />
+                <label class="form-check-label" for="minnano-av-enabled">Enable the minnano-av.com metadata provider</label>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="minnano-av-overwrite" @bind="minnanoAvSettings.OverwriteExisting" />
+                <label class="form-check-label" for="minnano-av-overwrite">Overwrite existing physical attributes when enriching</label>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="minnano-av-delay">Request throttling delay (ms)</label>
+                <InputNumber id="minnano-av-delay" class="form-control" @bind-Value="minnanoAvSettings.RequestDelayMs" min="200" max="5000" />
+                <div class="form-text">Delay between consecutive web requests during batch lookups (default: 750 ms).</div>
+            </div>
+
+            <div class="metadata-modal-status">
+                @if (minnanoAvSettings.LastEnrichedAt is null)
+                {
+                    <span class="text-muted">Never enriched in batch.</span>
+                }
+                else
+                {
+                    <div class="text-muted">Last batch enrichment: @minnanoAvSettings.LastEnrichedAt.Value.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")</div>
+                    @if (!string.IsNullOrWhiteSpace(minnanoAvSettings.LastEnrichSummary))
+                    {
+                        <div class="text-muted">@minnanoAvSettings.LastEnrichSummary</div>
+                    }
+                }
+            </div>
+
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save settings</button>
+                <button class="btn btn-outline-secondary" type="button" @onclick="MinnanoAvBatchEnrichNow" disabled="@(minnanoAvBatchEnriching || !minnanoAvSettings.Enabled)">
+                    @(minnanoAvBatchEnriching ? "Enriching…" : "Enrich all actors now")
+                </button>
+            </div>
+
+            @if (minnanoAvSaved)
+            {
+                <div class="alert alert-success mt-3 mb-0">Saved.</div>
+            }
+
+            @if (minnanoAvBatchEnrichMessage is not null)
+            {
+                <div class="alert alert-info mt-3 mb-0">@minnanoAvBatchEnrichMessage</div>
+            }
+        </EditForm>
+    </SlideOverDrawer>
+}
+
+@code {
+    private ConnectionStatus? localLibraryStatus;
+    private bool showLocalLibraryModal;
+
+    private R18DevSettings? settings;
+    private bool showModal;
+    private bool saved;
+    private bool importing;
+    private string? importMessage;
+    private bool wasEnabledOnOpen;
+
+    private MediaInfoSettings? mediaInfoSettings;
+
+    private TrickplaySettings? trickplaySettings;
+    private bool trickplayFromEnv;
+    private bool showTrickplayModal;
+    private bool showMediaInfoModal;
+    private IReadOnlyList<DiscoverySourceStatus>? discoverySources;
+    private Dictionary<string, bool> discoveryEdits = new();
+    private bool showDiscoveryModal;
+    private bool discoverySaved;
+    private bool mediaInfoSaved;
+
+    private WarashiSettings? warashiSettings;
+    private bool showWarashiModal;
+    private bool warashiSaved;
+    private bool batchEnriching;
+    private string? batchEnrichMessage;
+
+    private MinnanoAvSettings? minnanoAvSettings;
+    private bool showMinnanoAvModal;
+    private bool minnanoAvSaved;
+    private bool minnanoAvBatchEnriching;
+    private string? minnanoAvBatchEnrichMessage;
+
+    private bool envOverrideConfigured => !string.IsNullOrWhiteSpace(Configuration["R18Dev:DumpSourceOverride"]);
+
+    private static string FormatDumpDate(string? sourceDate) =>
+        DateTime.TryParseExact(sourceDate, "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out var parsed)
+            ? parsed.ToString("MMM d, yyyy")
+            : sourceDate ?? "unknown";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        localLibraryStatus = await ConnectionStatusService.GetLocalLibraryStatusAsync();
+        settings = await R18DevSettingsService.GetAsync();
+        mediaInfoSettings = await MediaInfoSettingsService.GetAsync();
+        warashiSettings = await WarashiSettingsService.GetAsync();
+        minnanoAvSettings = await MinnanoAvSettingsService.GetAsync();
+        discoverySources = await DiscoverySettingsService.GetSourcesAsync();
+        await LoadTrickplayTileAsync();
+    }
+
+    private string DiscoverySummary => $"{discoverySources!.Count(x => x.Enabled)} of {discoverySources!.Count} enabled";
+
+    private void OpenDiscoveryModal()
+    {
+        discoveryEdits = discoverySources!.ToDictionary(x => x.SourceName, x => x.Enabled);
+        discoverySaved = false;
+        showDiscoveryModal = true;
+    }
+
+    private void CloseDiscoveryModal() => showDiscoveryModal = false;
+
+    private async Task SaveDiscovery()
+    {
+        await DiscoverySettingsService.SaveAsync(discoveryEdits);
+        discoverySources = await DiscoverySettingsService.GetSourcesAsync();
+        discoverySaved = true;
+    }
+
+    private async Task LoadTrickplayTileAsync()
+    {
+        trickplaySettings = await TrickplaySettingsService.GetEffectiveAsync();
+        trickplayFromEnv = TrickplaySettingsService.IsSetByEnvironment(nameof(TrickplaySettings.GenerateForNewFiles));
+    }
+
+    private void OpenTrickplayModal() => showTrickplayModal = true;
+
+    private void CloseTrickplayModal() => showTrickplayModal = false;
+
+    private void OpenLocalLibraryModal() => showLocalLibraryModal = true;
+
+    private async Task CloseLocalLibraryModal()
+    {
+        showLocalLibraryModal = false;
+        // Re-fetch so the tile reflects anything saved while the drawer was open.
+        localLibraryStatus = await ConnectionStatusService.GetLocalLibraryStatusAsync();
+    }
+
+    private void OpenModal()
+    {
+        if (settings is null) return;
+
+        saved = false;
+        importMessage = null;
+        wasEnabledOnOpen = settings.Enabled;
+        showModal = true;
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private async Task Save()
+    {
+        if (settings is null) return;
+
+        if (wasEnabledOnOpen && !settings.Enabled)
+        {
+            DumpStore.DeleteDump();
+            settings.LastImportedAt = null;
+            settings.LastImportSourceDate = null;
+            settings.LastImportSummary = null;
+        }
+
+        await R18DevSettingsService.SaveAsync(settings);
+        wasEnabledOnOpen = settings.Enabled;
+        saved = true;
+    }
+
+    private async Task DeleteDumpNow()
+    {
+        if (settings is null) return;
+
+        DumpStore.DeleteDump();
+        settings.LastImportedAt = null;
+        settings.LastImportSourceDate = null;
+        settings.LastImportSummary = null;
+        await Save();
+    }
+
+    private async Task ImportNow()
+    {
+        await Save();
+
+        importing = true;
+        importMessage = null;
+        StateHasChanged();
+
+        _ = TaskLauncher.Queue("r18.dev Dump Import");
+
+        await Task.Delay(500);
+        importing = false;
+        await LoadAsync();
+        importMessage = "Import queued — see System → Tasks for progress and the result.";
+    }
+
+    private void OpenMediaInfoModal()
+    {
+        mediaInfoSaved = false;
+        showMediaInfoModal = true;
+    }
+
+    private void CloseMediaInfoModal() => showMediaInfoModal = false;
+
+    private async Task SaveMediaInfo()
+    {
+        if (mediaInfoSettings is null) return;
+
+        await MediaInfoSettingsService.SaveAsync(mediaInfoSettings);
+        mediaInfoSaved = true;
+    }
+
+    private void OpenWarashiModal()
+    {
+        warashiSaved = false;
+        batchEnrichMessage = null;
+        showWarashiModal = true;
+    }
+
+    private void CloseWarashiModal() => showWarashiModal = false;
+
+    private async Task SaveWarashi()
+    {
+        if (warashiSettings is null) return;
+
+        await WarashiSettingsService.SaveAsync(warashiSettings);
+        warashiSaved = true;
+    }
+
+    private async Task BatchEnrichNow()
+    {
+        if (warashiSettings is null) return;
+        await SaveWarashi();
+
+        batchEnriching = true;
+        batchEnrichMessage = null;
+        StateHasChanged();
+
+        // Runs on application-owned background execution, the same way ImportNow queues "r18.dev
+        // Dump Import" — it keeps running (and reporting to the sidebar) even if the user navigates
+        // away from Settings. The job only captures the overwrite flag, never this component.
+        _ = EnrichmentLauncher.QueueWarashi(warashiSettings.OverwriteExisting);
+
+        await Task.Delay(500);
+        batchEnriching = false;
+        await LoadAsync();
+        batchEnrichMessage = "Enrichment queued — see the sidebar for progress.";
+    }
+
+    private void OpenMinnanoAvModal()
+    {
+        minnanoAvSaved = false;
+        minnanoAvBatchEnrichMessage = null;
+        showMinnanoAvModal = true;
+    }
+
+    private void CloseMinnanoAvModal() => showMinnanoAvModal = false;
+
+    private async Task SaveMinnanoAv()
+    {
+        if (minnanoAvSettings is null) return;
+
+        await MinnanoAvSettingsService.SaveAsync(minnanoAvSettings);
+        minnanoAvSaved = true;
+    }
+
+    private async Task MinnanoAvBatchEnrichNow()
+    {
+        if (minnanoAvSettings is null) return;
+        await SaveMinnanoAv();
+
+        minnanoAvBatchEnriching = true;
+        minnanoAvBatchEnrichMessage = null;
+        StateHasChanged();
+
+        // See BatchEnrichNow's comment.
+        _ = EnrichmentLauncher.QueueMinnanoAv(minnanoAvSettings.OverwriteExisting);
+
+        await Task.Delay(500);
+        minnanoAvBatchEnriching = false;
+        await LoadAsync();
+        minnanoAvBatchEnrichMessage = "Enrichment queued — see the sidebar for progress.";
+    }
+}

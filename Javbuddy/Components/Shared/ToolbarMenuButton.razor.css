@@ -1,0 +1,57 @@
+.toolbar-menu {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+/* Same look as .movie-toolbar-btn — CSS isolation means it can't be shared, so it's copied here. */
+.toolbar-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    color: #cfd3de;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.4rem 0.6rem;
+    border-radius: 3px;
+    white-space: nowrap;
+}
+
+    .toolbar-menu-btn:hover:not(:disabled),
+    .toolbar-menu-btn[aria-expanded="true"] {
+        background-color: #454a5e;
+        color: #ffffff;
+    }
+
+    .toolbar-menu-btn:disabled {
+        opacity: 0.45;
+        cursor: default;
+    }
+
+.toolbar-menu-caret {
+    margin-left: -0.1rem;
+    opacity: 0.8;
+}
+
+.toolbar-menu-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+}
+
+.toolbar-menu-list {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    left: 0;
+    min-width: 180px;
+    background-color: #2b303c;
+    border: 1px solid #454a5e;
+    border-radius: 4px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 0.35rem 0;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+}

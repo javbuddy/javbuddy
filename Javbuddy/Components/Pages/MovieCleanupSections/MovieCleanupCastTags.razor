@@ -1,0 +1,179 @@
+@* The Review / Cleanup card's cast and tags, with editing. The page loads both and reloads them when
+   an edit reports the movie it changed; each edit is also recorded for the session summary. *@
+@using Javbuddy.Models
+@inject IMovieCleanupService CleanupService
+@inject IMovieService MovieService
+@inject ITagService TagService
+
+@if (Actors is { Count: > 0 })
+{
+    <div class="cleanup-actors-list">
+        @foreach (var actor in Actors)
+        {
+            <div class="cleanup-actor-item" title="@actor.Name">
+                <div class="cleanup-actor-avatar-wrap">
+                    @if (actor.ActorId is not null)
+                    {
+                        <a class="cleanup-actor-avatar @(actor.HasImage ? "cleanup-actor-avatar-photo" : "")" href="@($"/actors/{Uri.EscapeDataString(actor.Name)}")" target="_blank">
+                            @if (actor.HasImage)
+                            {
+                                <img class="cleanup-actor-img" src="@($"/actor-image/{actor.ActorId}/thumb")" alt="@actor.Name" loading="lazy" />
+                            }
+                            else
+                            {
+                                <span class="cleanup-actor-initials">@ActorMatching.Initials(actor.Name)</span>
+                            }
+                        </a>
+                    }
+                    else
+                    {
+                        <div class="cleanup-actor-avatar">
+                            <span class="cleanup-actor-initials">@ActorMatching.Initials(actor.Name)</span>
+                        </div>
+                    }
+                    @if (editingCast)
+                    {
+                        <button type="button" class="cleanup-actor-remove-btn" @onclick="() => RemoveCastActorAsync(actor)" aria-label="Remove @actor.Name">×</button>
+                    }
+                </div>
+                @if (actor.ActorId is not null)
+                {
+                    <a class="cleanup-actor-name" href="@($"/actors/{Uri.EscapeDataString(actor.Name)}")" target="_blank">@actor.Name</a>
+                }
+                else
+                {
+                    <span class="cleanup-actor-name">@actor.Name</span>
+                }
+            </div>
+        }
+    </div>
+}
+<div class="cleanup-cast-controls">
+    <button type="button" class="cleanup-edit-cast-btn" @onclick="ToggleCastEdit">@(editingCast ? "Done" : "Edit Cast")</button>
+</div>
+@if (castEditError is not null)
+{
+    <p class="cleanup-cast-error">@castEditError</p>
+}
+@if (editingCast)
+{
+    <CastSearchAdd ExcludedActorIds="@Actors.Where(a => a.ActorId is not null).Select(a => a.ActorId!.Value).ToHashSet()" OnAdd="AddCastActorAsync" />
+}
+@if (Tags.Count > 0)
+{
+    <div class="cleanup-tags-list">
+        @foreach (var tag in Tags)
+        {
+            <span class="cleanup-tag-item">
+                <span class="cleanup-tag @(tag.NeedsReview ? "cleanup-tag-flagged" : "") @(tag.IsImplicit ? "cleanup-tag-implied" : "")" title="@TagTitle(tag)">@(tag.ParentName is not null ? $"{tag.ParentName} › {tag.Name}" : tag.Name)</span>
+                @if (editingTags && !tag.IsImplicit)
+                {
+                    <button type="button" class="cleanup-tag-remove-btn" @onclick="() => RemoveTagAsync(tag.Id)" aria-label="Remove @tag.Name">×</button>
+                }
+            </span>
+        }
+    </div>
+}
+<div class="cleanup-tag-controls">
+    <button type="button" class="cleanup-edit-tags-btn" @onclick="ToggleTagEdit">@(editingTags ? "Done" : "Edit Tags")</button>
+</div>
+@if (tagEditError is not null)
+{
+    <p class="cleanup-tag-error">@tagEditError</p>
+}
+@if (editingTags)
+{
+    @* An implied tag can still be added, which makes it the movie's own too. *@
+    <TagSearchAdd ExcludedTagIds="@Tags.Where(t => !t.IsImplicit).Select(t => t.Id).ToHashSet()" OnAdd="AddTagAsync" />
+}
+
+@code {
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<CleanupActorItem> Actors { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<CleanupTagItem> Tags { get; set; } = [];
+
+    /// <summary>A cast edit finished for the movie with this id (the card may have moved on since).</summary>
+    [Parameter] public EventCallback<int> OnCastChanged { get; set; }
+
+    /// <summary>A tag edit finished for the movie with this id (the card may have moved on since).</summary>
+    [Parameter] public EventCallback<int> OnTagsChanged { get; set; }
+
+    private bool editingCast;
+    private string? castEditError;
+    private bool editingTags;
+
+    // A clip-only tag follows its scenes, highlights and apexes; it isn't removed here.
+    private static string? TagTitle(CleanupTagItem tag) =>
+        tag.IsImplicit ? "From scenes, highlights or apexes"
+        : tag.NeedsReview ? "Not yet approved in the tag library"
+        : null;
+    private string? tagEditError;
+
+    private void ToggleCastEdit()
+    {
+        editingCast = !editingCast;
+        castEditError = null;
+    }
+
+    private void ToggleTagEdit()
+    {
+        editingTags = !editingTags;
+        tagEditError = null;
+    }
+
+    private async Task AddTagAsync(int tagId)
+    {
+        var movieId = Movie.Id;
+        var result = await TagService.AddTagToMovieAsync(movieId, tagId);
+        if (result.Success) await CleanupService.RecordTagEditAsync(movieId, tagId, added: true);
+        await ApplyTagEditResultAsync(movieId, result.Success, result.ErrorMessage);
+    }
+
+    private async Task RemoveTagAsync(int tagId)
+    {
+        var movieId = Movie.Id;
+        var result = await TagService.RemoveTagFromMovieAsync(movieId, tagId);
+        if (result.Success) await CleanupService.RecordTagEditAsync(movieId, tagId, added: false);
+        await ApplyTagEditResultAsync(movieId, result.Success, result.ErrorMessage);
+    }
+
+    /// <summary>Shows a tag edit's outcome and has the page re-read the movie's tags from the
+    /// database.</summary>
+    private async Task ApplyTagEditResultAsync(int movieId, bool success, string? errorMessage)
+    {
+        tagEditError = success ? null : errorMessage;
+        await OnTagsChanged.InvokeAsync(movieId);
+    }
+
+    private Task AddCastActorAsync(int actorId) => ApplyCastEditAsync(
+        movieId => MovieService.AddActorToMovieAsync(movieId, actorId),
+        movieId => CleanupService.RecordActorEditAsync(movieId, actorId, added: true));
+
+    private Task RemoveCastActorAsync(CleanupActorItem actor) => actor.ActorId is { } actorId
+        ? ApplyCastEditAsync(
+            movieId => MovieService.RemoveActorFromMovieAsync(movieId, actorId),
+            movieId => CleanupService.RecordActorEditAsync(movieId, actorId, added: false))
+        : ApplyCastEditAsync(
+            movieId => MovieService.RemoveActorFromMovieAsync(movieId, actor.Name),
+            movieId =>
+            {
+                CleanupService.RecordUntrackedActorRemoval(movieId, actor.Name);
+                return Task.CompletedTask;
+            });
+
+    /// <summary>Runs one cast edit against the movie, records it for the session summary
+    /// if it succeeded, then re-reads its cast text: the card's Movie is loaded once
+    /// when the card comes up, so it would otherwise keep showing the pre-edit MetaActresses
+    ///.</summary>
+    private async Task ApplyCastEditAsync(Func<int, Task<OperationResult>> edit, Func<int, Task> record)
+    {
+        var movie = Movie;
+        var movieId = movie.Id;
+        var result = await edit(movieId);
+        if (result.Success) await record(movieId);
+        movie.MetaActresses = await CleanupService.GetMetaActressesAsync(movieId);
+
+        castEditError = result.Success ? null : result.ErrorMessage;
+        await OnCastChanged.InvokeAsync(movieId);
+    }
+}

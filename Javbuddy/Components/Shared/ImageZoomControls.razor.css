@@ -1,0 +1,6 @@
+/* Phones zoom by pinching and double-tapping; the buttons would only crowd the narrow top bar. */
+@media (max-width: 576px) {
+    .image-zoom-controls {
+        display: none;
+    }
+}

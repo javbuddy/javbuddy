@@ -1,0 +1,236 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Warashi
+@using Javbuddy.Services.MinnanoAv
+@inject IWarashiClient WarashiClient
+@inject IMinnanoAvClient MinnanoAvClient
+
+@if (Show && Actor is not null)
+{
+    <div class="search-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="search-modal-panel" @onclick:stopPropagation="true">
+            <div class="search-modal-header">
+                <h5 class="search-modal-title">Search All Providers — @Actor.DisplayName</h5>
+                <button type="button" class="search-modal-close-btn" @onclick="CloseAsync" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+
+            <div class="search-modal-body">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control search-input" placeholder="Search performer name, kanji, or alias…"
+                           @bind="searchQuery" @bind:event="oninput" @onkeydown="HandleInputKeyDown" disabled="@isSearching" />
+                    <button class="btn btn-primary" type="button" @onclick="ExecuteSearch" disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
+                        @(isSearching ? "Searching…" : "Search")
+                    </button>
+                </div>
+
+                @if (isSearching)
+                {
+                    <div class="text-center py-4 text-muted">
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span> Searching WAPdB and minnano-av.com...
+                    </div>
+                }
+                else
+                {
+                    <div class="combined-search-section">
+                        <h6 class="combined-search-source-title">WAPdB</h6>
+                        @if (warashiError is not null)
+                        {
+                            <div class="alert alert-danger py-2 mb-2 small">@warashiError</div>
+                        }
+                        else if (warashiResults is not null)
+                        {
+                            @if (warashiResults.Count == 0)
+                            {
+                                <p class="text-muted small my-2">No matching performers found on WAPdB.</p>
+                            }
+                            else
+                            {
+                                <div class="search-results-list">
+                                    @foreach (var res in warashiResults)
+                                    {
+                                        <div class="search-result-item" @onclick="() => PickWarashi(res.PathOrUrl)">
+                                            @if (!string.IsNullOrWhiteSpace(res.ImageUrl))
+                                            {
+                                                <img src="@res.ImageUrl" alt="@res.Name" class="search-result-thumb" />
+                                            }
+                                            <div class="flex-grow-1 min-w-0">
+                                                <div class="fw-semibold text-truncate">
+                                                    @res.Name
+                                                    @if (!string.IsNullOrWhiteSpace(res.JapaneseName))
+                                                    {
+                                                        <span class="text-muted fw-normal ms-1">(@res.JapaneseName)</span>
+                                                    }
+                                                    @if (res.IsExactMatch)
+                                                    {
+                                                        <span class="badge bg-success ms-1">Exact match</span>
+                                                    }
+                                                </div>
+                                                @if (!string.IsNullOrWhiteSpace(res.CareerActivity))
+                                                {
+                                                    <div class="text-muted small">@res.CareerActivity</div>
+                                                }
+                                            </div>
+                                            <button class="btn btn-sm btn-outline-secondary flex-shrink-0" type="button">Inspect</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <div class="combined-search-section">
+                        <h6 class="combined-search-source-title">minnano-av.com</h6>
+                        @if (minnanoAvError is not null)
+                        {
+                            <div class="alert alert-danger py-2 mb-2 small">@minnanoAvError</div>
+                        }
+                        else if (minnanoAvResults is not null)
+                        {
+                            @if (minnanoAvResults.Count == 0)
+                            {
+                                <p class="text-muted small my-2">No matching performers found on minnano-av.com.</p>
+                            }
+                            else
+                            {
+                                <div class="search-results-list">
+                                    @foreach (var res in minnanoAvResults)
+                                    {
+                                        <div class="search-result-item" @onclick="() => PickMinnanoAv(res.PathOrUrl)">
+                                            @if (!string.IsNullOrWhiteSpace(res.ImageUrl))
+                                            {
+                                                <img src="@res.ImageUrl" alt="@res.Name" class="search-result-thumb" />
+                                            }
+                                            <div class="flex-grow-1 min-w-0">
+                                                <div class="fw-semibold text-truncate">
+                                                    @res.Name
+                                                    @if (!string.IsNullOrWhiteSpace(res.Romaji))
+                                                    {
+                                                        <span class="text-muted fw-normal ms-1">(@res.Romaji)</span>
+                                                    }
+                                                    @if (res.IsExactMatch)
+                                                    {
+                                                        <span class="badge bg-success ms-1">Exact match</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <button class="btn btn-sm btn-outline-secondary flex-shrink-0" type="button">Inspect</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="search-modal-footer">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync">Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public Actor? Actor { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnPickWarashi { get; set; }
+    [Parameter] public EventCallback<string> OnPickMinnanoAv { get; set; }
+
+    private string searchQuery = string.Empty;
+    private bool isSearching;
+    private string? warashiError;
+    private string? minnanoAvError;
+    private IReadOnlyList<WarashiSearchResult>? warashiResults;
+    private IReadOnlyList<MinnanoAvSearchResult>? minnanoAvResults;
+    private int? lastActorId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && Actor is not null && lastActorId != Actor.Id)
+        {
+            lastActorId = Actor.Id;
+            searchQuery = !string.IsNullOrWhiteSpace(Actor.JapaneseNameKanji)
+                ? Actor.JapaneseNameKanji
+                : Actor.DisplayName;
+
+            warashiError = null;
+            minnanoAvError = null;
+            warashiResults = null;
+            minnanoAvResults = null;
+
+            await ExecuteSearch();
+        }
+        else if (!Show)
+        {
+            lastActorId = null;
+        }
+    }
+
+    private async Task HandleInputKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ExecuteSearch();
+        }
+        else if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task ExecuteSearch()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery)) return;
+
+        isSearching = true;
+        warashiError = null;
+        minnanoAvError = null;
+        var query = searchQuery.Trim();
+
+        await Task.WhenAll(SearchWarashiAsync(query), SearchMinnanoAvAsync(query));
+
+        isSearching = false;
+    }
+
+    private async Task SearchWarashiAsync(string query)
+    {
+        try
+        {
+            warashiResults = await WarashiClient.SearchPerformersAsync(query);
+        }
+        catch (Exception ex)
+        {
+            warashiError = $"WAPdB search failed: {ex.Message}";
+            warashiResults = Array.Empty<WarashiSearchResult>();
+        }
+    }
+
+    private async Task SearchMinnanoAvAsync(string query)
+    {
+        try
+        {
+            minnanoAvResults = await MinnanoAvClient.SearchPerformersAsync(query);
+        }
+        catch (Exception ex)
+        {
+            minnanoAvError = $"minnano-av.com search failed: {ex.Message}";
+            minnanoAvResults = Array.Empty<MinnanoAvSearchResult>();
+        }
+    }
+
+    private async Task PickWarashi(string path) => await OnPickWarashi.InvokeAsync(path);
+
+    private async Task PickMinnanoAv(string path) => await OnPickMinnanoAv.InvokeAsync(path);
+
+    private async Task CloseAsync() => await OnClose.InvokeAsync();
+}

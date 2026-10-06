@@ -1,0 +1,59 @@
+.fanart-thumb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.6rem;
+}
+
+.fanart-thumb-cell {
+    position: relative;
+}
+
+.fanart-thumb {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border-radius: 4px;
+    cursor: pointer;
+    background: #2b2f38;
+    transition: transform 0.12s ease, opacity 0.12s ease;
+}
+
+    .fanart-thumb:hover {
+        transform: scale(1.03);
+        opacity: 0.9;
+    }
+
+    /* A sized <img> with no src (the js-lazy-gallery-img pre-load state) still paints the
+       browser's broken-image glyph + alt text inside its box — visually indistinguishable from a
+       real load failure. Hide it until the lazy loader sets a real src, leaving just the dark
+       placeholder background visible; the moment src is set this selector stops matching. */
+    .fanart-thumb.js-lazy-gallery-img:not([src]) {
+        visibility: hidden;
+    }
+
+.fanart-thumb-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+    /* :focus-within too, so tabbing onto an overlay control (e.g. Movie Detail's delete button)
+       shows it instead of focusing an invisible button. */
+    .fanart-thumb-cell:hover .fanart-thumb-overlay,
+    .fanart-thumb-cell:focus-within .fanart-thumb-overlay {
+        opacity: 1;
+    }
+
+    /* Only the overlay's own controls take clicks; the rest of it lets them through to the
+       thumbnail underneath, so hovering a thumbnail with actions still opens the viewer
+. The controls come from the caller's markup, hence ::deep. */
+    .fanart-thumb-cell:hover ::deep .fanart-thumb-overlay > *,
+    .fanart-thumb-cell:focus-within ::deep .fanart-thumb-overlay > * {
+        pointer-events: auto;
+    }

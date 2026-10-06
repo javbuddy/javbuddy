@@ -1,0 +1,63 @@
+@using Javbuddy.Services.Movies
+
+@if (Options.CupSizes.Count > 0)
+{
+    <ChipMultiSelectGroup GroupLabel="Cup Size" Options="@CupSizeOptions"
+                          OnSelectAll="SelectAllCupsAsync" OnSelectNone="SelectNoCupsAsync" />
+}
+@foreach (var row in Rows)
+{
+    @if (row.Bounds is { } bounds)
+    {
+        <RangeFilter @key="row.Label" Label="@row.Label" Unit="@row.Unit"
+                     BoundsMin="bounds.Min" BoundsMax="bounds.Max"
+                     SelectedMin="@(row.Selected.Min ?? bounds.Min)" SelectedMax="@(row.Selected.Max ?? bounds.Max)"
+                     OnRangeCommitted="r => CommitRangeAsync(row, r)" />
+    }
+}
+
+@code {
+    /// <summary>The Actress Attributes filter groups shared by the Movies filter toolbar and the
+    /// Scenes &amp; Highlights wall: Cup Size chips and a range slider per offered measurement. Selection is the
+    /// applied one; edits are raised as a modified copy through SelectionChanged.</summary>
+    [Parameter, EditorRequired] public ActorAttributeOptions Options { get; set; } = ActorAttributeOptions.None;
+    [Parameter, EditorRequired] public ActorAttributeSelection Selection { get; set; } = ActorAttributeSelection.Empty;
+    [Parameter] public EventCallback<ActorAttributeSelection> SelectionChanged { get; set; }
+
+    private sealed record Row(string Label, string Unit, RangeBounds? Bounds, IntRange Selected, Func<ActorAttributeSelection, IntRange, ActorAttributeSelection> With);
+
+    private IEnumerable<Row> Rows =>
+    [
+        new("Height", "cm", Options.Height, Selection.Height, (s, r) => s with { Height = r }),
+        new("Bust", "cm", Options.Bust, Selection.Bust, (s, r) => s with { Bust = r }),
+        new("Waist", "cm", Options.Waist, Selection.Waist, (s, r) => s with { Waist = r }),
+        new("Hips", "cm", Options.Hips, Selection.Hips, (s, r) => s with { Hips = r }),
+        new("Age", "yrs", Options.Age, Selection.Age, (s, r) => s with { Age = r }),
+    ];
+
+    private IReadOnlyList<MultiSelectOption> CupSizeOptions => Options.CupSizes
+        .Select(cup => new MultiSelectOption(
+            cup,
+            Selection.CupSizes.Contains(cup, StringComparer.OrdinalIgnoreCase),
+            EventCallback.Factory.Create(this, () => ToggleCupAsync(cup))))
+        .ToList();
+
+    private Task ToggleCupAsync(string cup)
+    {
+        var cups = Selection.CupSizes.ToList();
+        if (cups.RemoveAll(c => string.Equals(c, cup, StringComparison.OrdinalIgnoreCase)) == 0) cups.Add(cup);
+        return SelectionChanged.InvokeAsync(Selection with { CupSizes = cups });
+    }
+
+    private Task SelectAllCupsAsync() => SelectionChanged.InvokeAsync(Selection with { CupSizes = Options.CupSizes.ToList() });
+
+    private Task SelectNoCupsAsync() => SelectionChanged.InvokeAsync(Selection with { CupSizes = [] });
+
+    // A thumb at its end stop means "no limit" on that side, so an actress added later beyond today's extremes isn't excluded.
+    private Task CommitRangeAsync(Row row, (int Min, int Max) range)
+    {
+        var bounds = row.Bounds!;
+        var next = new IntRange(range.Min <= bounds.Min ? null : range.Min, range.Max >= bounds.Max ? null : range.Max);
+        return SelectionChanged.InvokeAsync(row.With(Selection, next));
+    }
+}

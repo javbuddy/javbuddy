@@ -1,0 +1,18 @@
+@using Javbuddy.Services.Trickplay
+
+@* What a scrub bar's hover preview shows in the thumbnail's place while the trickplay it would use is
+   being generated: the scene cards' skeleton shimmer in a thumbnail-sized frame, and
+   ffmpeg's progress under it. Used by ScrubBar and ClipControls. *@
+<div class="trickplay-generating">
+    <div class="trickplay-generating-frame">
+        <ScenePreviewPlaceholder Generating="true" />
+    </div>
+    <span class="trickplay-generating-label">@Label(Generating)</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TrickplayGenerating Generating { get; set; } = default!;
+
+    public static string Label(TrickplayGenerating generating) =>
+        generating.Percent is { } percent ? $"Generating previews… {percent}%" : "Generating previews…";
+}

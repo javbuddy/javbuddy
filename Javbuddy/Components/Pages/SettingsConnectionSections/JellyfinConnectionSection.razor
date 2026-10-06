@@ -1,0 +1,309 @@
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Jellyfin
+@using Javbuddy.Services.MediaServer
+@using Javbuddy.Services.Trickplay
+@using Microsoft.EntityFrameworkCore
+@inject IJellyfinClient JellyfinClient
+@inject IConnectionSettingsSaveService ConnectionSettingsSaveService
+@inject IConfiguration Configuration
+@inject ITrickplaySettingsService TrickplaySettingsService
+
+<ConnectionSettingsCard TSettings="JellyfinSettings"
+                         Title="Jellyfin"
+                         EnvConfigured="envConfigured"
+                         Settings="settings"
+                         FormName="jellyfin-settings"
+                         OnSave="Save"
+                         OnTest="TestConnection"
+                         Testing="testing"
+                         TestResult="TestResultTuple"
+                         Saved="saved">
+    <TestResultDetails>
+        @if (!string.IsNullOrWhiteSpace(testResult?.Version) || !string.IsNullOrWhiteSpace(testResult?.ServerId))
+        {
+            <div class="mt-2 pt-2 border-top border-success-subtle small">
+                @if (!string.IsNullOrWhiteSpace(testResult?.Version))
+                {
+                    <div><strong>Server version:</strong> @testResult.Version</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(testResult?.ServerId))
+                {
+                    <div><strong>Server ID:</strong> <code>@testResult.ServerId</code></div>
+                }
+            </div>
+        }
+    </TestResultDetails>
+    <Description>
+        Used to look up whether a movie is already in your library. Create an API key under
+        Jellyfin's Dashboard → API Keys.
+    </Description>
+    <EnvBanner>
+        Configured via environment variables (<code>Jellyfin__BaseUrl</code> / <code>Jellyfin__ApiKey</code> / <code>Jellyfin__Enabled</code>).
+        These take precedence over the form below.
+    </EnvBanner>
+    <FormFields>
+        <div class="mb-3">
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="jellyfin-enabled"
+                       @bind="settings!.Enabled"
+                       disabled="@enabledEnvConfigured" />
+                <label class="form-check-label" for="jellyfin-enabled">
+                    Enable Jellyfin integration
+                </label>
+            </div>
+            <div class="form-text">When disabled, Jellyfin is not checked for movie ownership and background link sync is skipped.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Base URL (internal API)</label>
+            <InputText class="form-control" @bind-Value="settings!.BaseUrl" placeholder="http://localhost:8096" disabled="@envConfigured" />
+            <div class="form-text">Internal address used by this server to query Jellyfin API.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">External URL (optional)</label>
+            <InputText class="form-control" @bind-Value="settings!.ExternalUrl" placeholder="https://jellyfin.yourdomain.com" disabled="@envConfigured" />
+            <div class="form-text">Public browser URL for "Open in Jellyfin" buttons (falls back to Base URL if empty).</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">API key</label>
+            <InputText class="form-control" type="password" @bind-Value="settings!.ApiKey" placeholder="…" disabled="@envConfigured" />
+        </div>
+    </FormFields>
+    <ExtraContent>
+        <hr />
+        <h6>Libraries to check</h6>
+        <p class="text-muted">
+            Controls every Jellyfin lookup — the automatic check when adding a movie, the manual "Lookup in Jellyfin"
+            button, and "Scan Jellyfin" on the Movies page. <strong>None selected by default</strong>, which means
+            Jellyfin isn't checked at all until you pick at least one library here. Can also be set via the
+            <code>Jellyfin__SelectedLibraryNames__0</code>, <code>Jellyfin__SelectedLibraryNames__1</code> (or <code>Jellyfin__SelectedLibraryNames</code>) environment variables, which
+            override this selection when set.
+        </p>
+        <button class="btn btn-sm btn-outline-secondary mb-2" type="button" @onclick="LoadLibraries" disabled="@loadingLibraries">
+            @(loadingLibraries ? "Loading…" : "Load libraries")
+        </button>
+
+        @if (librariesError is not null)
+        {
+            <div class="alert alert-danger mb-2">@librariesError</div>
+        }
+
+        @if (libraries is not null)
+        {
+            @if (libraries.Count == 0)
+            {
+                <p class="text-muted">No libraries found.</p>
+            }
+            else
+            {
+                <div class="mb-2">
+                    @foreach (var lib in libraries)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="@("lib-" + lib.Name)"
+                                   checked="@selectedLibraryNames.Contains(lib.Name!)"
+                                   disabled="@libraryNamesEnvConfigured"
+                                   @onchange="@(e => ToggleLibrary(lib.Name!, (bool)e.Value!))" />
+                            <label class="form-check-label" for="@("lib-" + lib.Name)">
+                                @lib.Name <span class="text-muted">(@lib.CollectionType)</span>
+                            </label>
+                        </div>
+                    }
+                </div>
+                @if (!libraryNamesEnvConfigured)
+                {
+                    <button class="btn btn-sm btn-primary" @onclick="SaveLibrarySelection">Save library selection</button>
+                    @if (librariesSaved)
+                    {
+                        <span class="text-success ms-2">Saved.</span>
+                    }
+                }
+            }
+        }
+
+        <hr />
+        <h6>Background link sync</h6>
+        <p class="text-muted mb-1">
+            Every @(linkSyncIntervalHours) hours, checks any movie not yet linked to Jellyfin against your
+            selected libraries and links it (marking it Got) if found — the unattended version of "Scan
+            Jellyfin" / "Lookup in Jellyfin". Interval is configurable via the
+            <code>Jellyfin__LinkSyncIntervalHours</code> environment variable.
+        </p>
+        @if (lastLinkSyncAt is null)
+        {
+            <p class="text-muted mb-0">No sync has run yet.</p>
+        }
+        else
+        {
+            <p class="text-muted mb-0">
+                Last run @lastLinkSyncAt.Value.ToLocalTime().ToString("g") —
+                checked @lastLinkSyncChecked, linked @lastLinkSyncMatched.
+            </p>
+        }
+
+        <hr />
+        <h6>Trickplay</h6>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="trickplay-jellyfin-fallback"
+                   checked="@jellyfinFallback" disabled="@jellyfinFallbackEnvConfigured"
+                   @onchange="e => jellyfinFallback = e.Value is true" />
+            <label class="form-check-label" for="trickplay-jellyfin-fallback">
+                Use Jellyfin's trickplay until a movie has its own
+            </label>
+        </div>
+        <div class="form-text mb-2">
+            For movies matched in Jellyfin that have trickplay there. Turn off to show only Javbuddy's own
+            trickplay, and the scene timeline for movies that don't have it yet.
+        </div>
+        @if (jellyfinFallbackEnvConfigured)
+        {
+            <div class="form-text trickplay-env-note">Set by the <code>Trickplay__JellyfinFallback</code> environment variable.</div>
+        }
+        else
+        {
+            <button class="btn btn-sm btn-primary" @onclick="SaveJellyfinFallback">Save trickplay setting</button>
+            @if (jellyfinFallbackSaved)
+            {
+                <span class="text-success ms-2">Saved.</span>
+            }
+        }
+    </ExtraContent>
+</ConnectionSettingsCard>
+
+@code {
+    private JellyfinSettings? settings;
+    private MediaServerTestResult? testResult;
+    private bool testing;
+    private bool saved;
+    private bool envConfigured;
+    private bool enabledEnvConfigured;
+    private double linkSyncIntervalHours = 6;
+    private DateTime? lastLinkSyncAt;
+    private int lastLinkSyncChecked;
+    private int lastLinkSyncMatched;
+
+    private List<JellyfinVirtualFolderDto>? libraries;
+    private bool loadingLibraries;
+    private string? librariesError;
+    private bool librariesSaved;
+    private HashSet<string> selectedLibraryNames = new();
+    private bool libraryNamesEnvConfigured;
+
+    private bool jellyfinFallback;
+    private bool jellyfinFallbackEnvConfigured;
+    private bool jellyfinFallbackSaved;
+
+    private (bool Success, string Message)? TestResultTuple => testResult is null ? null : (testResult.Success, testResult.Message);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var envEnabled = JellyfinEnvConfig.GetEnabled(Configuration);
+        enabledEnvConfigured = envEnabled.HasValue;
+
+        envConfigured = JellyfinEnvConfig.IsSet(Configuration);
+        if (envConfigured)
+        {
+            settings = new JellyfinSettings
+            {
+                Enabled = envEnabled ?? true,
+                BaseUrl = JellyfinEnvConfig.GetBaseUrl(Configuration),
+                ExternalUrl = JellyfinEnvConfig.GetExternalUrl(Configuration),
+                ApiKey = JellyfinEnvConfig.GetApiKey(Configuration)
+            };
+        }
+        else
+        {
+            settings = await ConnectionSettingsSaveService.GetJellyfinAsync();
+            if (envEnabled.HasValue)
+            {
+                settings.Enabled = envEnabled.Value;
+            }
+        }
+
+        var configuredIntervalHours = Configuration["Jellyfin:LinkSyncIntervalHours"];
+        if (double.TryParse(configuredIntervalHours, out var hours) && hours > 0)
+        {
+            linkSyncIntervalHours = Math.Max(hours, 0.25);
+        }
+
+        var syncStats = await ConnectionSettingsSaveService.GetJellyfinAsync();
+        lastLinkSyncAt = syncStats.LastLinkSyncAt;
+        lastLinkSyncChecked = syncStats.LastLinkSyncChecked ?? 0;
+        lastLinkSyncMatched = syncStats.LastLinkSyncMatched ?? 0;
+
+        var envLibraryNames = JellyfinEnvConfig.GetSelectedLibraryNames(Configuration);
+        libraryNamesEnvConfigured = envLibraryNames.Count > 0;
+        if (libraryNamesEnvConfigured)
+        {
+            selectedLibraryNames = envLibraryNames.ToHashSet();
+        }
+        else
+        {
+            selectedLibraryNames = Javbuddy.Services.Jellyfin.JellyfinClient.ParseLibraryNames(settings?.SelectedLibraryNames).ToHashSet();
+        }
+
+        jellyfinFallbackEnvConfigured = TrickplaySettingsService.IsSetByEnvironment(nameof(TrickplaySettings.JellyfinFallback));
+        jellyfinFallback = (await TrickplaySettingsService.GetEffectiveAsync()).JellyfinFallback;
+    }
+
+    private async Task Save()
+    {
+        saved = false;
+        testResult = null;
+        await ConnectionSettingsSaveService.SaveJellyfinConnectionAsync(settings!);
+        saved = true;
+    }
+
+    private async Task TestConnection()
+    {
+        testing = true;
+        testResult = null;
+        await Save();
+        testResult = await JellyfinClient.TestConnectionAsync();
+        testing = false;
+    }
+
+    private async Task LoadLibraries()
+    {
+        loadingLibraries = true;
+        librariesError = null;
+        librariesSaved = false;
+
+        var result = await JellyfinClient.GetLibrariesAsync();
+        if (result.Success && result.Libraries is not null)
+        {
+            libraries = result.Libraries;
+        }
+        else
+        {
+            librariesError = result.ErrorMessage ?? "Failed to load libraries.";
+        }
+
+        loadingLibraries = false;
+    }
+
+    private void ToggleLibrary(string name, bool isChecked)
+    {
+        if (isChecked) selectedLibraryNames.Add(name);
+        else selectedLibraryNames.Remove(name);
+    }
+
+    private async Task SaveLibrarySelection()
+    {
+        librariesSaved = false;
+        await ConnectionSettingsSaveService.SaveJellyfinLibrarySelectionAsync(selectedLibraryNames);
+        librariesSaved = true;
+    }
+
+    private async Task SaveJellyfinFallback()
+    {
+        jellyfinFallbackSaved = false;
+        // Re-read the row so the other trickplay fields (Settings → Metadata → Trickplay) keep
+        // whatever was saved there since this section loaded.
+        var stored = await TrickplaySettingsService.GetStoredAsync();
+        stored.JellyfinFallback = jellyfinFallback;
+        await TrickplaySettingsService.SaveAsync(stored);
+        jellyfinFallbackSaved = true;
+    }
+}

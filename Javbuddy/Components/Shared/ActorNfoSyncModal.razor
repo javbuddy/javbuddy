@@ -1,0 +1,237 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@inject INfoSyncService NfoSyncService
+
+@if (Show && Actor is not null)
+{
+    <div class="sync-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="-1">
+        <div class="sync-modal-dialog" @onclick:stopPropagation="true">
+            <div class="sync-modal-header">
+                <h5 class="sync-modal-title">Sync .nfo Files — @Actor.DisplayName</h5>
+                <button type="button" class="btn-close btn-close-white" @onclick="CloseAsync" disabled="@isSyncing" aria-label="Close"></button>
+            </div>
+
+            <div class="sync-modal-body">
+                @if (isLoading)
+                {
+                    <div class="p-4 text-center">
+                        <LoadingIndicator />
+                        <p class="text-muted small mt-2 mb-0">Scanning linked movie .nfo files…</p>
+                    </div>
+                }
+                else if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger mb-0">@errorMessage</div>
+                }
+                else if (previewResult is not null)
+                {
+                    <p class="text-muted small mb-3">
+                        Scans linked movie <code>.nfo</code> XML files on disk and aligns actor names matching aliases, reversed names, or previous spellings with canonical name <strong>@previewResult.CanonicalName</strong>.
+                    </p>
+
+                    @if (syncResult is not null)
+                    {
+                        <div class="alert alert-success mb-3">
+                            <strong>Sync complete!</strong> Updated @syncResult.UpdatedCount .nfo file@(syncResult.UpdatedCount == 1 ? "" : "s") (@syncResult.UpToDateCount already up to date@(syncResult.FailedCount > 0 ? $", {syncResult.FailedCount} failed" : "")).
+                        </div>
+                    }
+
+                    <div class="sync-stats-bar mb-3">
+                        <span class="badge bg-secondary me-1">@previewResult.TotalMovies movie@(previewResult.TotalMovies == 1 ? "" : "s")</span>
+                        @if (previewResult.WillUpdateCount > 0)
+                        {
+                            <span class="badge bg-warning text-dark me-1">@previewResult.WillUpdateCount need update</span>
+                        }
+                        @if (previewResult.UpToDateCount > 0)
+                        {
+                            <span class="badge bg-success me-1">@previewResult.UpToDateCount up to date</span>
+                        }
+                        @if (previewResult.NoNfoCount > 0)
+                        {
+                            <span class="badge bg-dark border border-secondary text-muted me-1">@previewResult.NoNfoCount no .nfo</span>
+                        }
+                        @if (previewResult.ProblemCount > 0)
+                        {
+                            <span class="badge bg-danger me-1">@previewResult.ProblemCount error@(previewResult.ProblemCount == 1 ? "" : "s")</span>
+                        }
+                    </div>
+
+                    @if (previewResult.Movies.Count == 0)
+                    {
+                        <div class="text-muted text-center p-3">No movies linked to this actor.</div>
+                    }
+                    else
+                    {
+                        <div class="sync-movie-list-container">
+                            <table class="table table-sm table-dark table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Movie</th>
+                                        <th>Current in .nfo</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var movie in previewResult.Movies)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold text-light">@movie.MovieCode</div>
+                                                @if (!string.IsNullOrWhiteSpace(movie.MovieTitle))
+                                                {
+                                                    <div class="text-muted small text-truncate" style="max-width: 280px;" title="@movie.MovieTitle">@movie.MovieTitle</div>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (movie.CurrentNames.Count > 0)
+                                                {
+                                                    <span class="text-light">@string.Join(", ", movie.CurrentNames)</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted small">—</span>
+                                                }
+                                            </td>
+                                            <td>
+                                                @switch (movie.Status)
+                                                {
+                                                    case ActorNfoMovieStatus.WillUpdate:
+                                                        <span class="badge bg-warning text-dark">Will update &rarr; @movie.ProposedName</span>
+                                                        break;
+                                                    case ActorNfoMovieStatus.UpToDate:
+                                                        <span class="badge bg-success">Up to date</span>
+                                                        break;
+                                                    case ActorNfoMovieStatus.NoNfoFound:
+                                                        <span class="badge bg-secondary">No .nfo file</span>
+                                                        break;
+                                                    case ActorNfoMovieStatus.NoMatchingActorInNfo:
+                                                        <span class="badge bg-secondary">Actor not in .nfo</span>
+                                                        break;
+                                                    case ActorNfoMovieStatus.ReadOnly:
+                                                        <span class="badge bg-danger" title="File is marked read-only">Read-only</span>
+                                                        break;
+                                                    case ActorNfoMovieStatus.InvalidXml:
+                                                        <span class="badge bg-danger" title="@movie.ErrorMessage">Invalid XML</span>
+                                                        break;
+                                                    case ActorNfoMovieStatus.Error:
+                                                        <span class="badge bg-danger" title="@movie.ErrorMessage">Error</span>
+                                                        break;
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="sync-modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isSyncing">
+                    @(syncResult is not null ? "Close" : "Cancel")
+                </button>
+                @if (syncResult is null && previewResult is not null)
+                {
+                    <button type="button"
+                            class="btn btn-primary"
+                            @onclick="RunSyncAsync"
+                            disabled="@(previewResult.WillUpdateCount == 0 || isSyncing)">
+                        @(isSyncing ? "Syncing…" : $"Sync {previewResult.WillUpdateCount} .nfo File{(previewResult.WillUpdateCount == 1 ? "" : "s")}")
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public Actor? Actor { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private bool isLoading;
+    private bool isSyncing;
+    private string? errorMessage;
+    private ActorNfoSyncPreviewResult? previewResult;
+    private ActorNfoSyncResult? syncResult;
+    private int? loadedActorId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && Actor is not null && loadedActorId != Actor.Id)
+        {
+            loadedActorId = Actor.Id;
+            syncResult = null;
+            errorMessage = null;
+            await LoadPreviewAsync();
+        }
+        else if (!Show)
+        {
+            loadedActorId = null;
+            syncResult = null;
+            previewResult = null;
+        }
+    }
+
+    private async Task LoadPreviewAsync()
+    {
+        if (Actor is null) return;
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            previewResult = await NfoSyncService.PreviewSyncActorAsync(Actor.Id);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load preview: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RunSyncAsync()
+    {
+        if (Actor is null || isSyncing) return;
+        isSyncing = true;
+        errorMessage = null;
+
+        try
+        {
+            syncResult = await NfoSyncService.SyncActorAsync(Actor.Id);
+            // Reload preview to show refreshed status
+            previewResult = await NfoSyncService.PreviewSyncActorAsync(Actor.Id);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to synchronize .nfo files: {ex.Message}";
+        }
+        finally
+        {
+            isSyncing = false;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (isSyncing) return;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+}

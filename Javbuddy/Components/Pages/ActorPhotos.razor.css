@@ -1,0 +1,215 @@
+.sort-dropdown-wrapper {
+    position: relative;
+    z-index: 40;
+}
+
+.sort-dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 0.5rem 1rem;
+    color: #e7e9ee;
+    font-size: 0.9rem;
+}
+
+    .sort-dropdown-item:hover {
+        background-color: #3d4256;
+        color: #ffffff;
+    }
+
+    .sort-dropdown-item.active {
+        color: #4fc3e0;
+        font-weight: 600;
+    }
+
+.sort-dropdown-arrow {
+    font-size: 0.65rem;
+    margin-left: 0.35rem;
+}
+
+.sort-dropdown-divider {
+    height: 1px;
+    background: #3d4256;
+    margin: 0.35rem 0;
+}
+
+.dropdown-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 35;
+    background: transparent;
+}
+
+.actor-photos-timeline-section {
+    margin-bottom: 2rem;
+}
+
+.actor-photos-timeline-heading {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: inherit;
+    margin-top: 1.5rem;
+    margin-bottom: 0.65rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.actor-photos-timeline-count {
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: #8f96a3;
+}
+
+/* Nextcloud Photos-style dynamic sizing justified gallery */
+.actor-photos-justified-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.actor-photos-justified-grid::after {
+    content: "";
+    flex-grow: 999999999;
+    min-width: 150px;
+    height: 0;
+}
+
+.actor-photo-tile {
+    position: relative;
+    height: 220px;
+    flex-grow: calc(var(--ar, 1) * 100);
+    flex-basis: calc(var(--ar, 1) * 220px);
+    max-width: 100%;
+    border-radius: 2px;
+    overflow: hidden;
+    background: #242833;
+    cursor: pointer;
+}
+
+.actor-photo-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.15s ease, filter 0.15s ease, opacity 0.2s ease;
+}
+
+.actor-photo-tile img.actor-photo-tile-img {
+    opacity: 0;
+}
+
+.actor-photo-tile img.actor-photo-tile-img.loaded,
+.actor-photo-tile img.actor-photo-tile-img[src] {
+    opacity: 1;
+}
+
+.actor-photo-tile:hover img.actor-photo-tile-img {
+    transform: scale(1.02);
+}
+
+.actor-photo-tile-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 1.25rem 0.6rem 0.5rem;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.4) 60%, transparent 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.actor-photo-tile:hover .actor-photo-tile-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.actor-photo-tile-actor {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #ffffff;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.actor-photo-tile-actor:hover {
+    color: #4fc3e0;
+    text-decoration: underline;
+}
+
+.actor-photo-tile-avatar {
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.actor-photo-tile-avatar.loaded,
+.actor-photo-tile-avatar[src] {
+    opacity: 1;
+}
+
+.actor-photo-tile-album {
+    font-size: 0.72rem;
+    color: #e0e6ed;
+    background: rgba(43, 48, 60, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 3px;
+    padding: 0.1rem 0.4rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    max-width: 8rem;
+}
+
+/* Lightbox title content (GalleryLightbox's Title fragment) — authored in this component, so
+   styled by this component's scoped CSS. */
+.gallery-actor-link {
+    color: #fff;
+    font-weight: 600;
+    font-size: 1.05rem;
+    text-decoration: none;
+}
+
+.gallery-actor-link:hover {
+    color: #4fc3e0;
+    text-decoration: underline;
+}
+
+.gallery-album-badge {
+    font-size: 0.75rem;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    color: #e0e6ed;
+}
+
+@media (max-width: 576px) {
+    .actor-photo-tile {
+        height: 160px;
+        flex-basis: calc(var(--ar, 1) * 160px);
+    }
+}

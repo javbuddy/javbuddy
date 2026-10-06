@@ -1,0 +1,22 @@
+<button type="button" class="sort-dropdown-item @(ActiveCount > 0 ? "active" : "")" @onclick="ToggleExpanded">
+    <span>@Label@(ActiveCount > 0 ? $" ({ActiveCount})" : "")</span>
+    <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
+</button>
+@if (expanded)
+{
+    <div class="filter-section-body">@ChildContent</div>
+}
+
+@code {
+    /// <summary>A collapsible parent inside a filter dropdown that nests related filter groups under one header
+    /// (e.g. "Actor" holding the wall's name picker and the actress cup size / measurement / age filters,
+    ///). Same header row as MultiSelectFilterGroup; ActiveCount is how many filters inside are set.
+    /// Owns only its expand/collapse state.</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public int ActiveCount { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool expanded;
+
+    private void ToggleExpanded() => expanded = !expanded;
+}

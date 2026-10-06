@@ -1,0 +1,37 @@
+# Git
+.git/
+.gitignore
+
+# Build outputs
+**/bin/
+**/obj/
+publish/
+TestResults/
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# Local caches and test directories
+/cache/
+Javbuddy/cache/
+test-jav/
+r18.dev/
+
+# IDE and tooling
+.vs/
+.idea/
+*.user
+.claude/
+
+# Local secrets & machine-specific overrides
+appsettings.Development.json
+appsettings.*.local.json
+.env
+docker-compose*.yml
+
+# Documentation
+docs/
+README.md
+CLAUDE.md

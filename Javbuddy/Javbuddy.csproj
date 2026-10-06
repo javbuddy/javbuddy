@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <DefaultItemExcludes>$(DefaultItemExcludes);publish\**</DefaultItemExcludes>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <!-- Workstation (concurrent) GC instead of the Web SDK's Server GC default: this is a
+         single-user app running 24/7, so a small heap matters more than throughput. Measured
+ on 4 cores, 2 runs per config, 3 bursts of 300 cold poster/fanart
+         conversions plus Movies page latency probes: vs Server GC + DATAS, peak RSS 523 -> 476 MB,
+         idle RSS 282 -> 263 MB, GC committed 76 -> 58 MB; request latency (p99 varies 28-44 ms
+         run to run under either), CPU and conversion time unchanged. GCConserveMemory=7 and a
+         256 MB GCHeapHardLimit made no measurable difference, because the managed heap stays
+         around 45 MB. Note the MSBuild property is ServerGarbageCollection, not ...Collector. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BlazorMonaco" />
+    <!-- Managed wrapper around MediaInfoLib (see Services/MediaInfo) — pulls in MediaInfo.Core.Native
+         transitively, which bundles the native libmediainfo binary itself (win-x64 for dev,
+         debian-x64 for the Docker image — see the Dockerfile's LD_LIBRARY_PATH setup) so nothing
+         needs installing separately at the OS level. -->
+    <PackageReference Include="MediaInfo.Wrapper.Core" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+    <!-- Adds process.memory.virtual, process.cpu.time (split by user/system mode),
+         process.thread.count, process.uptime, and Windows handle/Linux fd counts — none of which
+         OpenTelemetry.Instrumentation.Runtime's dotnet_process_* metrics cover. Still prerelease
+         (rc, not beta) upstream. -->
+    <PackageReference Include="OpenTelemetry.Instrumentation.Process" />
+    <!-- The Prometheus exporter has never left prerelease upstream (still betas years into 1.x) —
+         pinned explicitly rather than following a stable version scheme, since none exists yet. -->
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
+    <PackageReference Include="SkiaSharp" />
+    <!-- The base SkiaSharp package only bundles Windows/macOS native binaries — Linux (used by
+         the Docker image) needs this explicit companion package or libSkiaSharp.so is silently
+         missing from the publish output entirely, crashing on the first image conversion. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+  </ItemGroup>
+
+</Project>

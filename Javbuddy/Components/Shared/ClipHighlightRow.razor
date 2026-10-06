@@ -1,0 +1,57 @@
+@using Javbuddy.Services.Scenes
+
+@* A highlight's row in ClipEditor's tree, moved from HighlightEditor: its own tags and
+   actors, the tags its apexes roll up to it and the actors it inherits (grayed), and — drawn only under
+   the scene it starts in — which later scenes it continues into. Pure display; ClipEditor acts on the
+   callbacks. *@
+<button type="button" class="highlight-editor-row" @onclick="OnSeek" title="Jump to this highlight">
+    <span class="highlight-editor-pos">@Highlight.Position</span>
+    <span class="highlight-editor-name @(Highlight.Title is null ? "highlight-editor-name-default" : null)" title="@Highlight.DisplayTitle">@Highlight.DisplayTitle</span>
+    <span class="highlight-editor-meta">
+        <span class="highlight-editor-range">@SceneTimeFormat.Format(Highlight.StartSeconds)–@SceneTimeFormat.Format(Highlight.EndSeconds)</span>
+        <span class="highlight-editor-duration">(@SceneTimeFormat.Format(Highlight.DurationSeconds))</span>
+        @if (Node.ContinuesIntoScenePositions.Count > 0)
+        {
+            <span class="highlight-editor-continues">continues into @(Node.ContinuesIntoScenePositions.Count == 1 ? "scene" : "scenes") @string.Join(", ", Node.ContinuesIntoScenePositions)</span>
+        }
+        @if (Highlight.Actors.Count > 0)
+        {
+            <span class="highlight-editor-actors">@string.Join(", ", Highlight.Actors.Select(a => a.Name))</span>
+        }
+        <ImplicitChips Items="@ImplicitChip.ForActors(Node.Actors)" />
+        @foreach (var tag in Highlight.Tags)
+        {
+            <span class="highlight-editor-tag">@ImplicitChip.TagLabel(tag)</span>
+        }
+        <ImplicitChips Items="@ImplicitChip.ForTags(Node.ImplicitTags)" />
+    </span>
+</button>
+<button type="button" class="highlight-editor-icon-btn highlight-editor-play-btn" @onclick="OnPlay" aria-label="Play @Highlight.DisplayTitle" title="Play just this highlight">
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" /></svg>
+</button>
+<button type="button" class="highlight-editor-icon-btn highlight-editor-fav-btn @(Highlight.IsFavorite ? "highlight-editor-fav-on" : null)" @onclick="OnToggleFavorite" disabled="@Busy"
+        aria-pressed="@(Highlight.IsFavorite ? "true" : "false")" aria-label="@(Highlight.IsFavorite ? "Unfavorite" : "Favorite") @Highlight.DisplayTitle" title="@(Highlight.IsFavorite ? "Remove from favorite highlights" : "Add to favorite highlights")">
+    <FavoriteHeartIcon Filled="Highlight.IsFavorite" Size="12" />
+</button>
+<button type="button" class="highlight-editor-icon-btn highlight-editor-edit-btn" @onclick="OnEdit" disabled="@Busy" aria-label="Edit @Highlight.DisplayTitle" title="Edit">
+    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5z" /></svg>
+</button>
+<button type="button" class="highlight-editor-icon-btn highlight-editor-delete-btn" @onclick="OnDelete" disabled="@Busy" aria-label="Delete @Highlight.DisplayTitle" title="Delete">×</button>
+
+@code {
+    [Parameter, EditorRequired] public HighlightNode Node { get; set; } = null!;
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback OnSeek { get; set; }
+
+    [Parameter] public EventCallback OnPlay { get; set; }
+
+    [Parameter] public EventCallback OnToggleFavorite { get; set; }
+
+    [Parameter] public EventCallback OnEdit { get; set; }
+
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    private HighlightItem Highlight => Node.Highlight;
+}

@@ -1,0 +1,67 @@
+@using Javbuddy.Services
+@inject ITagService TagService
+
+<div class="tag-search">
+    <input type="text" class="tag-search-input" placeholder="Search tags to add…" value="@query" @oninput="OnInputAsync" @onkeydown="OnKeyDownAsync" />
+    @if (results.Count > 0)
+    {
+        <div class="tag-search-results">
+            @foreach (var candidate in results)
+            {
+                <div class="tag-search-candidate" @onclick="() => AddAsync(candidate)">
+                    @(candidate.ParentTagName != null ? $"{candidate.ParentTagName} › {candidate.Name}" : candidate.Name)
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Tags already on the movie, hidden from the results.</summary>
+    [Parameter] public IReadOnlyCollection<int> ExcludedTagIds { get; set; } = [];
+
+    /// <summary>Raised with the chosen tag's ID; the search box resets itself afterwards.</summary>
+    [Parameter] public EventCallback<int> OnAdd { get; set; }
+
+    /// <summary>Raised with the chosen tag itself (name and parent), alongside <see cref="OnAdd"/>.</summary>
+    [Parameter] public EventCallback<TagListItem> OnAddItem { get; set; }
+
+    /// <summary>When set, Enter adds the typed text as-is (TorrentSort genres), for values
+    /// that aren't a tag yet.</summary>
+    [Parameter] public EventCallback<string> OnAddFreeText { get; set; }
+
+    private string query = "";
+    private IReadOnlyList<TagListItem> results = [];
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        query = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            results = [];
+            return;
+        }
+
+        // Only approved tags can be added to a movie by hand (unapproved ones go through the Tags
+        // page's review flow first).
+        var matches = await TagService.GetTagsAsync(query);
+        results = matches.Where(t => !ExcludedTagIds.Contains(t.Id) && !t.NeedsReview).Take(10).ToList();
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || !OnAddFreeText.HasDelegate || string.IsNullOrWhiteSpace(query)) return;
+        var text = query.Trim();
+        query = "";
+        results = [];
+        await OnAddFreeText.InvokeAsync(text);
+    }
+
+    private async Task AddAsync(TagListItem candidate)
+    {
+        query = "";
+        results = [];
+        await OnAdd.InvokeAsync(candidate.Id);
+        await OnAddItem.InvokeAsync(candidate);
+    }
+}

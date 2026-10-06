@@ -1,0 +1,517 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Trickplay
+@inject IMovieStreamService StreamService
+@inject ITrickplayService TrickplayService
+@inject TrickplayGenerationTracker TrickplayGeneration
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* The full-screen player both player modals share: header, local stream
+ and trickplay loading (picking it up once it's generated while open),
+   and the VideoPlayerColumn: the video with VR and arrow-key seeking, and the scrub bar. VideoPlayerModal adds the scene editor as the SidePanel; ClipPlayerModal adds an Edit link to the
+   HeaderActions and replaces the native controls and scrub bar with its own clip Controls. *@
+@if (Show)
+{
+    <div class="video-player-modal-backdrop" tabindex="0" @ref="backdropRef" @onkeydown="HandleKeyDown" @onclick="CloseAsync">
+        <InertBackground Root="backdropRef" />
+        <div class="video-player-modal-panel" @ref="panelRef" @onclick:stopPropagation="true">
+            <div class="video-player-modal-header">
+                <div class="video-player-modal-title">
+                    @if (!string.IsNullOrWhiteSpace(Code))
+                    {
+                        <a class="video-player-modal-code" href="@($"/movies/{Uri.EscapeDataString(Code)}")"
+                           title="Open Movie Detail" @onclick="OnCodeClickAsync">@Code</a>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(Title))
+                    {
+                        <span class="video-player-modal-name" title="@Title">@Title</span>
+                    }
+                </div>
+                <div class="video-player-modal-actions">
+                    @HeaderActions
+                    @if (!string.IsNullOrWhiteSpace(streamUrl) && versions.Count > 1)
+                    {
+                        <select class="video-player-version-select" aria-label="Version" title="Switch to another version of this movie"
+                                value="@playingFileId" @onchange="SwitchVersionAsync">
+                            @foreach (var version in versions)
+                            {
+                                <option value="@version.FileId">@version.Label@(version.IsPrimary ? " (Primary)" : null)</option>
+                            }
+                        </select>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(streamUrl))
+                    {
+                        <button type="button"
+                                class="video-player-vr-toggle @(vrMode ? "video-player-vr-toggle-on" : null)"
+                                aria-pressed="@(vrMode ? "true" : "false")"
+                                title="Unwarp a side-by-side VR video into a draggable 2D view"
+                                @onclick="ToggleVrMode">
+                            VR 2D
+                        </button>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(ExternalWebUrl))
+                    {
+                        <a class="video-player-external-btn"
+                           href="@ExternalWebUrl"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           title="Open item in Jellyfin web client">
+                            <svg width="14" height="14" viewBox="0 0 72 72" fill="none" aria-hidden="true" class="me-1">
+                                <path d="M24.2116 49.1581C22.6599 46.0424 32.8378 27.5879 35.9999 27.5879C39.1666 27.5895 49.3228 46.0764 47.7882 49.1581C46.2536 52.2398 25.7632 52.2738 24.2116 49.1581Z" fill="currentColor" />
+                                <path fill-rule="evenodd" clip-rule="evenodd" d="M0.481861 64.9951C-4.19479 55.6047 26.4765 0 36 0C45.5328 0 76.153 55.713 71.5274 64.9951C66.9018 74.2773 5.15852 74.3856 0.481861 64.9951ZM12.7358 56.847C15.8005 62.9995 56.2536 62.9314 59.2843 56.847C62.3149 50.761 42.2515 14.2605 36.0093 14.2605C29.767 14.2605 9.67118 50.6944 12.7358 56.847Z" fill="currentColor" />
+                            </svg>
+                            Open in Jellyfin
+                        </a>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(streamUrl))
+                    {
+                        <ShortcutsInfo Shortcuts="AllShortcuts" />
+                    }
+                    <button type="button" class="video-player-modal-close-btn" @onclick="CloseAsync" aria-label="Close">
+                        <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
+                            <path d="M2.146 2.146a.5.5 0 0 1 .708 0L8 7.293l5.146-5.147a.5.5 0 1 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854a.5.5 0 0 1 0-.708z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="video-player-modal-body">
+                @if (loading)
+                {
+                    <div class="video-player-loading">
+                        <LoadingIndicator />
+                    </div>
+                }
+                else if (errorMessage is not null || streamUrl is null)
+                {
+                    <div class="video-player-error">
+                        <p class="video-player-error-text">@(errorMessage ?? "Video stream is unavailable.")</p>
+                        @if (!string.IsNullOrWhiteSpace(ExternalWebUrl))
+                        {
+                            <a class="btn btn-outline-light" href="@ExternalWebUrl" target="_blank" rel="noopener noreferrer">
+                                Open in Jellyfin
+                            </a>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="video-player-layout">
+                    <VideoPlayerColumn VideoClass="video-player-video"
+                                       Src="@VideoSrc"
+                                       Trickplay="trickplay"
+                                       Generating="generating"
+                                       DurationSeconds="DurationSeconds"
+                                       ShowTimeline="ShowTimeline"
+                                       Scenes="Scenes"
+                                       Suggestions="Suggestions"
+                                       Highlights="Highlights"
+                                       Apexes="Apexes"
+                                       CountdownApexes="CountdownApexes"
+                                       VrMode="vrMode"
+                                       NativeControls="NativeControls"
+                                       Controls="@(Controls?.Invoke(new ControlsContext(trickplay, streamMovieId == MovieId, trickplay is null ? generating : null)))"
+                                       SeekMinSeconds="SeekMinSeconds"
+                                       SeekMaxSeconds="SeekMaxSeconds"
+                                       HighlightJumpTargets="highlightJumpTargets"
+                                       ApexJumpTargets="apexJumpTargets"
+                                       ScrubBarShownChanged="shown => scrubBarShown = shown" />
+                    @if (SidePanel is not null)
+                    {
+                        <aside class="video-player-side-panel">
+                            @SidePanel(trickplay)
+                        </aside>
+                    }
+                    </div>
+                    <PlayerIdleChrome Root="panelRef" VideoSelector="video.video-player-video" />
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Code { get; set; }
+    /// <summary>The movie whose local video file is streamed.</summary>
+    [Parameter] public int? MovieId { get; set; }
+
+    /// <summary>The version (MovieFile id) played when the player opens; the movie's
+    /// main file when null.</summary>
+    [Parameter] public int? FileId { get; set; }
+
+    /// <summary>Whether the header offers the movie's other versions to switch to mid-playback
+    ///, shown when it has more than one.</summary>
+    [Parameter] public bool ShowVersions { get; set; }
+
+    [Parameter] public string? ExternalWebUrl { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    [Parameter] public double? DurationSeconds { get; set; }
+
+    /// <summary>Where playback starts when the player opens.</summary>
+    [Parameter] public double? StartAtSeconds { get; set; }
+
+    /// <summary>Where playback pauses, for playing just a clip; sent as the media
+    /// fragment's end.</summary>
+    [Parameter] public double? EndAtSeconds { get; set; }
+
+    /// <summary>Whether the scrub bar is drawn, without thumbnails, when there's no trickplay
+    ///; it takes DurationSeconds, or the video's own length when that's unknown.</summary>
+    [Parameter] public bool ShowTimeline { get; set; }
+
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.SceneItem>? Scenes { get; set; }
+
+    [Parameter] public IReadOnlyList<double>? Suggestions { get; set; }
+
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem>? Highlights { get; set; }
+
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? Apexes { get; set; }
+
+    /// <summary>Apexes for the countdown only; defaults to <see cref="Apexes"/>.</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? CountdownApexes { get; set; }
+
+    /// <summary>False hides the browser's own video controls, for a player that brings
+    /// its own Controls.</summary>
+    [Parameter] public bool NativeControls { get; set; } = true;
+
+    /// <summary>Shown under the video in place of the scrub bar when set.</summary>
+    [Parameter] public RenderFragment<ControlsContext>? Controls { get; set; }
+
+    /// <summary>What the Controls get: the trickplay once it loads, and whether the video is already
+    /// MovieId's. While switching to another movie the previous video keeps
+    /// playing until the new stream is ready, and controls for the new clip mustn't act on it.
+    /// Generating is set while there's no trickplay and the movie's is being generated.</summary>
+    public sealed record ControlsContext(TrickplayLayout? Trickplay, bool StreamReady, TrickplayGenerating? Generating = null);
+
+    /// <summary>The range arrow-key seeking is clamped to; the whole video when null.</summary>
+    [Parameter] public double? SeekMinSeconds { get; set; }
+
+    [Parameter] public double? SeekMaxSeconds { get; set; }
+
+    /// <summary>The highlights and apexes H / Shift+H and A / Shift+A jump between, in the
+    /// video's time and limited to the seek range; default to <see cref="Highlights"/> and
+    /// <see cref="Apexes"/>. A clip player, which draws no scrub-bar markers, sets them.</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem>? JumpHighlights { get; set; }
+
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? JumpApexes { get; set; }
+
+    /// <summary>False turns the jump keys off, while the editor's own H and A mark highlights and apexes.</summary>
+    [Parameter] public bool MarkerJumpKeys { get; set; } = true;
+
+    /// <summary>Extra header buttons, before the VR toggle.</summary>
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
+
+    /// <summary>Shown in a side panel next to the video when set; given the trickplay once it loads.</summary>
+    [Parameter] public RenderFragment<TrickplayLayout?>? SidePanel { get; set; }
+
+    /// <summary>The host's own keyboard shortcuts, listed in the header's info icon
+    /// before the ones the shell provides itself: seeking, fullscreen and Esc.</summary>
+    [Parameter] public IReadOnlyList<KeyboardShortcut> Shortcuts { get; set; } = [];
+
+    private static readonly KeyboardShortcut CloseShortcut = new(["Esc"], "Close the player (in fullscreen: leave fullscreen first)");
+
+    // F comes from the ScrubBar, the VR viewer, or the host's Controls; the browser's own
+    // controls have no fullscreen key.
+    private IReadOnlyList<KeyboardShortcut> AllShortcuts =>
+    [
+        .. Shortcuts,
+        .. (scrubBarShown && !vrMode ? [KeyboardShortcut.PlayPause] : Array.Empty<KeyboardShortcut>()),
+        KeyboardShortcut.Seek,
+        KeyboardShortcut.FrameStep,
+        .. (highlightJumpTargets.Count > 0 ? [KeyboardShortcut.JumpHighlight] : Array.Empty<KeyboardShortcut>()),
+        .. (apexJumpTargets.Count > 0 ? [KeyboardShortcut.JumpApex] : Array.Empty<KeyboardShortcut>()),
+        .. (Controls is not null || scrubBarShown || vrMode ? [KeyboardShortcut.Fullscreen] : Array.Empty<KeyboardShortcut>()),
+        CloseShortcut,
+    ];
+
+    // Whether the VideoPlayerColumn shows its scrub bar.
+    private bool scrubBarShown;
+
+    private IReadOnlyList<double> highlightJumpTargets = [];
+    private IReadOnlyList<double> apexJumpTargets = [];
+
+    private ElementReference backdropRef;
+    private ElementReference panelRef;
+    private bool focusNeeded;
+    private bool prevShow;
+    private int? prevMovieId;
+    private string? streamUrl;
+    // The movie streamUrl belongs to; behind MovieId while switching to another one.
+    private int? streamMovieId;
+    private TrickplayLayout? trickplay;
+    // The stream's movie's trickplay while it's being generated.
+    private TrickplayGenerating? generating;
+    private bool disposed;
+    private bool vrMode;
+    private bool loading;
+    private string? errorMessage;
+    private double? openedAtSeconds;
+    private double? openedEndAtSeconds;
+    // The movie's versions and the one streamed, with where the previous version was
+    // when switching, so the new one carries on from there.
+    private IReadOnlyList<MovieVersionOption> versions = [];
+    private int? playingFileId;
+    private double? resumeAtSeconds;
+    private IJSObjectReference? videoModule;
+
+    private double? StartSeconds => resumeAtSeconds ?? openedAtSeconds;
+
+    // A media fragment makes the browser start at the requested point without a separate seek, and
+    // with an end, pause there. A clip may start at 0, so an end always gets a fragment.
+    private string? VideoSrc => openedEndAtSeconds is { } end
+        ? streamUrl + FormattableString.Invariant($"#t={StartSeconds ?? 0:0.###},{end:0.###}")
+        : StartSeconds is > 0
+            ? streamUrl + FormattableString.Invariant($"#t={StartSeconds.Value:0.###}")
+            : streamUrl;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        highlightJumpTargets = MarkerJumpKeys ? MarkerJumps.HighlightTargets(JumpHighlights ?? Highlights, SeekMinSeconds, SeekMaxSeconds) : [];
+        apexJumpTargets = MarkerJumpKeys ? MarkerJumps.ApexTargets(JumpApexes ?? Apexes, SeekMinSeconds, SeekMaxSeconds) : [];
+
+        if (Show && !prevShow)
+        {
+            prevShow = true;
+            focusNeeded = true;
+            vrMode = false;
+            streamUrl = null;
+            await OpenAsync();
+        }
+        else if (Show && (MovieId != prevMovieId || StartAtSeconds != openedAtSeconds || EndAtSeconds != openedEndAtSeconds))
+        {
+            // Another clip while shown (a playlist's next one): the player stays on
+            // screen, fullscreen included, and the video just moves to the new clip, or the new video
+            // once its stream is ready.
+            if (MovieId == prevMovieId)
+            {
+                openedAtSeconds = StartAtSeconds;
+                openedEndAtSeconds = EndAtSeconds;
+                resumeAtSeconds = null;
+            }
+            else
+            {
+                await OpenAsync();
+            }
+        }
+        else if (!Show && prevShow)
+        {
+            prevShow = false;
+            prevMovieId = null;
+            streamUrl = null;
+            streamMovieId = null;
+            trickplay = null;
+            generating = null;
+            scrubBarShown = false;
+            vrMode = false;
+            loading = false;
+            errorMessage = null;
+            versions = [];
+            playingFileId = null;
+            resumeAtSeconds = null;
+        }
+    }
+
+    // Resolves the local stream for MovieId. On first open this shows the loading state; when
+    // switching videos the current one keeps playing until the new stream is ready.
+    private async Task OpenAsync()
+    {
+        var movieId = MovieId;
+        var fileId = FileId;
+        prevMovieId = movieId;
+        trickplay = null;
+        errorMessage = null;
+        resumeAtSeconds = null;
+
+        if (movieId is null)
+        {
+            streamUrl = null;
+            streamMovieId = movieId;
+            loading = false;
+            openedAtSeconds = StartAtSeconds;
+            openedEndAtSeconds = EndAtSeconds;
+            errorMessage = "No movie to play.";
+            return;
+        }
+
+        loading = streamUrl is null;
+        string? url = null;
+        string? error = null;
+        IReadOnlyList<MovieVersionOption> loadedVersions = [];
+        try
+        {
+            var path = fileId is { } id
+                ? await StreamService.GetFilePathAsync(movieId.Value, id)
+                : await StreamService.GetMainFilePathAsync(movieId.Value);
+            url = path is not null ? MovieStreamService.StreamUrl(movieId.Value, fileId) : null;
+            if (ShowVersions)
+            {
+                loadedVersions = await StreamService.GetVersionsAsync(movieId.Value) ?? [];
+            }
+            if (url is null)
+            {
+                error = "Video file not available locally.";
+            }
+        }
+        catch (Exception ex)
+        {
+            error = $"Error loading video stream: {ex.Message}";
+        }
+
+        // A later switch (or close) won the race.
+        if (!Show || MovieId != movieId) return;
+
+        loading = false;
+        streamUrl = url;
+        streamMovieId = movieId;
+        versions = loadedVersions;
+        playingFileId = fileId ?? loadedVersions.FirstOrDefault(v => v.IsPrimary)?.FileId ?? loadedVersions.FirstOrDefault()?.FileId;
+        errorMessage = error;
+        openedAtSeconds = StartAtSeconds;
+        openedEndAtSeconds = EndAtSeconds;
+        generating = null;
+        if (url is not null)
+        {
+            // Read before loading: a run that ends after this is caught by OnTrickplayGenerationChanged,
+            // and one that already ended saved its set first.
+            generating = TrickplayGeneration.Get(new TrickplayTarget(movieId.Value));
+            _ = LoadTrickplayAsync(movieId.Value);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Show && focusNeeded)
+        {
+            focusNeeded = false;
+            try
+            {
+                await backdropRef.FocusAsync();
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    protected override void OnInitialized() => TrickplayGeneration.Changed += OnTrickplayGenerationChanged;
+
+    // Raised on the generating thread. When the movie's set is written while the player is open, the
+    // scrub bar switches to its thumbnails.
+    private void OnTrickplayGenerationChanged(TrickplayTarget target)
+    {
+        if (disposed || target.Clip is not null || target.MovieId != streamMovieId) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed || target.MovieId != streamMovieId) return;
+            var wasGenerating = generating is not null;
+            generating = TrickplayGeneration.Get(target);
+            StateHasChanged();
+            if (wasGenerating && generating is null && trickplay is null)
+            {
+                await LoadTrickplayAsync(target.MovieId);
+            }
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        TrickplayGeneration.Changed -= OnTrickplayGenerationChanged;
+        if (videoModule is null) return;
+        try
+        {
+            await videoModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    // Swaps the stream to another version, carrying on from where the current one is.
+    // Trickplay, scenes and highlights stay the movie's (from its main file), so they're kept as they are.
+    private async Task SwitchVersionAsync(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var fileId) || fileId == playingFileId || streamMovieId is not { } movieId) return;
+
+        double? at = null;
+        try
+        {
+            videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");
+            at = await videoModule.InvokeAsync<double?>("currentTime", "video.video-player-video");
+        }
+        catch (JSException)
+        {
+        }
+        catch (JSDisconnectedException)
+        {
+            return;
+        }
+
+        string? path;
+        try
+        {
+            path = await StreamService.GetFilePathAsync(movieId, fileId);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading video stream: {ex.Message}";
+            return;
+        }
+        if (!Show || streamMovieId != movieId) return;
+        if (path is null)
+        {
+            errorMessage = "That version isn't available locally.";
+            return;
+        }
+
+        playingFileId = fileId;
+        errorMessage = null;
+        resumeAtSeconds = at ?? StartSeconds;
+        streamUrl = MovieStreamService.StreamUrl(movieId, fileId);
+    }
+
+    private async Task LoadTrickplayAsync(int movieId)
+    {
+        try
+        {
+            var loaded = await TrickplayService.GetAsync(movieId);
+            if (!Show || MovieId != movieId) return;
+            trickplay = loaded;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            // Trickplay is optional
+        }
+    }
+
+    private void ToggleVrMode() => vrMode = !vrMode;
+
+    // The code links to Movie Detail. A plain click closes the player too, since on
+    // Movie Detail itself the link lands on the page the player is already open over; a new-tab
+    // click (Ctrl/Cmd/Shift or middle button) leaves it playing.
+    private async Task OnCodeClickAsync(MouseEventArgs e)
+    {
+        if (e.Button != 0 || e.CtrlKey || e.MetaKey || e.ShiftKey) return;
+        await CloseAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        streamUrl = null;
+        trickplay = null;
+        generating = null;
+        vrMode = false;
+        await OnClose.InvokeAsync();
+    }
+}

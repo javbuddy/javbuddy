@@ -1,0 +1,98 @@
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Javinizer
+@using Microsoft.EntityFrameworkCore
+@inject IJavinizerClient JavinizerClient
+@inject IConnectionSettingsSaveService ConnectionSettingsSaveService
+@inject IConfiguration Configuration
+
+<ConnectionSettingsCard TSettings="JavinizerSettings"
+                         Title="javinizer-go"
+                         EnvConfigured="envConfigured"
+                         Settings="settings"
+                         FormName="javinizer-settings"
+                         OnSave="Save"
+                         OnTest="TestConnection"
+                         Testing="testing"
+                         TestResult="TestResultTuple"
+                         Saved="saved"
+                         IsFirst="true">
+    <TestResultDetails>
+        @if (!string.IsNullOrWhiteSpace(testResult?.Version))
+        {
+            <div class="mt-2 pt-2 border-top border-success-subtle small">
+                <div><strong>Server version:</strong> @testResult.Version</div>
+            </div>
+        }
+    </TestResultDetails>
+    <Description>
+        Used to fetch metadata for movies by their release code. Create an API token in your
+        javinizer-go instance's web UI (or via <code>POST /api/v1/tokens</code>) and paste it here.
+    </Description>
+    <EnvBanner>
+        Configured via environment variables (<code>Javinizer__BaseUrl</code> / <code>Javinizer__ApiToken</code>).
+        These take precedence over the form below.
+    </EnvBanner>
+    <FormFields>
+        <div class="mb-3">
+            <label class="form-label">Base URL (internal API)</label>
+            <InputText class="form-control" @bind-Value="settings!.BaseUrl" placeholder="http://localhost:8765" disabled="@envConfigured" />
+            <div class="form-text">Internal address used by this server to talk to javinizer-go API.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">External URL (optional)</label>
+            <InputText class="form-control" @bind-Value="settings!.ExternalUrl" placeholder="https://javinizer.yourdomain.com" disabled="@envConfigured" />
+            <div class="form-text">Public browser URL for links (falls back to Base URL if empty).</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">API token</label>
+            <InputText class="form-control" type="password" @bind-Value="settings!.ApiToken" placeholder="jvz_…" disabled="@envConfigured" />
+        </div>
+    </FormFields>
+</ConnectionSettingsCard>
+
+@code {
+    private JavinizerSettings? settings;
+    private JavinizerTestResult? testResult;
+    private bool testing;
+    private bool saved;
+    private bool envConfigured;
+
+    private (bool Success, string Message)? TestResultTuple => testResult is null ? null : (testResult.Success, testResult.Message);
+
+    protected override async Task OnInitializedAsync()
+    {
+        envConfigured = JavinizerEnvConfig.IsSet(Configuration);
+        if (envConfigured)
+        {
+            settings = new JavinizerSettings
+            {
+                BaseUrl = JavinizerEnvConfig.GetBaseUrl(Configuration),
+                ExternalUrl = JavinizerEnvConfig.GetExternalUrl(Configuration),
+                ApiToken = JavinizerEnvConfig.GetApiToken(Configuration)
+            };
+        }
+        else
+        {
+            settings = await ConnectionSettingsSaveService.GetJavinizerAsync();
+        }
+    }
+
+    private async Task Save()
+    {
+        saved = false;
+        testResult = null;
+        await ConnectionSettingsSaveService.SaveJavinizerAsync(settings!);
+        saved = true;
+    }
+
+    private async Task TestConnection()
+    {
+        testing = true;
+        testResult = null;
+        await Save();
+        testResult = await JavinizerClient.TestConnectionAsync();
+        testing = false;
+    }
+}

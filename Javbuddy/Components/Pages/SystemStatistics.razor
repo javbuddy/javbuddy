@@ -1,0 +1,83 @@
+@page "/system/statistics"
+@using Javbuddy.Services
+@using Javbuddy.Services.Statistics
+@inject ILibraryStatisticsService StatisticsService
+@rendermode InteractiveServer
+
+<PageTitle>Statistics · Javbuddy</PageTitle>
+
+@if (stats is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <h1 class="stats-title">Overview</h1>
+    <div class="stats-tiles">
+        <div class="stats-tile"><span class="stats-tile-value">@stats.Movies</span><span class="stats-tile-label">Movies</span></div>
+        <div class="stats-tile"><span class="stats-tile-value">@stats.Scenes</span><span class="stats-tile-label">Scenes</span></div>
+        <div class="stats-tile"><span class="stats-tile-value">@stats.Highlights</span><span class="stats-tile-label">Highlights</span></div>
+        <div class="stats-tile"><span class="stats-tile-value">@stats.Apexes</span><span class="stats-tile-label">Apexes</span></div>
+        <div class="stats-tile"><span class="stats-tile-value">@stats.Actors</span><span class="stats-tile-label">Actors (@stats.ActorsFavorite ♥)</span></div>
+        <div class="stats-tile"><span class="stats-tile-value">@stats.Tags</span><span class="stats-tile-label">Tags (@stats.TagsNeedingReview to review)</span></div>
+        <div class="stats-tile"><span class="stats-tile-value">@ByteSizeFormatter.Format(stats.TotalBytes)</span><span class="stats-tile-label">Library size</span></div>
+        <div class="stats-tile"><span class="stats-tile-value">@stats.TotalRuntimeHours.ToString("N0")&nbsp;h</span><span class="stats-tile-label">Runtime</span></div>
+    </div>
+
+    <h2 class="stats-title">Movies</h2>
+    <div class="stats-grid">
+        <section class="stats-card">
+            <h3>Status</h3>
+            <div class="stats-stack" role="img" aria-label="Got @stats.MoviesGot, missing @stats.MoviesMissing">
+                @if (stats.Movies > 0)
+                {
+                    <span class="stats-stack-got" style="width:@Pct(stats.MoviesGot, stats.Movies)"></span>
+                    <span class="stats-stack-missing" style="width:@Pct(stats.MoviesMissing, stats.Movies)"></span>
+                }
+            </div>
+            <div class="stats-legend">
+                <span><i class="stats-swatch stats-stack-got"></i> Got @stats.MoviesGot</span>
+                <span><i class="stats-swatch stats-stack-missing"></i> Missing @stats.MoviesMissing</span>
+                <span>VR @stats.MoviesVr</span>
+                <span>Favorites @stats.MoviesFavorite</span>
+            </div>
+        </section>
+        <section class="stats-card">
+            <h3>By library root</h3>
+            <BarList Rows="stats.ByRoot" ShowBytes="true" />
+        </section>
+        <section class="stats-card">
+            <h3>Resolution</h3>
+            <BarList Rows="stats.ByResolution" />
+        </section>
+        <section class="stats-card">
+            <h3>Video codec</h3>
+            <BarList Rows="stats.ByCodec" />
+        </section>
+        <section class="stats-card">
+            <h3>Added per month</h3>
+            <BarList Rows="stats.AddedPerMonth" />
+        </section>
+    </div>
+
+    <h2 class="stats-title">Actors &amp; tags</h2>
+    <div class="stats-grid">
+        <section class="stats-card">
+            <h3>Top actors (movies)</h3>
+            <BarList Rows="stats.TopActors" />
+        </section>
+        <section class="stats-card">
+            <h3>Top tags (movies)</h3>
+            <BarList Rows="stats.TopTags" />
+        </section>
+    </div>
+}
+
+@code {
+    private LibraryStatistics? stats;
+
+    protected override async Task OnInitializedAsync() => stats = await StatisticsService.GetAsync();
+
+    private static string Pct(int part, int total) =>
+        (total == 0 ? 0 : part * 100.0 / total).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+}

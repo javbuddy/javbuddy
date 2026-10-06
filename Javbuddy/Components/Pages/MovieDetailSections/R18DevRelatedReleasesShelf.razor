@@ -1,0 +1,89 @@
+@* Movie Detail's "More from this series": other r18.dev releases in an r18.dev
+   preview's series, marked against the library. Hidden when the movie has no series. Tracked movies
+   don't show it. *@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.R18Dev
+@inject IMovieAddService MovieAddService
+
+@if (rows.Count > 0 && Related.Series is { } series)
+{
+    <section class="related-releases">
+        <div class="related-releases-header">
+            <h2>More from this series: @series.Name</h2>
+            @if (Related.Total > rows.Count)
+            {
+                <button type="button" class="related-releases-see-all" @onclick="OnSeeAll">
+                    See all @Related.Total.ToString("N0")
+                </button>
+            }
+        </div>
+
+        @if (addError is not null)
+        {
+            <div class="alert alert-danger">@addError</div>
+        }
+
+        <PosterGrid>
+            @foreach (var row in rows)
+            {
+                <R18DevReleaseCard @key="row.CanonicalKey"
+                                   Release="row"
+                                   OnSearch="OpenSearchModal"
+                                   OnAdd="AddAsync"
+                                   AddInProgress="@addingCodes.Contains(row.Movie.DvdId)" />
+            }
+        </PosterGrid>
+
+        <ProwlarrSearchModal Code="@searchCode" Show="showSearchModal" OnClose="() => showSearchModal = false" OnMovieAdded="ApplyAdded" />
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public R18DevRelatedReleases Related { get; set; } = R18DevRelatedReleases.None;
+
+    /// <summary>Opens the Movies page's r18.dev catalog with every release of this series.</summary>
+    [Parameter] public EventCallback OnSeeAll { get; set; }
+
+    private List<R18DevReleaseRow> rows = [];
+    private R18DevRelatedReleases? shown;
+    private readonly HashSet<string> addingCodes = new(StringComparer.OrdinalIgnoreCase);
+    private string? addError;
+    private bool showSearchModal;
+    private string? searchCode;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(Related, shown)) return;
+        shown = Related;
+        rows = Related.Rows.ToList();
+        addError = null;
+    }
+
+    private void OpenSearchModal(string code)
+    {
+        searchCode = code;
+        showSearchModal = true;
+    }
+
+    private async Task AddAsync(string code)
+    {
+        if (!addingCodes.Add(code)) return;
+        addError = null;
+        try
+        {
+            var result = await MovieAddService.AddAsync(code);
+            ApplyAdded(result.Movie);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            addError = $"Couldn't add {code}: {ex.Message}";
+        }
+        finally
+        {
+            addingCodes.Remove(code);
+        }
+    }
+
+    private void ApplyAdded(Movie movie) => rows = R18DevReleaseMatcher.ApplyAddedMovie(rows, movie);
+}

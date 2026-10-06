@@ -1,0 +1,13 @@
+@* A small badge on an explicit tag or actor set that only repeats what the clip or movie already gets from
+   elsewhere: a scene's or highlight's own tag that something inside it carries too, a movie
+   tag that's also from its clips, or a highlight's or apex's own actors equal to what it would inherit. The
+   host offers the fix (the chip's remove button, or Use inherited) next to it. *@
+<span class="redundant-mark" title="@Tooltip" aria-label="@($"{Label}: {Tooltip}")">@Label</span>
+
+@code {
+    /// <summary>The badge text, e.g. "redundant" or "same as inherited".</summary>
+    [Parameter] public string Label { get; set; } = "redundant";
+
+    /// <summary>Where the value comes from anyway and what removing it leaves.</summary>
+    [Parameter, EditorRequired] public string Tooltip { get; set; } = string.Empty;
+}

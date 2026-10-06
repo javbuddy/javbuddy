@@ -1,0 +1,194 @@
+@inject IJSRuntime JS
+@inject ILogger<VirtualizedGrid> Logger
+@implements IAsyncDisposable
+
+@* A windowed card grid: only a contiguous slice of the list — the page's ChildContent —
+   is ever in the DOM, between two spacers VirtualizedGrid.razor.js sizes to the rows outside it (see
+   that file's header for the geometry). The page owns the data: it renders the window it holds and
+   loads a new one when LoadRange asks. Always rendered, even while empty: the spacers and this div are
+   the anchors the JS measures from for the page's whole lifetime, so tearing them out on an empty
+   result would leave it holding detached element references. The page keeps its own wrapper around
+   this, so its scoped CSS (::deep rules, a hidden class) still applies. *@
+<div class="virtualized-grid" @ref="gridWrapperRef">
+    @* The window's own position/size, read by the JS's MutationObserver — see that file's header
+       comment for why this has to be a rendered attribute (arriving in the same diff as the card
+       list below) rather than a separate JS call after the fact. *@
+    <div class="virtualized-grid-spacer"
+         @ref="leadingSpacerRef"
+         data-window-start="@WindowStart"
+         data-window-count="@WindowCount"
+         data-total-count="@TotalCount"
+         data-scroll-storage-key="@ScrollStorageKey"></div>
+
+    @ChildContent
+
+    <div class="virtualized-grid-spacer" @ref="trailingSpacerRef"></div>
+</div>
+
+@code {
+    /// <summary>Index of the first item the page currently renders.</summary>
+    [Parameter] public int WindowStart { get; set; }
+
+    /// <summary>How many items the page currently renders.</summary>
+    [Parameter] public int WindowCount { get; set; }
+
+    /// <summary>Every item the list holds, rendered or not — what the spacers reserve height for.</summary>
+    [Parameter] public int TotalCount { get; set; }
+
+    /// <summary>The CSS grid inside ChildContent, measured for its resolved column count and row gap.</summary>
+    [Parameter, EditorRequired] public string GridSelector { get; set; } = "";
+
+    /// <summary>One card inside the grid, measured for the row height. Every card must be this tall.</summary>
+    [Parameter, EditorRequired] public string CardSelector { get; set; } = "";
+
+    /// <summary>The page's route. Scroll events arriving once the URL has moved on are ignored.</summary>
+    [Parameter, EditorRequired] public string ActivePath { get; set; } = "";
+
+    /// <summary>Optional sessionStorage key: when set, the scroll position is remembered and restored
+    /// the next time the grid starts (a back-navigation to the page).</summary>
+    [Parameter] public string? ScrollStorageKey { get; set; }
+
+    /// <summary>Optional session cookie the window's start is kept in, so the server can load the right
+    /// window before the first render after a back-navigation.</summary>
+    [Parameter] public string? WindowStartCookie { get; set; }
+
+    /// <summary>False until the page has rendered its first real window. The JS starts only then, so
+    /// a scroll restore measures the real cards rather than a loading placeholder.</summary>
+    [Parameter] public bool Ready { get; set; } = true;
+
+    /// <summary>Asked to make the window cover (start, count), with the grid's current column count.
+    /// The page loads it and re-renders itself; requests never overlap.</summary>
+    [Parameter, EditorRequired] public Func<int, int, int, Task> LoadRange { get; set; } = default!;
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    // Keys this grid's state in the shared JS module, which every page using the component imports.
+    private readonly string gridId = Guid.NewGuid().ToString("N");
+    private ElementReference gridWrapperRef;
+    private ElementReference leadingSpacerRef;
+    private ElementReference trailingSpacerRef;
+    private DotNetObjectReference<VirtualizedGrid>? dotNetRef;
+    private Task<IJSObjectReference>? jsModuleTask;
+    private bool gridInitialized;
+    private bool scrollToTopPending;
+    private bool disposed;
+    private bool rangeBusy;
+    private (int Start, int Count, int Columns)? pendingRange;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                // OnAfterRenderAsync's returned Task isn't awaited by the renderer, so a second call can
+                // start before this import finishes. Stash the Task itself — not the awaited result — so
+                // every concurrent caller awaits the same in-flight import instead of a field that's still null.
+                jsModuleTask = JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/VirtualizedGrid.razor.js").AsTask();
+            }
+
+            if (jsModuleTask is null || !Ready) return;
+            var module = await jsModuleTask;
+
+            // The import above is a real round trip on the first visit, and navigating away during it
+            // disposes this component — init() would then attach listeners nothing ever detaches.
+            if (disposed) return;
+
+            if (!gridInitialized)
+            {
+                gridInitialized = true;
+                dotNetRef ??= DotNetObjectReference.Create(this);
+                // Returns false when the grid has already left the DOM, so a later render
+                // can still try again if this component turns out to be staying after all.
+                gridInitialized = await module.InvokeAsync<bool>("init", gridId, dotNetRef, gridWrapperRef, leadingSpacerRef, trailingSpacerRef,
+                    new { activePath = ActivePath, gridSelector = GridSelector, cardSelector = CardSelector, scrollStorageKey = ScrollStorageKey, windowStartCookie = WindowStartCookie });
+            }
+
+            if (gridInitialized && scrollToTopPending)
+            {
+                scrollToTopPending = false;
+                await module.InvokeVoidAsync("scrollToTop", gridId);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    /// <summary>Jumps to the top of the page, for a page that just replaced its list (a filter change).
+    /// Waits for the next render when the JS hasn't started yet.</summary>
+    public async Task ScrollToTopAsync()
+    {
+        if (!gridInitialized || jsModuleTask is not { IsCompletedSuccessfully: true })
+        {
+            scrollToTopPending = true;
+            return;
+        }
+
+        try
+        {
+            await (await jsModuleTask).InvokeVoidAsync("scrollToTop", gridId);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    /// <summary>The one entry point the JS uses to move the window. Serialized, because a scrollbar drag
+    /// reports positions far faster than the DB can answer them — and coalescing rather than dropping the
+    /// ones that arrive mid-load is what makes the drag land on the range the user actually released at.</summary>
+    [JSInvokable]
+    public async Task SetVisibleRange(int start, int count, int gridColumns)
+    {
+        var columns = Math.Max(1, gridColumns);
+
+        if (rangeBusy)
+        {
+            pendingRange = (start, count, columns);
+            return;
+        }
+
+        rangeBusy = true;
+        try
+        {
+            var request = (Start: start, Count: count, Columns: columns);
+            while (true)
+            {
+                await LoadRange(request.Start, request.Count, request.Columns);
+
+                if (pendingRange is null) break;
+                request = pendingRange.Value;
+                pendingRange = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load the grid's visible window.");
+        }
+        finally
+        {
+            rangeBusy = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        try
+        {
+            if (jsModuleTask is { IsCompletedSuccessfully: true })
+            {
+                var module = await jsModuleTask;
+                await module.InvokeVoidAsync("dispose", gridId);
+                await module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        finally
+        {
+            dotNetRef?.Dispose();
+        }
+    }
+}

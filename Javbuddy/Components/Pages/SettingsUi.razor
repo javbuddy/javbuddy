@@ -1,0 +1,256 @@
+@page "/settings/ui"
+@using Javbuddy.Services.Scenes
+@using Javbuddy.Components.Pages.ActorDetailSections
+@using System.Globalization
+@using Javbuddy.Models
+@inject IJSRuntime JS
+@inject IApexPlaybackSettingsService ApexPlayback
+@rendermode InteractiveServer
+
+<PageTitle>UI · Javbuddy</PageTitle>
+
+<h1>UI</h1>
+
+<div class="card" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">Style</h5>
+        <div class="mb-2">
+            <label class="form-label">Theme</label>
+            <select class="form-select" style="max-width: 300px;" value="@theme" @onchange="OnThemeChanged">
+                <option value="auto">Auto</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+            </select>
+        </div>
+        <p class="text-muted mb-0">
+            Changes the application's colour theme. "Auto" follows your operating system's
+            light/dark setting and switches live if it changes.
+        </p>
+    </div>
+</div>
+
+<div class="card mt-4" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">Movie Detail</h5>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="movie-backdrop-check" checked="@movieBackdrop" @onchange="OnMovieBackdropChanged" />
+            <label class="form-check-label" for="movie-backdrop-check">Show backdrop image on movie detail page</label>
+        </div>
+        <p class="text-muted mb-0">
+            Shows the movie's fanart image as a low-opacity background behind the detail page, similar to Jellyfin.
+        </p>
+    </div>
+</div>
+
+<div class="card mt-4" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">Actor Detail</h5>
+        <label class="form-label" id="actor-detail-sections-label">Section order</label>
+        <ol class="list-group list-group-numbered mb-2" style="max-width: 300px;" aria-labelledby="actor-detail-sections-label">
+            @for (var i = 0; i < actorDetailSections.Count; i++)
+            {
+                var index = i;
+                var section = actorDetailSections[index];
+                <li class="list-group-item d-flex align-items-center gap-2 actor-detail-section-item" data-section="@section">
+                    <span class="me-auto">@section</span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" title="Move up" aria-label="Move @section up"
+                            disabled="@(index == 0)" @onclick="() => MoveActorDetailSectionAsync(index, -1)">↑</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" title="Move down" aria-label="Move @section down"
+                            disabled="@(index == actorDetailSections.Count - 1)" @onclick="() => MoveActorDetailSectionAsync(index, 1)">↓</button>
+                </li>
+            }
+        </ol>
+        <button type="button" class="btn btn-link btn-sm p-0 mb-2" disabled="@actorDetailSections.SequenceEqual(ActorDetailSectionOrder.Default)"
+                @onclick="ResetActorDetailSectionsAsync">Reset to default</button>
+        <p class="text-muted mb-0">
+            The order of the sections below the actor's details. Scenes, Highlights and Apexes only show when the
+            actor has some. It's a setting of this browser.
+        </p>
+    </div>
+</div>
+
+<div class="card mt-4" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">Player</h5>
+        <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="apex-countdown-check" checked="@apexCountdownOn" @onchange="OnApexCountdownToggled" />
+            <label class="form-check-label" for="apex-countdown-check">Count down to apexes</label>
+        </div>
+        <div class="mb-2">
+            <label class="form-label" for="apex-countdown-seconds">Countdown length (seconds)</label>
+            <input class="form-control" style="max-width: 120px;" type="number" id="apex-countdown-seconds"
+                   min="1" max="@ApexRanges.MaxCountdownSeconds" value="@apexCountdownSeconds" disabled="@(!apexCountdownOn)"
+                   @onchange="OnApexCountdownSecondsChanged" />
+        </div>
+        <p class="text-muted mb-0">
+            Shows a number over the video in the last seconds before the next apex, counting down to it.
+            It's a setting of this browser.
+        </p>
+    </div>
+</div>
+
+<div class="card mt-4" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">Apex playback</h5>
+        @if (apexPlayback is not null)
+        {
+            @WindowField("apex-lead-in-seconds", nameof(ApexPlaybackSettings.LeadInSeconds), "Lead-in (seconds)", 0, apexWindow.LeadInSeconds, apexPlayback.LeadInSeconds, OnApexLeadInChanged)
+            @WindowField("apex-tail-seconds", nameof(ApexPlaybackSettings.TailSeconds), "Tail (seconds)", 1, apexWindow.TailSeconds, apexPlayback.TailSeconds, OnApexTailChanged)
+            @if (apexPlaybackError is not null)
+            {
+                <div class="text-danger mb-2">@apexPlaybackError</div>
+            }
+        }
+        <p class="text-muted mb-0">
+            Clicking an apex starts playback this long before it, and an apex's clip on the Scenes wall runs
+            on this long after it. An apex can set its own in the clip editor. It applies to every browser.
+        </p>
+    </div>
+</div>
+
+@code {
+    private string theme = "auto";
+    private bool movieBackdrop;
+    private bool apexCountdownOn;
+    private int apexCountdownSeconds = ApexRanges.DefaultCountdownSeconds;
+    private IReadOnlyList<ActorDetailSection> actorDetailSections = ActorDetailSectionOrder.Default;
+    private ApexPlaybackSettings? apexPlayback;
+    private ApexWindow apexWindow = ApexWindow.Default;
+    private string? apexPlaybackError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        apexPlayback = await ApexPlayback.GetStoredAsync();
+        apexWindow = await ApexPlayback.GetEffectiveAsync();
+    }
+
+    private RenderFragment WindowField(string id, string field, string label, double min, double effectiveValue, double storedValue,
+        Func<ChangeEventArgs, Task> onChange) => @<div class="mb-2">
+        <label class="form-label" for="@id">@label</label>
+        @if (ApexPlayback.IsSetByEnvironment(field))
+        {
+            <input class="form-control" style="max-width: 120px;" type="number" id="@id" value="@Format(effectiveValue)" disabled />
+            <div class="form-text">Set by the <code>ApexPlayback__@field</code> environment variable.</div>
+        }
+        else
+        {
+            <input class="form-control" style="max-width: 120px;" type="number" id="@id" step="any"
+                   min="@Format(min)" max="@Format(ApexRanges.MaxWindowSeconds)" value="@Format(storedValue)" @onchange="onChange" />
+        }
+    </div>;
+
+    private static string Format(double seconds) => seconds.ToString("0.###", CultureInfo.InvariantCulture);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var current = await JS.InvokeAsync<string?>("lsTheme.get");
+                theme = current is "light" or "dark" ? current : "auto";
+                movieBackdrop = await JS.InvokeAsync<bool>("lsMovieBackdrop.get");
+                var countdown = await JS.InvokeAsync<int>("lsApexCountdown.get");
+                apexCountdownOn = countdown > 0;
+                apexCountdownSeconds = countdown > 0 ? countdown : ApexRanges.DefaultCountdownSeconds;
+                actorDetailSections = ActorDetailSectionOrder.Parse(await JS.InvokeAsync<string?>("lsActorDetailSections.get"));
+            }
+            catch (JSDisconnectedException)
+            {
+                return;
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnThemeChanged(ChangeEventArgs e)
+    {
+        theme = e.Value?.ToString() ?? "auto";
+        try
+        {
+            await JS.InvokeVoidAsync("lsTheme.set", theme);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task OnMovieBackdropChanged(ChangeEventArgs e)
+    {
+        movieBackdrop = e.Value is bool value && value;
+        try
+        {
+            await JS.InvokeVoidAsync("lsMovieBackdrop.set", movieBackdrop);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task OnApexCountdownToggled(ChangeEventArgs e)
+    {
+        apexCountdownOn = e.Value is bool value && value;
+        await SaveApexCountdownAsync();
+    }
+
+    private async Task OnApexCountdownSecondsChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var seconds))
+        {
+            apexCountdownSeconds = Math.Clamp(seconds, 1, ApexRanges.MaxCountdownSeconds);
+        }
+        await SaveApexCountdownAsync();
+    }
+
+    private async Task SaveApexCountdownAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("lsApexCountdown.set", apexCountdownOn ? apexCountdownSeconds : 0);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private Task OnApexLeadInChanged(ChangeEventArgs e) =>
+        SaveApexPlaybackAsync(e, (settings, seconds) => settings.LeadInSeconds = seconds);
+
+    private Task OnApexTailChanged(ChangeEventArgs e) =>
+        SaveApexPlaybackAsync(e, (settings, seconds) => settings.TailSeconds = seconds);
+
+    private async Task SaveApexPlaybackAsync(ChangeEventArgs e, Action<ApexPlaybackSettings, double> set)
+    {
+        if (apexPlayback is null) return;
+        if (!double.TryParse(e.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
+        {
+            apexPlaybackError = "Enter a number of seconds.";
+            return;
+        }
+        var edited = new ApexPlaybackSettings { Id = apexPlayback.Id, LeadInSeconds = apexPlayback.LeadInSeconds, TailSeconds = apexPlayback.TailSeconds };
+        set(edited, seconds);
+        apexPlaybackError = await ApexPlayback.SaveAsync(edited);
+        if (apexPlaybackError is null)
+        {
+            apexPlayback = edited;
+            apexWindow = await ApexPlayback.GetEffectiveAsync();
+        }
+    }
+
+    private Task MoveActorDetailSectionAsync(int index, int direction) =>
+        SaveActorDetailSectionsAsync(ActorDetailSectionOrder.Move(actorDetailSections, index, direction));
+
+    private Task ResetActorDetailSectionsAsync() => SaveActorDetailSectionsAsync(ActorDetailSectionOrder.Default);
+
+    private async Task SaveActorDetailSectionsAsync(IReadOnlyList<ActorDetailSection> order)
+    {
+        actorDetailSections = order;
+        try
+        {
+            await JS.InvokeVoidAsync("lsActorDetailSections.set", ActorDetailSectionOrder.Serialize(order));
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

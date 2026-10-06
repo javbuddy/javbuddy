@@ -1,0 +1,190 @@
+@* A thumbnail grid + full-screen lightbox (GalleryLightbox) for a movie's extra images. Shared by
+   Movie Detail's real (local extrafanart, MovieImagesSection) and r18.dev preview
+   (MoviePreviewDetails) branches — both just hand it a list of URLs. *@
+
+@if (ShowThumbnails && ThumbUrls.Count > 0)
+{
+    @if (CardWrapper)
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                @if (!string.IsNullOrEmpty(Heading))
+                {
+                    <h5 class="card-title">@Heading</h5>
+                }
+                <div class="fanart-thumb-grid">
+                    @for (var i = 0; i < ThumbUrls.Count; i++)
+                    {
+                        var index = i;
+                        <div class="fanart-thumb-cell">
+                            @if (Lazy)
+                            {
+                                <img class="fanart-thumb js-lazy-gallery-img" data-src="@ThumbUrls[index]" alt="Image @(index + 1)" @onclick="() => OpenGallery(index)" />
+                            }
+                            else
+                            {
+                                <img class="fanart-thumb" src="@ThumbUrls[index]" alt="Image @(index + 1)" loading="lazy" @onclick="() => OpenGallery(index)" />
+                            }
+                            @if (ThumbBadge is not null)
+                            {
+                                @ThumbBadge(index)
+                            }
+                            @if (ThumbOverlay is not null)
+                            {
+                                <div class="fanart-thumb-overlay">@ThumbOverlay(index)</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="fanart-thumb-grid">
+            @for (var i = 0; i < ThumbUrls.Count; i++)
+            {
+                var index = i;
+                <div class="fanart-thumb-cell">
+                    @if (Lazy)
+                    {
+                        <img class="fanart-thumb js-lazy-gallery-img" data-src="@ThumbUrls[index]" alt="Image @(index + 1)" @onclick="() => OpenGallery(index)" />
+                    }
+                    else
+                    {
+                        <img class="fanart-thumb" src="@ThumbUrls[index]" alt="Image @(index + 1)" loading="lazy" @onclick="() => OpenGallery(index)" />
+                    }
+                    @if (ThumbBadge is not null)
+                    {
+                        @ThumbBadge(index)
+                    }
+                    @if (ThumbOverlay is not null)
+                    {
+                        <div class="fanart-thumb-overlay">@ThumbOverlay(index)</div>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@if (galleryOpen)
+{
+    <GalleryLightbox Count="ThumbUrls.Count"
+                     @bind-Index="galleryIndex"
+                     ImageUrl="FullUrl"
+                     OriginalUrl="OriginalUrl"
+                     Actions="LightboxActions"
+                     Covered="LightboxCovered"
+                     OnClose="CloseGalleryAsync" />
+}
+
+@code {
+    /// <summary>Grid thumbnail URLs — also determines the image count.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<string> ThumbUrls { get; set; } = Array.Empty<string>();
+
+    /// <summary>Full-size URLs shown in the lightbox, index-aligned with ThumbUrls. Defaults to
+    /// ThumbUrls itself when the caller has no separate full-size source (e.g. the r18.dev
+    /// preview, which only has one gallery resolution).</summary>
+    [Parameter] public IReadOnlyList<string>? FullUrls { get; set; }
+
+    /// <summary>Full-resolution, uncompressed original URLs shown in the lightbox when the
+    /// "Original" toggle is active, index-aligned with ThumbUrls. Null (the default) hides the
+    /// toggle entirely — used by galleries with no on-disk original to fall back to (e.g. the
+    /// r18.dev preview gallery).</summary>
+    [Parameter] public IReadOnlyList<string>? OriginalUrls { get; set; }
+
+    /// <summary>Whether to wrap the grid in a Bootstrap card. Defaults to true.</summary>
+    [Parameter] public bool CardWrapper { get; set; } = true;
+
+    /// <summary>When true, thumbnails render <c>data-src</c> with no <c>src</c> and a
+    /// <c>js-lazy-gallery-img</c> marker class instead of native <c>loading="lazy"</c>, for a
+    /// caller that drives an IntersectionObserver-based JS module itself (e.g.
+    /// ActorPhotoGallery.razor, whose actor galleries can run into the hundreds of photos).
+    /// Defaults to false so existing callers (MovieDetail.razor, TorrentSort.razor) keep their
+    /// current native-lazy behavior.</summary>
+    [Parameter] public bool Lazy { get; set; }
+
+    /// <summary>Hides the thumbnail grid when another element (such as a Discover poster) is the
+    /// gallery trigger. The full-screen viewer remains available through <see cref="OpenRequestKey"/>.</summary>
+    [Parameter] public bool ShowThumbnails { get; set; } = true;
+
+    /// <summary>A caller-owned value that opens the gallery at its first image whenever it changes
+    /// to a non-empty value. This supports an external thumbnail without duplicating a gallery grid.</summary>
+    [Parameter] public string? OpenRequestKey { get; set; }
+
+    /// <summary>Raised after the full-screen viewer is closed.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Optional heading when CardWrapper is true. Defaults to "Images".</summary>
+    [Parameter] public string? Heading { get; set; } = "Images";
+
+    /// <summary>Optional per-thumbnail overlay content (e.g. hover action buttons), keyed by the
+    /// thumbnail's index into ThumbUrls. Hidden until hover — see .fanart-thumb-overlay in the
+    /// razor.css. Null by default so existing callers render unchanged.</summary>
+    [Parameter] public RenderFragment<int>? ThumbOverlay { get; set; }
+
+    /// <summary>Optional per-thumbnail content that's always visible (e.g. a status badge),
+    /// keyed by the thumbnail's index into ThumbUrls — unlike ThumbOverlay, not hidden until
+    /// hover. Null by default so existing callers render unchanged.</summary>
+    [Parameter] public RenderFragment<int>? ThumbBadge { get; set; }
+
+    /// <summary>Optional actions in the open lightbox toolbar, keyed by the current image index.</summary>
+    [Parameter] public RenderFragment<int>? LightboxActions { get; set; }
+
+    /// <summary>True while the caller shows a dialog over the open viewer (e.g. one of
+    /// LightboxActions' confirmations); see GalleryLightbox.Covered.</summary>
+    [Parameter] public bool LightboxCovered { get; set; }
+
+    private bool galleryOpen;
+    private int galleryIndex;
+    private string? previousOpenRequestKey;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(OpenRequestKey)
+            && OpenRequestKey != previousOpenRequestKey
+            && ThumbUrls.Count > 0)
+        {
+            OpenGallery(0);
+        }
+
+        previousOpenRequestKey = OpenRequestKey;
+
+        // The caller can remove images while the viewer is open (Movie Detail's delete,
+        //): stay on the same position — now the next image — or on the new last one,
+        // and close once nothing is left.
+        if (galleryOpen && galleryIndex >= ThumbUrls.Count)
+        {
+            if (ThumbUrls.Count == 0)
+            {
+                await CloseGalleryAsync();
+            }
+            else
+            {
+                galleryIndex = ThumbUrls.Count - 1;
+            }
+        }
+    }
+
+    private string FullUrl(int index) =>
+        FullUrls is { Count: > 0 } full && index < full.Count ? full[index] : ThumbUrls[index];
+
+    private string? OriginalUrl(int index) =>
+        OriginalUrls is { Count: > 0 } original && index < original.Count ? original[index] : null;
+
+    private void OpenGallery(int index)
+    {
+        galleryIndex = index;
+        galleryOpen = true;
+    }
+
+    private async Task CloseGalleryAsync()
+    {
+        galleryOpen = false;
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+}

@@ -1,0 +1,65 @@
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.LocalLibrary
+@using Microsoft.EntityFrameworkCore
+@inject IConnectionSettingsSaveService ConnectionSettingsSaveService
+@inject IConfiguration Configuration
+
+<ConnectionSettingsCard TSettings="LocalLibrarySettings"
+                         Title="Local Library"
+                         EnvConfigured="envConfigured"
+                         Settings="settings"
+                         FormName="local-library-settings"
+                         ShowValidator="false"
+                         ShowTestButton="false"
+                         OnSave="Save"
+                         Saved="saved">
+    <Description>
+        Metadata source (Stage 7): one folder per movie, named after its release code, containing
+        a Kodi/Jellyfin-style .nfo file plus poster.jpg/fanart.jpg. Checked before javinizer-go when
+        adding or refreshing a movie. Configure one or more root directories (one per line or comma-separated).
+    </Description>
+    <EnvBanner>
+        Configured via the <code>LocalLibrary__RootPaths__0</code>, <code>LocalLibrary__RootPaths__1</code> (or <code>LocalLibrary__RootPaths</code>) environment variables. This takes
+        precedence over the form below.
+    </EnvBanner>
+    <FormFields>
+        <div class="mb-3">
+            <label class="form-label">Root paths</label>
+            <InputTextArea class="form-control" rows="3" @bind-Value="settings!.RootPaths"
+                           placeholder="D:\media\movies\jav&#10;D:\media\movies\vr" disabled="@envConfigured" />
+            <div class="form-text">Enter one root path per line or comma-separated.</div>
+        </div>
+    </FormFields>
+</ConnectionSettingsCard>
+
+@code {
+    private LocalLibrarySettings? settings;
+    private bool saved;
+    private bool envConfigured;
+
+    protected override async Task OnInitializedAsync()
+    {
+        envConfigured = LocalLibraryEnvConfig.IsSet(Configuration);
+        if (envConfigured)
+        {
+            var envPaths = LocalLibraryEnvConfig.GetRootPaths(Configuration);
+            settings = new LocalLibrarySettings
+            {
+                RootPaths = string.Join("\n", envPaths)
+            };
+        }
+        else
+        {
+            settings = await ConnectionSettingsSaveService.GetLocalLibraryAsync();
+        }
+    }
+
+    private async Task Save()
+    {
+        saved = false;
+        await ConnectionSettingsSaveService.SaveLocalLibraryAsync(settings!);
+        saved = true;
+    }
+}

@@ -1,0 +1,641 @@
+@page "/actors/{RouteName}/missing"
+@using Microsoft.EntityFrameworkCore
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.R18Dev
+@inject IActorService ActorService
+@inject IR18DevSettingsService R18DevSettingsService
+@inject IActorFilmographyService FilmographyService
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>@(actor?.DisplayName ?? "Actor") · Missing · Javbuddy</PageTitle>
+
+@if (loaded && actor is null)
+{
+    <p>Actor not found. <a href="/actors">Back to actors</a></p>
+}
+else if (actor is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <div class="actor-toolbar">
+        <BackButton Href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}")" CssClass="actor-toolbar-btn">@actor.DisplayName</BackButton>
+    </div>
+
+    <h1 class="missing-title">Missing</h1>
+
+    @if (!r18DevEnabled)
+    {
+        <p class="text-muted">
+            The r18.dev metadata source is disabled. Go to
+            <a href="/settings/metadata">Settings → Metadata</a> to enable it.
+        </p>
+    }
+    else if (loadingFilmography)
+    {
+        <div class="r18dev-name-override">
+            <label for="r18dev-name-input">r18.dev name override</label>
+            <input id="r18dev-name-input" class="form-control form-control-sm" @bind="r18DevNameInput" @bind:event="oninput"
+                   placeholder="e.g. Ichika Matsumoto (leave blank to auto-detect)" />
+            <button class="btn btn-sm btn-outline-secondary" @onclick="SaveR18DevName" disabled="@savingR18DevName">
+                @(savingR18DevName ? "Saving…" : "Save")
+            </button>
+        </div>
+
+        <div class="missing-loading-state">
+            <PosterGridSkeleton />
+        </div>
+    }
+    else if (!dumpAvailable)
+    {
+        <p class="text-muted">
+            r18.dev metadata is enabled but hasn't been imported yet. Go to
+            <a href="/settings/metadata">Settings → Metadata</a> and click "Import now".
+        </p>
+    }
+    else
+    {
+        <div class="r18dev-name-override">
+            <label for="r18dev-name-input">r18.dev name override</label>
+            <input id="r18dev-name-input" class="form-control form-control-sm" @bind="r18DevNameInput" @bind:event="oninput"
+                   placeholder="e.g. Ichika Matsumoto (leave blank to auto-detect)" />
+            <button class="btn btn-sm btn-outline-secondary" @onclick="SaveR18DevName" disabled="@savingR18DevName">
+                @(savingR18DevName ? "Saving…" : "Save")
+            </button>
+        </div>
+
+        @if (rawFilmography.Count == 0)
+        {
+            <p class="text-muted">
+                No filmography found on r18.dev for this actor.
+                @if (linkedMovieCount == 0 && string.IsNullOrWhiteSpace(actor.R18DevName))
+                {
+                    @: Add one of their movies to your library, or set an r18.dev name override above, to help find a match — r18.dev often romanizes names in the opposite word order (e.g. "Ichika Matsumoto" vs. "Matsumoto Ichika").
+                }
+            </p>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <StatusFilterButtonGroup Options="@StatusFilterOptions" />
+
+                <input type="search"
+                       class="form-control form-control-sm w-auto"
+                       style="min-width: 220px;"
+                       placeholder="Filter by code or title…"
+                       value="@textFilter"
+                       @oninput="OnTextFilterInput" />
+
+                @if (showFilterDropdown || showSortDropdown)
+                {
+                    <div class="dropdown-backdrop" @onclick="CloseDropdowns"></div>
+                }
+
+                <div class="sort-dropdown-wrapper">
+                    <DropdownMenuButton Label="@($"Filter{(ActiveFilterCount > 0 ? $" ({ActiveFilterCount})" : "")}")" Active="ActiveFilterCount > 0" ShowMenu="showFilterDropdown" MenuMinWidth="280px" OnToggle="ToggleFilterDropdown">
+                            <button type="button" class="sort-dropdown-item @(hidePreviouslyDeleted ? "active" : "")" aria-pressed="@(hidePreviouslyDeleted ? "true" : "false")" @onclick="ToggleHidePreviouslyDeleted">
+                                <span>Hide previously deleted</span>
+                                @if (hidePreviouslyDeleted)
+                                {
+                                    <span class="ms-2">✓</span>
+                                }
+                            </button>
+                            <button type="button" class="sort-dropdown-item @(hideDuplicates ? "active" : "")" @onclick="ToggleHideDuplicates">
+                                <span>Hide duplicates</span>
+                                @if (hideDuplicates)
+                                {
+                                    <span class="ms-2">✓</span>
+                                }
+                            </button>
+                            <button type="button" class="sort-dropdown-item @(hideDistributorReleases ? "active" : "")" @onclick="ToggleHideDistributorReleases">
+                                <span>Hide distributor releases</span>
+                                @if (hideDistributorReleases)
+                                {
+                                    <span class="ms-2">✓</span>
+                                }
+                            </button>
+                            <button type="button" class="sort-dropdown-item @(hideCompilations ? "active" : "")" @onclick="ToggleHideCompilations">
+                                <span>Hide compilations / box sets</span>
+                                @if (hideCompilations)
+                                {
+                                    <span class="ms-2">✓</span>
+                                }
+                            </button>
+                            <button type="button" class="sort-dropdown-item @(soloOnly ? "active" : "")" @onclick="ToggleSoloOnly">
+                                <span>Solo works only</span>
+                                @if (soloOnly)
+                                {
+                                    <span class="ms-2">✓</span>
+                                }
+                            </button>
+                            <button type="button" class="sort-dropdown-item @(hideVr ? "active" : "")" @onclick="ToggleHideVr">
+                                <span>Hide VR releases</span>
+                                @if (hideVr)
+                                {
+                                    <span class="ms-2">✓</span>
+                                }
+                            </button>
+                            <button type="button" class="sort-dropdown-item @(onlyWithPosters ? "active" : "")" @onclick="ToggleOnlyWithPosters">
+                                <span>Only with posters</span>
+                                @if (onlyWithPosters)
+                                {
+                                    <span class="ms-2">✓</span>
+                                }
+                            </button>
+
+                            @if (availableMakers.Count > 0 || availableYears.Count > 0)
+                            {
+                                <div class="sort-dropdown-divider"></div>
+                            }
+
+                            @if (availableMakers.Count > 0)
+                            {
+                                <MultiSelectFilterGroup GroupLabel="Studio" Options="@StudioFilterOptions" />
+                            }
+
+                            @if (availableYears.Count > 0)
+                            {
+                                <MultiSelectFilterGroup GroupLabel="Year" Options="@YearFilterOptions" />
+                            }
+                    </DropdownMenuButton>
+                </div>
+
+                <div class="sort-dropdown-wrapper">
+                    <DropdownMenuButton Label="@($"Sort: {SortFieldLabel(sortField)}")" Arrow="@(sortDescending ? "▼" : "▲")" ShowMenu="showSortDropdown" OnToggle="ToggleSortDropdown">
+                        @foreach (var field in SortFields)
+                        {
+                            <button type="button" class="sort-dropdown-item @(sortField == field ? "active" : "")" @onclick="() => SetSort(field)">
+                                @SortFieldLabel(field)
+                                @if (sortField == field)
+                                {
+                                    <span class="sort-dropdown-arrow">@(sortDescending ? "▼" : "▲")</span>
+                                }
+                            </button>
+                        }
+                    </DropdownMenuButton>
+                </div>
+            </div>
+
+            <p class="missing-summary">
+                @displayedFilmography.Count movies
+                (@missingCount missing · @inLibraryCount already in your library · @deletedCount previously deleted@(hidePreviouslyDeleted && deletedCount > 0 ? ", hidden" : ""))
+                @if (hideDuplicates && duplicateCount > 0)
+                {
+                    <span class="text-muted ms-1">(@duplicateCount duplicate releases filtered)</span>
+                }
+            </p>
+
+            @if (displayedFilmography.Count == 0)
+            {
+                <p class="text-muted">No movies match the selected filters.</p>
+            }
+            else
+            {
+                <PosterGrid>
+                    @foreach (var entry in displayedFilmography)
+                    {
+                        <R18DevReleaseCard Release="entry" OnSearch="OpenSearchModal" />
+                    }
+                </PosterGrid>
+                <ProwlarrSearchModal Code="@searchCode" Show="showSearchModal" OnClose="CloseSearchModal" OnMovieAdded="OnMovieAdded" />
+            }
+        }
+    }
+}
+
+@code {
+    [Parameter]
+    public string RouteName { get; set; } = "";
+
+    private enum StatusFilterOption { Missing, InLibrary }
+    private enum SortFieldOption { ReleaseDate, Code, Title }
+
+    private static readonly SortFieldOption[] SortFields = Enum.GetValues<SortFieldOption>();
+
+    [CascadingParameter]
+    public HttpContext? HttpContext { get; set; }
+
+    private Actor? actor;
+    private bool loaded;
+    private bool loadingFilmography;
+    private bool r18DevEnabled;
+    private bool dumpAvailable;
+    private int linkedMovieCount;
+    private List<R18DevReleaseRow> rawFilmography = new();
+    private List<R18DevReleaseRow> displayedFilmography = new();
+    private CancellationTokenSource? loadCts;
+
+    private List<string> availableMakers = new();
+    private List<string> availableYears = new();
+
+    private StatusFilterOption? statusFilter;
+    private string textFilter = "";
+    private HashSet<string> makerFilter = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> yearFilter = new();
+
+    private bool hideDuplicates = true;
+    private bool hidePreviouslyDeleted = true;
+    private bool hideDistributorReleases = true;
+    private bool soloOnly = false;
+    private bool hideCompilations = true;
+    private bool hideVr = false;
+    private bool onlyWithPosters = false;
+
+    private int ActiveFilterCount =>
+        (hideDuplicates ? 1 : 0) +
+        (hidePreviouslyDeleted ? 1 : 0) +
+        (hideDistributorReleases ? 1 : 0) +
+        (soloOnly ? 1 : 0) +
+        (hideCompilations ? 1 : 0) +
+        (hideVr ? 1 : 0) +
+        (onlyWithPosters ? 1 : 0) +
+        makerFilter.Count +
+        yearFilter.Count;
+
+    private SortFieldOption sortField = SortFieldOption.ReleaseDate;
+    private bool sortDescending = true;
+
+    private bool showFilterDropdown;
+    private bool showSortDropdown;
+
+    private int totalDeduplicatedCount;
+    private int missingCount;
+    private int inLibraryCount;
+    private int deletedCount;
+    private int duplicateCount;
+
+    private string? r18DevNameInput;
+    private bool savingR18DevName;
+    private string? loadedRouteName;
+    private bool showSearchModal;
+    private string? searchCode;
+
+    // OnParametersSetAsync, not OnInitializedAsync: Blazor reuses the same component instance
+    // when navigating directly between two "/actors/{RouteName}/missing" URLs (e.g. editing the
+    // address bar, or browser back/forward across two such pages) — OnInitializedAsync only runs
+    // once per instance and would leave the previous actor's data on screen.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedRouteName == RouteName) return;
+        loadedRouteName = RouteName;
+        await LoadActorAsync();
+        if (actor is not null && r18DevEnabled && HttpContext is null)
+        {
+            await LoadFilmographyAsync();
+        }
+    }
+
+    private async Task LoadActorAsync()
+    {
+        actor = await ActorService.GetByRouteNameAsync(RouteName);
+        loaded = true;
+
+        // Reset per-actor state so a stale previous actor's filmography/status can never leak
+        // through while this instance is reused across a route-parameter change.
+        linkedMovieCount = 0;
+        rawFilmography = new();
+        displayedFilmography = new();
+        availableMakers = new();
+        availableYears = new();
+        dumpAvailable = false;
+
+        if (actor is null)
+        {
+            loadingFilmography = false;
+            return;
+        }
+
+        r18DevNameInput = actor.R18DevName;
+
+        r18DevEnabled = (await R18DevSettingsService.GetAsync()).Enabled;
+        loadingFilmography = r18DevEnabled;
+    }
+
+    private async Task LoadFilmographyAsync()
+    {
+        if (actor is null || !r18DevEnabled)
+        {
+            loadingFilmography = false;
+            return;
+        }
+
+        loadCts?.Cancel();
+        loadCts?.Dispose();
+        loadCts = new CancellationTokenSource();
+        var ct = loadCts.Token;
+
+        try
+        {
+            var result = await FilmographyService.GetFilmographyAsync(actor.Id, actor.DisplayName, actor.R18DevName, ct);
+            linkedMovieCount = result.LinkedMovieCount;
+            dumpAvailable = result.DumpAvailable;
+            if (!dumpAvailable) return;
+
+            rawFilmography = result.Rows.ToList();
+
+            availableMakers = rawFilmography
+                .Select(r => r.Movie.MakerName)
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Distinct()
+                .OrderBy(m => m)
+                .ToList()!;
+
+            availableYears = rawFilmography
+                .Where(r => r.Movie.ReleaseDate.HasValue)
+                .Select(r => r.Movie.ReleaseDate!.Value.Year.ToString())
+                .Distinct()
+                .OrderByDescending(y => y)
+                .ToList();
+
+            ApplyFiltersAndSort();
+        }
+        catch (OperationCanceledException)
+        {
+            // Navigation away or subsequent query started — discard gracefully
+        }
+        finally
+        {
+            loadingFilmography = false;
+        }
+    }
+
+    private void OpenSearchModal(string code)
+    {
+        searchCode = code;
+        showSearchModal = true;
+    }
+
+    private void CloseSearchModal() => showSearchModal = false;
+
+    // Updates the matching filmography row(s) in place from "missing" to the newly added movie's
+    // status, mirroring the exact-code-then-canonical matching LoadFilmographyAsync uses, so
+    // duplicate releases under the same canonical key all flip over too instead of just the one
+    // that was searched.
+    private void OnMovieAdded(Movie movie)
+    {
+        if (movie.Code is null) return;
+
+        linkedMovieCount++;
+        rawFilmography = R18DevReleaseMatcher.ApplyAddedMovie(rawFilmography, movie);
+        ApplyFiltersAndSort();
+    }
+
+    private void ApplyFiltersAndSort()
+    {
+        IEnumerable<R18DevReleaseRow> working = rawFilmography;
+
+        if (hideDuplicates)
+        {
+            var deduped = R18DevReleaseMatcher.CollapseDuplicates(working);
+            duplicateCount = rawFilmography.Count - deduped.Count;
+            working = deduped;
+        }
+        else
+        {
+            duplicateCount = 0;
+        }
+
+        if (hideDistributorReleases)
+        {
+            working = working.Where(r => !CodeNormalization.IsDistributorRelease(r.Movie.DvdId));
+        }
+
+        if (soloOnly)
+        {
+            working = working.Where(r => r.Movie.IsSolo);
+        }
+
+        if (hideCompilations)
+        {
+            working = working.Where(r => !r.Movie.IsCompilation);
+        }
+
+        if (hideVr)
+        {
+            working = working.Where(r => !r.Movie.IsVr);
+        }
+
+        if (onlyWithPosters)
+        {
+            working = working.Where(r => !string.IsNullOrWhiteSpace(r.Movie.PosterUrl));
+        }
+
+        if (makerFilter.Count > 0)
+        {
+            working = working.Where(r => r.Movie.MakerName is not null && makerFilter.Contains(r.Movie.MakerName));
+        }
+
+        if (yearFilter.Count > 0)
+        {
+            working = working.Where(r => r.Movie.ReleaseDate.HasValue && yearFilter.Contains(r.Movie.ReleaseDate.Value.Year.ToString()));
+        }
+
+        if (!string.IsNullOrWhiteSpace(textFilter))
+        {
+            var search = textFilter.Trim();
+            working = working.Where(r =>
+                r.Movie.DvdId.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                r.Movie.DisplayTitle.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // Computed after every filter except status itself, so "All/Missing/In Library (N)" and the
+        // "X movies (Y missing · Z already in your library)" summary always agree with each other and
+        // with the grid — previously these counted right after dedup, before the other filters
+        // (distributor/compilation/VR/etc.) ran, so they silently drifted from what was on screen.
+        // Previously deleted releases are counted before they're hidden, so the summary still
+        // says how many the "Hide previously deleted" toggle is holding back.
+        var filteredExceptStatus = working.ToList();
+        deletedCount = filteredExceptStatus.Count(r => r.PreviouslyDeleted);
+        if (hidePreviouslyDeleted)
+        {
+            filteredExceptStatus = filteredExceptStatus.Where(r => !r.PreviouslyDeleted).ToList();
+        }
+
+        totalDeduplicatedCount = filteredExceptStatus.Count;
+        missingCount = filteredExceptStatus.Count(r => r.StatusClass == "missing");
+        inLibraryCount = filteredExceptStatus.Count(r => r.InLibrary);
+
+        if (statusFilter == StatusFilterOption.Missing)
+        {
+            working = filteredExceptStatus.Where(r => r.StatusClass == "missing");
+        }
+        else if (statusFilter == StatusFilterOption.InLibrary)
+        {
+            working = filteredExceptStatus.Where(r => r.InLibrary);
+        }
+        else
+        {
+            working = filteredExceptStatus;
+        }
+
+        working = sortField switch
+        {
+            SortFieldOption.ReleaseDate => sortDescending
+                ? working.OrderByDescending(r => r.Movie.ReleaseDate.HasValue).ThenByDescending(r => r.Movie.ReleaseDate).ThenBy(r => r.Movie.DvdId)
+                : working.OrderBy(r => !r.Movie.ReleaseDate.HasValue).ThenBy(r => r.Movie.ReleaseDate).ThenBy(r => r.Movie.DvdId),
+            SortFieldOption.Code => sortDescending
+                ? working.OrderByDescending(r => r.Movie.DvdId)
+                : working.OrderBy(r => r.Movie.DvdId),
+            SortFieldOption.Title => sortDescending
+                ? working.OrderByDescending(r => r.Movie.DisplayTitle)
+                : working.OrderBy(r => r.Movie.DisplayTitle),
+            _ => working
+        };
+
+        displayedFilmography = working.ToList();
+    }
+
+    private void SetStatusFilter(StatusFilterOption? opt)
+    {
+        statusFilter = opt;
+        ApplyFiltersAndSort();
+    }
+
+    private void ToggleHidePreviouslyDeleted()
+    {
+        hidePreviouslyDeleted = !hidePreviouslyDeleted;
+        ApplyFiltersAndSort();
+    }
+
+    private IReadOnlyList<FilterButtonOption> StatusFilterOptions => new[]
+    {
+        new FilterButtonOption($"All ({totalDeduplicatedCount})", statusFilter is null, EventCallback.Factory.Create(this, () => SetStatusFilter(null))),
+        new FilterButtonOption($"Missing ({missingCount})", statusFilter == StatusFilterOption.Missing, EventCallback.Factory.Create(this, () => SetStatusFilter(StatusFilterOption.Missing))),
+        new FilterButtonOption($"In Library ({inLibraryCount})", statusFilter == StatusFilterOption.InLibrary, EventCallback.Factory.Create(this, () => SetStatusFilter(StatusFilterOption.InLibrary))),
+    };
+
+    private IReadOnlyList<MultiSelectOption> StudioFilterOptions => availableMakers
+        .Select(maker => new MultiSelectOption(
+            maker,
+            makerFilter.Contains(maker),
+            EventCallback.Factory.Create(this, () => ToggleMakerFilter(maker))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> YearFilterOptions => availableYears
+        .Select(year => new MultiSelectOption(
+            year,
+            yearFilter.Contains(year),
+            EventCallback.Factory.Create(this, () => ToggleYearFilter(year))))
+        .ToList();
+
+    // Multi-select, like the other Filter dropdown toggles above: picking one studio/year doesn't
+    // clear the others, and doesn't re-run ApplyFiltersAndSort until this click's own state change
+    // is applied.
+    private void ToggleMakerFilter(string maker)
+    {
+        makerFilter.Toggle(maker);
+        ApplyFiltersAndSort();
+    }
+
+    private void ToggleYearFilter(string year)
+    {
+        yearFilter.Toggle(year);
+        ApplyFiltersAndSort();
+    }
+
+    private void OnTextFilterInput(ChangeEventArgs e)
+    {
+        textFilter = e.Value?.ToString() ?? "";
+        ApplyFiltersAndSort();
+    }
+
+    private void ToggleHideDuplicates()
+    {
+        hideDuplicates = !hideDuplicates;
+        ApplyFiltersAndSort();
+    }
+
+    private void ToggleHideDistributorReleases()
+    {
+        hideDistributorReleases = !hideDistributorReleases;
+        ApplyFiltersAndSort();
+    }
+
+    private void ToggleSoloOnly()
+    {
+        soloOnly = !soloOnly;
+        ApplyFiltersAndSort();
+    }
+
+    private void ToggleHideCompilations()
+    {
+        hideCompilations = !hideCompilations;
+        ApplyFiltersAndSort();
+    }
+
+    private void ToggleHideVr()
+    {
+        hideVr = !hideVr;
+        ApplyFiltersAndSort();
+    }
+
+    private void ToggleOnlyWithPosters()
+    {
+        onlyWithPosters = !onlyWithPosters;
+        ApplyFiltersAndSort();
+    }
+
+    private void SetSort(SortFieldOption field)
+    {
+        if (sortField == field)
+        {
+            sortDescending = !sortDescending;
+        }
+        else
+        {
+            sortField = field;
+            sortDescending = field == SortFieldOption.ReleaseDate;
+        }
+        showSortDropdown = false;
+        ApplyFiltersAndSort();
+    }
+
+    private static string SortFieldLabel(SortFieldOption field) => field switch
+    {
+        SortFieldOption.ReleaseDate => "Release Date",
+        SortFieldOption.Code => "Release Code",
+        SortFieldOption.Title => "Title",
+        _ => field.ToString()
+    };
+
+    private void ToggleFilterDropdown()
+    {
+        showFilterDropdown = !showFilterDropdown;
+        showSortDropdown = false;
+    }
+
+    private void ToggleSortDropdown()
+    {
+        showSortDropdown = !showSortDropdown;
+        showFilterDropdown = false;
+    }
+
+    private void CloseDropdowns()
+    {
+        showFilterDropdown = false;
+        showSortDropdown = false;
+    }
+
+    private async Task SaveR18DevName()
+    {
+        if (actor is null) return;
+
+        savingR18DevName = true;
+
+        actor.R18DevName = await FilmographyService.SaveR18DevNameAsync(actor.Id, r18DevNameInput);
+
+        savingR18DevName = false;
+        loadingFilmography = true;
+        await LoadFilmographyAsync();
+    }
+
+    public void Dispose()
+    {
+        loadCts?.Cancel();
+        loadCts?.Dispose();
+    }
+}

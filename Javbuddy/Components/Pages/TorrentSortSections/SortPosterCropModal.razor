@@ -1,0 +1,210 @@
+@using Javbuddy.Services.Images
+@using Javbuddy.Services.Torrents
+@inject ITorrentSortService SortService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* The sort metadata editor's manual poster crop: a 2:3 box over the full-size
+   poster javinizer-go itself measures crops against, posted to its poster-crop endpoint. Reuses
+   the Movie Detail crop dialog's cropper script (MovieCoverCropModal.razor.js). *@
+@if (Show)
+{
+    @* Keys stop here: Esc closes only this dialog (not the editor drawer behind it), and
+       Ctrl+Enter doesn't save the editor. *@
+    <div class="spc-backdrop" tabindex="0" @onkeydown="OnKeyDownAsync" @onkeydown:stopPropagation="true" @onclick="CloseAsync">
+        <div class="spc-panel" @onclick:stopPropagation="true">
+            <div class="spc-header">
+                <h5 class="spc-title">Crop poster · @MovieId</h5>
+                <button type="button" class="spc-close-btn" @onclick="CloseAsync" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+            <div class="spc-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+                }
+                @if (loading)
+                {
+                    <div class="text-center py-5">
+                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                        Loading poster…
+                    </div>
+                }
+                else if (source is not null)
+                {
+                    @if (!source.IsFullSize)
+                    {
+                        <div class="alert alert-warning py-2 mb-3 spc-fallback-note">
+                            javinizer-go has no full-size poster for this movie, so this crops the current, already-cropped poster.
+                        </div>
+                    }
+                    <div class="spc-workspace">
+                        <div class="spc-viewport-wrapper">
+                            <CropperViewport HeightPx="420" @ref="viewport" />
+                            <small class="spc-hint">Drag inside the box to move it · drag the handles to resize · scroll to zoom</small>
+                        </div>
+                        <div class="spc-preview">
+                            <span class="spc-preview-title">Poster</span>
+                            <div class="spc-preview-wrapper">
+                                <canvas width="130" height="195" class="spc-preview-canvas" @ref="previewCanvasRef"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="spc-footer">
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@saving">Cancel</button>
+                @if (source is not null)
+                {
+                    <button type="button" class="btn btn-primary btn-sm spc-save" @onclick="SaveAsync" disabled="@saving">
+                        @(saving ? "Saving…" : "Save crop")
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public int TorrentDownloadId { get; set; }
+    [Parameter, EditorRequired] public string ResultId { get; set; } = "";
+    [Parameter, EditorRequired] public string MovieId { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnCropped { get; set; }
+
+    /// <summary>The cropper script's normalized (0-1) crop rectangle.</summary>
+    public record CropRectDto(double x, double y, double width, double height);
+
+    private PosterCropSource? source;
+    private bool loading;
+    private bool saving;
+    private string? errorMessage;
+    private bool shouldInitCropper;
+    private bool prevShow;
+    private CropperViewport? viewport;
+    private ElementReference previewCanvasRef;
+    private IJSObjectReference? jsModule;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && !prevShow)
+        {
+            prevShow = true;
+            await LoadSourceAsync();
+        }
+        else if (!Show && prevShow)
+        {
+            prevShow = false;
+            await DestroyCropperAsync();
+            source = null;
+            errorMessage = null;
+        }
+    }
+
+    private async Task LoadSourceAsync()
+    {
+        loading = true;
+        errorMessage = null;
+        source = null;
+        StateHasChanged();
+
+        var (loaded, error) = await SortService.GetPosterCropSourceAsync(TorrentDownloadId, MovieId);
+        loading = false;
+        if (loaded is null)
+        {
+            errorMessage = error ?? "Could not load the full-size poster.";
+            return;
+        }
+
+        source = loaded;
+        shouldInitCropper = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!shouldInitCropper || source is null || viewport is null) return;
+        shouldInitCropper = false;
+        try
+        {
+            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/MovieCoverCropModal.razor.js");
+            // Stream the bytes to the browser as a blob URL rather than a base64 data: URL in the render tree.
+            using var streamRef = new DotNetStreamReference(new MemoryStream(source.Bytes, writable: false));
+            await jsModule.InvokeVoidAsync("setImageSource", viewport.Image, streamRef, source.ContentType);
+            await jsModule.InvokeVoidAsync("initCropper", viewport.Container, viewport.Image, previewCanvasRef);
+            await jsModule.InvokeVoidAsync("setAspectRatio", 2.0 / 3.0);
+        }
+        catch (JSException ex)
+        {
+            errorMessage = $"Could not start the cropper: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (source is null || jsModule is null) return;
+        saving = true;
+        errorMessage = null;
+        try
+        {
+            var rect = await jsModule.InvokeAsync<CropRectDto>("getCropRect");
+            var result = await SortService.CropPosterAsync(TorrentDownloadId, ResultId, new NormalizedCropRect(rect.x, rect.y, rect.width, rect.height), source.Width, source.Height);
+            if (!result.Success)
+            {
+                errorMessage = result.ErrorMessage ?? "Could not save the crop.";
+                return;
+            }
+
+            await OnCropped.InvokeAsync();
+            await CloseAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit is gone; nothing left to update.
+        }
+        catch (JSException ex)
+        {
+            errorMessage = $"Could not read the crop box: {ex.Message}";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CloseAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        await DestroyCropperAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task DestroyCropperAsync()
+    {
+        if (jsModule is null) return;
+        try
+        {
+            await jsModule.InvokeVoidAsync("destroyCropper");
+        }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is null) return;
+        try
+        {
+            await jsModule.InvokeVoidAsync("destroyCropper");
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+    }
+}

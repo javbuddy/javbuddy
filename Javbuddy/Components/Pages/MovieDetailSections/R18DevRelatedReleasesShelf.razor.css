@@ -1,0 +1,37 @@
+.related-releases {
+    margin-top: 1.5rem;
+}
+
+/* Same header and button as MovieScenesSection's. */
+.related-releases-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.35);
+    margin-bottom: 0.9rem;
+    padding-bottom: 0.5rem;
+}
+
+    .related-releases-header h2 {
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+.related-releases-see-all {
+    appearance: none;
+    background-color: rgba(127, 127, 127, 0.12);
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    border-radius: 3px;
+    color: #4a8fe7;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+}
+
+    .related-releases-see-all:hover {
+        background-color: rgba(127, 127, 127, 0.22);
+    }

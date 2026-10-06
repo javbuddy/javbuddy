@@ -1,0 +1,20 @@
+@using Javbuddy.Services
+
+@if (ActorPhysicalAttributesHelper.IsBirthday(BirthDate, AsOf))
+{
+    <span class="birthday-indicator" role="img" title="@Label" aria-label="@Label">🎉</span>
+}
+
+@code {
+    /// <summary>The 🎉 "birthday today" marker shown next to an actor's name on the Actors grid,
+    /// the Actor detail hero, and Movie detail's cast grid. Renders nothing unless today is the
+    /// actor's birthday.</summary>
+    [Parameter] public DateTime? BirthDate { get; set; }
+
+    /// <summary>Overrides "today" (tests only); defaults to the same basis as the displayed age.</summary>
+    [Parameter] public DateOnly? AsOf { get; set; }
+
+    private string Label => ActorPhysicalAttributesHelper.CalculateAge(BirthDate, AsOf) is int age
+        ? $"Birthday today (turns {age})"
+        : "Birthday today";
+}

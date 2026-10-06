@@ -1,0 +1,133 @@
+@page "/add/new"
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.R18Dev
+@inject IMovieAddService MovieAddService
+@inject IR18DevReleaseBrowseService ReleaseBrowseService
+@implements IDisposable
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Add a movie · Javbuddy</PageTitle>
+
+<h1>Add a movie</h1>
+
+<div class="card">
+    <div class="card-body">
+        <p class="text-muted">
+            Ownership is checked in Jellyfin (marking it Got if already owned) once you've selected libraries on the
+            Connections page. Metadata is looked up separately — from your local library folders first, falling back
+            to javinizer-go. Only the code is needed here.
+        </p>
+        <EditForm Model="newMovie" OnValidSubmit="AddMovie" FormName="add-movie">
+            <DataAnnotationsValidator />
+            <div class="row g-2 align-items-start">
+                <div class="col-md-10">
+                    <InputText class="form-control" @bind-Value="newMovie.Code" @oninput="OnCodeInput" placeholder="Code, e.g. IPX-535" disabled="@adding" autocomplete="off" />
+                    <ValidationMessage For="() => newMovie.Code" />
+                    @if (suggestions.Count > 0)
+                    {
+                        @* Codes the r18.dev dump knows starting with what's typed; picking one fills the box. *@
+                        <div class="add-suggestions" role="listbox" aria-label="r18.dev catalog matches">
+                            @foreach (var release in suggestions)
+                            {
+                                <button type="button" class="add-suggestion" role="option" disabled="@adding" @onclick="() => PickSuggestion(release)">
+                                    <span class="add-suggestion-code">@release.Movie.DvdId</span>
+                                    @if (release.Movie.DisplayTitle != release.Movie.DvdId)
+                                    {
+                                        <span class="add-suggestion-title">@release.Movie.DisplayTitle</span>
+                                    }
+                                    <span class="add-suggestion-meta">@(release.InLibrary ? $"In library ({release.StatusLabel})" : release.Movie.ReleaseDate?.ToString("yyyy-MM-dd"))</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" type="submit" disabled="@adding">
+                        @(adding ? "Adding…" : "Add")
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+
+        @if (addError is not null)
+        {
+            <div class="alert alert-warning mt-3 mb-0">@addError</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "code")]
+    public string? CodeQuery { get; set; }
+
+    private Movie newMovie = new();
+    private List<R18DevReleaseRow> suggestions = new();
+    private CancellationTokenSource? suggestCts;
+    private const int SuggestionCount = 8;
+    private bool adding;
+    private string? addError;
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrWhiteSpace(CodeQuery))
+        {
+            newMovie.Code = CodeQuery;
+        }
+    }
+
+    private async Task OnCodeInput(ChangeEventArgs e)
+    {
+        var term = e.Value?.ToString() ?? "";
+        suggestCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        suggestCts = cts;
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            suggestions = new();
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(250, cts.Token);
+            // Off the circuit's sync context, since Microsoft.Data.Sqlite's async calls complete synchronously.
+            var found = await Task.Run(() => ReleaseBrowseService.SuggestAsync(term, SuggestionCount, cts.Token), cts.Token);
+            if (!cts.IsCancellationRequested) suggestions = found.ToList();
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer keystroke superseded this lookup.
+        }
+    }
+
+    private void PickSuggestion(R18DevReleaseRow release)
+    {
+        suggestCts?.Cancel();
+        newMovie.Code = release.Movie.DvdId;
+        suggestions = new();
+    }
+
+    public void Dispose() => suggestCts?.Cancel();
+
+    private async Task AddMovie()
+    {
+        suggestCts?.Cancel();
+        suggestions = new();
+        adding = true;
+        addError = null;
+
+        var result = await MovieAddService.AddAsync(newMovie.Code!);
+
+        if (!result.MetadataFound && !result.OwnedViaJellyfin)
+        {
+            addError = $"Movie added, but no metadata found locally or via javinizer-go: {result.MetadataError}. You can retry from the movie's page.";
+            adding = false;
+            return;
+        }
+
+        Nav.NavigateTo($"/movies/{Uri.EscapeDataString(result.Movie.Code ?? string.Empty)}");
+    }
+}

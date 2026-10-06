@@ -1,0 +1,133 @@
+.image-lightbox-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.92);
+    outline: none;
+    padding: 1rem;
+    /* Pinches zoom the image, not the page behind. */
+    touch-action: none;
+}
+
+.image-lightbox-topbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    background: linear-gradient(rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.35) 70%, transparent);
+    z-index: 1;
+}
+
+.image-lightbox-title-area {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #ffffff;
+    /* Lets the title shrink and truncate instead of pushing the actions off-screen. */
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.image-lightbox-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.image-lightbox-badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.18);
+    color: #e0e4eb;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.image-lightbox-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
+.image-lightbox-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background-color 0.12s ease;
+}
+
+    .image-lightbox-close-btn:hover {
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+.image-lightbox-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 90vw;
+    max-height: 85vh;
+}
+
+.image-lightbox-image {
+    max-width: 90vw;
+    max-height: 85vh;
+    object-fit: contain;
+    cursor: default;
+    border-radius: 4px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    user-select: none;
+    touch-action: none;
+}
+
+    /* Zoomed in (set by ImageZoomControls.razor.js). */
+    .image-lightbox-image.is-zoomed {
+        cursor: grab;
+    }
+
+    .image-lightbox-image.is-panning {
+        cursor: grabbing;
+    }
+
+@media (max-width: 576px) {
+    .image-lightbox-topbar {
+        padding: 0.5rem 0.75rem;
+        gap: 0.5rem;
+    }
+
+    .image-lightbox-title-area {
+        gap: 0.5rem;
+    }
+
+    .image-lightbox-name {
+        font-size: 0.9rem;
+    }
+
+    .image-lightbox-badge {
+        font-size: 0.65rem;
+        padding: 0.15rem 0.4rem;
+    }
+
+    .image-lightbox-actions {
+        gap: 0.4rem;
+    }
+}

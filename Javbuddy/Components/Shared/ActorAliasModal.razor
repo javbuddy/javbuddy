@@ -1,0 +1,182 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@inject IActorService ActorService
+
+@if (Show && Actor is not null)
+{
+    <div class="alias-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="alias-modal-panel" @onclick:stopPropagation="true">
+            <div class="alias-modal-header">
+                <h5 class="alias-modal-title">Manage Aliases — @Actor.DisplayName</h5>
+                <button type="button" class="alias-modal-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@isProcessing">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+
+            <div class="alias-modal-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+                }
+                @if (successMessage is not null)
+                {
+                    <div class="alert alert-success py-2 mb-3">@successMessage</div>
+                }
+
+                <div class="alias-notice mb-3">
+                    <p class="mb-0 small">
+                        Actor aliases allow alternate stage names and romanizations to match movies and cast lists without creating duplicate actor records.
+                        You can add or remove aliases anytime.
+                    </p>
+                </div>
+
+                <div class="alias-add-section mb-3">
+                    <label class="form-label text-muted small text-uppercase fw-semibold mb-1" for="new-alias-input">Add New Alias</label>
+                    <form @onsubmit="AddAliasAsync" class="d-flex gap-2">
+                        <input id="new-alias-input"
+                               type="text"
+                               class="form-control"
+                               placeholder="e.g. Alternate name, spelling, or romanization"
+                               @bind="newAliasName"
+                               disabled="@isProcessing" />
+                        <button type="submit"
+                                class="btn btn-primary text-nowrap"
+                                disabled="@(isProcessing || string.IsNullOrWhiteSpace(newAliasName))">
+                            @if (isAdding)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            }
+                            Add Alias
+                        </button>
+                    </form>
+                </div>
+
+                <div class="alias-list-section">
+                    <label class="form-label text-muted small text-uppercase fw-semibold mb-1">
+                        Current Aliases (@Actor.Aliases.Count)
+                    </label>
+
+                    @if (Actor.Aliases.Count == 0)
+                    {
+                        <div class="alias-empty text-muted small fst-italic p-3 text-center">
+                            No aliases recorded for this actor yet.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="alias-list">
+                            @foreach (var alias in Actor.Aliases.OrderBy(a => a.Name))
+                            {
+                                <div class="alias-row">
+                                    <div class="alias-name-col">
+                                        <span class="alias-name">@alias.Name</span>
+                                    </div>
+                                    <div class="alias-actions-col">
+                                        <button type="button"
+                                                class="btn btn-outline-danger btn-sm alias-remove-btn"
+                                                @onclick="() => RemoveAliasAsync(alias.Id)"
+                                                disabled="@isProcessing"
+                                                title="Remove alias"
+                                                aria-label="@($"Remove alias {alias.Name}")">
+                                            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+                                                <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                                                <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L13.882 4H4.118zM2.5 3h11V2h-11v1z"/>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="alias-modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isProcessing">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public Actor? Actor { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnAliasesChanged { get; set; }
+
+    private string newAliasName = "";
+    private string? errorMessage;
+    private string? successMessage;
+    private bool isAdding;
+    private bool isProcessing;
+
+    private async Task AddAliasAsync()
+    {
+        if (Actor is null || string.IsNullOrWhiteSpace(newAliasName) || isProcessing) return;
+
+        isAdding = true;
+        isProcessing = true;
+        errorMessage = null;
+        successMessage = null;
+
+        var result = await ActorService.AddAliasAsync(Actor.Id, newAliasName);
+        isAdding = false;
+        isProcessing = false;
+
+        if (!result.Success)
+        {
+            errorMessage = result.ErrorMessage ?? "Failed to add alias.";
+            return;
+        }
+
+        var addedName = newAliasName.Trim();
+        newAliasName = "";
+        successMessage = $"Added alias \"{addedName}\".";
+        await OnAliasesChanged.InvokeAsync();
+    }
+
+    private async Task RemoveAliasAsync(int aliasId)
+    {
+        if (Actor is null || isProcessing) return;
+
+        isProcessing = true;
+        errorMessage = null;
+        successMessage = null;
+
+        var result = await ActorService.RemoveAliasAsync(Actor.Id, aliasId);
+        isProcessing = false;
+
+        if (!result.Success)
+        {
+            errorMessage = result.ErrorMessage ?? "Failed to remove alias.";
+            return;
+        }
+
+        successMessage = "Alias removed.";
+        await OnAliasesChanged.InvokeAsync();
+    }
+
+    private async Task CloseAsync()
+    {
+        if (isProcessing) return;
+        errorMessage = null;
+        successMessage = null;
+        newAliasName = "";
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+}

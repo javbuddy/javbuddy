@@ -1,0 +1,106 @@
+@* The Movie Detail page's Genres section: the movie's tags as chips that filter the Movies grid,
+   plus adding and removing tags. OnChanged asks the page to reload the movie. *@
+@using Javbuddy.Models
+@inject ITagService TagService
+@inject MovieFilterNavigationState FilterNavigationState
+@inject NavigationManager Nav
+
+<div class="movie-detail-section">
+    <div class="movie-detail-section-header">
+        <h2>Genres</h2>
+        <button type="button" class="movie-detail-edit-tags-btn" @onclick="ToggleTagEdit">@(editingTags ? "Done" : "Edit Tags")</button>
+    </div>
+    @if (tagEditError is not null)
+    {
+        <p class="movie-detail-tag-error">@tagEditError</p>
+    }
+    @if (TagChips.Count > 0)
+    {
+        <div class="movie-detail-badges">
+            @foreach (var tag in TagChips)
+            {
+                <span class="movie-detail-tag-item">
+                    @if (tag.ParentName != null)
+                    {
+                        <span class="movie-detail-badge-group">
+                            <button type="button" class="movie-detail-badge movie-detail-badge-parent" @onclick="() => FilterByGenre(tag.ParentName)" disabled="@editingTags" title="Filter by @tag.ParentName">
+                                @tag.ParentName
+                            </button>
+                            <span class="movie-detail-badge-delimiter" aria-hidden="true">›</span>
+                            <button type="button" class="movie-detail-badge movie-detail-badge-child @(tag.NeedsReview ? "movie-detail-badge-flagged" : "")" @onclick="() => FilterByGenre(tag.Name)" disabled="@editingTags" title="@(tag.NeedsReview ? "Not yet approved in the tag library" : $"Filter by {tag.Name}")">
+                                @if (tag.NeedsReview)
+                                {
+                                    <svg viewBox="0 0 16 16" width="10" height="10" fill="#ffc107" aria-hidden="true"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.891 0 1.439-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" /></svg>
+                                }
+                                @tag.Name
+                            </button>
+                        </span>
+                    }
+                    else
+                    {
+                        <button type="button" class="movie-detail-badge @(tag.NeedsReview ? "movie-detail-badge-flagged" : "")" @onclick="() => FilterByGenre(tag.Name)" disabled="@editingTags" title="@(tag.NeedsReview ? "Not yet approved in the tag library" : null)">
+                            @if (tag.NeedsReview)
+                            {
+                                <svg viewBox="0 0 16 16" width="10" height="10" fill="#ffc107" aria-hidden="true"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.891 0 1.439-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" /></svg>
+                            }
+                            @tag.Name
+                        </button>
+                    }
+                    @if (editingTags)
+                    {
+                        <button type="button" class="movie-detail-tag-remove-btn" @onclick="() => RemoveTagAsync(tag.Id)" aria-label="Remove @tag.Name">×</button>
+                    }
+                </span>
+            }
+        </div>
+    }
+    @if (editingTags)
+    {
+        <TagSearchAdd ExcludedTagIds="@TagChips.Select(t => t.Id).ToHashSet()" OnAdd="AddTagAsync" />
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool editingTags;
+    private string? tagEditError;
+
+    /// <summary>One tag chip — sourced from the movie's real MovieTag/Tag relationships (not the
+    /// MetaGenres string cache) so add/remove and the NeedsReview flag have a Tag.Id to work with.</summary>
+    private sealed record TagChip(int Id, string Name, string? ParentName, bool NeedsReview);
+
+    private List<TagChip> TagChips =>
+        Movie.MovieTags
+            .Select(mt => new TagChip(mt.TagId, mt.Tag.Name, mt.Tag.ParentTag?.Name, mt.Tag.NeedsReview))
+            .OrderBy(t => t.ParentName ?? t.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private void FilterByGenre(string genre)
+    {
+        if (string.IsNullOrWhiteSpace(genre)) return;
+        FilterNavigationState.SetPendingFilter(genre: genre);
+        Nav.NavigateTo("/");
+    }
+
+    private void ToggleTagEdit()
+    {
+        editingTags = !editingTags;
+        tagEditError = null;
+    }
+
+    private async Task AddTagAsync(int tagId)
+    {
+        var result = await TagService.AddTagToMovieAsync(Movie.Id, tagId);
+        tagEditError = result.Success ? null : result.ErrorMessage;
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveTagAsync(int tagId)
+    {
+        await TagService.RemoveTagFromMovieAsync(Movie.Id, tagId);
+        await OnChanged.InvokeAsync();
+    }
+}

@@ -1,0 +1,286 @@
+@page "/system/tasks"
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Tasks
+@inject IScheduledTaskOverviewService Overview
+@inject IServiceScopeFactory ScopeFactory
+@inject ScheduledTaskLauncher TaskLauncher
+@inject ScheduledTaskCancellationRegistry CancellationRegistry
+@inject ScheduledTaskChangeNotifier ScheduledTaskChangeNotifier
+@inject ILogger<SystemTasks> Logger
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>Tasks · Javbuddy</PageTitle>
+
+<h1 class="tasks-section-title">Scheduled</h1>
+
+@if (scheduledRows is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <div class="tasks-table">
+        <div class="tasks-row tasks-header tasks-row-scheduled">
+            <span>Name</span>
+            <span>Interval</span>
+            <span>Last Execution</span>
+            <span>Last Duration</span>
+            <span>Next Execution</span>
+            <span></span>
+        </div>
+        @foreach (var row in scheduledRows)
+        {
+            <div class="tasks-row tasks-row-scheduled">
+                <span class="tasks-name-cell">
+                    @row.Name
+                    <span class="tasks-info-icon" title="@row.Description" aria-label="@row.Description"></span>
+                </span>
+                <span>@FormatInterval(row.Interval)</span>
+                <span>@(row.LastExecution is null ? "Never" : FormatRelative(row.LastExecution.Value, future: false))</span>
+                <span>@(row.LastDuration is null ? "—" : FormatDuration(row.LastDuration.Value))</span>
+                <span>@FormatRelative(row.NextExecution, future: true)</span>
+                <span>
+                    <button class="tasks-run-btn" title="Run now" disabled="@runningTasks.Contains(row.Name)" @onclick="() => RunNow(row.Name)">
+                        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true" class="@(runningTasks.Contains(row.Name) ? "tasks-run-icon-spin" : "")">
+                            <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" />
+                            <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" />
+                        </svg>
+                    </button>
+                </span>
+            </div>
+        }
+    </div>
+}
+
+@if (justQueued is not null)
+{
+    <div class="alert alert-info" style="max-width: 640px;">@justQueued queued.</div>
+}
+
+<h1 class="tasks-section-title">Queue</h1>
+
+@if (history is null)
+{
+    <LoadingIndicator />
+}
+else if (history.Count == 0)
+{
+    <p class="text-muted">No task runs yet.</p>
+}
+else
+{
+    <div class="tasks-table">
+        <div class="tasks-row tasks-header tasks-row-queue">
+            <span>Name</span>
+            <span>Queued</span>
+            <span>Started</span>
+            <span>Ended</span>
+            <span>Progress</span>
+            <span>Duration</span>
+            <span></span>
+        </div>
+        @foreach (var run in history)
+        {
+            <div class="tasks-row tasks-row-queue">
+                <span class="tasks-queue-name">
+                    <span class="tasks-icon @(run.EndedAt is null ? "tasks-icon-running" : run.Success ? "tasks-icon-ok" : "tasks-icon-warning")" aria-hidden="true"></span>
+                    @run.TaskName
+                </span>
+                <span>@FormatRelative(run.QueuedAt, future: false)</span>
+                <span>@(run.StartedAt is null ? "—" : FormatRelative(run.StartedAt.Value, future: false))</span>
+                <span>@(run.EndedAt is null ? "—" : FormatRelative(run.EndedAt.Value, future: false))</span>
+                <span class="tasks-progress-cell">
+                    @if (run.EndedAt is null && CancellationRegistry.IsCancellationRequested(run.Id))
+                    {
+                        <span class="tasks-progress-stage tasks-cancelling">Cancelling…</span>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(run.ProgressStage))
+                    {
+                        <span class="tasks-progress-stage">@run.ProgressStage</span>
+                    }
+                    <span>@FormatProgress(run)</span>
+                </span>
+                <span>@(run.StartedAt is not null && run.EndedAt is not null ? FormatDuration(run.EndedAt.Value - run.StartedAt.Value) : "—")</span>
+                <span>
+                    @if (run.EndedAt is null)
+                    {
+                        // A run this process is executing gets a real cancel; one it isn't (an
+                        // orphan from a crash/restart) has no work to stop, so it's only dismissed.
+                        var cancellable = CancellationRegistry.IsActive(run.Id);
+                        var cancelling = cancellingRunIds.Contains(run.Id) || CancellationRegistry.IsCancellationRequested(run.Id);
+                        <button class="tasks-dismiss-btn"
+                                title="@(cancellable ? "Cancel task" : "Mark as Failed")"
+                                aria-label="@(cancellable ? $"Cancel {run.TaskName}" : $"Mark {run.TaskName} as failed")"
+                                disabled="@cancelling"
+                                @onclick="() => CancelRun(run.Id)">
+                            <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+                                <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854Z" />
+                            </svg>
+                        </button>
+                    }
+                </span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<ScheduledTaskRow>? scheduledRows;
+    private List<ScheduledTaskRun>? history;
+    private readonly HashSet<string> runningTasks = new();
+    private readonly HashSet<int> cancellingRunIds = new();
+    private string? justQueued;
+    private CancellationTokenSource? pollCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ScheduledTaskChangeNotifier.Changed += OnScheduledTasksChangedElsewhere;
+        await LoadAsync();
+        StartPollingIfNeeded();
+    }
+
+    private bool IsAnyRunActive => history?.Any(r => r.EndedAt is null) ?? false;
+
+    // Polls every couple seconds while a run is in flight, so a long task like ImageCacheTask
+    // shows live "X / Y" progress instead of a static "Running" row until it finishes — and stops
+    // itself once nothing's running, rather than polling this page forever while it's left open.
+    private void StartPollingIfNeeded()
+    {
+        if (pollCts is not null || !IsAnyRunActive) return;
+
+        pollCts = new CancellationTokenSource();
+        _ = PollLoopAsync(pollCts.Token);
+    }
+
+    private async Task PollLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                await InvokeAsync(async () =>
+                {
+                    await LoadAsync();
+                    StateHasChanged();
+                });
+                if (!IsAnyRunActive) break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            pollCts = null;
+        }
+    }
+
+    public void Dispose()
+    {
+        ScheduledTaskChangeNotifier.Changed -= OnScheduledTasksChangedElsewhere;
+        pollCts?.Cancel();
+    }
+
+    private void OnScheduledTasksChangedElsewhere()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await LoadAsync();
+                StartPollingIfNeeded();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Failed to refresh tasks after a change notification.");
+            }
+        });
+    }
+
+    private async Task CancelRun(int runId)
+    {
+        cancellingRunIds.Add(runId);
+        StateHasChanged();
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
+            await runner.CancelRunAsync(runId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to cancel scheduled task run {RunId}.", runId);
+        }
+        finally
+        {
+            cancellingRunIds.Remove(runId);
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        var overview = await Overview.GetOverviewAsync();
+        scheduledRows = overview.Rows.ToList();
+        history = overview.History.ToList();
+    }
+
+    private async Task RunNow(string taskName)
+    {
+        runningTasks.Add(taskName);
+        justQueued = taskName;
+        StateHasChanged();
+
+        // Queued on application-owned background execution so the run keeps going (and gets
+        // recorded) even after this click handler returns — a full sync can take minutes.
+        _ = TaskLauncher.Queue(taskName);
+
+        // Give the runner a moment to write the "queued" row, then refresh the queue view.
+        await Task.Delay(500);
+        runningTasks.Remove(taskName);
+        await LoadAsync();
+        StartPollingIfNeeded();
+    }
+
+    private static string FormatProgress(ScheduledTaskRun run)
+    {
+        if (run.ProgressCurrent is not { } current)
+        {
+            return run.EndedAt is null ? (string.IsNullOrWhiteSpace(run.ProgressStage) ? "starting…" : "") : "—";
+        }
+
+        return run.ProgressTotal is { } total ? $"{current:N0} / {total:N0}" : $"{current:N0}";
+    }
+
+    private static string FormatInterval(TimeSpan span)
+    {
+        if (span.TotalDays >= 1) return $"{(int)Math.Round(span.TotalDays)} day{(span.TotalDays >= 1.5 ? "s" : "")}";
+        if (span.TotalHours >= 1) return $"{(int)Math.Round(span.TotalHours)} hour{(span.TotalHours >= 1.5 ? "s" : "")}";
+        return $"{(int)Math.Round(span.TotalMinutes)} minute{(span.TotalMinutes >= 1.5 ? "s" : "")}";
+    }
+
+    private static string FormatDuration(TimeSpan span)
+    {
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+        return span.ToString(@"hh\:mm\:ss");
+    }
+
+    private static string FormatRelative(DateTime utc, bool future)
+    {
+        var span = future ? utc - DateTime.UtcNow : DateTime.UtcNow - utc;
+        if (span < TimeSpan.Zero) return future ? "due now" : "just now";
+
+        string value;
+        if (span.TotalDays >= 1) { var n = (int)Math.Round(span.TotalDays); value = $"{n} day{(n == 1 ? "" : "s")}"; }
+        else if (span.TotalHours >= 1) { var n = (int)Math.Round(span.TotalHours); value = $"{n} hour{(n == 1 ? "" : "s")}"; }
+        else if (span.TotalMinutes >= 1) { var n = (int)Math.Round(span.TotalMinutes); value = $"{n} minute{(n == 1 ? "" : "s")}"; }
+        else return future ? "in a few seconds" : "a few seconds ago";
+
+        return future ? $"in {value}" : $"{value} ago";
+    }
+}

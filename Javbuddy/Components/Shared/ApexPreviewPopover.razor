@@ -1,0 +1,45 @@
+@using Javbuddy.Services.Scenes
+<div class="apex-preview" role="tooltip">
+    <div class="apex-preview-media">
+        @if (PreviewUrl is not null)
+        {
+            <ScenePreviewMedia PreviewUrl="@PreviewUrl" />
+        }
+        else
+        {
+            <ScenePreviewPlaceholder Generating="Generating" />
+        }
+    </div>
+    <div class="apex-preview-details">
+        <div class="apex-preview-tags">
+            @if (Actors.Count > 0)
+            {
+                <span class="apex-preview-actors">@string.Join(", ", Actors.Select(a => a.Name))</span>
+            }
+            @if (Tags.Count == 0 && Actors.Count == 0)
+            {
+                <span class="apex-preview-tag">Apex</span>
+            }
+            @foreach (var tag in Tags)
+            {
+                <span class="apex-preview-tag">@(tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}")</span>
+            }
+        </div>
+        <span class="apex-preview-time">@SceneTimeFormat.Format(Seconds)</span>
+    </div>
+</div>
+
+@code {
+    /// <summary>What hovering an apex marker shows: the looping clip around the apex,
+    /// its actors, tags and time. Until the clip exists, the cards' placeholder: a shimmer while it's being
+    /// generated, or "No preview" when none can be made. The caller positions it.</summary>
+    [Parameter] public string? PreviewUrl { get; set; }
+
+    [Parameter] public bool Generating { get; set; }
+
+    [Parameter] public IReadOnlyList<SceneActorItem> Actors { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<SceneTagItem> Tags { get; set; } = [];
+
+    [Parameter] public double Seconds { get; set; }
+}

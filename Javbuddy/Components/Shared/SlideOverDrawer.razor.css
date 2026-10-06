@@ -1,0 +1,93 @@
+.slide-over-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: flex-end;
+    outline: none;
+}
+
+.slide-over-drawer-panel {
+    height: 100%;
+    width: 480px;
+    max-width: 92vw;
+    background: #fff;
+    border-left: 1px solid #dee2e6;
+    padding: 1.5rem;
+    overflow-y: auto;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.15);
+}
+
+.slide-over-drawer-panel-wide {
+    width: 880px;
+}
+
+.slide-over-drawer-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+    .slide-over-drawer-head h2 {
+        font-size: 1.2rem;
+        margin: 0;
+    }
+
+.slide-over-drawer-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    color: #6c757d;
+}
+
+    .slide-over-drawer-close-btn:hover {
+        background-color: #eef0f2;
+        color: #212529;
+    }
+
+/* Neutralize a hosted ConnectionSettingsCard's (or similarly card-shaped content's) own .card
+   chrome/margin when hosted inside the drawer — the drawer panel already provides the frame, so a
+   nested card border/shadow/margin would double up. */
+.slide-over-drawer-body ::deep .card {
+    border: none;
+    box-shadow: none;
+    max-width: none;
+}
+
+    .slide-over-drawer-body ::deep .card.mt-4 {
+        margin-top: 0 !important;
+    }
+
+    .slide-over-drawer-body ::deep .card-body {
+        padding: 0;
+    }
+
+:root[data-theme="dark"] .slide-over-drawer-panel {
+    background-color: #242833;
+    border-left-color: #363c4a;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .slide-over-drawer-close-btn {
+    color: #b9bfd1;
+}
+
+    :root[data-theme="dark"] .slide-over-drawer-close-btn:hover {
+        background-color: #3a4150;
+        color: #ffffff;
+    }
+
+@media (max-width: 700px) {
+    .slide-over-drawer-panel {
+        width: 100%;
+        max-width: none;
+    }
+}

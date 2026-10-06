@@ -1,0 +1,171 @@
+@using Javbuddy.Services.Trickplay
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* The video and what's under it, shared by VideoPlayerShell and the Review card: the
+   video with VR and arrow-key seeking, and the scrub bar, which replaces the browser's seek bar. With
+   ShowTimeline it's drawn without thumbnails until trickplay loads. A host's own Controls
+   replace it. Without a Src the area shows only the ChildContent, e.g. the Review card's poster. *@
+<div class="video-player-column @Class">
+    <div class="video-player-area">
+        @if (Src is not null)
+        {
+            <video class="video-player-media @VideoClass @(ScrubBarShown ? "video-player-scrub" : null) @(VrMode ? "video-player-vr" : null)"
+                   src="@Src"
+                   controls="@(NativeControls && !OwnControls)"
+                   controlslist="@(VrMode || ScrubBarShown ? "nofullscreen" : null)"
+                   @ondurationchange="OnVideoDurationChangedAsync"
+                   autoplay>
+            </video>
+            @if (VrMode)
+            {
+                <VrViewer VideoSelector="@VideoSelector" />
+            }
+            @if (SeekKeys)
+            {
+                <VideoSeekKeys VideoSelector="@VideoSelector" MinSeconds="SeekMinSeconds" MaxSeconds="SeekMaxSeconds"
+                               HighlightTargets="HighlightJumpTargets" ApexTargets="ApexJumpTargets" />
+            }
+            <ApexCountdown Apexes="CountdownApexes ?? Apexes" VideoSelector="@VideoSelector" />
+        }
+        @ChildContent
+    </div>
+    @if (Src is not null)
+    {
+        @if (Controls is not null)
+        {
+            @Controls
+        }
+        else if (ScrubBarShown)
+        {
+            <ScrubBar Trickplay="Trickplay" Generating="Trickplay is null ? Generating : null" DurationSeconds="TimelineDurationSeconds" VideoSelector="@VideoSelector" Scenes="Scenes" Suggestions="Suggestions" Highlights="Highlights" Apexes="Apexes" PlayerControls="OwnControls" />
+        }
+    }
+</div>
+
+@code {
+    /// <summary>The video's own class; <c>video.{VideoClass}</c> is the selector other components use to
+    /// find it.</summary>
+    [Parameter, EditorRequired] public string VideoClass { get; set; } = default!;
+
+    /// <summary>Extra classes on the column, e.g. for the host's fullscreen or layout rules.</summary>
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>The video's URL; no video is shown while it's null.</summary>
+    [Parameter] public string? Src { get; set; }
+
+    [Parameter] public TrickplayLayout? Trickplay { get; set; }
+
+    /// <summary>Set while there's no trickplay and it's being generated.</summary>
+    [Parameter] public TrickplayGenerating? Generating { get; set; }
+
+    [Parameter] public double? DurationSeconds { get; set; }
+
+    /// <summary>Whether the scrub bar is drawn, without thumbnails, when there's no trickplay
+    ///; it takes DurationSeconds, or the video's own length when that's unknown.</summary>
+    [Parameter] public bool ShowTimeline { get; set; }
+
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.SceneItem>? Scenes { get; set; }
+
+    [Parameter] public IReadOnlyList<double>? Suggestions { get; set; }
+
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem>? Highlights { get; set; }
+
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? Apexes { get; set; }
+
+    /// <summary>The apexes the countdown counts down to, in the video's time; defaults to
+    /// <see cref="Apexes"/>. A clip player, which draws no scrub-bar markers, sets it.</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? CountdownApexes { get; set; }
+
+    [Parameter] public bool VrMode { get; set; }
+
+    /// <summary>False hides the browser's own video controls, for a host that brings its own Controls.</summary>
+    [Parameter] public bool NativeControls { get; set; } = true;
+
+    /// <summary>Shown under the video in place of the scrub bar when set.</summary>
+    [Parameter] public RenderFragment? Controls { get; set; }
+
+    /// <summary>Whether the arrow keys seek the video.</summary>
+    [Parameter] public bool SeekKeys { get; set; } = true;
+
+    /// <summary>The range arrow-key seeking is clamped to; the whole video when null.</summary>
+    [Parameter] public double? SeekMinSeconds { get; set; }
+
+    [Parameter] public double? SeekMaxSeconds { get; set; }
+
+    /// <summary>Where the highlight and apex jump keys land, from MarkerJumps; the keys
+    /// do nothing while empty.</summary>
+    [Parameter] public IReadOnlyList<double> HighlightJumpTargets { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<double> ApexJumpTargets { get; set; } = [];
+
+    /// <summary>Raised when the scrub bar appears or goes, so the host can list its F shortcut.</summary>
+    [Parameter] public EventCallback<bool> ScrubBarShownChanged { get; set; }
+
+    /// <summary>Shown in the video area after the video.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string VideoSelector => "video." + VideoClass;
+
+    // The scrub bar replaces the browser's seek bar, with trickplay thumbnails once they load.
+    // The scrub bar carries the play, time and volume controls, like the clip player's, in
+    // place of the browser's. Not in VR mode, whose viewer overlays the native controls.
+    private bool OwnControls => NativeControls && !VrMode && ScrubBarShown;
+
+    private bool ScrubBarShown => Src is not null && Controls is null && (Trickplay is not null || ShowTimeline && TimelineDurationSeconds is > 0);
+
+    // A movie whose file was never probed for its length (MediaDurationSeconds null) still gets the
+    // scrub bar once the browser has read the video's own length.
+    private double? TimelineDurationSeconds => DurationSeconds is > 0 ? DurationSeconds : videoDurationSeconds;
+
+    private double? videoDurationSeconds;
+    // The stream videoDurationSeconds was read from; a media fragment (#t=...) doesn't change it.
+    private string? videoStream;
+    // Null until first reported, so a new column (e.g. keyed to another movie) always tells its host.
+    private bool? reportedScrubBarShown;
+    private IJSObjectReference? videoModule;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var stream = Src?.Split('#')[0];
+        if (stream != videoStream)
+        {
+            videoStream = stream;
+            videoDurationSeconds = null;
+        }
+        await ReportScrubBarShownAsync();
+    }
+
+    private async Task OnVideoDurationChangedAsync()
+    {
+        if (DurationSeconds is > 0 || !ShowTimeline) return;
+        try
+        {
+            videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");
+            videoDurationSeconds = await videoModule.InvokeAsync<double?>("duration", VideoSelector);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        await ReportScrubBarShownAsync();
+    }
+
+    private async Task ReportScrubBarShownAsync()
+    {
+        if (ScrubBarShown == reportedScrubBarShown) return;
+        reportedScrubBarShown = ScrubBarShown;
+        await ScrubBarShownChanged.InvokeAsync(ScrubBarShown);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (videoModule is null) return;
+        try
+        {
+            await videoModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

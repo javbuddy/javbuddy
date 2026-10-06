@@ -1,0 +1,397 @@
+@page "/settings/deovr"
+@using Javbuddy.Models
+@using Javbuddy.Services.DeoVr
+@using Javbuddy.Services.Movies
+@inject IDeoVrSettingsService SettingsService
+@inject IDeoVrGroupService GroupService
+@inject IMovieGridQueryService GridQuery
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+@* Settings > DeoVR: turns on the /deovr JSON routes DeoVR browses, and edits the
+   groups listed there after "All movies". A field set by its DeoVr__<Field> environment variable
+   is shown with that value and can't be changed here. *@
+<PageTitle>DeoVR · Javbuddy</PageTitle>
+
+<h1>DeoVR</h1>
+
+@if (settings is null || effective is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <div class="card deovr-card">
+        <div class="card-body">
+            <h5 class="card-title">Connection</h5>
+            <p class="text-muted">
+                Lets the <a href="https://deovr.com/app" target="_blank" rel="noopener">DeoVR</a> player browse and play
+                Javbuddy's movies, listed by the groups below; each version of a movie is a selectable source and its scenes
+                are chapters.
+            </p>
+            <EditForm Model="settings" OnValidSubmit="SaveSettingsAsync" FormName="deovr-settings">
+                <div class="form-check mb-3">
+                    @if (SettingsService.IsSetByEnvironment(nameof(DeoVrSettings.Enabled)))
+                    {
+                        <input class="form-check-input" type="checkbox" id="deovr-enabled" checked="@effective.Enabled" disabled />
+                    }
+                    else
+                    {
+                        <input class="form-check-input" type="checkbox" id="deovr-enabled" checked="@settings.Enabled"
+                               @onchange="e => settings.Enabled = e.Value is true" />
+                    }
+                    <label class="form-check-label" for="deovr-enabled">Enable DeoVR</label>
+                    <div class="form-text">Off, the /deovr addresses answer "not found".</div>
+                    @EnvNote(nameof(DeoVrSettings.Enabled))
+                </div>
+
+                <button class="btn btn-primary" type="submit" disabled="@allFromEnv">Save</button>
+                @if (settingsSaved)
+                {
+                    <div class="alert alert-success mt-3 mb-0">Saved.</div>
+                }
+            </EditForm>
+
+            @if (effective.Enabled)
+            {
+                <p class="mt-3 mb-0">
+                    In DeoVR, open <code class="deovr-address">@DeoVrAddress</code>, or <code>/deovr</code> on whatever
+                    address DeoVR reaches Javbuddy at: every link in its lists stays on the address it opened. DeoVR on
+                    Android needs HTTPS.
+                </p>
+            }
+        </div>
+    </div>
+
+    <div class="card deovr-card mt-4">
+        <div class="card-body">
+            <h5 class="card-title">Groups</h5>
+            <p class="text-muted">
+                Each group is a list in DeoVR of the movies matching its filters, in its sort order, shown in the order
+                below. Only Got movies with a local video file are listed; a Missing movie has nothing to play.
+            </p>
+
+            @if (groups.Count == 0)
+            {
+                <div class="alert alert-warning deovr-no-groups">No groups: DeoVR has nothing to list. Add one, e.g. an "All movies" group without filters.</div>
+            }
+            <ul class="list-group mb-3 deovr-groups">
+                @for (var i = 0; i < groups.Count; i++)
+                {
+                    var group = groups[i];
+                    var index = i;
+                    <li class="list-group-item d-flex align-items-center gap-2 deovr-group" @key="group.Id">
+                        <span class="flex-grow-1">
+                            @group.Name
+                            <span class="text-muted small">· Sort: @MovieFilterOptions.SortFieldLabel(group.Sort.Field)@(group.Sort.Field == "random" ? "" : group.Sort.Descending ? " ▼" : " ▲")</span>
+                        </span>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" title="Move up" aria-label="Move @group.Name up"
+                                disabled="@(index == 0 || busy)" @onclick="() => MoveAsync(group.Id, -1)">▲</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" title="Move down" aria-label="Move @group.Name down"
+                                disabled="@(index == groups.Count - 1 || busy)" @onclick="() => MoveAsync(group.Id, 1)">▼</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => EditAsync(group)">Edit</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => deleting = group">Delete</button>
+                    </li>
+                }
+            </ul>
+
+            @if (editor is null)
+            {
+                <button type="button" class="btn btn-outline-primary" disabled="@busy" @onclick="AddAsync">+ Add group</button>
+            }
+            else
+            {
+                <div class="deovr-editor">
+                    <h6>@(editor.Id == 0 ? "New group" : $"Edit {editor.OriginalName}")</h6>
+                    <div class="mb-3">
+                        <label class="form-label" for="deovr-group-name">Name</label>
+                        <input class="form-control deovr-name" id="deovr-group-name" maxlength="100"
+                               value="@editor.Name" @oninput="e => editor.Name = e.Value?.ToString() ?? string.Empty" />
+                    </div>
+
+                    <MovieFilterToolbar ShowStatusFilter="false"
+                                        LibraryNames="@(summary?.LibraryNames ?? [])"
+                                        LibraryFilter="@editor.Library"
+                                        OnLibraryFilterChanged="l => UpdateAsync(() => editor.Library = l)"
+                                        TextFilter="@editor.Text"
+                                        OnTextFilterChanged="t => UpdateAsync(() => editor.Text = t)"
+                                        ResolutionFilter="@editor.Resolutions"
+                                        OnToggleResolution="o => UpdateAsync(() => Toggle(editor.Resolutions, o))"
+                                        ScanTypeFilter="@editor.ScanTypes"
+                                        OnToggleScanType="o => UpdateAsync(() => Toggle(editor.ScanTypes, o))"
+                                        NfoDriftFilter="@editor.NfoDriftKinds"
+                                        OnToggleNfoDrift="o => UpdateAsync(() => Toggle(editor.NfoDriftKinds, o))"
+                                        AvailableCodecs="@(summary?.Codecs ?? [])"
+                                        CodecFilter="@editor.Codecs"
+                                        OnToggleCodec="o => UpdateAsync(() => Toggle(editor.Codecs, o))"
+                                        AvailableStudios="@(summary?.Studios ?? [])"
+                                        StudioFilter="@editor.Studios"
+                                        OnToggleStudio="o => UpdateAsync(() => Toggle(editor.Studios, o))"
+                                        OnSelectAllStudios="all => UpdateAsync(() => editor.Studios.UnionWith(all))"
+                                        OnSelectNoneStudios="() => UpdateAsync(editor.Studios.Clear)"
+                                        AvailableGenres="@(summary?.Genres ?? [])"
+                                        GenreFilter="@editor.Genres"
+                                        OnToggleGenre="o => UpdateAsync(() => Toggle(editor.Genres, o))"
+                                        OnSelectAllGenres="all => UpdateAsync(() => editor.Genres.UnionWith(all))"
+                                        OnSelectNoneGenres="() => UpdateAsync(editor.Genres.Clear)"
+                                        FeatureFilter="@editor.Features"
+                                        OnToggleFeature="o => UpdateAsync(() => Toggle(editor.Features, o))"
+                                        ShowActorAttributes="true"
+                                        ActorAttributeOptions="@(summary?.ActorAttributes ?? ActorAttributeOptions.None)"
+                                        ActorAttributeSelection="@editor.ActorAttributes"
+                                        OnActorAttributesChanged="a => UpdateAsync(() => editor.ActorAttributes = MovieFilterOptions.MergeActorAttributes(editor.ActorAttributes, a, summary?.ActorAttributes ?? ActorAttributeOptions.None))"
+                                        AvailableActors="@actorOptions"
+                                        ActorFilter="@editor.Actors"
+                                        OnToggleActor="id => UpdateAsync(() => Toggle(editor.Actors, id))"
+                                        OnSelectAllActors="ids => UpdateAsync(() => editor.Actors.UnionWith(ids))"
+                                        OnSelectNoneActors="() => UpdateAsync(editor.Actors.Clear)"
+                                        SortField="@editor.SortField"
+                                        SortDescending="@editor.SortDescending"
+                                        OnSortChanged="c => { editor.SortField = c.Field; editor.SortDescending = c.Descending; }"
+                                        HasActiveFilters="@editor.HasFilters"
+                                        OnResetFilters="() => UpdateAsync(editor.ClearFilters)" />
+
+                    <p class="deovr-match-count">
+                        @(matchCount is null ? "Counting…" : $"{matchCount} Got movie{(matchCount == 1 ? "" : "s")} with a local file match.")
+                    </p>
+
+                    @if (editorError is not null)
+                    {
+                        <div class="alert alert-danger">@editorError</div>
+                    }
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" disabled="@busy" @onclick="SaveGroupAsync">Save group</button>
+                        <button type="button" class="btn btn-outline-secondary" disabled="@busy" @onclick="CancelEdit">Cancel</button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@if (deleting is not null)
+{
+    <DeleteConfirmDialog ItemName="@deleting.Name" Busy="busy"
+                         Message="The group disappears from DeoVR. Its movies stay in your library."
+                         OnConfirm="DeleteAsync" OnCancel="() => deleting = null" />
+}
+
+@code {
+    private DeoVrSettings? settings;
+    private DeoVrSettings? effective;
+    private bool allFromEnv;
+    private bool settingsSaved;
+
+    private IReadOnlyList<DeoVrGroupDefinition> groups = [];
+    private GroupEditor? editor;
+    private MovieGridSummary? summary;
+    private IReadOnlyList<MovieActorOption> actorOptions = [];
+    private int? matchCount;
+    private string? editorError;
+    private DeoVrGroupDefinition? deleting;
+    private bool busy;
+
+    // The address this page was opened at; DeoVR's links follow whichever address DeoVR itself uses.
+    private string DeoVrAddress => $"{Navigation.BaseUri.TrimEnd('/')}{DeoVrUrls.Root}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        allFromEnv = SettingsService.IsSetByEnvironment(nameof(DeoVrSettings.Enabled));
+        settings = await SettingsService.GetStoredAsync();
+        effective = await SettingsService.GetEffectiveAsync();
+        groups = await GroupService.ListAsync();
+    }
+
+    private RenderFragment EnvNote(string field) => @<text>
+        @if (SettingsService.IsSetByEnvironment(field))
+        {
+            <div class="form-text">Set by the <code>DeoVr__@field</code> environment variable.</div>
+        }
+    </text>;
+
+    private async Task SaveSettingsAsync()
+    {
+        settingsSaved = false;
+        await SettingsService.SaveAsync(settings!);
+        settings = await SettingsService.GetStoredAsync();
+        effective = await SettingsService.GetEffectiveAsync();
+        settingsSaved = true;
+    }
+
+    private Task AddAsync() => OpenEditorAsync(new GroupEditor());
+
+    private Task EditAsync(DeoVrGroupDefinition group) => OpenEditorAsync(GroupEditor.From(group));
+
+    private async Task OpenEditorAsync(GroupEditor next)
+    {
+        actorOptions = await GridQuery.GetActorOptionsWithFilesAsync();
+        editor = next;
+        editorError = null;
+        await RefreshMatchesAsync();
+    }
+
+    private void CancelEdit()
+    {
+        editor = null;
+        editorError = null;
+    }
+
+    private async Task UpdateAsync(Action change)
+    {
+        change();
+        await RefreshMatchesAsync();
+    }
+
+    private static void Toggle<T>(HashSet<T> set, T value)
+    {
+        if (!set.Remove(value)) set.Add(value);
+    }
+
+    // The filter options come from the grid's summary; the match count is what DeoVR would list
+    // (Got movies with a local file only).
+    private async Task RefreshMatchesAsync()
+    {
+        if (editor is null) return;
+        var filter = editor.ToFilter();
+        matchCount = null;
+        summary = await GridQuery.GetSummaryAsync(filter);
+        matchCount = (await GridQuery.GetWithFilesAsync(filter, new MovieGridSort("added", true, 0))).Count;
+    }
+
+    private async Task SaveGroupAsync()
+    {
+        if (editor is null) return;
+        if (string.IsNullOrWhiteSpace(editor.Name))
+        {
+            editorError = "Give the group a name.";
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            await GroupService.SaveAsync(editor.Id, editor.Name, editor.ToFilter(), editor.SortField, editor.SortDescending);
+            groups = await GroupService.ListAsync();
+            editor = null;
+            editorError = null;
+        }
+        catch (ArgumentException ex)
+        {
+            editorError = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task MoveAsync(int id, int direction)
+    {
+        busy = true;
+        try
+        {
+            await GroupService.MoveAsync(id, direction);
+            groups = await GroupService.ListAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (deleting is null) return;
+        busy = true;
+        try
+        {
+            await GroupService.DeleteAsync(deleting.Id);
+            if (editor?.Id == deleting.Id) editor = null;
+            groups = await GroupService.ListAsync();
+            deleting = null;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    /// <summary>The group being added or edited, in the toolbar's own shapes.</summary>
+    private sealed class GroupEditor
+    {
+        public int Id { get; init; }
+        public string OriginalName { get; init; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? Library { get; set; }
+        public string Text { get; set; } = string.Empty;
+        public HashSet<MovieResolutionFilterOption> Resolutions { get; init; } = [];
+        public HashSet<MovieScanTypeFilterOption> ScanTypes { get; init; } = [];
+        public HashSet<NfoDriftKind> NfoDriftKinds { get; init; } = [];
+        public HashSet<string> Codecs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> Studios { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> Genres { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<MovieFeatureFilterOption> Features { get; init; } = [];
+        public HashSet<int> Actors { get; init; } = [];
+        public ActorAttributeSelection ActorAttributes { get; set; } = ActorAttributeSelection.Empty;
+        public string SortField { get; set; } = "added";
+        public bool SortDescending { get; set; } = true;
+
+        public bool HasFilters =>
+            !string.IsNullOrEmpty(Library) || !string.IsNullOrWhiteSpace(Text)
+            || Resolutions.Count + ScanTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count + Actors.Count > 0
+            || !ActorAttributes.IsEmpty;
+
+        public void ClearFilters()
+        {
+            Library = null;
+            Text = string.Empty;
+            Resolutions.Clear();
+            ScanTypes.Clear();
+            NfoDriftKinds.Clear();
+            Codecs.Clear();
+            Studios.Clear();
+            Genres.Clear();
+            Features.Clear();
+            Actors.Clear();
+            ActorAttributes = ActorAttributeSelection.Empty;
+        }
+
+        // No status: the DeoVR lists only ever hold Got movies (MovieGridQueryService.GetWithFilesAsync).
+        public MovieGridFilter ToFilter() => new(
+            Library: string.IsNullOrEmpty(Library) ? null : Library,
+            Resolutions: Resolutions.ToList(),
+            ScanTypes: ScanTypes.ToList(),
+            Codecs: Codecs.ToList(),
+            Studios: Studios.ToList(),
+            Genres: Genres.ToList(),
+            Features: Features.ToList(),
+            Text: string.IsNullOrWhiteSpace(Text) ? null : Text.Trim(),
+            NfoDriftKinds: NfoDriftKinds.ToList(),
+            ActorAttributes: ActorAttributes,
+            ActorIds: Actors.ToList());
+
+        public static GroupEditor From(DeoVrGroupDefinition group)
+        {
+            var f = group.Filter;
+            return new GroupEditor
+            {
+                Id = group.Id,
+                OriginalName = group.Name,
+                Name = group.Name,
+                Library = f.Library,
+                Text = f.Text ?? string.Empty,
+                Resolutions = [.. f.Resolutions ?? []],
+                ScanTypes = [.. f.ScanTypes ?? []],
+                NfoDriftKinds = [.. f.NfoDriftKinds ?? []],
+                Codecs = new(f.Codecs ?? [], StringComparer.OrdinalIgnoreCase),
+                Studios = new(f.Studios ?? [], StringComparer.OrdinalIgnoreCase),
+                Genres = new(f.Genres ?? [], StringComparer.OrdinalIgnoreCase),
+                Features = [.. f.Features ?? []],
+                Actors = [.. f.ActorIds ?? []],
+                ActorAttributes = f.ActorAttributes ?? ActorAttributeSelection.Empty,
+                SortField = group.Sort.Field,
+                SortDescending = group.Sort.Descending,
+            };
+        }
+    }
+}

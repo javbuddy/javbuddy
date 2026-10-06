@@ -1,0 +1,94 @@
+@* The Movie Detail page for a release that isn't in the library: its r18.dev metadata and gallery. *@
+@using Javbuddy.Services.R18Dev
+
+<div class="movie-hero" style="@(!string.IsNullOrWhiteSpace(Preview.PosterUrl) ? $"background-image: url('{Preview.PosterUrl}')" : "")">
+    <div class="movie-hero-scrim"></div>
+    <div class="movie-hero-content">
+        <div class="movie-hero-poster">
+            @if (!string.IsNullOrWhiteSpace(Preview.PosterUrl))
+            {
+                <img src="@PosterFullUrl" alt="Cover" />
+            }
+            else
+            {
+                <div class="movie-hero-poster-placeholder">@Preview.DvdId</div>
+            }
+        </div>
+        <div class="movie-hero-info">
+            <h1 class="movie-hero-title" title="@Preview.DisplayTitle">@MovieDetailText.Truncate(Preview.DisplayTitle, 70)</h1>
+            <div class="movie-hero-subtitle">
+                @if (Preview.RuntimeMinutes is not null)
+                {
+                    <span>@(Preview.RuntimeMinutes) Minutes</span>
+                }
+                @if (Preview.Genres.Count > 0)
+                {
+                    <span>@string.Join(", ", Preview.Genres)</span>
+                }
+                @if (Preview.ReleaseDate is not null)
+                {
+                    <span>@Preview.ReleaseDate.Value.Year</span>
+                }
+            </div>
+            <div class="movie-hero-badges">
+                <span class="movie-hero-badge">@Preview.DvdId</span>
+                @if (!string.IsNullOrWhiteSpace(Preview.Studio))
+                {
+                    <span class="movie-hero-badge">@Preview.Studio</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(Preview.Label) && Preview.Label != Preview.Studio)
+                {
+                    @if (Preview.LabelRef is { } labelRef)
+                    {
+                        <button type="button" class="movie-hero-badge movie-hero-badge-link" title="Browse this label's releases on r18.dev" @onclick="() => OnBrowseCatalog.InvokeAsync((null, labelRef))">@Preview.Label</button>
+                    }
+                    else
+                    {
+                        <span class="movie-hero-badge">@Preview.Label</span>
+                    }
+                }
+                @if (Preview.SeriesRef is { } seriesRef)
+                {
+                    <button type="button" class="movie-hero-badge movie-hero-badge-link" title="Browse this series' releases on r18.dev" @onclick="() => OnBrowseCatalog.InvokeAsync((seriesRef, null))">@seriesRef.Name</button>
+                }
+                <span class="movie-hero-badge movie-hero-badge-missing">Not in library</span>
+                @if (!string.IsNullOrWhiteSpace(Preview.TrailerUrl))
+                {
+                    <a class="movie-hero-badge movie-hero-badge-jellyfin" href="@Preview.TrailerUrl" target="_blank" rel="noopener noreferrer">Watch trailer</a>
+                }
+            </div>
+            @if (Preview.Actresses.Count > 0)
+            {
+                <p class="movie-hero-cast">
+                    <strong>Cast:</strong> @string.Join(", ", Preview.Actresses)
+                </p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Preview.Director))
+            {
+                <p class="movie-hero-cast"><strong>Director:</strong> @Preview.Director</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(Preview.Description))
+            {
+                <p class="movie-hero-overview">@Preview.Description</p>
+            }
+        </div>
+    </div>
+    <div class="movie-hero-footer">Metadata: r18.dev preview — not yet in your library</div>
+</div>
+
+<MovieGallery
+    ThumbUrls="@(Preview.GalleryThumbUrls is { Count: > 0 } thumbs && thumbs.Count == Preview.GalleryUrls.Count ? thumbs : Preview.GalleryUrls)"
+    FullUrls="@Preview.GalleryUrls"
+    OriginalUrls="@Preview.GalleryUrls" />
+
+@code {
+    [Parameter, EditorRequired] public R18DevMovieDetail Preview { get; set; } = null!;
+
+    /// <summary>Raised with the series or label badge clicked, to browse its releases.</summary>
+    [Parameter] public EventCallback<(R18DevCatalogRef? Series, R18DevCatalogRef? Label)> OnBrowseCatalog { get; set; }
+
+    // r18.dev's cover is landscape ("backdrop"-shaped), same situation as a Missing movie's remote
+    // MetaCoverUrl — this goes through the same /image-cache endpoint, which crops it into a
+    // proper poster (see IRemotePosterCropService) instead of showing the raw cover as-is.
+    private string PosterFullUrl => $"/image-cache/{Uri.EscapeDataString(Preview.DvdId)}/poster/full";
+}

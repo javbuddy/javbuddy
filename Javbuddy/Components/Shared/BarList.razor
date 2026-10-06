@@ -1,0 +1,29 @@
+@using Javbuddy.Services
+@using Javbuddy.Services.Statistics
+
+@if (Rows.Count == 0)
+{
+    <p class="bar-list-empty">No data.</p>
+}
+else
+{
+    var max = Math.Max(1, Rows.Max(r => r.Count));
+    <ul class="bar-list">
+        @foreach (var row in Rows)
+        {
+            <li class="bar-list-row">
+                <span class="bar-list-label" title="@row.Label">@row.Label</span>
+                <span class="bar-list-track"><span class="bar-list-fill" style="width:@((row.Count * 100.0 / max).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%"></span></span>
+                <span class="bar-list-value">@row.Count@(ShowBytes ? " · " + ByteSizeFormatter.Format(row.Bytes) : "")</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    /// <summary>Horizontal bars scaled to the largest row — the dependency-free chart for categorical breakdowns.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<StatRow> Rows { get; set; } = [];
+
+    /// <summary>Append each row's byte total next to its count.</summary>
+    [Parameter] public bool ShowBytes { get; set; }
+}

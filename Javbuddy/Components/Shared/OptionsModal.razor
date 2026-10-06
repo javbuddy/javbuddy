@@ -1,0 +1,31 @@
+@* Display-options dialog behind a page toolbar's "Options" button: the Movies page's Poster Options
+   and the Actors page's Actor Options. Render it only while open; ✕, Close and a
+   backdrop click call OnClose. Lay each setting out as
+   <div class="options-row"><span class="options-label">…</span>control</div> — those two classes
+   are styled here (via ::deep) so every row's control lines up behind a fixed label column. *@
+<div class="options-modal-backdrop" tabindex="0" @onclick="OnClose">
+    <div class="options-modal-panel" role="dialog" aria-modal="true" aria-labelledby="@titleId" @onclick:stopPropagation="true">
+        <div class="options-modal-header">
+            <h5 class="options-modal-title" id="@titleId">@Title</h5>
+            <button type="button" class="options-modal-close-btn" @onclick="OnClose" aria-label="Close">
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+            </button>
+        </div>
+        <div class="options-modal-body">
+            @ChildContent
+        </div>
+        <div class="options-modal-footer">
+            <button class="btn btn-outline-secondary" type="button" @onclick="OnClose">Close</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = default!;
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private readonly string titleId = "options-modal-title-" + Guid.NewGuid().ToString("N");
+}

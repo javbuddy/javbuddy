@@ -1,0 +1,119 @@
+<div class="poster-card-wrapper">
+    <a class="poster-card" href="@Href">
+        <div class="poster-image @StatusCssClass">
+            @if (!string.IsNullOrWhiteSpace(ImageUrl))
+            {
+                @* decoding="sync" asks the browser to present each poster atomically with the rest of
+                   its card, instead of painting the card first and the image a frame or two later.
+                   That gap is tiny, but on a scrolling grid it happens to every card that comes in,
+                   which is what reads as a flash. Affordable here precisely because these are small
+                   pre-scaled WebP thumbnails — it would be the wrong call for full-size artwork. *@
+                @if (Loading == PosterImageLoading.Eager)
+                {
+                    <img src="@ImageUrl" alt="@AltText" decoding="sync" />
+                }
+                else if (Loading == PosterImageLoading.JsLazy)
+                {
+                    <img data-src="@ImageUrl" alt="@AltText" class="js-lazy-poster-img" decoding="sync" />
+                }
+                else
+                {
+                    <img src="@ImageUrl" alt="@AltText" loading="lazy" decoding="sync" />
+                }
+            }
+            else
+            {
+                <div class="poster-placeholder">@PlaceholderText</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(CornerBadge))
+            {
+                <div class="poster-corner-badge" title="@CornerBadgeTooltip">@CornerBadge</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(WarningTooltip))
+            {
+                <div class="poster-warning-badge" title="@WarningTooltip" aria-label="@WarningTooltip">
+                    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.891 0 1.439-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" /></svg>
+                </div>
+            }
+        </div>
+        <div class="poster-info">
+            <div class="poster-title" title="@TitleTooltip">@TitleText</div>
+            <div class="poster-meta">@MetaLine</div>
+            @if (MetaSubLines is not null)
+            {
+                @foreach (var line in MetaSubLines)
+                {
+                    <div class="poster-meta-sub">
+                        @if (string.IsNullOrEmpty(line))
+                        {
+                            @((MarkupString)"&nbsp;")
+                        }
+                        else
+                        {
+                            @line
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </a>
+    @* Outside the <a>, not inside it: a button nested in a link is invalid HTML, and a click on it
+       would also follow the link. Positioned over the poster image by .poster-card-wrapper. *@
+    @if (IsFavorite is bool favorite)
+    {
+        <button type="button"
+                class="poster-favorite @(favorite ? "active" : "")"
+                @onclick="OnToggleFavorite"
+                title="@(favorite ? "Remove from favorites" : "Add to favorites")"
+                aria-label="@(favorite ? $"Unfavorite {TitleText}" : $"Favorite {TitleText}")"
+                aria-pressed="@(favorite ? "true" : "false")">
+            <FavoriteHeartIcon Filled="favorite" />
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>One card in a <see cref="PosterGrid"/> — the poster-card/poster-image/
+    /// poster-info/poster-title/poster-meta markup (and its CSS, including every status-*
+    /// border color both pages use) shared by MoviePosterGrid and ActorMissing.razor. Each page
+    /// keeps computing its own status CSS class and image URL/loading mode — the underlying
+    /// data (a Movie entity with local file/torrent tracking vs. an r18.dev filmography entry)
+    /// differs too much to unify beyond this presentational shell.</summary>
+    [Parameter, EditorRequired] public string Href { get; set; } = "";
+
+    /// <summary>Full CSS class for the status border, e.g. "status-wanted" — the caller supplies
+    /// the "status-" prefix since the two pages' status vocabularies differ (Movies.razor adds a
+    /// "status-downloading" state ActorMissing.razor has no equivalent data for).</summary>
+    [Parameter, EditorRequired] public string StatusCssClass { get; set; } = "";
+
+    [Parameter] public string? ImageUrl { get; set; }
+    [Parameter] public PosterImageLoading Loading { get; set; } = PosterImageLoading.Eager;
+    [Parameter] public string AltText { get; set; } = "";
+    [Parameter, EditorRequired] public string PlaceholderText { get; set; } = "";
+    [Parameter, EditorRequired] public string TitleText { get; set; } = "";
+    [Parameter] public string? TitleTooltip { get; set; }
+    [Parameter] public string? MetaLine { get; set; }
+
+    /// <summary>Extra poster-meta-sub rows below MetaLine (Movies.razor's release-year and
+    /// file-size rows). Null/empty string renders a non-breaking space to hold the row's height,
+    /// matching the pages' existing behavior.</summary>
+    [Parameter] public IReadOnlyList<string?>? MetaSubLines { get; set; }
+
+    /// <summary>When set, renders a small warning badge in the poster image's corner with this
+    /// text as its native hover tooltip (e.g. Movies.razor's unmatched/missing cast indicator).
+    /// Null renders nothing — ActorMissing.razor, the other consumer of this component, doesn't
+    /// set this.</summary>
+    [Parameter] public string? WarningTooltip { get; set; }
+
+    /// <summary>When set, a short label in the poster image's bottom-left corner, e.g. the Movies
+    /// grid's "VR" / "3D"; CornerBadgeTooltip names it in full.</summary>
+    [Parameter] public string? CornerBadge { get; set; }
+    [Parameter] public string? CornerBadgeTooltip { get; set; }
+
+    /// <summary>When set, renders a heart toggle over the poster's top-left corner (filled when
+    /// true) that invokes <see cref="OnToggleFavorite"/> — Movies.razor's favorite toggle
+    ///. Null renders nothing, as for ActorMissing.razor.</summary>
+    [Parameter] public bool? IsFavorite { get; set; }
+
+    [Parameter] public EventCallback OnToggleFavorite { get; set; }
+}

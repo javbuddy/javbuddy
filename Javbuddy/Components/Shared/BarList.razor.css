@@ -1,0 +1,45 @@
+.bar-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.bar-list-row {
+    display: grid;
+    grid-template-columns: minmax(5rem, 11rem) 1fr auto;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.2rem 0;
+    font-size: 0.85rem;
+}
+
+.bar-list-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bar-list-track {
+    height: 0.7rem;
+    background: rgba(127, 127, 127, 0.18);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.bar-list-fill {
+    display: block;
+    height: 100%;
+    background: #2f8fd6;
+    border-radius: 3px;
+}
+
+.bar-list-value {
+    color: #6c757d;
+    font-variant-numeric: tabular-nums;
+}
+
+.bar-list-empty {
+    color: #6c757d;
+    font-size: 0.85rem;
+    margin: 0;
+}

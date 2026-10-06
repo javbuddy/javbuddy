@@ -1,0 +1,84 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Trickplay
+@inject ITrickplaySettingsService SettingsService
+
+@* Settings > Metadata's Trickplay drawer. The Jellyfin fallback toggle lives in
+   Settings > Connections > Jellyfin instead. A field set by its Trickplay__<Field>
+   environment variable is shown with that value and can't be changed here. *@
+<p class="text-muted">
+    Trickplay is the strip of preview thumbnails shown when hovering the player's scrub bar, and the
+    stand-in picture for scenes without a screenshot. Javbuddy generates its own from each movie's
+    video file with ffmpeg (a thumbnail every 10 seconds) and keeps it next to its other data, so it
+    survives a database reset. Generation runs in the background, one movie at a time; the
+    <strong>Trickplay Backfill</strong> task on System → Tasks queues every movie that has none yet.
+</p>
+
+@if (settings is not null && effective is not null)
+{
+    <EditForm Model="settings" OnValidSubmit="SaveAsync" FormName="trickplay-settings">
+        @Toggle("trickplay-generate-new", nameof(TrickplaySettings.GenerateForNewFiles), effective.GenerateForNewFiles,
+            settings.GenerateForNewFiles, v => settings.GenerateForNewFiles = v,
+            "Generate trickplay for new movie files",
+            "When a library scan finds a new or replaced video file. Rewriting a file in place (chapters, repair) keeps its trickplay.")
+
+        @Toggle("trickplay-keyframe-only", nameof(TrickplaySettings.KeyframeOnly), effective.KeyframeOnly,
+            settings.KeyframeOnly, v => settings.KeyframeOnly = v,
+            "Keyframes only (faster, less exact)",
+            "Decodes only the video's keyframes: over ten times faster, but a thumbnail can come from up to one keyframe gap (often 2–10 s) away from its point. Off, the whole video is decoded.")
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit" disabled="@allFromEnv">Save</button>
+        </div>
+        @if (saved)
+        {
+            <div class="alert alert-success mt-3 mb-0">Saved.</div>
+        }
+    </EditForm>
+}
+
+@code {
+    /// <summary>Raised after a save, so the page can refresh its tile.</summary>
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private static readonly string[] Fields =
+        [nameof(TrickplaySettings.GenerateForNewFiles), nameof(TrickplaySettings.KeyframeOnly)];
+
+    private TrickplaySettings? settings;
+    private TrickplaySettings? effective;
+    private bool allFromEnv;
+    private bool saved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        allFromEnv = Fields.All(SettingsService.IsSetByEnvironment);
+        settings = await SettingsService.GetStoredAsync();
+        effective = await SettingsService.GetEffectiveAsync();
+    }
+
+    private RenderFragment Toggle(string id, string field, bool effectiveValue, bool storedValue, Action<bool> set, string label, string help) => @<div class="form-check mb-3">
+        @if (SettingsService.IsSetByEnvironment(field))
+        {
+            <input class="form-check-input" type="checkbox" id="@id" checked="@effectiveValue" disabled />
+        }
+        else
+        {
+            <input class="form-check-input" type="checkbox" id="@id" checked="@storedValue"
+                   @onchange="e => set(e.Value is true)" />
+        }
+        <label class="form-check-label" for="@id">@label</label>
+        <div class="form-text">@help</div>
+        @if (SettingsService.IsSetByEnvironment(field))
+        {
+            <div class="form-text trickplay-env-note">Set by the <code>Trickplay__@field</code> environment variable.</div>
+        }
+    </div>;
+
+    private async Task SaveAsync()
+    {
+        saved = false;
+        await SettingsService.SaveAsync(settings!);
+        effective = await SettingsService.GetEffectiveAsync();
+        saved = true;
+        await OnSaved.InvokeAsync();
+    }
+}

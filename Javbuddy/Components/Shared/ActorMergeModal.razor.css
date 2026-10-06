@@ -1,0 +1,255 @@
+.merge-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    padding: 1rem;
+}
+
+.merge-modal-panel {
+    background-color: #222631;
+    color: #cfd3de;
+    border: 1px solid #3d4354;
+    border-radius: 6px;
+    width: 100%;
+    max-width: 680px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.merge-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.25rem;
+    background-color: #2b303c;
+    border-bottom: 1px solid #3d4354;
+}
+
+.merge-modal-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.merge-modal-close-btn {
+    background: none;
+    border: none;
+    color: #9aa1af;
+    padding: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.merge-modal-close-btn:hover {
+    color: #ffffff;
+    background-color: #3d4354;
+}
+
+.merge-modal-body {
+    padding: 1.25rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.merge-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background-color: #2b303c;
+    border-top: 1px solid #3d4354;
+}
+
+.merge-notice {
+    background-color: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.25);
+    border-radius: 4px;
+    padding: 0.75rem 1rem;
+    color: #f8d7da;
+}
+
+.actor-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background-color: #2a2e3b;
+    border: 1px solid #3d4354;
+    border-radius: 6px;
+    min-height: 75px;
+}
+
+.source-card {
+    border-color: rgba(220, 53, 69, 0.4);
+}
+
+.target-card {
+    border-color: rgba(47, 168, 79, 0.5);
+    background-color: #25332c;
+}
+
+.target-card-placeholder {
+    justify-content: center;
+    border-style: dashed;
+    background-color: transparent;
+}
+
+.actor-card-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: #4a5162;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.actor-card-avatar-photo {
+    background-color: #2b2f38;
+}
+
+    .actor-card-avatar-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+.source-card .actor-card-avatar-photo {
+    border: 2px solid rgba(220, 53, 69, 0.6);
+}
+
+.target-card .actor-card-avatar-photo {
+    border: 2px solid rgba(47, 168, 79, 0.7);
+}
+
+.avatar-target {
+    background-color: #2fa84f;
+}
+
+.actor-card-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.actor-card-name {
+    font-weight: 600;
+    color: #ffffff;
+    font-size: 0.95rem;
+}
+
+.actor-card-sub {
+    font-size: 0.8rem;
+    color: #9aa1af;
+}
+
+.actor-card-meta {
+    margin-top: 0.25rem;
+}
+
+.candidate-list {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid #3d4354;
+    border-radius: 4px;
+    background-color: #1a1c23;
+}
+
+.candidate-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #282c37;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.candidate-item:last-child {
+    border-bottom: none;
+}
+
+.candidate-item:hover {
+    background-color: #252a36;
+}
+
+.candidate-item.selected {
+    background-color: #2b3a4a;
+    border-left: 3px solid #2f8fd6;
+}
+
+.candidate-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #3d4354;
+    color: #cfd3de;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.candidate-avatar-photo {
+    background-color: #2b2f38;
+}
+
+    .candidate-avatar-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+.candidate-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.candidate-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #ffffff;
+}
+
+.candidate-japanese {
+    font-size: 0.75rem;
+    color: #8c93a4;
+}
+
+.merge-preview-summary {
+    background-color: #1c202a;
+    border: 1px solid #323847;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+}
+
+.merge-preview-summary li {
+    padding: 0.2rem 0;
+}
+
+/* Bootstrap's .text-muted is dark grey (and !important), unreadable on this dark panel. */
+.merge-modal-panel .text-muted {
+    color: #9aa1af !important;
+}

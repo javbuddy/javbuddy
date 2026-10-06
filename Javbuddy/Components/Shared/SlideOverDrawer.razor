@@ -1,0 +1,63 @@
+@if (Show)
+{
+    <div class="slide-over-drawer-overlay" tabindex="0" @ref="overlayRef" @onkeydown="OnKeyDown" @onclick="Close">
+        <div class="slide-over-drawer-panel @(Wide ? "slide-over-drawer-panel-wide" : null)" @onclick:stopPropagation="true">
+            <div class="slide-over-drawer-head">
+                <h2>@Title</h2>
+                <button class="slide-over-drawer-close-btn" type="button" @onclick="Close" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+            <div class="slide-over-drawer-body">
+                @ChildContent
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Generic slide-over drawer shell — Settings &gt; Connections' status grid
+    /// and Settings &gt; Metadata's card grid both use this to host one item's edit
+    /// form at a time, replacing per-page centered-modal implementations. Same
+    /// overlay/backdrop/focus/Escape pattern as <see cref="ProwlarrSearchModal"/>.</summary>
+    [Parameter] public bool Show { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnClose { get; set; }
+
+    /// <summary>A wider panel for an editor with more content (TorrentSort's metadata editor).</summary>
+    [Parameter] public bool Wide { get; set; }
+
+    /// <summary>Raised on Ctrl+Enter anywhere inside the drawer (submit shortcut).</summary>
+    [Parameter] public EventCallback OnCtrlEnter { get; set; }
+
+    private ElementReference overlayRef;
+    private bool shouldFocusOverlay;
+    private bool prevShow;
+
+    protected override void OnParametersSet()
+    {
+        if (Show && !prevShow)
+        {
+            shouldFocusOverlay = true;
+        }
+        prevShow = Show;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (shouldFocusOverlay)
+        {
+            shouldFocusOverlay = false;
+            await overlayRef.FocusAsync();
+        }
+    }
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await Close();
+        else if (e.Key == "Enter" && e.CtrlKey && OnCtrlEnter.HasDelegate) await OnCtrlEnter.InvokeAsync();
+    }
+}

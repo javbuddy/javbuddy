@@ -1,0 +1,414 @@
+@page "/movies/discover"
+@using Javbuddy.Components.Pages.MovieDiscoverSections
+@using Javbuddy.Models
+@using Javbuddy.Services.MovieDiscovery
+@using Javbuddy.Services.Tasks
+@inject IMovieDiscoveryService DiscoveryService
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>Discover · Javbuddy</PageTitle>
+
+<div class="discover-top-bar">
+    <div class="discover-top-bar-logos">
+        @if (sections is not null)
+        {
+            @foreach (var section in sections)
+            {
+                @if (section.Logo is { } logo)
+                {
+                    @* href includes the page's own path, not just "#fragment" — App.razor's <base href="/">
+                       makes the browser resolve a hash-only href against the base URL, not the current
+                       page, so a bare "#fragment" here would navigate to "/" instead of scrolling. *@
+                    <a class="discover-top-bar-logo-link" href="@($"/movies/discover#{SectionAnchorId(section.SourceName)}")" title="Jump to @section.StudioDisplayName">
+                        <img class="discover-top-bar-logo" src="@logo.Url" width="@logo.Width" height="@logo.Height" alt="@section.StudioDisplayName" />
+                    </a>
+                }
+            }
+        }
+    </div>
+    <div class="discover-top-bar-actions">
+        <button class="btn btn-primary" @onclick="ScanAsync" disabled="@scanning">
+            @(scanning ? "Scanning…" : "Scan Now")
+        </button>
+        @if (scanning && activeProgress is not null)
+        {
+            <span class="scan-progress-label text-muted small">@ProgressLabel</span>
+            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="CancelScan">Cancel</button>
+        }
+    </div>
+</div>
+@if (scanning)
+{
+    <div class="progress discover-inline-progress" style="height: 4px; border-radius: 0;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+             role="progressbar"
+             style="width: @ProgressPercentage%"
+             aria-valuenow="@ProgressPercentage"
+             aria-valuemin="0"
+             aria-valuemax="100">
+        </div>
+    </div>
+}
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger mt-3" style="max-width: 900px;">@errorMessage</div>
+}
+
+@if (infoMessage is not null)
+{
+    <div class="alert alert-info mt-3" style="max-width: 900px;">@infoMessage</div>
+}
+
+@if (lastScanResult is not null)
+{
+    <div class="alert alert-info mt-3" style="max-width: 900px;">
+        Scan complete. Found @lastScanResult.TotalFound release@(lastScanResult.TotalFound == 1 ? "" : "s")
+        (@lastScanResult.AlreadyTrackedCount already tracked). @lastScanResult.NewCount new candidate@(lastScanResult.NewCount == 1 ? "" : "s").
+    </div>
+}
+
+@if (sections is null)
+{
+    <LoadingIndicator />
+}
+else if (sections.Count == 0)
+{
+    <p class="text-muted">Nothing new right now — run a scan, or check back after next week's automatic scan.</p>
+}
+else
+{
+    @for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
+    {
+        var section = sections[sectionIndex];
+        var isFirstSection = sectionIndex == 0;
+        var window = WindowFor(section);
+        <div class="discover-studio-section" id="@SectionAnchorId(section.SourceName)" @key="section.SourceName">
+            <div class="discover-studio-header">
+                @if (section.Logo is { } logo)
+                {
+                    <img class="discover-studio-logo" src="@logo.Url" width="@logo.Width" height="@logo.Height" alt="@section.StudioDisplayName" />
+                }
+                <h2 class="discover-studio-name">@section.StudioDisplayName</h2>
+                <span class="discover-studio-count">@section.Candidates.Count new</span>
+            </div>
+            @* Windowed per section through the shared VirtualizedGrid: every studio's every
+               candidate in the DOM at once was thousands of elements and seconds of style/layout on a
+               phone. Only the cards around the viewport are rendered, with the spacers reserving the
+               height of the rest, so the page keeps its full length and the top bar's logo links still
+               land on their section. Its row geometry needs every card to be the same height, which is
+               why the actress line is always rendered, empty or not. *@
+            <VirtualizedGrid WindowStart="window.Start"
+                             WindowCount="window.Count"
+                             TotalCount="section.Candidates.Count"
+                             GridSelector=".poster-grid"
+                             CardSelector=".discover-candidate-card"
+                             ActivePath="/movies/discover"
+                             LoadRange="(start, count, columns) => SetSectionRange(section.SourceName, start, count, columns)">
+                <PosterGrid>
+                    @for (var index = window.Start; index < window.Start + window.Count; index++)
+                    {
+                        var view = section.Candidates[index];
+                        var candidate = view.Candidate;
+                        // The first cover is the page's largest paint: fetch it straight away, ahead of the rest.
+                        var isLcpCover = isFirstSection && index == 0;
+                        var isAdding = addingCandidateId == candidate.Id;
+                        var isDismissing = dismissingCandidateId == candidate.Id;
+                        var isAnyBusy = addingCandidateId is not null || dismissingCandidateId is not null;
+                        <article class="discover-candidate-card" @key="candidate.Id">
+                            <button type="button" class="discover-candidate-cover" @onclick="() => OpenGallery(candidate)" aria-label="View images for @candidate.Code">
+                                @if (candidate.CoverImageUrl is { Length: > 0 } cover)
+                                {
+                                    <img src="@cover" alt="@candidate.Title" loading="@(isLcpCover ? "eager" : "lazy")" fetchpriority="@(isLcpCover ? "high" : null)" />
+                                }
+                                else
+                                {
+                                    <span class="discover-cover-placeholder">@candidate.Code</span>
+                                }
+                                @if (candidate.IsUpcoming)
+                                {
+                                    <span class="badge discover-upcoming-badge">Upcoming</span>
+                                }
+                            </button>
+                            <div class="discover-candidate-details">
+                                <div class="discover-candidate-code">@candidate.Code</div>
+                                <div class="discover-candidate-title" title="@candidate.Title">@candidate.Title</div>
+                                <div class="discover-candidate-meta">
+                                    <span>@candidate.Studio</span>
+                                    <span>@(candidate.ReleaseDate is { } d ? d.ToString("MMM d, yyyy") : "Date to be announced")</span>
+                                </div>
+                                <div class="discover-candidate-actresses">
+                                    @for (var i = 0; i < view.Actresses.Count; i++)
+                                    {
+                                        var actress = view.Actresses[i];
+                                        if (actress.ActorId is not null)
+                                        {
+                                            <a href="@($"/actors/{Uri.EscapeDataString(actress.ActorDisplayName!)}")" class="discover-actress-tracked">@actress.ActorDisplayName</a>
+                                        }
+                                        else
+                                        {
+                                            <span>@actress.Name</span>
+                                        }
+                                        if (i < view.Actresses.Count - 1)
+                                        {
+                                            <text>, </text>
+                                        }
+                                    }
+                                </div>
+                                <div class="discover-candidate-actions @(isAdding ? "is-adding" : isDismissing ? "is-dismissing" : "")">
+                                    @if (isAdding)
+                                    {
+                                        <button type="button" class="btn btn-primary btn-sm w-100" disabled>
+                                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                            Adding…
+                                        </button>
+                                    }
+                                    else if (isDismissing)
+                                    {
+                                        <button type="button" class="btn btn-outline-secondary btn-sm w-100" disabled>
+                                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                            Dismissing…
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-primary btn-sm" @onclick="() => AddAsync(candidate)" disabled="@isAnyBusy">
+                                            Add
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => DismissAsync(candidate)" disabled="@isAnyBusy">
+                                            Dismiss
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </article>
+                    }
+                </PosterGrid>
+            </VirtualizedGrid>
+        </div>
+    }
+    <MovieGallery ThumbUrls="@(selectedGalleryCandidate?.GalleryImageUrls ?? [])"
+                  ShowThumbnails="false"
+                  OpenRequestKey="@(selectedGalleryCandidate?.Id.ToString())"
+                  OnClose="CloseGallery" />
+}
+
+@if (recentlyAdded.Count > 0)
+{
+    <h2 class="discover-section-title">Added this session</h2>
+    <ul class="discover-result-list">
+        @foreach (var added in recentlyAdded)
+        {
+            <li><a href="@($"/movies/{Uri.EscapeDataString(added.Code)}")">@added.Code</a> — @added.Title</li>
+        }
+    </ul>
+}
+
+@code {
+    private List<DiscoveredStudioSection>? sections;
+    private bool scanning;
+    private int? addingCandidateId;
+    private int? dismissingCandidateId;
+    private string? errorMessage;
+    private string? infoMessage;
+    private MovieDiscoveryScanResult? lastScanResult;
+    private List<(string Code, string Title)> recentlyAdded = new();
+    private DiscoveredMovieCandidate? selectedGalleryCandidate;
+
+    // Each section's rendered window, by SourceName; a section with no entry yet shows its initial one.
+    private Dictionary<string, DiscoverSectionWindow> sectionWindows = new();
+    // Last column count each section's grid reported, to re-fit its window when the section shrinks.
+    private readonly Dictionary<string, int> sectionColumns = new();
+
+    private TaskProgress? activeProgress;
+    private CancellationTokenSource? activeCts;
+
+    /// <summary>Anchor id for a studio's section, used by both the section's own <c>id</c> and the
+    /// top-bar logo linking to it. <see cref="DiscoveredStudioSection.SourceName"/> (e.g. "S1",
+    /// "Moodyz") is already a short, stable, URL-fragment-safe identifier per source.</summary>
+    private static string SectionAnchorId(string sourceName) => $"discover-section-{sourceName}";
+
+    private string ProgressLabel
+    {
+        get
+        {
+            if (activeProgress is { } p)
+            {
+                var stage = !string.IsNullOrWhiteSpace(p.Stage) ? p.Stage : "Scanning";
+                return p.Total is { } total && total > 0
+                    ? $"{stage} ({p.Current}/{total})…"
+                    : $"{stage}…";
+            }
+            return "Scanning…";
+        }
+    }
+
+    private int ProgressPercentage
+    {
+        get
+        {
+            if (activeProgress is { Total: { } total, Current: var current } && total > 0)
+            {
+                return Math.Clamp((int)Math.Round((double)current / total * 100), 0, 100);
+            }
+            return 100;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCandidatesAsync();
+    }
+
+    private async Task LoadCandidatesAsync()
+    {
+        sections = (await DiscoveryService.GetCandidateSectionsAsync()).ToList();
+        sectionWindows = new();
+    }
+
+    private DiscoverSectionWindow WindowFor(DiscoveredStudioSection section) =>
+        sectionWindows.TryGetValue(section.SourceName, out var window)
+            ? window
+            : DiscoverSectionWindow.Initial(section.Candidates.Count);
+
+    /// <summary>A section's VirtualizedGrid LoadRange: moves that section's window to the range its
+    /// viewport needs. Every candidate is already in memory, so this is only a re-render.</summary>
+    private Task SetSectionRange(string sourceName, int start, int count, int columns)
+    {
+        var section = sections?.FirstOrDefault(s => s.SourceName == sourceName);
+        if (section is null) return Task.CompletedTask;
+
+        sectionColumns[sourceName] = columns;
+        var window = DiscoverSectionWindow.Clamp(start, count, columns, section.Candidates.Count);
+        if (window != WindowFor(section))
+        {
+            sectionWindows[sourceName] = window;
+            StateHasChanged();
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Drops a candidate from whatever section it's in after Add/Dismiss, removing the
+    /// section entirely if that was its last candidate, without needing a full reload.</summary>
+    private void RemoveCandidate(int candidateId)
+    {
+        if (sections is null) return;
+
+        sections = sections
+            .Select(s => s with { Candidates = s.Candidates.Where(v => v.Candidate.Id != candidateId).ToList() })
+            .Where(s => s.Candidates.Count > 0)
+            .ToList();
+
+        // The section that lost a card may now be shorter than its window reaches.
+        foreach (var section in sections)
+        {
+            var window = WindowFor(section);
+            sectionWindows[section.SourceName] = DiscoverSectionWindow.Clamp(
+                window.Start, window.Count, sectionColumns.GetValueOrDefault(section.SourceName, 1), section.Candidates.Count);
+        }
+    }
+
+    private async Task ScanAsync()
+    {
+        activeCts?.Cancel();
+        activeCts?.Dispose();
+        activeCts = new CancellationTokenSource();
+        var ct = activeCts.Token;
+
+        scanning = true;
+        errorMessage = null;
+        infoMessage = null;
+        lastScanResult = null;
+        activeProgress = new TaskProgress(0, null, "Scanning");
+
+        var progress = new Progress<TaskProgress>(p =>
+        {
+            activeProgress = p;
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            lastScanResult = await DiscoveryService.RunScanAsync(progress, ct);
+            await LoadCandidatesAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            infoMessage = "Scan was cancelled.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to scan for new releases: {ex.Message}";
+        }
+        finally
+        {
+            scanning = false;
+            activeProgress = null;
+        }
+    }
+
+    private void CancelScan() => activeCts?.Cancel();
+
+    private void OpenGallery(DiscoveredMovieCandidate candidate)
+    {
+        if (addingCandidateId == candidate.Id || dismissingCandidateId == candidate.Id)
+        {
+            return;
+        }
+
+        if (candidate.GalleryImageUrls.Count > 0)
+        {
+            selectedGalleryCandidate = candidate;
+        }
+    }
+
+    private void CloseGallery() => selectedGalleryCandidate = null;
+
+    private async Task AddAsync(DiscoveredMovieCandidate candidate)
+    {
+        addingCandidateId = candidate.Id;
+        errorMessage = null;
+
+        try
+        {
+            await DiscoveryService.AddCandidateAsync(candidate.Id);
+            recentlyAdded.Add((candidate.Code, candidate.Title));
+            RemoveCandidate(candidate.Id);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to add {candidate.Code}: {ex.Message}";
+        }
+        finally
+        {
+            addingCandidateId = null;
+        }
+    }
+
+    private async Task DismissAsync(DiscoveredMovieCandidate candidate)
+    {
+        dismissingCandidateId = candidate.Id;
+        errorMessage = null;
+
+        try
+        {
+            await DiscoveryService.DismissCandidateAsync(candidate.Id);
+            RemoveCandidate(candidate.Id);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to dismiss {candidate.Code}: {ex.Message}";
+        }
+        finally
+        {
+            dismissingCandidateId = null;
+        }
+    }
+
+    public void Dispose()
+    {
+        activeCts?.Cancel();
+        activeCts?.Dispose();
+    }
+}

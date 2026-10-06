@@ -1,0 +1,242 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@inject ITagService TagService
+
+@if (Show)
+{
+    <div class="tag-create-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="tag-create-modal-panel" @onclick:stopPropagation="true">
+            <div class="tag-create-modal-header">
+                <h5 class="tag-create-modal-title">Create Tag</h5>
+                <button type="button" class="tag-create-modal-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@isCreating">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+
+            <div class="tag-create-modal-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+                }
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold mb-1" for="new-tag-name">Tag Name</label>
+                    <input type="text"
+                           id="new-tag-name"
+                           class="form-control"
+                           placeholder="e.g. Cosplay"
+                           maxlength="200"
+                           @bind="tagName"
+                           @bind:event="oninput"
+                           @onkeydown="HandleInputKeyDown"
+                           disabled="@isCreating"
+                           autofocus />
+                </div>
+
+                <div class="mb-3 tag-parent-field">
+                    <label class="form-label fw-semibold mb-1" for="new-tag-parent">Parent Tag (Optional)</label>
+                    <div class="input-group">
+                        <input type="text"
+                               id="new-tag-parent"
+                               class="form-control"
+                               placeholder="Search root tag…"
+                               value="@parentSearchQuery"
+                               @oninput="OnParentSearchInput"
+                               disabled="@isCreating"
+                               autocomplete="off" />
+                        @if (selectedParent is not null || !string.IsNullOrEmpty(parentSearchQuery))
+                        {
+                            <button type="button"
+                                    class="btn btn-outline-secondary"
+                                    @onclick="ClearParent"
+                                    title="Clear parent tag"
+                                    disabled="@isCreating">
+                                ×
+                            </button>
+                        }
+                    </div>
+                    @if (selectedParent is not null)
+                    {
+                        <div class="form-text text-success mt-1">
+                            Selected parent: <strong>@selectedParent.Name</strong>
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(parentSearchQuery) && selectedParent?.Name != parentSearchQuery)
+                    {
+                        var matches = GetParentMatches();
+                        @if (matches.Count > 0)
+                        {
+                            <div class="tag-parent-suggestions">
+                                @foreach (var parent in matches)
+                                {
+                                    <button type="button"
+                                            class="tag-parent-suggestion-item"
+                                            @onclick="() => SelectParent(parent)">
+                                        <span class="fw-medium">@parent.Name</span>
+                                        <span class="text-muted small ms-auto">@parent.MovieCount movie@(parent.MovieCount == 1 ? "" : "s")</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="tag-parent-suggestions">
+                                <div class="p-2 text-muted small">No root tag matching "@parentSearchQuery".</div>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="tag-create-modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isCreating">Cancel</button>
+                <button type="button"
+                        class="btn btn-primary"
+                        @onclick="CreateAsync"
+                        disabled="@(isCreating || string.IsNullOrWhiteSpace(tagName))">
+                    @(isCreating ? "Creating…" : "Create")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<Tag> OnCreated { get; set; }
+
+    [Parameter]
+    public int? DefaultParentTagId { get; set; }
+
+    private string tagName = "";
+    private string parentSearchQuery = "";
+    private TagListItem? selectedParent;
+    private int? selectedParentId;
+    private List<TagListItem> rootTags = [];
+    private string? errorMessage;
+    private bool isCreating;
+    private bool wasShown;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && !wasShown)
+        {
+            tagName = "";
+            errorMessage = null;
+            isCreating = false;
+
+            var all = await TagService.GetTagsAsync();
+            rootTags = all
+                .Where(t => t.ParentTagId == null && !t.NeedsReview)
+                .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            selectedParent = DefaultParentTagId.HasValue
+                ? rootTags.FirstOrDefault(t => t.Id == DefaultParentTagId.Value)
+                : null;
+            selectedParentId = selectedParent?.Id;
+            parentSearchQuery = selectedParent?.Name ?? "";
+        }
+        wasShown = Show;
+    }
+
+    private void OnParentSearchInput(ChangeEventArgs e)
+    {
+        parentSearchQuery = e.Value?.ToString() ?? "";
+        var match = rootTags.FirstOrDefault(t => string.Equals(t.Name, parentSearchQuery.Trim(), StringComparison.OrdinalIgnoreCase));
+        selectedParent = match;
+        selectedParentId = match?.Id;
+    }
+
+    private void SelectParent(TagListItem parent)
+    {
+        selectedParent = parent;
+        selectedParentId = parent.Id;
+        parentSearchQuery = parent.Name;
+    }
+
+    private void ClearParent()
+    {
+        selectedParent = null;
+        selectedParentId = null;
+        parentSearchQuery = "";
+    }
+
+    private List<TagListItem> GetParentMatches()
+    {
+        if (string.IsNullOrWhiteSpace(parentSearchQuery)) return [];
+        return rootTags
+            .Where(t => t.Name.Contains(parentSearchQuery, StringComparison.OrdinalIgnoreCase))
+            .Take(8)
+            .ToList();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task HandleInputKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isCreating && !string.IsNullOrWhiteSpace(tagName))
+        {
+            await CreateAsync();
+        }
+        else if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (isCreating) return;
+        tagName = "";
+        selectedParent = null;
+        selectedParentId = null;
+        parentSearchQuery = "";
+        errorMessage = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(tagName))
+        {
+            errorMessage = "Tag name is required.";
+            return;
+        }
+
+        isCreating = true;
+        errorMessage = null;
+
+        var result = selectedParentId.HasValue
+            ? await TagService.CreateTagAsync(tagName, selectedParentId.Value)
+            : await TagService.CreateTagAsync(tagName);
+        isCreating = false;
+
+        if (result.Success && result.Tag is not null)
+        {
+            var createdTag = result.Tag;
+            tagName = "";
+            selectedParent = null;
+            selectedParentId = null;
+            parentSearchQuery = "";
+            errorMessage = null;
+            await OnCreated.InvokeAsync(createdTag);
+        }
+        else
+        {
+            errorMessage = result.ErrorMessage ?? "Failed to create tag.";
+        }
+    }
+}

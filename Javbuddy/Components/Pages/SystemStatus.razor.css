@@ -1,0 +1,157 @@
+.status-section-title {
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: #333;
+    margin: 2rem 0 1rem;
+}
+
+.status-section-title:first-child {
+    margin-top: 0.5rem;
+}
+
+.health-table {
+    max-width: 900px;
+}
+
+.health-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.health-service-link {
+    color: inherit;
+}
+
+.health-service-version {
+    font-weight: 400;
+}
+
+.health-icon {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+    background-color: currentColor;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.health-icon-warning {
+    color: #d9822b;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16z'/%3E%3Cpath fill='white' d='M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16z'/%3E%3Cpath fill='white' d='M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z'/%3E%3C/svg%3E");
+}
+
+.health-icon-ok {
+    color: #2fa84f;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l4.98-5.25a.75.75 0 0 0-.02-1.06z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l4.98-5.25a.75.75 0 0 0-.02-1.06z'/%3E%3C/svg%3E");
+}
+
+.about-table {
+    max-width: 640px;
+}
+
+.about-row {
+    display: grid;
+    grid-template-columns: 12rem 1fr;
+    padding: 0.4rem 0;
+}
+
+.about-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.disk-space-table {
+    max-width: 1040px;
+}
+
+.disk-space-row {
+    display: grid;
+    grid-template-columns: 1fr 8rem 8rem 8rem 8rem;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.disk-space-header {
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.disk-space-location {
+    display: flex;
+    flex-direction: column;
+}
+
+.disk-space-location-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.disk-space-location-path {
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+.disk-space-bar {
+    display: block;
+    height: 8px;
+    border-radius: 4px;
+    background-color: #e9ecef;
+    overflow: hidden;
+}
+
+.disk-space-bar-fill {
+    display: block;
+    height: 100%;
+    background-color: #1c9fc4;
+}
+
+:root[data-theme="dark"] .status-section-title {
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .health-row {
+    border-bottom-color: #363c4a;
+}
+
+:root[data-theme="dark"] .health-service-version {
+    color: #8c93a4;
+}
+
+:root[data-theme="dark"] .about-label {
+    color: #b9bfd1;
+}
+
+:root[data-theme="dark"] .disk-space-row {
+    border-bottom-color: #363c4a;
+}
+
+:root[data-theme="dark"] .disk-space-location-label {
+    color: #b9bfd1;
+}
+
+:root[data-theme="dark"] .disk-space-location-path {
+    color: #8c93a4;
+}
+
+:root[data-theme="dark"] .disk-space-header {
+    color: #b9bfd1;
+    border-bottom-color: #4a5062;
+}
+
+:root[data-theme="dark"] .disk-space-bar {
+    background-color: #363c4a;
+}

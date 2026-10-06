@@ -1,0 +1,511 @@
+@using Javbuddy.Services
+@using Javbuddy.Services.LocalLibrary
+@using Microsoft.Extensions.DependencyInjection
+@inject IActorImageCacheService ActorImageCacheService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (Show)
+{
+    <div class="crop-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="crop-modal-panel" @onclick:stopPropagation="true">
+            <div class="crop-modal-header">
+                <h5 class="crop-modal-title">Change Portrait — @ActorName</h5>
+                <button type="button" class="crop-modal-close-btn" @onclick="CloseAsync" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+
+            <div class="crop-modal-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+                }
+
+                @if (selectedImageBytes is null)
+                {
+                    <div class="upload-dropzone">
+                        <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
+                        <div class="upload-icon">
+                            <svg viewBox="0 0 16 16" width="48" height="48" fill="currentColor" aria-hidden="true">
+                                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                                <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                            </svg>
+                        </div>
+                        <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
+                        <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
+                    </div>
+
+                    <div class="upload-divider">
+                        <span>OR</span>
+                    </div>
+
+                    <div class="upload-url-section">
+                        <label class="form-label text-light small mb-1" for="actor-image-url-input">Import from URL</label>
+                        <div class="input-group">
+                            <input id="actor-image-url-input"
+                                   type="url"
+                                   class="form-control form-control-sm url-input"
+                                   placeholder="https://example.com/photo.jpg"
+                                   @bind="imageUrlInput"
+                                   @bind:event="oninput"
+                                   @onkeydown="HandleUrlKeyDown"
+                                   disabled="@fetchingUrl" />
+                            <button type="button"
+                                    class="btn btn-primary btn-sm fetch-btn"
+                                    @onclick="FetchFromUrlAsync"
+                                    disabled="@(fetchingUrl || string.IsNullOrWhiteSpace(imageUrlInput))">
+                                @(fetchingUrl ? "Fetching…" : "Fetch")
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (hasCustomImage)
+                    {
+                        <div class="mt-4 p-3 bg-dark border border-secondary rounded d-flex align-items-center justify-content-between">
+                            <div>
+                                <strong class="text-light">Custom Portrait Active</strong>
+                                <p class="text-muted small mb-0">This actor currently has a custom uploaded portrait.</p>
+                            </div>
+                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="RemoveCustomPhotoAsync" disabled="@deleting">
+                                @(deleting ? "Removing…" : "Revert to Library Photo")
+                            </button>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="cropper-toolbar">
+                        <div class="ratio-group">
+                            <button type="button" class="btn-tool @(currentAspectRatio == 1.0 ? "active" : "")" @onclick="() => SetAspectRatio(1.0)">
+                                1:1 Square
+                            </button>
+                            <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)">
+                                Free-form
+                            </button>
+                            <button type="button" class="btn-tool @(Math.Abs((currentAspectRatio ?? 0) - (2.0/3.0)) < 0.01 ? "active" : "")" @onclick="() => SetAspectRatio(2.0/3.0)">
+                                2:3 Portrait
+                            </button>
+                        </div>
+
+                        <div class="zoom-controls">
+                            <button type="button" class="btn-tool" @onclick="() => AdjustZoom(-0.1)" title="Zoom out">-</button>
+                            <input type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom" @oninput="HandleZoomInput" />
+                            <button type="button" class="btn-tool" @onclick="() => AdjustZoom(0.1)" title="Zoom in">+</button>
+                            <button type="button" class="btn-tool ms-2" @onclick="ResetCrop" title="Reset crop box">Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="cropper-workspace">
+                        <div class="cropper-viewport-wrapper">
+                            <CropperViewport HeightPx="380" @ref="viewport" />
+                            <small class="text-muted d-block mt-1">Drag inside box to pan • Drag handles to resize • Scroll to zoom</small>
+                        </div>
+
+                        <div class="cropper-previews">
+                            <span class="preview-title">Avatar Preview</span>
+                            <div class="preview-circle-wrapper" title="Circular Avatar Preview">
+                                <canvas width="96" height="96" class="preview-canvas" @ref="circleCanvasRef"></canvas>
+                            </div>
+                            <div class="preview-square-wrapper" title="Square Avatar Preview">
+                                <canvas width="80" height="80" class="preview-canvas" @ref="squareCanvasRef"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="crop-modal-footer">
+                @if (selectedImageBytes is not null)
+                {
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetSelection" disabled="@saving">
+                        Choose Different Image
+                    </button>
+                    <div class="footer-actions-right">
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="SaveFullAsync" disabled="@saving">
+                            Upload Full (Skip Crop)
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" @onclick="SaveCroppedAsync" disabled="@(saving || !cropperReady)">
+                            @(saving ? "Saving…" : "Save Photo")
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div></div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync">
+                        Cancel
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public int ActorId { get; set; }
+
+    [Parameter]
+    public string ActorName { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnPhotoChanged { get; set; }
+
+    /// <summary>Optional WebP image bytes from an actor gallery photo, opened directly in the
+    /// same crop/editor workflow as a newly selected portrait file.</summary>
+    [Parameter]
+    public InitialImageSource? InitialImage { get; set; }
+
+    // Wraps the bytes rather than taking a byte[] parameter: an array-typed component parameter
+    // crashes the SDK's BL0014 for-loop analyzer (AD0001 build warning) in any parent whose
+    // markup also has a @for loop, as ActorDetail's does.
+    public sealed record InitialImageSource(byte[] Bytes);
+
+    [Inject] private IServiceProvider Sp { get; set; } = default!;
+    private ImageUploadSettings UploadSettings => Sp.GetService<ImageUploadSettings>() ?? ImageUploadSettings.Default;
+
+    private bool hasCustomImage;
+    private string? selectedImageContentType;
+    private byte[]? selectedImageBytes;
+    private double? currentAspectRatio = 1.0;
+    private double currentZoom = 1.0;
+    private bool saving;
+    private bool deleting;
+    private string? errorMessage;
+    private bool shouldInitCropper;
+    // Whether the cropper for the selected image is up, so Save Photo can read its crop rect;
+    // until then a click would have nothing to save.
+    private bool cropperReady;
+    private string imageUrlInput = string.Empty;
+    private bool fetchingUrl;
+    private InitialImageSource? loadedInitialImage;
+
+    private CropperViewport? viewport;
+    private ElementReference circleCanvasRef;
+    private ElementReference squareCanvasRef;
+
+    private IJSObjectReference? jsModule;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && ActorId > 0)
+        {
+            hasCustomImage = await ActorImageCacheService.HasCustomImageAsync(ActorId);
+            if (InitialImage is not null && !ReferenceEquals(InitialImage, loadedInitialImage))
+            {
+                loadedInitialImage = InitialImage;
+                LoadSelectedImage(InitialImage.Bytes, "image/webp");
+            }
+        }
+        else if (!Show)
+        {
+            ResetSelection();
+            loadedInitialImage = null;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (shouldInitCropper && selectedImageBytes is not null && selectedImageContentType is not null)
+        {
+            shouldInitCropper = false;
+            try
+            {
+                jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ActorImageUploadModal.razor.js");
+                // Stream the bytes to the browser as a blob URL instead of rendering a base64
+                // data: URL, which kept a multi-MB string in the render tree and SignalR frame.
+                using var streamRef = new DotNetStreamReference(new MemoryStream(selectedImageBytes, writable: false));
+                await jsModule.InvokeVoidAsync("setImageSource", viewport!.Image, streamRef, selectedImageContentType);
+                await jsModule.InvokeVoidAsync("initCropper", viewport!.Container, viewport.Image, circleCanvasRef, squareCanvasRef);
+                if (currentAspectRatio.HasValue)
+                {
+                    await jsModule.InvokeVoidAsync("setAspectRatio", currentAspectRatio.Value);
+                }
+                else
+                {
+                    await jsModule.InvokeVoidAsync("setAspectRatio", (object?)null);
+                }
+                cropperReady = true;
+                StateHasChanged();
+            }
+            catch (JSException ex)
+            {
+                errorMessage = $"Could not initialize cropper: {ex.Message}";
+            }
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        errorMessage = null;
+        var file = e.File;
+        if (file is null) return;
+
+        if (file.Size > UploadSettings.MaxSizeBytes)
+        {
+            errorMessage = $"Image size exceeds {UploadSettings.MaxSizeMb} MB limit.";
+            return;
+        }
+
+        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+        {
+            errorMessage = "Unsupported image format. Please select a JPEG, PNG, or WebP image.";
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(UploadSettings.MaxSizeBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType;
+            LoadSelectedImage(ms.ToArray(), contentType);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading image: {ex.Message}";
+        }
+    }
+
+    private void LoadSelectedImage(byte[] bytes, string contentType)
+    {
+        selectedImageBytes = bytes;
+        selectedImageContentType = contentType;
+        currentZoom = 1.0;
+        currentAspectRatio = 1.0;
+        shouldInitCropper = true;
+        cropperReady = false;
+    }
+
+    private async Task SetAspectRatio(double? ratio)
+    {
+        currentAspectRatio = ratio;
+        if (jsModule is not null)
+        {
+            try
+            {
+                if (ratio.HasValue)
+                {
+                    await jsModule.InvokeVoidAsync("setAspectRatio", ratio.Value);
+                }
+                else
+                {
+                    await jsModule.InvokeVoidAsync("setAspectRatio", (object?)null);
+                }
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+
+    private async Task HandleZoomInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var z))
+        {
+            currentZoom = Math.Clamp(z, 1.0, 3.0);
+            if (jsModule is not null)
+            {
+                try
+                {
+                    await jsModule.InvokeVoidAsync("setZoom", currentZoom);
+                }
+                catch (JSDisconnectedException) { }
+                catch (InvalidOperationException) { }
+            }
+        }
+    }
+
+    private async Task AdjustZoom(double delta)
+    {
+        currentZoom = Math.Clamp(currentZoom + delta, 1.0, 3.0);
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("setZoom", currentZoom);
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+
+    private async Task ResetCrop()
+    {
+        currentZoom = 1.0;
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("setZoom", 1.0);
+                await jsModule.InvokeVoidAsync("resetCrop");
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+
+    private void ResetSelection()
+    {
+        selectedImageContentType = null;
+        selectedImageBytes = null;
+        errorMessage = null;
+        shouldInitCropper = false;
+        cropperReady = false;
+        currentZoom = 1.0;
+        currentAspectRatio = 1.0;
+        imageUrlInput = string.Empty;
+        fetchingUrl = false;
+    }
+
+    private async Task HandleUrlKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !fetchingUrl && !string.IsNullOrWhiteSpace(imageUrlInput))
+        {
+            await FetchFromUrlAsync();
+        }
+    }
+
+    private async Task FetchFromUrlAsync()
+    {
+        if (string.IsNullOrWhiteSpace(imageUrlInput) || fetchingUrl) return;
+
+        fetchingUrl = true;
+        errorMessage = null;
+
+        try
+        {
+            var result = await ActorImageCacheService.DownloadImageFromUrlAsync(imageUrlInput);
+            if (!result.Success || result.Bytes is null)
+            {
+                errorMessage = result.ErrorMessage ?? "Failed to download image.";
+                return;
+            }
+
+            var contentType = string.IsNullOrWhiteSpace(result.ContentType) ? "image/jpeg" : result.ContentType;
+            LoadSelectedImage(result.Bytes, contentType);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error downloading image: {ex.Message}";
+        }
+        finally
+        {
+            fetchingUrl = false;
+        }
+    }
+
+    private record CropRectDto(double x, double y, double width, double height);
+
+    private async Task SaveCroppedAsync()
+    {
+        if (selectedImageBytes is null || jsModule is null) return;
+        saving = true;
+        errorMessage = null;
+
+        try
+        {
+            var dto = await jsModule.InvokeAsync<CropRectDto>("getCropRect");
+            var cropRect = new NormalizedCropRect(dto.x, dto.y, dto.width, dto.height);
+            await ActorImageCacheService.SaveCustomImageAsync(ActorId, selectedImageBytes, cropRect);
+            await OnPhotoChanged.InvokeAsync();
+            await CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to save photo: {ex.Message}";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task SaveFullAsync()
+    {
+        if (selectedImageBytes is null) return;
+        saving = true;
+        errorMessage = null;
+
+        try
+        {
+            await ActorImageCacheService.SaveCustomImageAsync(ActorId, selectedImageBytes, cropRect: null);
+            await OnPhotoChanged.InvokeAsync();
+            await CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to save photo: {ex.Message}";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task RemoveCustomPhotoAsync()
+    {
+        deleting = true;
+        errorMessage = null;
+
+        try
+        {
+            await ActorImageCacheService.DeleteCustomImageAsync(ActorId);
+            hasCustomImage = false;
+            await OnPhotoChanged.InvokeAsync();
+            await CloseAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to remove custom photo: {ex.Message}";
+        }
+        finally
+        {
+            deleting = false;
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        ResetSelection();
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("destroyCropper");
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+        await OnClose.InvokeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("destroyCropper");
+                await jsModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+}

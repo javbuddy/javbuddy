@@ -1,0 +1,129 @@
+@using Javbuddy.Services
+@inject ITagService TagService
+@inject IMovieDetailQueryService MovieDetailQuery
+
+@* Movie-level tags, a collapsed section of the ClipEditor panel so a whole-movie
+   genre/theme can be set while watching, without opening a scene's form or leaving the player.
+   Distinct from a scene's own tags (ClipEditor's scene form). Adds/removes go through
+   ITagService, which syncs MetaGenres and checks .nfo drift. A tag the movie only has because a
+   scene, highlight or apex carries it shows as a grayed chip with no remove button; one the
+   movie has explicitly that a clip carries too is marked redundant.
+   Themed by the same --scene-editor-* custom properties as the ClipEditor. *@
+<div class="movie-tags-editor">
+    <button type="button" class="movie-tags-toggle" aria-expanded="@(expanded ? "true" : "false")" @onclick="ToggleAsync">
+        <span class="movie-tags-caret" aria-hidden="true">@(expanded ? "▾" : "▸")</span>
+        Movie tags@(loaded && tags.Count > 0 ? $" ({tags.Count})" : null)
+    </button>
+
+    @if (expanded)
+    {
+        <p class="movie-tags-hint">Apply to the whole movie — not to a single scene.</p>
+        @if (error is not null)
+        {
+            <p class="movie-tags-error" role="alert">@error</p>
+        }
+        @if (tags.Count > 0)
+        {
+            <div class="movie-tags-chips">
+                @foreach (var tag in tags.Where(t => !t.IsImplicit))
+                {
+                    <span class="movie-tags-chip">
+                        @Label(tag)
+                        @if (tag.FromClips)
+                        {
+                            <RedundantMark Tooltip="Also from its scenes, highlights or apexes. Remove it and it stays, grayed, as implied." />
+                        }
+                        <button type="button" class="movie-tags-chip-remove" aria-label="Remove @tag.Name" @onclick="() => RemoveAsync(tag.Id)">×</button>
+                    </span>
+                }
+                <ImplicitChips Items="@ImpliedChips" />
+            </div>
+        }
+        else if (loaded)
+        {
+            <p class="movie-tags-hint">No movie tags yet.</p>
+        }
+        @* An implied tag can still be added, which makes it the movie's own too. *@
+        <TagSearchAdd ExcludedTagIds="@tags.Where(t => !t.IsImplicit).Select(t => t.Id).ToHashSet()" OnAdd="AddAsync" />
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int MovieId { get; set; }
+
+    /// <summary>Raised after a tag was added to or removed from the movie, so a host showing the
+    /// movie's tags elsewhere can re-read them.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    // FromClips on an explicit tag means a clip carries it too, so it's redundant.
+    private sealed record TagChip(int Id, string Name, string? ParentName, bool IsImplicit, bool FromClips);
+
+    private IReadOnlyList<TagChip> tags = [];
+    private bool expanded;
+    private bool loaded;
+    private int? loadedMovieId;
+    private string? error;
+
+    protected override void OnParametersSet()
+    {
+        // The host reuses the component across movies (Review mode's queue).
+        if (loadedMovieId != MovieId)
+        {
+            loadedMovieId = null;
+            loaded = false;
+            tags = [];
+            error = null;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        expanded = !expanded;
+        if (expanded && !loaded) await LoadAsync();
+    }
+
+    /// <summary>Re-reads the tags after the host changed them elsewhere, e.g. a clip tag rolling up to the
+    /// movie. Not yet loaded, the next expand reads them anyway.</summary>
+    public async Task RefreshAsync()
+    {
+        if (!loaded) return;
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        var movieId = MovieId;
+        var links = await MovieDetailQuery.GetMovieTagsAsync(movieId);
+        if (movieId != MovieId) return;
+
+        tags = links
+            .Select(l => new TagChip(l.TagId, l.Tag.Name, l.Tag.ParentTag?.Name, !l.IsExplicit, l.FromClips))
+            .OrderBy(t => t.ParentName ?? t.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+        loadedMovieId = movieId;
+        loaded = true;
+    }
+
+    private async Task AddAsync(int tagId)
+    {
+        var result = await TagService.AddTagToMovieAsync(MovieId, tagId);
+        error = result.Success ? null : result.ErrorMessage;
+        await LoadAsync();
+        if (result.Success) await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(int tagId)
+    {
+        var result = await TagService.RemoveTagFromMovieAsync(MovieId, tagId);
+        error = result.Success ? null : result.ErrorMessage;
+        await LoadAsync();
+        if (result.Success) await OnChanged.InvokeAsync();
+    }
+
+    private static string Label(TagChip tag) => tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}";
+
+    private IReadOnlyList<ImplicitChip> ImpliedChips =>
+        tags.Where(t => t.IsImplicit).Select(t => new ImplicitChip(Label(t), "From scenes, highlights or apexes")).ToList();
+}

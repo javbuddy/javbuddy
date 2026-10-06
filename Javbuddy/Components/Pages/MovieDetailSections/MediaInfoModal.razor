@@ -1,0 +1,112 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+
+@if (show)
+{
+    <div class="mediainfo-modal-backdrop" tabindex="0" @onclick="Close">
+        <div class="mediainfo-modal-panel" @onclick:stopPropagation="true">
+            <div class="mediainfo-modal-header">
+                <h5 class="mediainfo-modal-title">Media Info</h5>
+                <button class="mediainfo-modal-close-btn" @onclick="Close" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+            <div class="mediainfo-modal-body">
+                @if (Files.Count > 1)
+                {
+                    <div class="mediainfo-version-tabs">
+                        @foreach (var file in Files)
+                        {
+                            <button type="button" class="mediainfo-version-tab @(file == activeFile ? "active" : "")" @onclick="() => SelectFile(file)">
+                                <span class="version-tag">@file.VersionTag</span>
+                                @if (file.ResolutionDisplay is not null)
+                                {
+                                    <span class="version-badge">@file.ResolutionDisplay</span>
+                                }
+                                @if (file.FrameRate is > 0)
+                                {
+                                    <span class="version-badge">@MovieVersionParser.FormatFps(file.FrameRate)</span>
+                                }
+                                @if (file.VrType is not null)
+                                {
+                                    <span class="version-badge version-badge-vr">@file.VrType</span>
+                                }
+                                @if (file.IsPrimary)
+                                {
+                                    <span class="version-badge-primary">Primary</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+
+                @if (ActiveScanError is not null)
+                {
+                    <div class="alert alert-warning mb-0">@ActiveScanError</div>
+                }
+                else if (fullReport is not null)
+                {
+                    <pre class="mediainfo-full mb-0">@fullReport</pre>
+                }
+                else if (Movie.MediaScanWarning is not null)
+                {
+                    <p class="text-muted mb-0">@Movie.MediaScanWarning</p>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">Not scanned yet.</p>
+                }
+            </div>
+            <div class="mediainfo-modal-footer">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="Close">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>The "Media Info" modal for MovieDetail's toolbar button — shows the full
+    /// General/Video/Audio report (Services/MediaInfoTextFormatter) for technical info gathered
+    /// for each movie file/version. Doesn't re-probe the file itself.</summary>
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+
+    private bool show;
+    private MovieFile? activeFile;
+    private string? fullReport;
+
+    private IReadOnlyList<MovieFile> Files => Movie.MovieFiles
+        .OrderByDescending(f => f.IsPrimary)
+        .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    private string? ActiveScanError => activeFile is not null ? activeFile.MediaScanError : Movie.MediaScanError;
+
+    public Task OpenAsync()
+    {
+        activeFile = Files.FirstOrDefault(f => f.IsPrimary) ?? Files.FirstOrDefault();
+        UpdateReport();
+        show = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void SelectFile(MovieFile file)
+    {
+        activeFile = file;
+        UpdateReport();
+    }
+
+    private void UpdateReport()
+    {
+        if (activeFile is not null)
+        {
+            fullReport = MediaInfoTextFormatter.FormatFull(activeFile);
+        }
+        else
+        {
+            fullReport = MediaInfoTextFormatter.FormatFull(Movie);
+        }
+    }
+
+    private void Close() => show = false;
+}

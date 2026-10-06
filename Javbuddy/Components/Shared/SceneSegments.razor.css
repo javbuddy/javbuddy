@@ -1,0 +1,40 @@
+.scene-segments {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.scene-segment {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-left: 2px solid #fff;
+    border-radius: 0;
+    box-sizing: border-box;
+    background-color: rgba(245, 159, 0, 0.55);
+}
+
+.scene-segment-0 {
+    background-color: rgba(250, 82, 82, 0.55);
+}
+
+.scene-segments-clickable .scene-segment {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.scene-segments-clickable .scene-segment:hover {
+    filter: brightness(1.25);
+}
+
+.scene-suggestion-tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    border-left: 2px dashed rgba(255, 255, 255, 0.85);
+    z-index: 1;
+}

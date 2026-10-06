@@ -1,0 +1,102 @@
+@using Javbuddy.Services.Javinizer
+@using Javbuddy.Services.Torrents.SortWizard
+
+@* A sort result's screenshots plus its original poster/cover, with hover actions to use one as
+   the poster or fanart or delete a screenshot. Shared by the Review card and the metadata editor
+   drawer. *@
+@{
+    var galleryUrls = Movie is not null ? BuildGalleryUrls(Movie) : new List<string>();
+    var screenshotUrlSet = Movie?.ScreenshotUrls is { Count: > 0 } shotSet ? new HashSet<string>(shotSet) : new HashSet<string>();
+}
+@if (Movie is not null && galleryUrls.Count > 0)
+{
+    <div class="sort-movie-gallery-section">
+        <h6 class="sort-gallery-heading">Images (@galleryUrls.Count)</h6>
+        <MovieGallery ThumbUrls="@galleryUrls" CardWrapper="false">
+            <ThumbBadge Context="badgeIdx">
+                @{
+                    var badgeUrl = galleryUrls[badgeIdx];
+                    var badgeIsPoster = badgeUrl == Movie.PosterUrl;
+                    var badgeIsFanart = badgeUrl == Movie.CoverUrl;
+                }
+                @if (badgeIsPoster || badgeIsFanart)
+                {
+                    <div class="sort-screenshot-badges">
+                        @if (badgeIsPoster)
+                        {
+                            <span class="sort-screenshot-badge sort-screenshot-badge-poster" title="Current poster">
+                                <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="4.5" y="1" width="7" height="14" rx="1" /><circle cx="6.6" cy="5" r="0.9" fill="currentColor" stroke="none" /><path d="M5 12.3l2.2-3 1.7 1.9 1.5-2 1.4 3" stroke-linejoin="round" stroke-linecap="round" /></svg>
+                            </span>
+                        }
+                        @if (badgeIsFanart)
+                        {
+                            <span class="sort-screenshot-badge sort-screenshot-badge-fanart" title="Current cover/fanart">
+                                <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1" y="4" width="14" height="8" rx="1" /><circle cx="4.2" cy="6.9" r="0.85" fill="currentColor" stroke="none" /><path d="M1.8 10.8l2.8-3 1.9 1.9 2-2.3 2.8 3.3" stroke-linejoin="round" stroke-linecap="round" /></svg>
+                            </span>
+                        }
+                    </div>
+                }
+            </ThumbBadge>
+            <ThumbOverlay Context="idx">
+                @{
+                    var screenshotUrl = galleryUrls[idx];
+                    var isPoster = screenshotUrl == Movie.PosterUrl;
+                    var isFanart = screenshotUrl == Movie.CoverUrl;
+                    var isScreenshot = screenshotUrlSet.Contains(screenshotUrl);
+                    var busy = Review.UpdatingScreenshots.Contains($"{ResultId}:{screenshotUrl}");
+                }
+                <button type="button" class="sort-screenshot-action sort-screenshot-action-poster @(isPoster ? "is-active" : "")"
+                        title="Use as poster" disabled="@busy"
+                        @onclick="() => Review.SetPosterFromScreenshotAsync(ResultId, screenshotUrl)">
+                    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="4.5" y="1" width="7" height="14" rx="1" /><circle cx="6.6" cy="5" r="0.9" fill="currentColor" stroke="none" /><path d="M5 12.3l2.2-3 1.7 1.9 1.5-2 1.4 3" stroke-linejoin="round" stroke-linecap="round" /></svg>
+                </button>
+                <button type="button" class="sort-screenshot-action sort-screenshot-action-fanart @(isFanart ? "is-active" : "")"
+                        title="Use as cover/fanart" disabled="@busy"
+                        @onclick="() => Review.SetCoverFromScreenshotAsync(ResultId, screenshotUrl)">
+                    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1" y="4" width="14" height="8" rx="1" /><circle cx="4.2" cy="6.9" r="0.85" fill="currentColor" stroke="none" /><path d="M1.8 10.8l2.8-3 1.9 1.9 2-2.3 2.8 3.3" stroke-linejoin="round" stroke-linecap="round" /></svg>
+                </button>
+                @if (isScreenshot)
+                {
+                    <button type="button" class="sort-screenshot-action sort-screenshot-action-delete"
+                            title="Delete" disabled="@busy"
+                            @onclick="() => Review.RemoveScreenshotAsync(ResultId, screenshotUrl)">
+                        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3.5.5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" /><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3h11V2h-11v1z" /></svg>
+                    </button>
+                }
+            </ThumbOverlay>
+        </MovieGallery>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string ResultId { get; set; } = "";
+    [Parameter] public MovieViewDto? Movie { get; set; }
+    [Parameter, EditorRequired] public ReviewStep Review { get; set; } = null!;
+
+    /// <summary>Screenshots followed by the movie's original (pre-edit) poster/cover, deduped — so
+    /// the Review-step picker can also offer switching back to javinizer-go's own auto-picked images,
+    /// not just this scan's screenshots — with whichever tile ends up last moved to the front purely
+    /// for display (doesn't touch movie.CoverUrl/PosterUrl or send anything to javinizer-go). Callers
+    /// can tell a "real" screenshot from an appended original by checking membership in
+    /// movie.ScreenshotUrls, not by position — the front-move means index alone no longer tells them
+    /// apart.</summary>
+    private static List<string> BuildGalleryUrls(MovieViewDto movie)
+    {
+        var urls = movie.ScreenshotUrls is { Count: > 0 } shots ? new List<string>(shots) : new List<string>();
+        if (!string.IsNullOrWhiteSpace(movie.OriginalPosterUrl) && !urls.Contains(movie.OriginalPosterUrl))
+        {
+            urls.Add(movie.OriginalPosterUrl);
+        }
+        if (!string.IsNullOrWhiteSpace(movie.OriginalCoverUrl) && movie.OriginalCoverUrl != movie.OriginalPosterUrl && !urls.Contains(movie.OriginalCoverUrl))
+        {
+            urls.Add(movie.OriginalCoverUrl);
+        }
+        if (urls.Count > 1)
+        {
+            var last = urls[^1];
+            urls.RemoveAt(urls.Count - 1);
+            urls.Insert(0, last);
+        }
+        return urls;
+    }
+}

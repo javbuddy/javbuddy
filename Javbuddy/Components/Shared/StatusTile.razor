@@ -1,0 +1,38 @@
+<div class="status-tile" @onclick="() => OnOpen.InvokeAsync()">
+    <div class="status-tile-head">
+        <span class="status-tile-title">
+            <span class="status-tile-dot @DotClass"></span>
+            @Title
+        </span>
+        <span class="status-tile-badge @DotClass">@BadgeText</span>
+    </div>
+    <p class="status-tile-desc">@Description</p>
+    @if (!string.IsNullOrEmpty(Summary))
+    {
+        <div class="status-tile-meta">@Summary</div>
+    }
+    @if (EnvConfigured)
+    {
+        <span class="status-tile-env">ENV configured</span>
+    }
+</div>
+
+@code {
+    /// <summary>Generic clickable status-tile grid item — used by Settings &gt; Connections' status
+    /// grid and Settings &gt; Metadata's card grid, each opening the matching
+    /// item's form in a <see cref="SlideOverDrawer"/> when clicked.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+    [Parameter] public bool Configured { get; set; }
+    [Parameter] public string? Summary { get; set; }
+    [Parameter] public bool EnvConfigured { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnOpen { get; set; }
+
+    /// <summary>Connections uses "Configured"/"Not configured"; Metadata's Enabled/Disabled
+    /// toggles read better as "Enabled"/"Disabled" — same dot/badge shape either way.</summary>
+    [Parameter] public string ConfiguredLabel { get; set; } = "Configured";
+    [Parameter] public string NotConfiguredLabel { get; set; } = "Not configured";
+
+    private string DotClass => Configured ? "status-tile-ok" : "status-tile-off";
+    private string BadgeText => Configured ? ConfiguredLabel : NotConfiguredLabel;
+}

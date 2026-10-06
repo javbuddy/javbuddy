@@ -1,0 +1,48 @@
+@if (ShowClear)
+{
+    <div class="btn-group btn-group-sm dropdown-menu-group" role="group">
+        <button class="btn @(Active ? "btn-secondary" : "btn-outline-secondary") dropdown-main-btn" type="button" @onclick="OnToggle">
+            @Label
+        </button>
+        <button class="btn @(Active ? "btn-secondary" : "btn-outline-secondary") dropdown-clear-btn" type="button" @onclick="OnClear" title="@ClearTitle" aria-label="@ClearAriaLabel">
+            <span aria-hidden="true">×</span>
+        </button>
+        <button class="btn @(Active ? "btn-secondary" : "btn-outline-secondary") dropdown-arrow-btn" type="button" @onclick="OnToggle" aria-label="Toggle dropdown">
+            <span class="sort-dropdown-arrow">@Arrow</span>
+        </button>
+    </div>
+}
+else
+{
+    <button class="btn btn-sm @(Active ? "btn-secondary" : "btn-outline-secondary")" type="button" @onclick="OnToggle">
+        @Label
+        <span class="sort-dropdown-arrow">@Arrow</span>
+    </button>
+}
+@if (ShowMenu)
+{
+    <div class="sort-dropdown-menu" style="@(MenuMinWidth is not null ? $"min-width:{MenuMinWidth}" : null)">
+        @ChildContent
+    </div>
+}
+
+@code {
+    /// <summary>Toggle-button + arrow + dropdown-menu-container chrome shared by Movies.razor's
+    /// sort dropdown and ActorMissing.razor's sort/filter dropdowns. Deliberately doesn't own the
+    /// open/close interaction itself (no @onfocusout, no backdrop) — Movies.razor closes its
+    /// dropdown on blur, ActorMissing.razor's (which contains real &lt;select&gt; elements, where
+    /// blur-to-close fires before a click inside registers) closes via a full-page backdrop click
+    /// instead. That's a real, page-specific interaction difference, not incidental duplication,
+    /// so it stays on the caller's own wrapper element.</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string Arrow { get; set; } = "▼";
+    [Parameter] public bool Active { get; set; }
+    [Parameter] public bool ShowClear { get; set; }
+    [Parameter] public string ClearTitle { get; set; } = "Reset all filters";
+    [Parameter] public string ClearAriaLabel { get; set; } = "Reset all filters";
+    [Parameter] public EventCallback OnClear { get; set; }
+    [Parameter] public bool ShowMenu { get; set; }
+    [Parameter] public string? MenuMinWidth { get; set; }
+    [Parameter, EditorRequired] public EventCallback OnToggle { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

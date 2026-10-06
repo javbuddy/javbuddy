@@ -1,0 +1,20 @@
+<div class="cropper-viewport" style="height: @(HeightPx)px" @ref="Container">
+    <img alt="To Crop" @ref="Image" />
+    <div class="cropper-crop-box">
+        <div class="crop-handle handle-nw" data-handle="nw"></div>
+        <div class="crop-handle handle-ne" data-handle="ne"></div>
+        <div class="crop-handle handle-sw" data-handle="sw"></div>
+        <div class="crop-handle handle-se" data-handle="se"></div>
+        <div class="crop-handle handle-n" data-handle="n"></div>
+        <div class="crop-handle handle-s" data-handle="s"></div>
+        <div class="crop-handle handle-w" data-handle="w"></div>
+        <div class="crop-handle handle-e" data-handle="e"></div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int HeightPx { get; set; } = 400;
+
+    public ElementReference Container { get; private set; }
+    public ElementReference Image { get; private set; }
+}

@@ -1,0 +1,66 @@
+/* An item in the scene editor's tools row. While expanded, the root steps out of the
+   layout (display: contents) so a button it still shows stays in the row, and everything else
+   (progress, suggestions, confirmation, message) wraps onto full-width lines below the buttons. */
+.scene-chapter-writer {
+    flex: 0 1 auto;
+    min-width: 0;
+    font-size: 0.8rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+}
+
+.scene-chapter-writer-expanded {
+    display: contents;
+}
+
+    .scene-chapter-writer-expanded > :not(.scene-editor-btn) {
+        flex-basis: 100%;
+        order: 1;
+    }
+
+.scene-chapter-writer p {
+    margin: 0 0 0.35rem;
+}
+
+.scene-chapter-writer-warning {
+    color: #f59f00;
+}
+
+.scene-chapter-writer-status,
+.scene-chapter-writer-done {
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.scene-chapter-writer-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
+/* Same look as the editor's buttons (CSS isolation: copied, not shared). */
+.scene-editor-btn {
+    appearance: none;
+    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    color: var(--scene-editor-accent, #6ea8fe);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    white-space: nowrap;
+}
+
+.scene-editor-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* After .scene-editor-btn: same specificity, so it has to come later to win. */
+.scene-chapter-writer-confirm-btn {
+    background-color: #2f8fd6;
+    border-color: #2f8fd6;
+    color: #fff;
+}
+
+.scene-editor-error {
+    color: #fa5252;
+}

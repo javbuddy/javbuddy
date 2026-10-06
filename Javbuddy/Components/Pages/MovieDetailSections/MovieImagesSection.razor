@@ -1,0 +1,156 @@
+@* The Movie Detail page's Images section: the movie folder's extrafanart, with adding and deleting
+   images. Hidden when the movie has neither images nor a local folder to add them to. *@
+@using Javbuddy.Models
+@using Javbuddy.Services.LocalLibrary
+@inject ILocalLibraryClient LocalLibraryClient
+@inject IMovieExtraFanartService ExtraFanartService
+
+@if (ExtraFanartThumbUrls.Count > 0 || hasLocalFolder)
+{
+    <div class="movie-detail-section">
+        <div class="movie-detail-section-header">
+            <h2>Images</h2>
+            @if (hasLocalFolder && ExtraFanartThumbUrls.Count > 0)
+            {
+                <button type="button" class="movie-detail-edit-tags-btn" @onclick="OpenImageUploadModal">Add Images</button>
+            }
+        </div>
+        @if (imagesError is not null)
+        {
+            <div class="alert alert-danger py-2">@imagesError</div>
+        }
+        @if (ExtraFanartThumbUrls.Count > 0)
+        {
+            <MovieGallery ThumbUrls="@ExtraFanartThumbUrls" FullUrls="@ExtraFanartFullUrls" OriginalUrls="@ExtraFanartOriginalUrls" CardWrapper="false"
+                          ThumbOverlay="@(hasLocalFolder ? ImageDeleteOverlay : null)"
+                          LightboxActions="@(hasLocalFolder ? ImageDeleteLightboxAction : null)"
+                          LightboxCovered="@(imagePendingDelete is not null)" />
+        }
+        else
+        {
+            <button type="button" class="movie-images-empty" @onclick="OpenImageUploadModal">
+                <span class="fw-semibold">No images yet</span>
+                <span class="text-muted small">Add images to this movie's extrafanart folder</span>
+            </button>
+        }
+    </div>
+}
+
+<MovieImageUploadModal Show="@showImageUploadModal"
+                       MovieId="@Movie.Id"
+                       Code="@(Movie.Code ?? "")"
+                       OnClose="() => showImageUploadModal = false"
+                       OnUploaded="ReloadExtraFanartAfterChangeAsync" />
+
+@if (imagePendingDelete is not null)
+{
+    <DeleteConfirmDialog @key="imagePendingDelete"
+                         ItemName="@imagePendingDelete"
+                         Message="The file is removed from the movie's extrafanart folder."
+                         Busy="deletingImage"
+                         OnConfirm="ConfirmDeleteImageAsync"
+                         OnCancel="() => imagePendingDelete = null" />
+}
+
+@code {
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+
+    private Movie? loadedFor;
+    private List<string> extraFanartFiles = new();
+    private bool hasLocalFolder;
+    private bool showImageUploadModal;
+    private string? imagePendingDelete;
+    private bool deletingImage;
+    private string? imagesError;
+    private int extraFanartGeneration;
+
+    // The page hands over a new Movie on every reload (a rescan, a status change, …), which is when
+    // the folder is listed again; a re-render with the same Movie keeps the listing.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ReferenceEquals(loadedFor, Movie)) return;
+        loadedFor = Movie;
+        await LoadExtraFanartAsync();
+    }
+
+    // The endpoint is index-based, so adding or deleting an image shifts which file an index URL
+    // means; versioning by file name keeps the browser's cached copy of the old file from showing
+    // up under the shifted index. A name alone can come back with different bytes
+    // (delete the last fanartN, then add one: it gets the same name), so every change on this
+    // page also bumps a generation.
+    private string FanartUrl(int index, string variant) =>
+        $"/image-cache/{Uri.EscapeDataString(Movie.Code!)}/extrafanart/{index}/{variant}?v={Uri.EscapeDataString(extraFanartFiles[index])}"
+        + (extraFanartGeneration > 0 ? $"&g={extraFanartGeneration}" : "");
+
+    private Task ReloadExtraFanartAfterChangeAsync()
+    {
+        extraFanartGeneration++;
+        return LoadExtraFanartAsync();
+    }
+
+    private async Task LoadExtraFanartAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Movie.Code))
+        {
+            extraFanartFiles = new List<string>();
+            hasLocalFolder = false;
+            return;
+        }
+
+        extraFanartFiles = await LocalLibraryClient.ListExtraFanartFileNamesAsync(Movie.Code);
+        hasLocalFolder = await LocalLibraryClient.ResolveMovieFolderPathAsync(Movie.Code) is not null;
+    }
+
+    private void OpenImageUploadModal()
+    {
+        imagesError = null;
+        showImageUploadModal = true;
+    }
+
+    private RenderFragment<int> ImageDeleteOverlay => index => __builder =>
+    {
+        <button type="button" class="movie-image-delete-btn" title="Delete image" aria-label="Delete image @(index + 1)"
+                @onclick="() => imagePendingDelete = extraFanartFiles[index]" @onclick:stopPropagation="true">
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" /><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z" /></svg>
+        </button>
+    };
+
+    // The Images section's own alert sits behind the open viewer, so a failed delete started
+    // from the viewer also shows its error here, next to the button.
+    private RenderFragment<int> ImageDeleteLightboxAction => index => __builder =>
+    {
+        @if (imagesError is not null)
+        {
+            <span class="movie-image-viewer-error" role="alert">@imagesError</span>
+        }
+        <button type="button" class="btn btn-outline-light btn-sm movie-image-viewer-delete-btn" @onclick="() => imagePendingDelete = extraFanartFiles[index]">Delete</button>
+    };
+
+    private async Task ConfirmDeleteImageAsync()
+    {
+        if (imagePendingDelete is null) return;
+
+        deletingImage = true;
+        imagesError = null;
+        try
+        {
+            var result = await ExtraFanartService.DeleteAsync(Movie.Id, imagePendingDelete);
+            if (!result.Success) imagesError = result.ErrorMessage;
+            await ReloadExtraFanartAfterChangeAsync();
+        }
+        finally
+        {
+            deletingImage = false;
+            imagePendingDelete = null;
+        }
+    }
+
+    private List<string> ExtraFanartThumbUrls =>
+        Enumerable.Range(0, extraFanartFiles.Count).Select(i => FanartUrl(i, "thumb")).ToList();
+
+    private List<string> ExtraFanartFullUrls =>
+        Enumerable.Range(0, extraFanartFiles.Count).Select(i => FanartUrl(i, "full")).ToList();
+
+    private List<string> ExtraFanartOriginalUrls =>
+        Enumerable.Range(0, extraFanartFiles.Count).Select(i => FanartUrl(i, "original")).ToList();
+}

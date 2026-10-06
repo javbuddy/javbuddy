@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="JunitXml.TestLogger" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.Playwright" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Javbuddy\Javbuddy.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- On-disk fixture movie folders for LibraryImportFlowTests — LocalLibraryClient reads
+         real directories via System.IO, so these need to exist in the build output, not just
+         the source tree. -->
+    <None Include="Fixtures\LocalLibraryFixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Tiny side-by-side fisheye clip FakeJellyfinServer streams for the Movie Cleanup VR 2D mode test. -->
+    <None Include="Fixtures\VrVideo\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

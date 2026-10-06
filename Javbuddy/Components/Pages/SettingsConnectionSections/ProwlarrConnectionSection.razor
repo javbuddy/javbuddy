@@ -1,0 +1,97 @@
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Prowlarr
+@using Microsoft.EntityFrameworkCore
+@inject IProwlarrClient ProwlarrClient
+@inject IConnectionSettingsSaveService ConnectionSettingsSaveService
+@inject IConfiguration Configuration
+
+<ConnectionSettingsCard TSettings="ProwlarrSettings"
+                         Title="Prowlarr"
+                         EnvConfigured="envConfigured"
+                         Settings="settings"
+                         FormName="prowlarr-settings"
+                         OnSave="Save"
+                         OnTest="TestConnection"
+                         Testing="testing"
+                         TestResult="TestResultTuple"
+                         Saved="saved">
+    <TestResultDetails>
+        @if (!string.IsNullOrWhiteSpace(testResult?.Version))
+        {
+            <div class="mt-2 pt-2 border-top border-success-subtle small">
+                <div><strong>Server version:</strong> @testResult.Version</div>
+            </div>
+        }
+    </TestResultDetails>
+    <Description>
+        Used to search indexers for a movie's release code. Create an API key in Prowlarr under
+        Settings → General, or use the one shown there.
+    </Description>
+    <EnvBanner>
+        Configured via environment variables (<code>Prowlarr__BaseUrl</code> / <code>Prowlarr__ApiKey</code>).
+        These take precedence over the form below.
+    </EnvBanner>
+    <FormFields>
+        <div class="mb-3">
+            <label class="form-label">Base URL (internal API)</label>
+            <InputText class="form-control" @bind-Value="settings!.BaseUrl" placeholder="http://localhost:9696" disabled="@envConfigured" />
+            <div class="form-text">Internal address used by this server to search Prowlarr API.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">External URL (optional)</label>
+            <InputText class="form-control" @bind-Value="settings!.ExternalUrl" placeholder="https://prowlarr.yourdomain.com" disabled="@envConfigured" />
+            <div class="form-text">Public browser URL for links (falls back to Base URL if empty).</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">API key</label>
+            <InputText class="form-control" type="password" @bind-Value="settings!.ApiKey" placeholder="…" disabled="@envConfigured" />
+        </div>
+    </FormFields>
+</ConnectionSettingsCard>
+
+@code {
+    private ProwlarrSettings? settings;
+    private ProwlarrTestResult? testResult;
+    private bool testing;
+    private bool saved;
+    private bool envConfigured;
+
+    private (bool Success, string Message)? TestResultTuple => testResult is null ? null : (testResult.Success, testResult.Message);
+
+    protected override async Task OnInitializedAsync()
+    {
+        envConfigured = ProwlarrEnvConfig.IsSet(Configuration);
+        if (envConfigured)
+        {
+            settings = new ProwlarrSettings
+            {
+                BaseUrl = ProwlarrEnvConfig.GetBaseUrl(Configuration),
+                ExternalUrl = ProwlarrEnvConfig.GetExternalUrl(Configuration),
+                ApiKey = ProwlarrEnvConfig.GetApiKey(Configuration)
+            };
+        }
+        else
+        {
+            settings = await ConnectionSettingsSaveService.GetProwlarrAsync();
+        }
+    }
+
+    private async Task Save()
+    {
+        saved = false;
+        testResult = null;
+        await ConnectionSettingsSaveService.SaveProwlarrAsync(settings!);
+        saved = true;
+    }
+
+    private async Task TestConnection()
+    {
+        testing = true;
+        testResult = null;
+        await Save();
+        testResult = await ProwlarrClient.TestConnectionAsync();
+        testing = false;
+    }
+}

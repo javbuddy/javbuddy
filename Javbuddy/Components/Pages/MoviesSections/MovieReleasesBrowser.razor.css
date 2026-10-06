@@ -1,0 +1,46 @@
+.releases-summary {
+    margin-bottom: 0.75rem;
+    color: #6c757d;
+}
+
+:root[data-theme="dark"] .releases-summary {
+    color: #9aa1af;
+}
+
+.releases-show-more-wrapper {
+    display: flex;
+    justify-content: center;
+    margin: 1.5rem 0;
+}
+
+.releases-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.releases-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.35rem 0.15rem 0.6rem;
+    border: 1px solid #ced4da;
+    border-radius: 999px;
+    font-size: 0.85rem;
+}
+
+.releases-chip-remove {
+    border: none;
+    background: none;
+    padding: 0 0.25rem;
+    line-height: 1;
+    font-size: 1rem;
+    color: inherit;
+    cursor: pointer;
+}
+
+:root[data-theme="dark"] .releases-chip {
+    border-color: #495057;
+}

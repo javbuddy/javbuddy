@@ -1,0 +1,123 @@
+/* A highlight's add/edit form, moved from HighlightEditor.razor.css (CSS isolation
+   doesn't share it); reads the same --scene-editor-* custom properties. */
+
+.highlight-editor-btn {
+    appearance: none;
+    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    color: var(--scene-editor-accent, #6ea8fe);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    white-space: nowrap;
+}
+
+.highlight-editor-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.highlight-editor-save-btn {
+    background-color: #2f8fd6;
+    border-color: #2f8fd6;
+    color: #fff;
+}
+
+.highlight-editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.5rem;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 6px;
+    background-color: var(--scene-editor-form-bg, rgba(255, 255, 255, 0.03));
+}
+
+.highlight-editor-times {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.highlight-editor-times .highlight-editor-field {
+    flex: 1 1 8rem;
+}
+
+.highlight-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.highlight-editor-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.highlight-editor-hint {
+    font-weight: 400;
+}
+
+.highlight-editor-time-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.highlight-editor-input {
+    width: 100%;
+    min-width: 0;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.8rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background-color: var(--scene-editor-input-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.highlight-editor-time-row .highlight-editor-input {
+    flex: 1 1 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.highlight-editor-form-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
+/* Favorite toggle, red like the scene and movie favorite hearts. */
+
+/* Actor and tag pickers, copied from ApexEditor.razor.css (CSS isolation doesn't share it). */
+.highlight-editor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.highlight-editor-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background-color: rgba(47, 143, 214, 0.18);
+    border: 1px solid #2f8fd6;
+    border-radius: 999px;
+}
+
+.highlight-editor-chip-remove {
+    appearance: none;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+}

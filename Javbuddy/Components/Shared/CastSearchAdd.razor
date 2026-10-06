@@ -1,0 +1,56 @@
+@using Javbuddy.Services
+@inject IActorService ActorService
+
+<div class="cast-search">
+    <input type="text" class="cast-search-input" placeholder="Search actors to add…" value="@query" @oninput="OnInputAsync" />
+    @if (results.Count > 0)
+    {
+        <div class="cast-search-results">
+            @foreach (var candidate in results)
+            {
+                <div class="cast-search-candidate" @onclick="() => AddAsync(candidate.Id)">
+                    @if (candidate.HasImage)
+                    {
+                        <img class="cast-search-avatar" src="@($"/actor-image/{candidate.Id}/thumb")" alt="" loading="lazy" />
+                    }
+                    else
+                    {
+                        <span class="cast-search-avatar">@ActorMatching.Initials(candidate.DisplayName)</span>
+                    }
+                    <span>@candidate.DisplayName</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Tracked actors already on the movie, hidden from the results.</summary>
+    [Parameter] public IReadOnlyCollection<int> ExcludedActorIds { get; set; } = [];
+
+    /// <summary>Raised with the chosen actor's ID; the search box resets itself afterwards.</summary>
+    [Parameter] public EventCallback<int> OnAdd { get; set; }
+
+    private string query = "";
+    private IReadOnlyList<ActorSearchItem> results = [];
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        query = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            results = [];
+            return;
+        }
+
+        var matches = await ActorService.SearchActorsAsync(query);
+        results = matches.Where(a => !ExcludedActorIds.Contains(a.Id)).ToList();
+    }
+
+    private async Task AddAsync(int actorId)
+    {
+        query = "";
+        results = [];
+        await OnAdd.InvokeAsync(actorId);
+    }
+}

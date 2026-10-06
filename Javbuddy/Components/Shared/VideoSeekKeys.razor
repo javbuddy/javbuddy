@@ -1,0 +1,61 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Arrow-key seeking for a player's <video>: ←/→ skip 5 s, Shift+←/→ skip 60 s, ,/. step one frame,
+   and H / Shift+H and A / Shift+A jump to the next / previous highlight and apex when given.
+   Renders nothing; the keydown listener lives in VideoSeekKeys.razor.js so a held key seeks without
+   a SignalR round-trip. Shared by the player modal and Review mode's card. *@
+
+@code {
+    /// <summary>CSS selector of the <c>&lt;video&gt;</c> to seek. Resolved on each key press, so the
+    /// video may be (re)created after this component renders.</summary>
+    [Parameter, EditorRequired] public string VideoSelector { get; set; } = default!;
+
+    /// <summary>Seeks stay at or after this point (e.g. a clip's start); 0 when null.</summary>
+    [Parameter] public double? MinSeconds { get; set; }
+
+    /// <summary>Seeks stay at or before this point; the video's end when null.</summary>
+    [Parameter] public double? MaxSeconds { get; set; }
+
+    /// <summary>Where H / Shift+H jump to, sorted, from MarkerJumps; none when empty.</summary>
+    [Parameter] public IReadOnlyList<double> HighlightTargets { get; set; } = [];
+
+    /// <summary>Where A / Shift+A jump to, sorted, from MarkerJumps; none when empty.</summary>
+    [Parameter] public IReadOnlyList<double> ApexTargets { get; set; } = [];
+
+    private readonly string key = Guid.NewGuid().ToString("N");
+    private IJSObjectReference? jsModule;
+    // What the listener was last set up with; it's set up again when any of it changes (a playlist's
+    // next clip, a highlight added in the editor).
+    private (string Selector, double? Min, double? Max, IReadOnlyList<double> Highlights, IReadOnlyList<double> Apexes)? sent;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (sent is { } last && last.Selector == VideoSelector && last.Min == MinSeconds && last.Max == MaxSeconds
+            && last.Highlights.SequenceEqual(HighlightTargets) && last.Apexes.SequenceEqual(ApexTargets)) return;
+
+        sent = (VideoSelector, MinSeconds, MaxSeconds, HighlightTargets, ApexTargets);
+        try
+        {
+            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/VideoSeekKeys.razor.js");
+            await jsModule.InvokeVoidAsync("init", key, VideoSelector, MinSeconds, MaxSeconds, HighlightTargets, ApexTargets);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("dispose", key);
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

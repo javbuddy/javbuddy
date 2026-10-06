@@ -1,0 +1,49 @@
+<div class="toolbar-menu" @onkeydown="OnKeyDown">
+    <button type="button" class="toolbar-menu-btn" disabled="@Disabled" title="@Title"
+            aria-haspopup="menu" aria-expanded="@(open ? "true" : "false")" @onclick="Toggle">
+        @Icon
+        @Label
+        <svg class="toolbar-menu-caret" viewBox="0 0 16 16" width="10" height="10" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z" /></svg>
+    </button>
+    @if (open)
+    {
+        <div class="toolbar-menu-backdrop" @onclick="() => open = false"></div>
+        <div class="toolbar-menu-list" role="menu" aria-label="@Label">
+            <CascadingValue Value="this" IsFixed="true">
+                @ChildContent
+            </CascadingValue>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>A page-toolbar button that opens a menu of <see cref="ToolbarMenuItem"/>s, so rarely
+    /// used actions can share one toolbar slot. Styled to match the dark page
+    /// toolbars (`.movie-toolbar-btn`). The menu closes when an item is picked, on a click outside
+    /// it, or on Escape.</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public RenderFragment? Icon { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool open;
+
+    private void Toggle() => open = !open;
+
+    /// <summary>Called by a <see cref="ToolbarMenuItem"/> from its own click handler, which only
+    /// re-renders the item — so this re-renders the menu itself.</summary>
+    internal void Close()
+    {
+        if (!open)
+            return;
+        open = false;
+        StateHasChanged();
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            open = false;
+    }
+}

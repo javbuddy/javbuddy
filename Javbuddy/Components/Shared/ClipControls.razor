@@ -1,0 +1,234 @@
+@using Javbuddy.Services.Trickplay
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* The clip player's own controls, in place of the browser's, which always show the
+   whole file: the track and the time readout run from the clip's start (0:00) to its end. At the end
+   the clip closes (OnEnded), or with Loop on, restarts. In a playlist it also offers
+   Previous and Next (P / N). Playback, seeking, the readout, volume, fullscreen and those buttons run
+   in ClipControls.razor.js; only Loop lives here, remembered by the module in this browser's
+   localStorage. A scene's highlights are drawn above the track, cut to the clip. *@
+<div class="clip-controls" @ref="root">
+    @if (Playlist)
+    {
+        <button type="button" class="clip-controls-btn clip-controls-prev" aria-label="Previous clip" title="Previous clip (P); restarts this one when you're more than 3 s in">
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path d="M4 4a.5.5 0 0 1 1 0v3.248l6.267-3.636c.52-.302 1.233.043 1.233.696v7.384c0 .653-.713.998-1.233.696L5 8.752V12a.5.5 0 0 1-1 0V4z" />
+            </svg>
+        </button>
+    }
+    <button type="button" class="clip-controls-btn clip-controls-play" aria-label="Play or pause" title="Play/pause (space)">
+        <svg class="clip-controls-icon-play" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
+        </svg>
+        <svg class="clip-controls-icon-pause" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" />
+        </svg>
+    </button>
+    @if (Playlist)
+    {
+        <button type="button" class="clip-controls-btn clip-controls-next" aria-label="Next clip" title="Next clip (N)">
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path d="M12.5 4a.5.5 0 0 0-1 0v3.248L5.233 3.612C4.713 3.31 4 3.655 4 4.308v7.384c0 .653.713.998 1.233.696L11.5 8.752V12a.5.5 0 0 0 1 0V4z" />
+            </svg>
+        </button>
+    }
+    <div class="clip-controls-track-wrap" aria-hidden="true" title="Click to jump to that point">
+        <div class="clip-controls-preview">
+            <div class="clip-controls-thumb"></div>
+            @if (Generating is not null)
+            {
+                <TrickplayGeneratingPreview Generating="Generating" />
+            }
+            <span class="clip-controls-preview-time"></span>
+        </div>
+        <ApexMarkers Apexes="clipApexes" DurationSeconds="HighlightsLengthSeconds" />
+        <HighlightSegments Highlights="clipHighlights" DurationSeconds="HighlightsLengthSeconds" />
+        <div class="clip-controls-track">
+            <div class="clip-controls-progress"></div>
+        </div>
+    </div>
+    <span class="clip-controls-time"></span>
+    <button type="button" class="clip-controls-btn clip-controls-mute" aria-label="Mute or unmute" title="Mute/unmute">
+        <svg class="clip-controls-icon-sound" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z" />
+            <path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.706.706z" />
+            <path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z" />
+        </svg>
+        <svg class="clip-controls-icon-muted" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06zm7.137 2.096a.5.5 0 0 1 0 .708L12.207 8l1.647 1.646a.5.5 0 0 1-.708.708L11.5 8.707l-1.646 1.647a.5.5 0 0 1-.708-.708L10.793 8 9.146 6.354a.5.5 0 1 1 .708-.708L11.5 7.293l1.646-1.647a.5.5 0 0 1 .708 0z" />
+        </svg>
+    </button>
+    <input type="range" class="clip-controls-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume" title="Volume" />
+    <button type="button"
+            class="clip-controls-btn clip-controls-loop @(loop ? "clip-controls-loop-on" : null)"
+            aria-pressed="@(loop ? "true" : "false")"
+            title="Loop: restart the clip at its end instead of closing the player"
+            @onclick="ToggleLoopAsync">
+        Loop
+    </button>
+    <button type="button" class="clip-controls-btn clip-controls-fullscreen" aria-label="Toggle fullscreen" title="Toggle fullscreen (f, double-click video)">
+        <svg class="clip-controls-fs-icon-enter" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0V2h3.5a.5.5 0 0 0 0-1h-4zm13 0h-4a.5.5 0 0 0 0 1H14v3.5a.5.5 0 0 0 1 0v-4a.5.5 0 0 0-.5-.5zM1 10.5a.5.5 0 0 0 .5.5H5a.5.5 0 0 0 0-1H2v-3.5a.5.5 0 0 0-1 0v4zm14 0a.5.5 0 0 0-1 0V14h-3.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 .5-.5v-4z" />
+        </svg>
+        <svg class="clip-controls-fs-icon-exit" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10.5 4.5v-4a.5.5 0 0 1 .5-.5zM0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zm10.5 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4z" />
+        </svg>
+    </button>
+</div>
+
+@code {
+    /// <summary>CSS selector of the clip player's <c>&lt;video&gt;</c>.</summary>
+    [Parameter, EditorRequired] public string VideoSelector { get; set; } = default!;
+
+    /// <summary>Where the clip starts in the video: 0:00 on the track.</summary>
+    [Parameter] public double StartSeconds { get; set; }
+
+    /// <summary>Where the clip ends; the end of the video when null.</summary>
+    [Parameter] public double? EndSeconds { get; set; }
+
+    /// <summary>The movie's highlights, in start order; those the clip overlaps are
+    /// drawn above the track, and clicking one jumps to its start.</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem>? Highlights { get; set; }
+
+    /// <summary>The movie's apexes; those inside the clip are marked above the track.</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? Apexes { get; set; }
+
+    /// <summary>The movie's length: where a clip without EndSeconds ends, for placing highlights.</summary>
+    [Parameter] public double? MovieDurationSeconds { get; set; }
+
+    /// <summary>Thumbnails for the track's hover preview; none until (or unless) it loads.</summary>
+    [Parameter] public TrickplayLayout? Trickplay { get; set; }
+
+    /// <summary>Set while the trickplay the preview would use is being generated; the
+    /// preview shows that instead, so Trickplay should be null meanwhile.</summary>
+    [Parameter] public TrickplayGenerating? Generating { get; set; }
+
+    /// <summary>The clip played to its end with Loop off.</summary>
+    [Parameter] public EventCallback OnEnded { get; set; }
+
+    /// <summary>Set in a playlist: offers Next and Previous, and the N / P keys.</summary>
+    [Parameter] public EventCallback OnNext { get; set; }
+
+    [Parameter] public EventCallback OnPrevious { get; set; }
+
+    /// <summary>Identifies the clip: another clip re-inits the controls even when its range and
+    /// place match the previous one's (two single-scene movies in a row both run 0 → end).</summary>
+    [Parameter] public string? ClipKey { get; set; }
+
+    /// <summary>False while the player still shows the previous clip's video (another movie's stream
+    /// is loading): another clip's range is only applied once its video is there.</summary>
+    [Parameter] public bool StreamReady { get; set; } = true;
+
+    /// <summary>Whether Previous can go back a clip; otherwise it restarts this one.</summary>
+    [Parameter] public bool HasPrevious { get; set; }
+
+    /// <summary>What the module needs to run the controls, serialized camelCase.</summary>
+    public sealed record ClipRange(string VideoSelector, double StartSeconds, double? EndSeconds, TrickplayLayout? Trickplay, bool Playlist, bool HasPrevious);
+
+    private bool Playlist => OnNext.HasDelegate;
+
+    private ElementReference root;
+    private IJSObjectReference? jsModule;
+    private DotNetObjectReference<ClipControls>? selfRef;
+    private TrickplayLayout? sentTrickplay;
+    private ClipRange? sentRange;
+    private string? sentKey;
+    private bool loop;
+    private IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem>? clipHighlights;
+    private IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? clipApexes;
+
+    private double? HighlightsLengthSeconds => (EndSeconds ?? MovieDurationSeconds) - StartSeconds;
+
+    private ClipRange Range => new(VideoSelector, StartSeconds, EndSeconds, Trickplay, Playlist, HasPrevious);
+
+    protected override void OnParametersSet()
+    {
+        clipHighlights = Highlights is { Count: > 0 } && HighlightsLengthSeconds is > 0
+            ? Javbuddy.Services.Scenes.HighlightRanges.WithinClip(Highlights, StartSeconds, StartSeconds + HighlightsLengthSeconds.Value)
+            : null;
+        clipApexes = Apexes is { Count: > 0 } && HighlightsLengthSeconds is > 0
+            ? Javbuddy.Services.Scenes.ApexRanges.WithinClip(Apexes, StartSeconds, StartSeconds + HighlightsLengthSeconds.Value)
+            : null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipControls.razor.js");
+                selfRef = DotNetObjectReference.Create(this);
+                await InitAsync();
+                StateHasChanged();
+            }
+            else if (jsModule is not null && StreamReady && (ClipKey != sentKey || Range with { Trickplay = sentTrickplay } != sentRange))
+            {
+                // Another clip in the same player (a playlist's next one): start over on its range.
+                await InitAsync();
+            }
+            else if (jsModule is not null && Trickplay != sentTrickplay)
+            {
+                sentTrickplay = Trickplay;
+                await jsModule.InvokeVoidAsync("setTrickplay", root, Trickplay);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task InitAsync()
+    {
+        sentTrickplay = Trickplay;
+        sentRange = Range;
+        sentKey = ClipKey;
+        try
+        {
+            loop = await jsModule!.InvokeAsync<bool>("init", root, selfRef, sentRange);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task ToggleLoopAsync()
+    {
+        loop = !loop;
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("setLoop", root, loop);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    [JSInvokable]
+    public Task ClipEndedAsync() => OnEnded.InvokeAsync();
+
+    [JSInvokable]
+    public Task NextAsync() => OnNext.InvokeAsync();
+
+    [JSInvokable]
+    public Task PreviousAsync() => OnPrevious.InvokeAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("dispose", root);
+                await jsModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+        selfRef?.Dispose();
+    }
+}

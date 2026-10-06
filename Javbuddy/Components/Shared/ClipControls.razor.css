@@ -1,0 +1,167 @@
+/* The track, preview and fullscreen button follow ScrubBar.razor.css; CSS isolation means the rules
+   are this component's own copy. */
+.clip-controls {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 32px;
+    padding: 0 0.25rem;
+    color: #cbd5e1;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.clip-controls-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 26px;
+    padding: 0 0.3rem;
+    color: #cbd5e1;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.clip-controls-btn:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.clip-controls-icon-pause,
+.clip-controls-icon-muted,
+.clip-controls-fs-icon-exit {
+    display: none;
+}
+
+.clip-controls-playing .clip-controls-icon-play,
+.clip-controls-muted .clip-controls-icon-sound,
+.clip-controls-is-fullscreen .clip-controls-fs-icon-enter {
+    display: none;
+}
+
+.clip-controls-playing .clip-controls-icon-pause,
+.clip-controls-muted .clip-controls-icon-muted,
+.clip-controls-is-fullscreen .clip-controls-fs-icon-exit {
+    display: block;
+}
+
+.clip-controls-is-fullscreen {
+    padding: 0 1rem 0.5rem 1rem;
+    background-color: #000;
+}
+
+/* A column so a scene's highlight track, when there is one, sits just above the track. */
+.clip-controls-track-wrap {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    cursor: pointer;
+    touch-action: none;
+}
+
+.clip-controls-track {
+    position: relative;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background-color: #3d4354;
+    overflow: hidden;
+    transition: height 0.12s ease;
+}
+
+.clip-controls-track-wrap:hover .clip-controls-track {
+    height: 10px;
+}
+
+.clip-controls-progress {
+    width: 0;
+    height: 100%;
+    background-color: #2f8fd6;
+}
+
+.clip-controls-preview {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    transform: translateX(-50%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.clip-controls-preview-visible {
+    display: flex;
+}
+
+.clip-controls-thumb {
+    background-color: #000;
+    overflow: hidden;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    box-sizing: content-box;
+}
+
+.clip-controls-thumb[hidden] {
+    display: none;
+}
+
+.clip-controls-preview-time {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    background-color: rgba(0, 0, 0, 0.75);
+    border-radius: 3px;
+    padding: 0 0.35rem;
+}
+
+.clip-controls-time {
+    flex: none;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.clip-controls-volume {
+    flex: none;
+    width: 80px;
+    accent-color: #2f8fd6;
+    cursor: pointer;
+}
+
+.clip-controls-loop {
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.clip-controls-loop-on {
+    color: #fff;
+    background-color: #2f8fd6;
+    border-color: #2f8fd6;
+}
+
+.clip-controls-loop-on:hover {
+    background-color: #2a7fbf;
+}
+
+@media (max-width: 576px) {
+    .clip-controls-volume {
+        display: none;
+    }
+}

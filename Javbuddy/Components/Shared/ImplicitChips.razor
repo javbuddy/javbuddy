@@ -1,0 +1,15 @@
+@* Grayed, read-only chips for implied tags and inherited actors; see ImplicitChip. *@
+
+@if (Items.Count > 0)
+{
+    <span class="implicit-chips">
+        @foreach (var item in Items)
+        {
+            <span class="implicit-chip" title="@item.Tooltip" aria-label="@item.Label, implied">@item.Label</span>
+        }
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ImplicitChip> Items { get; set; } = [];
+}

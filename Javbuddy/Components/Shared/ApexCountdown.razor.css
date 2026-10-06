@@ -1,0 +1,19 @@
+/* Just the number, in the video area's bottom right corner (position: relative): faded so it doesn't
+   dominate the picture, and out of the way of clicks. */
+.apex-countdown {
+    position: absolute;
+    right: 3%;
+    bottom: 6%;
+    opacity: 0.55;
+    color: #fff;
+    font-size: clamp(1.25rem, 4vmin, 2.5rem);
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.apex-countdown[hidden] {
+    display: none;
+}

@@ -1,0 +1,481 @@
+@page "/actors/add/import"
+@using Javbuddy.Services
+@using Javbuddy.Services.Tasks
+@inject IActorDiscoveryService DiscoveryService
+@rendermode InteractiveServer
+@implements IDisposable
+
+<PageTitle>Import actors · Javbuddy</PageTitle>
+
+<h1 class="import-title">Import actors from your movies</h1>
+
+<div class="card source-card mb-4">
+    <div class="card-body">
+        <h2 class="import-tips-title">Import Source</h2>
+        <div class="row g-3 align-items-center mb-2">
+            <div class="col-sm-auto">
+                <label for="import-source-select" class="col-form-label fw-semibold">Source:</label>
+            </div>
+            <div class="col-sm-6 col-md-5">
+                <select id="import-source-select"
+                        class="form-select"
+                        @bind="selectedSource"
+                        disabled="@(scanning || importing)">
+                    <option value="@ActorDiscoverySource.LocalLibrary">Local Library (.nfo / filesystem)</option>
+                </select>
+            </div>
+            <div class="col-sm-auto d-flex align-items-center gap-2">
+                <button class="btn btn-primary import-btn" @onclick="ScanAsync" disabled="@(scanning || importing)">
+                    <svg class="import-btn-icon" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z" />
+                        <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z" />
+                    </svg>
+                    @(scanning ? "Scanning…" : "Scan Local Library for Actors")
+                </button>
+                @if (scanning && activeProgress is not null)
+                {
+                    <span class="scan-progress-label text-muted small ms-1">@ProgressLabel</span>
+                    <button type="button" class="btn btn-outline-danger btn-sm ms-1" @onclick="CancelOperation">
+                        Cancel
+                    </button>
+                }
+            </div>
+        </div>
+        <div class="text-muted small">
+            Scans movie directories for local <code>.nfo</code> files, movie cast lists (<code>MetaActresses</code>), and portrait headshots in local <code>.actors/</code> folders.
+        </div>
+    </div>
+    @if (scanning)
+    {
+        <div class="progress scan-inline-progress" style="height: 4px; border-radius: 0;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                 role="progressbar"
+                 style="width: @ProgressPercentage%"
+                 aria-valuenow="@ProgressPercentage"
+                 aria-valuemin="0"
+                 aria-valuemax="100">
+            </div>
+        </div>
+    }
+</div>
+
+<div class="card import-tips-card mb-4">
+    <div class="card-body">
+        <h2 class="import-tips-title">How local library import works:</h2>
+        <ul class="mb-0">
+            <li>Scans the cast list (<code>MetaActresses</code>) and local <code>.nfo</code> metadata for every movie you're tracking.</li>
+            <li>Finds candidate actors that don't have an Actor record yet and lets you review them before importing.</li>
+            <li>Select individual candidates to approve, or import all at once.</li>
+            <li>Extracts Japanese names and profile pictures from local <code>.actors</code> folders and <code>.nfo</code> fallback URLs.</li>
+        </ul>
+    </div>
+</div>
+
+
+@if (errorMessage is not null)
+{
+    <div class="alert alert-danger mt-3" style="max-width: 800px;">@errorMessage</div>
+}
+
+@if (infoMessage is not null)
+{
+    <div class="alert alert-info mt-3" style="max-width: 800px;">@infoMessage</div>
+}
+
+@if (lastImportResult is not null)
+{
+    <div class="alert alert-success mt-3" style="max-width: 800px;">
+        Successfully imported @lastImportResult.ImportedCount new actor@(lastImportResult.ImportedCount == 1 ? "" : "s").
+        @lastImportResult.ImagesCached actor headshot@(lastImportResult.ImagesCached == 1 ? " was" : "s were") cached locally.
+    </div>
+}
+
+@if (lastImportResult is { Failures.Count: > 0 })
+{
+    <div class="alert alert-warning mt-3" style="max-width: 800px;">
+        Could not import @lastImportResult.Failures.Count actor@(lastImportResult.Failures.Count == 1 ? "" : "s"):
+        <ul class="mb-0 mt-2">
+            @foreach (var failure in lastImportResult.Failures)
+            {
+                <li><strong>@failure.ActorName</strong> — @failure.Reason</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (lastImportResult is { ImageFailures.Count: > 0 })
+{
+    <div class="alert alert-warning mt-3" style="max-width: 800px;">
+        Could not import @lastImportResult.ImageFailures.Count actor image@(lastImportResult.ImageFailures.Count == 1 ? "" : "s"):
+        <ul class="mb-0 mt-2">
+            @foreach (var failure in lastImportResult.ImageFailures)
+            {
+                <li><strong>@failure.ActorName</strong> — <code>@failure.ImagePath</code>: @failure.Reason</li>
+            }
+        </ul>
+    </div>
+}
+
+@if (scanResult is not null && candidates.Count == 0 && lastImportResult is null)
+{
+    <div class="alert alert-info mt-3" style="max-width: 800px;">
+        Scan complete. Found @scanResult.TotalFound distinct actor name@(scanResult.TotalFound == 1 ? "" : "s") across your movies, and all @scanResult.AlreadyTracked are already tracked in your library.
+    </div>
+}
+
+@if (scanResult is not null && candidates.Count > 0)
+{
+    <div class="alert alert-info mt-3" style="max-width: 800px;">
+        Scan complete. Found @scanResult.TotalFound actors (@scanResult.AlreadyTracked already tracked). @candidates.Count candidate actor@(candidates.Count == 1 ? "" : "s") ready for review:
+    </div>
+}
+
+@if (candidates.Count > 0)
+{
+    <div class="card candidate-card mt-3">
+        <div class="card-header candidate-toolbar">
+            <div class="d-flex align-items-center gap-2">
+                <input type="checkbox"
+                       id="select-all-candidates"
+                       class="form-check-input"
+                       checked="@AllSelected"
+                       @onchange="ToggleSelectAll"
+                       disabled="@(importing || scanning)" />
+                <label for="select-all-candidates" class="form-check-label user-select-none">
+                    Select All (@candidates.Count)
+                </label>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                @if (importing && activeProgress is not null)
+                {
+                    <span class="candidate-progress-label text-muted small me-1">@ProgressLabel</span>
+                    <button type="button" class="btn btn-outline-danger btn-sm me-1" @onclick="CancelOperation">
+                        Cancel
+                    </button>
+                }
+                <button type="button"
+                        class="btn btn-primary btn-sm"
+                        @onclick="ImportSelectedAsync"
+                        disabled="@(selectedKeys.Count == 0 || importing || scanning)">
+                    @(importing ? "Importing…" : $"Import Selected ({selectedKeys.Count})")
+                </button>
+                <button type="button"
+                        class="btn btn-outline-primary btn-sm"
+                        @onclick="ImportAllAsync"
+                        disabled="@(importing || scanning)">
+                    @(importing ? "Importing…" : $"Import All ({candidates.Count})")
+                </button>
+            </div>
+        </div>
+        @if (importing)
+        {
+            <div class="progress candidate-inline-progress" style="height: 4px; border-radius: 0;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                     role="progressbar"
+                     style="width: @ProgressPercentage%"
+                     aria-valuenow="@ProgressPercentage"
+                     aria-valuemin="0"
+                     aria-valuemax="100">
+                </div>
+            </div>
+        }
+
+        <div class="table-responsive">
+            <table class="table candidate-table align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;"></th>
+                        <th style="width: 60px;">Photo</th>
+                        <th>Name</th>
+                        <th>Japanese</th>
+                        <th>Movies</th>
+                        <th>Source</th>
+                        <th style="width: 110px; text-align: right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var candidate in candidates)
+                    {
+                        var isSelected = selectedKeys.Contains(candidate.Key);
+                        <tr class="@(isSelected ? "table-active" : "")">
+                            <td>
+                                <input type="checkbox"
+                                       class="form-check-input candidate-checkbox"
+                                       checked="@isSelected"
+                                       @onchange="() => ToggleSelect(candidate.Key)"
+                                       disabled="@(importing || scanning)" />
+                            </td>
+                            <td>
+                                <div class="candidate-avatar @(candidate.ThumbnailDataUrl != null ? "candidate-avatar-photo" : "")">
+                                    @if (candidate.ThumbnailDataUrl != null)
+                                    {
+                                        <img src="@candidate.ThumbnailDataUrl"
+                                             alt="@candidate.DisplayName"
+                                             loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <span>@Initials(candidate.DisplayName)</span>
+                                    }
+                                </div>
+                            </td>
+                            <td>
+                                <strong>@candidate.DisplayName</strong>
+                                @if (!string.IsNullOrWhiteSpace(candidate.LastName))
+                                {
+                                    <div class="text-muted small">@candidate.FirstName @candidate.LastName</div>
+                                }
+                            </td>
+                            <td>
+                                @if (!string.IsNullOrWhiteSpace(candidate.JapaneseKanji) || !string.IsNullOrWhiteSpace(candidate.JapaneseKana))
+                                {
+                                    <div>@candidate.JapaneseKanji</div>
+                                    <div class="text-muted small">@candidate.JapaneseKana</div>
+                                }
+                                else
+                                {
+                                    <span class="text-muted small fst-italic">—</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary" title="@string.Join(", ", candidate.MovieCodes)">
+                                    @candidate.MovieCount movie@(candidate.MovieCount == 1 ? "" : "s")
+                                </span>
+                            </td>
+                            <td>
+                                <span class="candidate-source-badge">@candidate.Source</span>
+                            </td>
+                            <td style="text-align: right;">
+                                <button type="button"
+                                        class="btn btn-outline-secondary btn-sm"
+                                        @onclick="() => ImportSingleAsync(candidate)"
+                                        disabled="@(importing || scanning)">
+                                    Import
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (recentlyImportedNames.Count > 0)
+{
+    <h2 class="import-section-title">Imported this session</h2>
+    <ul class="import-result-list">
+        @foreach (var name in recentlyImportedNames)
+        {
+            <li><a href="@($"/actors/{Uri.EscapeDataString(name)}")">@name</a></li>
+        }
+    </ul>
+}
+
+@code {
+    private ActorDiscoverySource selectedSource = ActorDiscoverySource.LocalLibrary;
+    private bool scanning;
+    private bool importing;
+    private string? errorMessage;
+    private string? infoMessage;
+    private ActorScanResult? scanResult;
+    private List<DiscoveredActorCandidate> candidates = new();
+    private HashSet<string> selectedKeys = new();
+    private ActorImportResult? lastImportResult;
+    private List<string> recentlyImportedNames = new();
+
+    private TaskProgress? activeProgress;
+    private CancellationTokenSource? activeCts;
+
+    private bool AllSelected => candidates.Count > 0 && selectedKeys.Count == candidates.Count;
+
+    private string ProgressLabel
+    {
+        get
+        {
+            if (activeProgress is { } p)
+            {
+                var stage = !string.IsNullOrWhiteSpace(p.Stage)
+                    ? p.Stage
+                    : (scanning ? "Scanning" : "Importing");
+                return p.Total is { } total && total > 0
+                    ? $"{stage} ({p.Current}/{total})…"
+                    : $"{stage}…";
+            }
+            return scanning ? "Scanning…" : "Importing…";
+        }
+    }
+
+    private int ProgressPercentage
+    {
+        get
+        {
+            if (activeProgress is { Total: { } total, Current: var current } && total > 0)
+            {
+                return Math.Clamp((int)Math.Round((double)current / total * 100), 0, 100);
+            }
+            return 100;
+        }
+    }
+
+    private async Task ScanAsync()
+    {
+        activeCts?.Cancel();
+        activeCts?.Dispose();
+        activeCts = new CancellationTokenSource();
+        var ct = activeCts.Token;
+
+        scanning = true;
+        errorMessage = null;
+        infoMessage = null;
+        lastImportResult = null;
+        activeProgress = new TaskProgress(0, null, "Scanning movies");
+
+        var progress = new Progress<TaskProgress>(p =>
+        {
+            activeProgress = p;
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            scanResult = await DiscoveryService.ScanAsync(selectedSource, progress, ct);
+            candidates = scanResult.Candidates.ToList();
+            selectedKeys.Clear();
+        }
+        catch (OperationCanceledException)
+        {
+            infoMessage = "Scan was cancelled.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to scan local library for actors: {ex.Message}";
+        }
+        finally
+        {
+            scanning = false;
+            activeProgress = null;
+        }
+    }
+
+    private void CancelOperation()
+    {
+        activeCts?.Cancel();
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = e.Value as bool? ?? false;
+        if (isChecked)
+        {
+            selectedKeys = candidates.Select(c => c.Key).ToHashSet();
+        }
+        else
+        {
+            selectedKeys.Clear();
+        }
+    }
+
+    private void ToggleSelect(string key)
+    {
+        if (selectedKeys.Contains(key))
+        {
+            selectedKeys.Remove(key);
+        }
+        else
+        {
+            selectedKeys.Add(key);
+        }
+    }
+
+    private async Task ImportSelectedAsync()
+    {
+        var toImport = candidates.Where(c => selectedKeys.Contains(c.Key)).ToList();
+        if (toImport.Count == 0) return;
+
+        await RunImportAsync(toImport);
+    }
+
+    private async Task ImportAllAsync()
+    {
+        if (candidates.Count == 0) return;
+        await RunImportAsync(candidates.ToList());
+    }
+
+    private async Task ImportSingleAsync(DiscoveredActorCandidate candidate)
+    {
+        await RunImportAsync([candidate]);
+    }
+
+    private async Task RunImportAsync(IReadOnlyList<DiscoveredActorCandidate> toImport)
+    {
+        activeCts?.Cancel();
+        activeCts?.Dispose();
+        activeCts = new CancellationTokenSource();
+        var ct = activeCts.Token;
+
+        importing = true;
+        errorMessage = null;
+        infoMessage = null;
+        lastImportResult = null;
+        activeProgress = new TaskProgress(0, toImport.Count, "Importing actors");
+        StateHasChanged();
+
+        var progress = new Progress<TaskProgress>(p =>
+        {
+            activeProgress = p;
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            var result = await DiscoveryService.ImportCandidatesAsync(toImport, progress, ct);
+            lastImportResult = result;
+
+            var importedKeys = toImport.Select(c => c.Key).ToHashSet();
+            candidates.RemoveAll(c => importedKeys.Contains(c.Key));
+            selectedKeys.RemoveWhere(importedKeys.Contains);
+
+            foreach (var name in result.ImportedNames)
+            {
+                if (!recentlyImportedNames.Contains(name, StringComparer.OrdinalIgnoreCase))
+                {
+                    recentlyImportedNames.Add(name);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            infoMessage = "Import was cancelled.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to import actors: {ex.Message}";
+        }
+        finally
+        {
+            importing = false;
+            activeProgress = null;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        activeCts?.Cancel();
+        activeCts?.Dispose();
+    }
+
+    private static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant()
+        };
+    }
+}

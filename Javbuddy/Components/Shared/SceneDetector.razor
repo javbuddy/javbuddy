@@ -1,0 +1,317 @@
+@using Javbuddy.Services
+@using Javbuddy.Services.VideoRepair
+@inject ISceneDetectionService Detection
+@implements IDisposable
+
+@* Suggested scene boundaries from FFmpeg signal detection: start a scan, follow it,
+   and accept or dismiss what it finds, already while it runs. Nothing becomes a scene
+   until accepted. Accepting the first fade to black (or Accept all, when the earliest suggestion is
+   one) asks whether to also add a scene from 0:00 for the intro before it. *@
+<div class="scene-detector @(runningJob is not null || openingPrompt is not null || suggestions.Count > 0 || message is not null ? "scene-detector-expanded" : null)">
+    @if (runningJob is not null)
+    {
+        <p class="scene-detector-status" role="status">
+            Scanning @runningJob.FileName for scene boundaries…
+            @if (runningJob.LatestProgress is { } progress)
+            {
+                <span>@($"{progress.PercentComplete:0}%")</span>
+            }
+        </p>
+    }
+    @if (openingPrompt is not null)
+    {
+        <div class="scene-detector-opening-prompt">
+            <p class="scene-detector-opening-question">
+                Also add a scene from 0:00 to @SceneTimeFormat.Format(openingPrompt.Seconds), before the first fade to black?
+            </p>
+            <div class="scene-detector-opening-actions">
+                <button type="button" class="scene-editor-btn scene-detector-opening-insert-btn" @onclick="() => ConfirmOpeningAsync(insert: true)" disabled="@busy">Insert before and accept</button>
+                <button type="button" class="scene-editor-btn scene-detector-opening-skip-btn" @onclick="() => ConfirmOpeningAsync(insert: false)" disabled="@busy">Accept without inserting</button>
+                <button type="button" class="scene-editor-btn scene-detector-opening-cancel-btn" @onclick="CancelOpening" disabled="@busy">Cancel</button>
+            </div>
+        </div>
+    }
+    else if (suggestions.Count > 0)
+    {
+        @* While a scan runs, what it has found so far is listed already. *@
+        <div class="scene-detector-header">
+            <span class="scene-detector-heading">@suggestions.Count suggested @(suggestions.Count == 1 ? "boundary" : "boundaries")@(runningJob is not null ? " so far" : null)</span>
+            <button type="button" class="scene-editor-btn scene-detector-accept-all-btn" @onclick="RequestAcceptAllAsync" disabled="@busy">@(runningJob is not null ? "Accept all so far" : "Accept all")</button>
+        </div>
+        <ul class="scene-detector-list">
+            @foreach (var suggestion in suggestions)
+            {
+                <li class="scene-detector-item" @key="suggestion.Id">
+                    <button type="button" class="scene-detector-time" @onclick="() => OnSeek.InvokeAsync(suggestion.Seconds)" title="Jump here">@SceneTimeFormat.Format(suggestion.Seconds)</button>
+                    <span class="scene-detector-source">@(suggestion.Source == Javbuddy.Models.SceneSuggestionSource.Black ? "fade to black" : "hard cut")</span>
+                    <button type="button" class="scene-detector-icon-btn scene-detector-accept-btn" @onclick="() => RequestAcceptAsync(suggestion)" disabled="@busy" aria-label="Accept @SceneTimeFormat.Format(suggestion.Seconds)" title="Start a scene here">✓</button>
+                    <button type="button" class="scene-detector-icon-btn scene-detector-dismiss-btn" @onclick="() => DismissAsync(suggestion)" disabled="@busy" aria-label="Dismiss @SceneTimeFormat.Format(suggestion.Seconds)" title="Dismiss (won't be suggested again)">×</button>
+                </li>
+            }
+        </ul>
+    }
+    else if (runningJob is null)
+    {
+        <button type="button" class="scene-editor-btn scene-detector-start-btn" @onclick="StartAsync" disabled="@busy" title="Scan the whole video for fades to black and hard cuts, and suggest scene boundaries. Takes a while for long or 8K files; runs in the background.">
+            Detect scenes…
+        </button>
+    }
+    @if (message is not null)
+    {
+        <p class="@(failed ? "scene-editor-error" : "scene-detector-note")" role="status">@message</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int MovieId { get; set; }
+
+    /// <summary>Raised after suggestions were accepted as scenes, so the editor reloads its list.</summary>
+    [Parameter] public EventCallback OnScenesAdded { get; set; }
+
+    /// <summary>The pending suggestions, whenever they change (for the timeline's ghost markers).</summary>
+    [Parameter] public EventCallback<IReadOnlyList<SceneSuggestionItem>> OnSuggestionsChanged { get; set; }
+
+    [Parameter] public EventCallback<double> OnSeek { get; set; }
+
+    /// <summary>Where the movie's earliest scene starts, or null without scenes; accepting a fade to
+    /// black before it offers a scene from 0:00.</summary>
+    [Parameter] public double? FirstSceneStart { get; set; }
+
+    /// <summary>A pending "add a scene from 0:00?" question; a null Suggestion means Accept all.</summary>
+    private sealed record OpeningPrompt(SceneSuggestionItem? Suggestion, double Seconds);
+
+    private IReadOnlyList<SceneSuggestionItem> suggestions = [];
+    private VideoRepairJob? runningJob;
+    private bool busy;
+    private string? message;
+    private bool failed;
+    private OpeningPrompt? openingPrompt;
+    private CancellationTokenSource? pollCts;
+    // Whether the followed scan listed anything, so "none found" isn't said after accepting them all.
+    private bool foundDuringScan;
+    private int loads;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSuggestionsAsync();
+        if (Detection.GetRunningJob(MovieId) is { } job)
+        {
+            Follow(job);
+        }
+    }
+
+    private async Task LoadSuggestionsAsync()
+    {
+        loads++;
+        suggestions = await Detection.GetSuggestionsAsync(MovieId);
+        foundDuringScan |= runningJob is not null && suggestions.Count > 0;
+        await OnSuggestionsChanged.InvokeAsync(suggestions);
+    }
+
+    /// <summary>Picks up what a running scan stored since the last tick; the host only hears about
+    /// actual changes, so its timeline doesn't re-render every second.</summary>
+    private async Task RefreshSuggestionsAsync()
+    {
+        if (busy) return;
+        var started = loads;
+        var latest = await Detection.GetSuggestionsAsync(MovieId);
+        // An accept/dismiss reloaded the list meanwhile; this read may predate it.
+        if (loads != started) return;
+        if (latest.Select(s => s.Id).SequenceEqual(suggestions.Select(s => s.Id))) return;
+        suggestions = latest;
+        foundDuringScan |= suggestions.Count > 0;
+        await OnSuggestionsChanged.InvokeAsync(suggestions);
+    }
+
+    private async Task StartAsync()
+    {
+        busy = true;
+        message = null;
+        try
+        {
+            Follow(await Detection.StartAsync(MovieId));
+        }
+        catch (InvalidOperationException ex)
+        {
+            Show(ex.Message, isError: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Follow(VideoRepairJob job)
+    {
+        runningJob = job;
+        foundDuringScan = suggestions.Count > 0;
+        pollCts?.Cancel();
+        pollCts = new CancellationTokenSource();
+        _ = PollAsync(job, pollCts.Token);
+    }
+
+    private async Task PollAsync(VideoRepairJob job, CancellationToken ct)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (job.Task is { IsCompleted: false } && await timer.WaitForNextTickAsync(ct))
+            {
+                await InvokeAsync(async () =>
+                {
+                    await RefreshSuggestionsAsync();
+                    StateHasChanged();
+                });
+            }
+            if (ct.IsCancellationRequested || job.Task is null) return;
+
+            string? error;
+            try
+            {
+                var result = await job.Task;
+                error = result.Success ? null : result.ErrorMessage ?? "Scene detection failed.";
+            }
+            catch (OperationCanceledException)
+            {
+                error = "Scene detection was cancelled.";
+            }
+            catch (Exception)
+            {
+                error = "Scene detection failed; see the server log.";
+            }
+
+            await InvokeAsync(async () =>
+            {
+                runningJob = null;
+                await LoadSuggestionsAsync();
+                if (error is not null)
+                {
+                    Show(error, isError: true);
+                }
+                else if (suggestions.Count == 0 && !foundDuringScan)
+                {
+                    Show("No new scene boundaries found.", isError: false);
+                }
+                StateHasChanged();
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private bool AsksForOpeningScene(SceneSuggestionItem suggestion) =>
+        suggestion.Source == Javbuddy.Models.SceneSuggestionSource.Black
+        && suggestion.Seconds > 0
+        && !(FirstSceneStart <= suggestion.Seconds);
+
+    private async Task RequestAcceptAsync(SceneSuggestionItem suggestion)
+    {
+        if (AsksForOpeningScene(suggestion))
+        {
+            openingPrompt = new OpeningPrompt(suggestion, suggestion.Seconds);
+            return;
+        }
+        await AcceptAsync(suggestion, insertOpeningScene: false);
+    }
+
+    private async Task RequestAcceptAllAsync()
+    {
+        if (suggestions.Count > 0 && AsksForOpeningScene(suggestions[0]))
+        {
+            openingPrompt = new OpeningPrompt(null, suggestions[0].Seconds);
+            return;
+        }
+        await AcceptAllAsync(insertOpeningScene: false);
+    }
+
+    private async Task ConfirmOpeningAsync(bool insert)
+    {
+        if (openingPrompt is not { } prompt) return;
+        openingPrompt = null;
+        if (prompt.Suggestion is { } suggestion)
+        {
+            await AcceptAsync(suggestion, insert);
+        }
+        else
+        {
+            await AcceptAllAsync(insert);
+        }
+    }
+
+    private void CancelOpening() => openingPrompt = null;
+
+    private async Task AcceptAsync(SceneSuggestionItem suggestion, bool insertOpeningScene)
+    {
+        busy = true;
+        try
+        {
+            var result = await Detection.AcceptAsync(suggestion.Id, insertOpeningScene);
+            if (!result.Success)
+            {
+                Show(result.ErrorMessage ?? "Couldn't add the scene.", isError: true);
+                if (!insertOpeningScene) return;
+                // The suggestion's scene may have been added even though the one from 0:00 wasn't.
+            }
+            else
+            {
+                message = null;
+            }
+            await LoadSuggestionsAsync();
+            await OnScenesAdded.InvokeAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task AcceptAllAsync(bool insertOpeningScene)
+    {
+        busy = true;
+        try
+        {
+            var result = await Detection.AcceptAllAsync(MovieId, insertOpeningScene);
+            if (result.Errors.Count > 0)
+            {
+                Show($"Added {result.Accepted}; skipped {string.Join("; ", result.Errors)}", isError: true);
+            }
+            else
+            {
+                message = null;
+            }
+            await LoadSuggestionsAsync();
+            await OnScenesAdded.InvokeAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DismissAsync(SceneSuggestionItem suggestion)
+    {
+        busy = true;
+        try
+        {
+            await Detection.DismissAsync(suggestion.Id);
+            await LoadSuggestionsAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Show(string text, bool isError)
+    {
+        message = text;
+        failed = isError;
+    }
+
+    public void Dispose()
+    {
+        pollCts?.Cancel();
+        pollCts?.Dispose();
+    }
+}

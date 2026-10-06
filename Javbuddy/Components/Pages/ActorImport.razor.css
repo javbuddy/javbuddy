@@ -1,0 +1,208 @@
+.import-title {
+    text-align: center;
+    font-weight: 400;
+    font-size: 2.4rem;
+    color: #6c757d;
+    margin: 1.5rem 0 2.5rem;
+}
+
+.import-tips-card,
+.source-card {
+    max-width: 800px;
+}
+
+.import-tips-title,
+.import-section-title {
+    font-size: 1.25rem;
+    font-weight: 400;
+    color: #333;
+    margin-bottom: 0.75rem;
+}
+
+.import-section-title {
+    margin-top: 2rem;
+}
+
+.import-tips-card ul {
+    margin-bottom: 0;
+}
+
+.import-tips-card li {
+    margin-bottom: 0.4rem;
+}
+
+.import-tips-card code {
+    background: #eef0f2;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+}
+
+.import-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.import-result-list {
+    max-width: 640px;
+}
+
+.candidate-card {
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.candidate-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.candidate-table {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+.candidate-table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 0.75rem 1rem;
+    color: #495057;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.candidate-table td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+}
+
+.candidate-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background-color: #2f8fd6;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.candidate-avatar-photo {
+    background-color: #2b2f38;
+}
+
+.candidate-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.candidate-source-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background-color: #e9ecef;
+    color: #495057;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+    white-space: nowrap;
+}
+
+/* Dark theme overrides */
+:root[data-theme="dark"] .import-title {
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .import-tips-title,
+:root[data-theme="dark"] .import-section-title {
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .source-card,
+:root[data-theme="dark"] .candidate-card {
+    background-color: #242833;
+    border-color: #363c4a;
+}
+
+:root[data-theme="dark"] .import-tips-card code,
+:root[data-theme="dark"] .source-card code {
+    background: #2a2f3b;
+    color: #e7a9d0;
+}
+
+:root[data-theme="dark"] .candidate-source-badge {
+    background-color: #2b303c;
+    color: #cfd3de;
+    border-color: #3d4354;
+}
+
+:root[data-theme="dark"] .candidate-toolbar {
+    background-color: #20242e;
+    border-bottom-color: #363c4a;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .candidate-table {
+    --bs-table-bg: transparent;
+    --bs-table-color: #dfe2e8;
+    --bs-table-border-color: #363c4a;
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
+    --bs-table-striped-color: #dfe2e8;
+    --bs-table-active-bg: rgba(255, 255, 255, 0.06);
+    --bs-table-active-color: #dfe2e8;
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.04);
+    --bs-table-hover-color: #dfe2e8;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .candidate-table th {
+    color: #b9bfd1;
+    border-bottom-color: #3d4452;
+}
+
+:root[data-theme="dark"] .candidate-table td {
+    border-color: #363c4a;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .candidate-table tr.table-active {
+    --bs-table-accent-bg: rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme="dark"] .form-check-input {
+    background-color: #1b1e27;
+    border-color: #4a5062;
+}
+
+:root[data-theme="dark"] .form-check-input:checked {
+    background-color: #1b6ec2;
+    border-color: #1861ac;
+}
+
+:root[data-theme="dark"] .candidate-avatar:not(.candidate-avatar-photo) {
+    background-color: #2f8fd6;
+    color: #ffffff;
+}
+
+:root[data-theme="dark"] .candidate-inline-progress,
+:root[data-theme="dark"] .scan-inline-progress {
+    background-color: #1b1e27;
+}
+
+:root[data-theme="dark"] .candidate-progress-label,
+:root[data-theme="dark"] .scan-progress-label {
+    color: #9aa1b2 !important;
+}

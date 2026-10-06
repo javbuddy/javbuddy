@@ -1,0 +1,192 @@
+.mediainfo-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.55);
+    outline: none;
+    padding: 1.5rem;
+}
+
+.mediainfo-modal-panel {
+    width: 100%;
+    max-width: 900px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    border-radius: 6px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.mediainfo-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+.mediainfo-modal-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.mediainfo-modal-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    color: #6c757d;
+}
+
+    .mediainfo-modal-close-btn:hover {
+        background-color: #eef0f2;
+        color: #212529;
+    }
+
+.mediainfo-modal-body {
+    padding: 1.25rem;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.mediainfo-version-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+    flex-wrap: wrap;
+}
+
+.mediainfo-version-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    background-color: #f8f9fa;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.mediainfo-version-tab:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.mediainfo-version-tab.active {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.mediainfo-version-tab .version-tag {
+    font-weight: 600;
+}
+
+.mediainfo-version-tab .version-badge {
+    font-size: 0.75rem;
+    opacity: 0.85;
+}
+
+.mediainfo-version-tab .version-badge-primary {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.3rem;
+    border-radius: 3px;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.mediainfo-version-tab.active .version-badge-primary {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+:root[data-theme="dark"] .mediainfo-version-tabs {
+    border-color: #363c4a;
+}
+
+:root[data-theme="dark"] .mediainfo-version-tab {
+    background-color: #2b303c;
+    border-color: #3f4756;
+    color: #c5cbd8;
+}
+
+:root[data-theme="dark"] .mediainfo-version-tab:hover {
+    background-color: #353b49;
+    border-color: #4f586b;
+}
+
+:root[data-theme="dark"] .mediainfo-version-tab.active {
+    background-color: #2f8fd6;
+    border-color: #2f8fd6;
+    color: #ffffff;
+}
+
+.mediainfo-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+.mediainfo-full {
+    font-size: 0.8rem;
+    line-height: 1.4;
+    white-space: pre;
+}
+
+:root[data-theme="dark"] .mediainfo-modal-panel {
+    background-color: #242833;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .mediainfo-modal-header,
+:root[data-theme="dark"] .mediainfo-modal-footer {
+    border-color: #363c4a;
+}
+
+:root[data-theme="dark"] .mediainfo-modal-close-btn {
+    color: #b9bfd1;
+}
+
+    :root[data-theme="dark"] .mediainfo-modal-close-btn:hover {
+        background-color: #3a4150;
+        color: #ffffff;
+    }
+
+@media (max-width: 700px) {
+    .mediainfo-modal-backdrop {
+        padding: 0;
+    }
+
+    .mediainfo-modal-panel {
+        max-width: none;
+        height: 100%;
+        max-height: none;
+        border-radius: 0;
+    }
+}
+
+.mediainfo-version-tab .version-badge-vr {
+    font-weight: 600;
+}

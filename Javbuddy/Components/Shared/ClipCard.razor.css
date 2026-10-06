@@ -1,0 +1,220 @@
+/* One scene, highlight or apex card: moved here from the Scenes wall, which lays
+   the cards out; the class names stay scene-wall-* because the wall's VirtualizedGrid and its
+   JS find the cards by them. */
+
+.scene-wall-card {
+    display: flex;
+    color: #212529;
+    flex-direction: column;
+    border-radius: 6px;
+    overflow: hidden;
+    background-color: var(--scene-wall-card-bg, #fff);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    text-decoration: none;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.scene-wall-card:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+.scene-wall-media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background-color: #212529;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.scene-wall-duration {
+    position: absolute;
+    right: 0.35rem;
+    bottom: 0.35rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 3px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.scene-wall-fav {
+    position: absolute;
+    top: 0.35rem;
+    left: 0.35rem;
+    color: #e03131;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6));
+}
+
+/* How many apexes the clip contains, styled like Movie Detail's scene cards. */
+.scene-wall-apex-count {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid #f76707;
+    border-radius: 999px;
+    background-color: rgba(70, 30, 6, 0.9);
+    color: #ffa94d;
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+}
+
+.scene-wall-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.5rem 0.6rem 0.6rem;
+    min-width: 0;
+}
+
+.scene-wall-scene-title {
+    font-weight: 600;
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scene-wall-movie,
+.scene-wall-actors {
+    height: 1.125rem;
+    color: #6c757d;
+    font-size: 0.75rem;
+    line-height: 1.125rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scene-wall-code {
+    font-weight: 600;
+    color: #2f8fd6;
+}
+
+/* The tag row keeps its one line in the card while, hovered, it grows upward over it. */
+.scene-wall-tags-slot {
+    position: relative;
+    height: 1.125rem;
+}
+
+.scene-wall-tags {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.25rem;
+    height: 1.125rem;
+    overflow: hidden;
+}
+
+/* The chips past the +N badge, which ClipCard.razor.js's measureTagOverflow marks. */
+.scene-wall-tag[data-cut] {
+    display: none;
+}
+
+.scene-wall-tags-more {
+    display: none;
+    flex-shrink: 0;
+    padding: 0 0.4rem;
+    line-height: 1rem;
+    border: 1px solid #adb5bd;
+    border-radius: 999px;
+    background-color: #f1f3f5;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.scene-wall-tags-more::after {
+    content: attr(data-count);
+}
+
+.scene-wall-tags[data-overflow] .scene-wall-tags-more {
+    display: block;
+}
+
+/* Hovering the +N badge opens the row into a tray over the card's text and preview, showing every chip,
+   until the pointer leaves it (ClipCard.razor.js sets data-open); past 10rem it scrolls. Its padding
+   lines the chips up with the row's. */
+.scene-wall-tags[data-overflow][data-open] {
+    left: -0.6rem;
+    right: -0.6rem;
+    bottom: -0.6rem;
+    z-index: 2;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    height: auto;
+    max-height: 10rem;
+    overflow: hidden auto;
+    padding: 0.45rem 0.6rem 0.6rem;
+    border-top: 1px solid #dee2e6;
+    background-color: var(--scene-wall-card-bg, #fff);
+    box-shadow: 0 -6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.scene-wall-tags[data-overflow][data-open] .scene-wall-tag[data-cut] {
+    display: block;
+}
+
+.scene-wall-tags[data-overflow][data-open] .scene-wall-tags-more {
+    display: none;
+}
+
+.scene-wall-tag {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 0 0.4rem;
+    line-height: 1rem;
+    border: 1px solid #dee2e6;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    color: #495057;
+}
+
+/* A tag rolled up from the clip's highlights or apexes: dashed and muted like the clip
+   editor's implied chips (ImplicitChips), after the clip's own. */
+.scene-wall-tag-implicit {
+    border-style: dashed;
+    font-style: italic;
+    color: #868e96;
+    cursor: help;
+}
+
+:root[data-theme="dark"] .scene-wall-card {
+    --scene-wall-card-bg: #242833;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .scene-wall-tag {
+    border-color: #3d4354;
+    color: #b9bfd1;
+}
+
+:root[data-theme="dark"] .scene-wall-tag-implicit {
+    color: #8a91a5;
+}
+
+:root[data-theme="dark"] .scene-wall-tags-more {
+    border-color: #5c6378;
+    background-color: #313645;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .scene-wall-tags[data-overflow][data-open] {
+    border-top-color: #3d4354;
+    box-shadow: 0 -6px 12px rgba(0, 0, 0, 0.45);
+}
+
+/* A highlight card: the teal edge of the timeline's highlight track. */
+.scene-wall-card-highlight {
+    border-left: 3px solid #20c997;
+}

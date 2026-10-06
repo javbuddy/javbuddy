@@ -1,0 +1,58 @@
+@* Modal delete confirmation, shared by the scene editor and the highlight editor
+. Render it only while a delete is pending. Esc and backdrop clicks cancel and stop
+   here, so they don't also close a player modal around it; Cancel is focused on open so Esc works
+   without a click first. The Review shortcut and seek-key guards look for .delete-confirm-backdrop.
+   Themed by the --scene-editor-* custom properties. *@
+<div class="delete-confirm-backdrop" role="presentation" @onclick="CancelAsync" @onclick:stopPropagation="true"
+     @onkeydown="HandleKeyDownAsync" @onkeydown:stopPropagation="true">
+    <div class="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="@titleId" @onclick:stopPropagation="true">
+        <h2 id="@titleId">Delete "@ItemName"?</h2>
+        @if (Message is not null)
+        {
+            <p>@Message</p>
+        }
+        @ChildContent
+        <div class="delete-confirm-actions">
+            <button type="button" class="delete-confirm-btn delete-confirm-cancel-btn" @ref="cancelButton" @onclick="CancelAsync" disabled="@Busy">Cancel</button>
+            <button type="button" class="delete-confirm-btn delete-confirm-confirm-btn" @onclick="OnConfirm" disabled="@Busy">Delete</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>What's being deleted, shown as <c>Delete "ItemName"?</c></summary>
+    [Parameter, EditorRequired] public string ItemName { get; set; } = default!;
+
+    /// <summary>Optional line under the title, e.g. what else gets deleted.</summary>
+    [Parameter] public string? Message { get; set; }
+
+    /// <summary>Optional extra content between the message and the buttons, e.g. Movie Detail's
+    /// "Delete files from disk" toggle and file list.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Disables both buttons (and cancelling) while the delete runs.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback OnConfirm { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private readonly string titleId = "delete-confirm-title-" + Guid.NewGuid().ToString("N");
+    private ElementReference cancelButton;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            await cancelButton.FocusAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private Task CancelAsync() => Busy ? Task.CompletedTask : OnCancel.InvokeAsync();
+
+    private Task HandleKeyDownAsync(KeyboardEventArgs e) => e.Key == "Escape" ? CancelAsync() : Task.CompletedTask;
+}

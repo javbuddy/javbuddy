@@ -1,0 +1,405 @@
+@using System.Globalization
+@using Javbuddy.Services
+@inject IServiceProvider ServiceProvider
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (photoService is not null)
+{
+<section class="actor-photo-gallery card mb-4 @(isGalleryExpanded ? "actor-photo-gallery-expanded" : null)">
+    <div class="card-body">
+        <div class="actor-photo-gallery-header">
+            <h2 class="card-title">Photos <span class="actor-photo-count">(@gallery.Photos.Count)</span></h2>
+            <div class="actor-photo-gallery-header-actions">
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ToggleAlbumEditor">Albums</button>
+                <button type="button" class="btn btn-primary btn-sm" @onclick="() => showUploadModal = true">Add photos</button>
+            </div>
+        </div>
+
+        @if (errorMessage is not null)
+        {
+            <div class="alert alert-danger py-2">@errorMessage</div>
+        }
+
+        @if (showAlbumEditor)
+        {
+            <div class="actor-photo-album-editor">
+                <div class="input-group input-group-sm">
+                    <input class="form-control" @bind="newAlbumName" placeholder="New album name" maxlength="100" />
+                    <button class="btn btn-outline-primary" @onclick="CreateAlbumAsync">Create</button>
+                </div>
+                @if (activeAlbumId is { } selectedAlbumId)
+                {
+                    <div class="actor-photo-selected-album-actions">
+                        <input class="form-control form-control-sm" @bind="renameAlbumName" maxlength="100" aria-label="Album name" />
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="RenameAlbumAsync">Rename</button>
+                        <button class="btn btn-outline-danger btn-sm" @onclick="DeleteAlbumAsync">Delete album and photos</button>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="actor-photo-album-pills" role="group" aria-label="Photo album filter">
+            <button class="actor-photo-album-pill @(activeAlbumId is null && !showUncategorized ? "active" : "")" @onclick="ShowAll">All (@gallery.Photos.Count)</button>
+            @if (UncategorizedCount > 0)
+            {
+                <button class="actor-photo-album-pill @(showUncategorized ? "active" : "")" @onclick="ShowUncategorized">Uncategorized (@UncategorizedCount)</button>
+            }
+            @foreach (var album in gallery.Albums)
+            {
+                <button class="actor-photo-album-pill @(activeAlbumId == album.Id ? "active" : "")" @onclick="() => SelectAlbum(album)">@album.Name (@album.PhotoCount)</button>
+            }
+        </div>
+
+        @if (filteredPhotos.Count == 0)
+        {
+            <p class="text-muted mb-0">No photos in this selection yet.</p>
+        }
+        else
+        {
+            <div class="actor-photo-grid-preview" @ref="galleryGridRef">
+                <div class="actor-photos-justified-grid">
+                    @for (var i = 0; i < filteredPhotos.Count; i++)
+                    {
+                        var index = i;
+                        var photo = filteredPhotos[index];
+                        <div class="actor-photo-tile"
+                             @key="photo.Id"
+                             style="--ar: @(photo.AspectRatio.ToString("0.####", CultureInfo.InvariantCulture));"
+                             @onclick="() => OpenLightbox(index)">
+                            <img class="actor-photo-tile-img js-lazy-gallery-img"
+                                 data-src="@PhotoUrl(photo.Id, "thumb")"
+                                 alt="@(!string.IsNullOrEmpty(ActorName) ? ActorName : "Photo") @(index + 1)"
+                                 decoding="async" />
+                        </div>
+                    }
+                </div>
+            </div>
+            @* Plain inline <script>, not JS-interop: runs synchronously as the browser parses this
+               HTML, before the interactive circuit connects (matching App.razor's theme/sidebar
+               flicker-prevention scripts). Loads whichever thumbnails the "show 5 rows" CSS
+               collapse (ActorPhotoGallery.razor.css) currently renders within the visible grid
+               height, so visible photos never wait on the circuit/JS module. *@
+            <script>
+                (function () {
+                    var grid = document.querySelector('.actor-photo-grid-preview .actor-photos-justified-grid');
+                    if (!grid) return;
+                    var maxHeight = grid.offsetHeight || 1120;
+                    grid.querySelectorAll('.actor-photo-tile').forEach(function (tile) {
+                        if (tile.offsetTop >= maxHeight) return;
+                        var img = tile.querySelector('img[data-src]');
+                        if (img && !img.src) {
+                            img.src = img.dataset.src;
+                            img.classList.add('loaded');
+                        }
+                    });
+                })();
+            </script>
+            @if (filteredPhotos.Count > 5)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm actor-photo-gallery-expand" @onclick="ToggleGalleryExpansion">
+                    @(isGalleryExpanded ? "Show fewer photos" : $"Show all {filteredPhotos.Count} photos")
+                </button>
+            }
+        }
+    </div>
+</section>
+
+@if (ActiveLightboxPhoto is not null)
+{
+    <GalleryLightbox Count="filteredPhotos.Count"
+                     @bind-Index="activeLightboxIndex"
+                     ImageUrl="@(i => PhotoUrl(filteredPhotos[i].Id, "full"))"
+                     OriginalUrl="@(i => filteredPhotos[i].HasOriginal ? PhotoUrl(filteredPhotos[i].Id, "original") : null)"
+                     ImageAlt="@(i => $"Photo {i + 1}")"
+                     ItemName="photo"
+                     OnClose="CloseLightbox">
+        <Actions Context="i">
+            <button type="button" class="btn btn-primary btn-sm" @onclick="() => OpenPortraitEditorAsync(filteredPhotos[i].Id)">Set portrait</button>
+            <select class="form-select form-select-sm actor-photo-lightbox-move" value="@filteredPhotos[i].AlbumId" @onchange="eventArgs => MovePhotoAsync(filteredPhotos[i].Id, eventArgs.Value?.ToString())" aria-label="Move photo">
+                <option value="">Uncategorized</option>
+                @foreach (var album in gallery.Albums)
+                {
+                    <option value="@album.Id">@album.Name</option>
+                }
+            </select>
+            <button type="button" class="btn btn-outline-light btn-sm" @onclick="() => DeletePhotoAsync(filteredPhotos[i].Id)">Delete</button>
+        </Actions>
+    </GalleryLightbox>
+}
+
+<ActorPhotoUploadModal Show="@showUploadModal"
+                       ActorId="@ActorId"
+                       ActorName="@ActorName"
+                       Albums="@gallery.Albums"
+                       OnClose="() => showUploadModal = false"
+                       OnUploaded="ReloadAsync" />
+}
+
+@code {
+    [Parameter] public int ActorId { get; set; }
+    [Parameter] public string ActorName { get; set; } = string.Empty;
+    [Parameter] public EventCallback<byte[]> OnPortraitEditorRequested { get; set; }
+
+    private ActorPhotoGalleryData gallery = new([], []);
+    private List<ActorPhotoSummary> filteredPhotos = [];
+    private int? activeAlbumId;
+    private bool showUncategorized;
+    private bool isGalleryExpanded;
+    private bool showAlbumEditor;
+    private bool showUploadModal;
+    private string newAlbumName = string.Empty;
+    private string renameAlbumName = string.Empty;
+    private string? errorMessage;
+    private int loadedActorId;
+    private IActorPhotoService? photoService;
+    private ElementReference galleryGridRef;
+    private IJSObjectReference? jsModule;
+
+    private int activeLightboxIndex = -1;
+
+    private int UncategorizedCount => gallery.Photos.Count(photo => photo.AlbumId is null);
+
+    private ActorPhotoSummary? ActiveLightboxPhoto =>
+        activeLightboxIndex >= 0 && activeLightboxIndex < filteredPhotos.Count ? filteredPhotos[activeLightboxIndex] : null;
+
+    protected override void OnInitialized() => photoService = ServiceProvider.GetService<IActorPhotoService>();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ActorId != loadedActorId)
+        {
+            loadedActorId = ActorId;
+            activeAlbumId = null;
+            showUncategorized = false;
+            isGalleryExpanded = false;
+            CloseLightbox();
+            await ReloadAsync();
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        if (ActorId <= 0) return;
+        if (photoService is null) return;
+        gallery = await photoService.GetGalleryAsync(ActorId);
+        ApplyFilter();
+    }
+
+    // For an external caller reaching in via @ref (e.g. after metadata enrichment adds photos
+    // elsewhere on the page) — unlike an internal EventCallback such as the upload modal's
+    // OnUploaded, this doesn't route through this component's own event dispatch, so the
+    // re-render has to be requested explicitly.
+    public async Task RefreshAsync()
+    {
+        await ReloadAsync();
+        StateHasChanged();
+    }
+
+    private void ShowAll()
+    {
+        activeAlbumId = null;
+        showUncategorized = false;
+        renameAlbumName = string.Empty;
+        CloseLightbox();
+        ApplyFilter();
+    }
+
+    private void ShowUncategorized()
+    {
+        activeAlbumId = null;
+        showUncategorized = true;
+        renameAlbumName = string.Empty;
+        CloseLightbox();
+        ApplyFilter();
+    }
+
+    private void SelectAlbum(ActorPhotoAlbumSummary album)
+    {
+        if (activeAlbumId == album.Id)
+        {
+            ShowAll();
+            return;
+        }
+
+        activeAlbumId = album.Id;
+        showUncategorized = false;
+        renameAlbumName = album.Name;
+        CloseLightbox();
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        var photos = gallery.Photos.Where(photo =>
+            showUncategorized ? photo.AlbumId is null : activeAlbumId is null || photo.AlbumId == activeAlbumId);
+        // An album is viewed like a photobook, page 1 first, so it keeps upload order; the
+        // All/Uncategorized views stay newest first, as the service returns them.
+        filteredPhotos = activeAlbumId is null
+            ? photos.ToList()
+            : photos.OrderBy(photo => photo.UploadedAt).ThenBy(photo => photo.Id).ToList();
+    }
+
+    private void ToggleGalleryExpansion() => isGalleryExpanded = !isGalleryExpanded;
+
+    private void ToggleAlbumEditor() => showAlbumEditor = !showAlbumEditor;
+
+    private void OpenLightbox(int index)
+    {
+        if (index >= 0 && index < filteredPhotos.Count)
+        {
+            activeLightboxIndex = index;
+        }
+    }
+
+    private void CloseLightbox()
+    {
+        activeLightboxIndex = -1;
+    }
+
+    private async Task CreateAlbumAsync()
+    {
+        if (photoService is null) return;
+        var created = await photoService.CreateAlbumAsync(ActorId, newAlbumName);
+        errorMessage = created.Result.Success ? null : created.Result.ErrorMessage;
+        if (!created.Result.Success) return;
+        newAlbumName = string.Empty;
+        await ReloadAsync();
+        if (created.Album is not null) SelectAlbum(created.Album);
+    }
+
+    private async Task RenameAlbumAsync()
+    {
+        if (activeAlbumId is not { } albumId) return;
+        if (photoService is null) return;
+        var result = await photoService.RenameAlbumAsync(ActorId, albumId, renameAlbumName);
+        errorMessage = result.Success ? null : result.ErrorMessage;
+        if (result.Success) await ReloadAsync();
+    }
+
+    private async Task DeleteAlbumAsync()
+    {
+        if (activeAlbumId is not { } albumId) return;
+        if (photoService is null) return;
+        var result = await photoService.DeleteAlbumAsync(ActorId, albumId);
+        errorMessage = result.Success ? null : result.ErrorMessage;
+        if (!result.Success) return;
+        ShowAll();
+        await ReloadAsync();
+    }
+
+    private async Task MovePhotoAsync(int photoId, string? rawAlbumId)
+    {
+        int? albumId = int.TryParse(rawAlbumId, out var parsedAlbumId) ? parsedAlbumId : null;
+        if (photoService is null) return;
+        var result = await photoService.MovePhotoAsync(ActorId, photoId, albumId);
+        errorMessage = result.Success ? null : result.ErrorMessage;
+        if (result.Success)
+        {
+            await ReloadAsync();
+            if (activeLightboxIndex >= 0)
+            {
+                var idx = filteredPhotos.FindIndex(p => p.Id == photoId);
+                if (idx >= 0)
+                {
+                    activeLightboxIndex = idx;
+                }
+                else if (filteredPhotos.Count > 0)
+                {
+                    activeLightboxIndex = Math.Clamp(activeLightboxIndex, 0, filteredPhotos.Count - 1);
+                }
+                else
+                {
+                    CloseLightbox();
+                }
+            }
+        }
+    }
+
+    private async Task DeletePhotoAsync(int photoId)
+    {
+        if (photoService is null) return;
+        var result = await photoService.DeletePhotoAsync(ActorId, photoId);
+        errorMessage = result.Success ? null : result.ErrorMessage;
+        if (result.Success)
+        {
+            await ReloadAsync();
+            if (activeLightboxIndex >= 0)
+            {
+                if (filteredPhotos.Count == 0)
+                {
+                    CloseLightbox();
+                }
+                else
+                {
+                    activeLightboxIndex = Math.Clamp(activeLightboxIndex, 0, filteredPhotos.Count - 1);
+                }
+            }
+        }
+    }
+
+    private async Task OpenPortraitEditorAsync(int photoId)
+    {
+        if (photoService is null) return;
+        var imageBytes = await photoService.GetPhotoBytesAsync(ActorId, photoId);
+        if (imageBytes is null)
+        {
+            errorMessage = "Photo file not found.";
+            return;
+        }
+        errorMessage = null;
+        await OnPortraitEditorRequested.InvokeAsync(imageBytes);
+    }
+
+    private static string PhotoUrl(int photoId, string variant) => $"/actor-photo/{photoId}/{variant}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (filteredPhotos.Count > 0)
+        {
+            if (jsModule is null)
+            {
+                try
+                {
+                    jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ActorPhotoGallery.razor.js");
+                    await jsModule.InvokeVoidAsync("init", galleryGridRef);
+                }
+                catch (JSDisconnectedException)
+                {
+                }
+                catch (Exception)
+                {
+                    // In test or non-browser environments, JS module import may not resolve
+                }
+            }
+            else
+            {
+                try
+                {
+                    await jsModule.InvokeVoidAsync("observe", galleryGridRef);
+                }
+                catch (JSDisconnectedException)
+                {
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("dispose");
+                await jsModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+}

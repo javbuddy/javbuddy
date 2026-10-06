@@ -1,0 +1,183 @@
+@using Javbuddy.Services
+@using Javbuddy.Services.Jellyfin
+@using Javbuddy.Services.SceneMedia
+@using Javbuddy.Services.Trickplay
+@implements IDisposable
+@inject IJellyfinClient JellyfinClient
+@inject IMovieHighlightService HighlightService
+@inject IMovieApexService ApexService
+@inject IHighlightTrickplayService HighlightTrickplay
+@inject SceneMediaQueue SceneMediaQueue
+@inject TrickplayGenerationTracker TrickplayGeneration
+
+@* The Scenes wall's player: plays just one scene or highlight, without Movie
+   Detail's editor, and links there to edit it (on Movie Detail itself, OnEdit opens the editor
+   instead). Its ClipControls replace the browser's controls and
+   the whole-movie scrub bar, so the clip runs from 0:00 to its own length; at its end the player
+   closes, unless Loop restarts it. In a playlist (OnNext set) it shows the position and
+   hands the end, Next and Previous to the page. A scene shows the movie's highlights on its track
+; a highlight doesn't. Both show the movie's apexes inside the clip. A highlight previews from its own denser trickplay
+ once that's generated, switching over live, and from the movie's until then; while
+   the set the preview would use is being generated, the preview shows its progress. *@
+<VideoPlayerShell Show="Clip is not null"
+                  Title="@Clip?.DisplayTitle"
+                  Code="@Clip?.Code"
+                  MovieId="Clip?.MovieId"
+                  ExternalWebUrl="@webUrl"
+                  DurationSeconds="Clip?.DurationSeconds"
+                  StartAtSeconds="Clip?.StartSeconds"
+                  CountdownApexes="countdownApexes"
+                  JumpHighlights="highlights"
+                  JumpApexes="apexes"
+                  NativeControls="false"
+                  SeekMinSeconds="Clip?.StartSeconds"
+                  SeekMaxSeconds="Clip?.EndSeconds"
+                  Shortcuts="@(OnNext.HasDelegate ? PlaylistShortcuts : SingleClipShortcuts)"
+                  OnClose="OnClose">
+    <Controls>
+        @if (Clip is not null)
+        {
+            <ClipControls VideoSelector="video.video-player-video"
+                          ClipKey="@($"{Clip.Kind}:{Clip.Id}")"
+                          StartSeconds="Clip.StartSeconds"
+                          EndSeconds="Clip.EndSeconds"
+                          Highlights="highlights"
+                          Apexes="apexes"
+                          MovieDurationSeconds="Clip.DurationSeconds"
+                          Trickplay="clipGenerating is null ? clipTrickplay ?? context.Trickplay : null"
+                          Generating="clipGenerating ?? (clipTrickplay is null ? context.Generating : null)"
+                          StreamReady="context.StreamReady"
+                          OnEnded="OnEnded.HasDelegate ? OnEnded : OnClose"
+                          OnNext="OnNext"
+                          OnPrevious="OnPrevious"
+                          HasPrevious="Position > 1" />
+        }
+    </Controls>
+    <HeaderActions>
+        @if (Position is { } position && Count is { } count)
+        {
+            <span class="clip-player-position" title="Clip @position of @count">@position / @count</span>
+        }
+        @if (Clip is not null && OnEdit.HasDelegate)
+        {
+            <button type="button" class="clip-player-edit-btn" @onclick="() => OnEdit.InvokeAsync(Clip)" title="Open the full player with the scene editor">Edit</button>
+        }
+        else if (Clip is not null)
+        {
+            <a class="clip-player-edit-btn" href="@Clip.EditUrl" title="Open in Movie Detail's player with the scene editor">Edit in movie</a>
+        }
+    </HeaderActions>
+</VideoPlayerShell>
+
+@code {
+    [Parameter] public PlayerClip? Clip { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>The clip's 1-based place in a playlist, and the playlist's length.</summary>
+    [Parameter] public int? Position { get; set; }
+
+    [Parameter] public int? Count { get; set; }
+
+    /// <summary>The clip played to its end with Loop off; closes the player when not set.</summary>
+    [Parameter] public EventCallback OnEnded { get; set; }
+
+    /// <summary>Set in a playlist: Next / Previous (and N / P) in the clip controls.</summary>
+    [Parameter] public EventCallback OnNext { get; set; }
+
+    [Parameter] public EventCallback OnPrevious { get; set; }
+
+    /// <summary>Set on Movie Detail, which opens its own player with the editor
+    /// instead of following the Edit link back to itself.</summary>
+    [Parameter] public EventCallback<PlayerClip> OnEdit { get; set; }
+
+    // ClipControls' own keys; N / P only in a playlist.
+    private static readonly IReadOnlyList<KeyboardShortcut> SingleClipShortcuts = [KeyboardShortcut.PlayPause];
+    private static readonly IReadOnlyList<KeyboardShortcut> PlaylistShortcuts =
+        [KeyboardShortcut.PlayPause, new(["N"], "Next clip"), new(["P"], "Previous clip (restarts this one when you're more than 3 s in)")];
+
+    private PlayerClip? prevClip;
+    private string? webUrl;
+    private IReadOnlyList<HighlightItem>? highlights;
+    private IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? apexes;
+    // The apexes the clip still reaches, in the movie's time: the countdown mustn't count to one after the clip ends.
+    private IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? countdownApexes;
+    private TrickplayLayout? clipTrickplay;
+    // The highlight's own set while it's being generated.
+    private TrickplayGenerating? clipGenerating;
+    private bool disposed;
+
+    protected override void OnInitialized()
+    {
+        SceneMediaQueue.Generated += OnMediaGenerated;
+        TrickplayGeneration.Changed += OnTrickplayGenerationChanged;
+    }
+
+    private static TrickplayTarget? ClipTarget(PlayerClip? clip) =>
+        clip is { Kind: PlayerClipKind.Highlight, EndSeconds: { } end } ? TrickplayTarget.ForHighlight(clip.MovieId, clip.StartSeconds, end) : null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Clip == prevClip) return;
+        prevClip = Clip;
+        clipTrickplay = null;
+        clipGenerating = ClipTarget(Clip) is { } target ? TrickplayGeneration.Get(target) : null;
+        highlights = Clip is { Kind: PlayerClipKind.Scene }
+            ? await HighlightService.GetHighlightsAsync(Clip.MovieId)
+            : null;
+        apexes = Clip is null ? null : await ApexService.GetApexesAsync(Clip.MovieId);
+        countdownApexes = apexes is not null && Clip?.EndSeconds is { } clipEnd ? apexes.Where(a => a.Seconds < clipEnd).ToList() : apexes;
+        await LoadClipTrickplayAsync(Clip);
+        webUrl = Clip is { JellyfinItemId: { } itemId, JellyfinServerId: { } serverId }
+            ? await JellyfinClient.GetWebUrlAsync(itemId, serverId)
+            : null;
+    }
+
+    private async Task LoadClipTrickplayAsync(PlayerClip? clip)
+    {
+        if (clip is not { Kind: PlayerClipKind.Highlight }) return;
+        try
+        {
+            var loaded = await HighlightTrickplay.GetAsync(clip.Id);
+            // Another clip may have opened meanwhile.
+            if (Clip == clip) clipTrickplay = loaded;
+        }
+        catch (Exception)
+        {
+            // Optional: the movie's trickplay still previews the clip.
+        }
+    }
+
+    // Raised on the queue's worker thread; the highlight's set may be what was just generated.
+    private void OnMediaGenerated(int movieId)
+    {
+        if (disposed || Clip is not { Kind: PlayerClipKind.Highlight } clip || clip.MovieId != movieId || clipTrickplay is not null) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed) return;
+            await LoadClipTrickplayAsync(clip);
+            if (clipTrickplay is not null) StateHasChanged();
+        });
+    }
+
+    // Raised on the generating thread: the highlight's own set started, progressed or ended.
+    private void OnTrickplayGenerationChanged(TrickplayTarget target)
+    {
+        if (disposed || ClipTarget(Clip) != target) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed || ClipTarget(Clip) is not { } current || current != target) return;
+            var clip = Clip;
+            clipGenerating = TrickplayGeneration.Get(target);
+            if (clipGenerating is null && clipTrickplay is null) await LoadClipTrickplayAsync(clip);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        SceneMediaQueue.Generated -= OnMediaGenerated;
+        TrickplayGeneration.Changed -= OnTrickplayGenerationChanged;
+    }
+}

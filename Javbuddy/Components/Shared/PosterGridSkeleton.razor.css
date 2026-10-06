@@ -1,0 +1,190 @@
+/* Poster skeleton shimmer: two rows of placeholder cards, column count matched to the
+   container width (narrower layouts hide the cards past their second row). */
+.skeleton-wrapper {
+    container-type: inline-size;
+    width: 100%;
+    margin-bottom: 1.5rem;
+}
+
+.skeleton-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.85rem;
+    width: 100%;
+}
+
+@container (max-width: 700px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 5) {
+        display: none;
+    }
+}
+
+@container (min-width: 701px) and (max-width: 854px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 9) {
+        display: none;
+    }
+}
+
+@container (min-width: 855px) and (max-width: 1028px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 11) {
+        display: none;
+    }
+}
+
+@container (min-width: 1029px) and (max-width: 1201px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 13) {
+        display: none;
+    }
+}
+
+@container (min-width: 1202px) and (max-width: 1375px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(7, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 15) {
+        display: none;
+    }
+}
+
+@container (min-width: 1376px) and (max-width: 1548px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(8, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 17) {
+        display: none;
+    }
+}
+
+@container (min-width: 1549px) and (max-width: 1722px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(9, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 19) {
+        display: none;
+    }
+}
+
+@container (min-width: 1723px) and (max-width: 1896px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(10, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 21) {
+        display: none;
+    }
+}
+
+@container (min-width: 1897px) and (max-width: 2069px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(11, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 23) {
+        display: none;
+    }
+}
+
+@container (min-width: 2070px) {
+    .skeleton-grid {
+        grid-template-columns: repeat(12, 1fr);
+    }
+
+    .skeleton-card:nth-child(n + 25) {
+        display: none;
+    }
+}
+
+.skeleton-card {
+    display: flex;
+    flex-direction: column;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+:root[data-theme="dark"] .skeleton-card {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.skeleton-poster {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    background: #e4e7ed;
+    overflow: hidden;
+    border-radius: 4px 4px 0 0;
+}
+
+:root[data-theme="dark"] .skeleton-poster {
+    background: #252a37;
+}
+
+.skeleton-meta {
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.skeleton-line {
+    position: relative;
+    height: 12px;
+    border-radius: 3px;
+    background: #e4e7ed;
+    overflow: hidden;
+}
+
+:root[data-theme="dark"] .skeleton-line {
+    background: #252a37;
+}
+
+.skeleton-title-line {
+    width: 75%;
+}
+
+.skeleton-sub-line {
+    width: 45%;
+    height: 10px;
+}
+
+.skeleton-shimmer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+    animation: skeleton-wave 1.5s infinite;
+}
+
+:root[data-theme="dark"] .skeleton-shimmer {
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.09) 50%, transparent 100%);
+}
+
+@keyframes skeleton-wave {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}

@@ -1,0 +1,77 @@
+.sort-dropdown-arrow {
+    font-size: 0.65rem;
+    margin-left: 0.35rem;
+}
+
+.sort-dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 0.5rem 1rem;
+    color: #e7e9ee;
+    font-size: 0.9rem;
+}
+
+    .sort-dropdown-item:hover {
+        background-color: #3d4256;
+        color: #ffffff;
+    }
+
+    .sort-dropdown-item.active {
+        color: #4fc3e0;
+        font-weight: 600;
+    }
+
+.multiselect-actions-row {
+    display: flex;
+    gap: 1rem;
+    padding: 0 1rem 0.4rem;
+}
+
+.multiselect-action-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #4fc3e0;
+    font-size: 0.8rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+    .multiselect-action-link:hover {
+        color: #7ad7ee;
+    }
+
+.chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.1rem 1rem 0.6rem;
+}
+
+.filter-chip {
+    min-width: 2.25rem;
+    background-color: #2b2f38;
+    border: 1px solid #4a5064;
+    border-radius: 4px;
+    color: #e7e9ee;
+    font-size: 0.85rem;
+    padding: 0.3rem 0.5rem;
+    text-align: center;
+}
+
+    .filter-chip:hover {
+        background-color: #3d4256;
+        color: #ffffff;
+    }
+
+    .filter-chip.active {
+        background-color: #4fc3e0;
+        border-color: #4fc3e0;
+        color: #1c2027;
+        font-weight: 600;
+    }

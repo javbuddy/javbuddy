@@ -1,0 +1,15 @@
+<div class="btn-group" role="group">
+    @foreach (var option in Options)
+    {
+        <button class="btn btn-sm @(option.IsActive ? "btn-secondary" : "btn-outline-secondary")" @onclick="option.OnClick">
+            @option.Label
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>The "All (@count)" / "Missing (@count)" / ... toggle group used by Movies.razor
+    /// and ActorMissing.razor. Each page keeps its own filter enum/state — this just renders the
+    /// button row given the already-computed labels/active-state/click handlers.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<FilterButtonOption> Options { get; set; } = Array.Empty<FilterButtonOption>();
+}

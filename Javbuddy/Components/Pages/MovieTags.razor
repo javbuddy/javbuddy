@@ -1,0 +1,707 @@
+@page "/movies/tags"
+@using Javbuddy.Models
+@using Javbuddy.Services
+@inject ITagService TagService
+@inject ITagRuleService TagRuleService
+@inject MovieFilterNavigationState FilterNavigationState
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Tags · Javbuddy</PageTitle>
+
+<h1>Tags</h1>
+
+@if (statusMessage is not null)
+{
+    <div class="alert @(statusIsError ? "alert-danger" : "alert-success") py-2">@statusMessage</div>
+}
+
+<div class="tags-layout">
+    <nav class="tags-rail" aria-label="Tags navigation">
+        <div class="tags-rail-section">
+            <div class="tags-rail-label">Tags</div>
+            <button type="button" class="tags-rail-item @(activeRail == RailItem.AllTags ? "active" : "")" @onclick="() => SwitchRailAsync(RailItem.AllTags)">
+                <span>All Tags</span>
+                <span class="tags-rail-count">@allTags.Count</span>
+            </button>
+            <button type="button" class="tags-rail-item @(activeRail == RailItem.NeedsReview ? "active" : "")" @onclick="() => SwitchRailAsync(RailItem.NeedsReview)">
+                <span>Needs Review</span>
+                <span class="tags-rail-count">@allTags.Count(t => t.NeedsReview)</span>
+            </button>
+        </div>
+
+        <hr class="tags-rail-divider" />
+
+        <div class="tags-rail-section">
+            <div class="tags-rail-label">Automation</div>
+            <button type="button" class="tags-rail-item @(activeRail == RailItem.Rules ? "active" : "")" @onclick="() => SwitchRailAsync(RailItem.Rules)">
+                <span>Replacement Rules</span>
+                <span class="tags-rail-count">@(rules?.Count ?? 0)</span>
+            </button>
+            <button type="button" class="tags-rail-item @(activeRail == RailItem.Ignored ? "active" : "")" @onclick="() => SwitchRailAsync(RailItem.Ignored)">
+                <span>Ignored Tags</span>
+                <span class="tags-rail-count">@(ignoredTags?.Count ?? 0)</span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="tags-panel">
+        @if (activeRail == RailItem.AllTags || activeRail == RailItem.NeedsReview)
+        {
+            <div class="tags-panel-header">
+                <h2 class="h5 mb-0">@(activeRail == RailItem.NeedsReview ? "Needs Review" : "All Tags")</h2>
+                <p class="text-muted small mb-0">
+                    @allTags.Count tag@(allTags.Count == 1 ? "" : "s") total, @allTags.Count(t => t.NeedsReview) needing review
+                </p>
+            </div>
+
+            @if (selectedTagIds.Count > 0)
+            {
+                @if (bulkIgnoreConfirming)
+                {
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-3 tags-bulk-bar">
+                        <span class="small">Ignore @selectedTagIds.Count tag@(selectedTagIds.Count == 1 ? "" : "s") and strip from all movies?</span>
+                        <button type="button" class="btn btn-sm btn-warning" @onclick="ConfirmBulkIgnoreAsync">Yes</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => bulkIgnoreConfirming = false">No</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-3 tags-bulk-bar">
+                        <span class="fw-semibold">@selectedTagIds.Count selected</span>
+                        <button type="button" class="btn btn-sm btn-outline-success" @onclick="BulkApproveAsync">Approve all</button>
+                        <button type="button" class="btn btn-sm btn-outline-warning" @onclick="() => bulkIgnoreConfirming = true">Ignore all</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="OpenBulkMergeModal">Merge into…</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" @onclick="ClearSelection">Clear</button>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                    <input type="text" class="form-control" style="max-width: 280px;" placeholder="Search tags…"
+                           value="@search" @oninput="OnSearchInput" />
+                    <select class="form-select" style="max-width: 220px;" @bind="sort" @bind:after="LoadTagsAsync">
+                        <option value="@TagSortOrder.NameAsc">Name</option>
+                        <option value="@TagSortOrder.UsageDesc">Usage (most)</option>
+                        <option value="@TagSortOrder.UsageAsc">Usage (least)</option>
+                        <option value="@TagSortOrder.DateAddedDesc">Date added</option>
+                    </select>
+                    <div class="ms-auto d-flex gap-2">
+                        <button type="button" class="btn btn-primary" @onclick="OpenCreateTagModal">Create Tag</button>
+                        <button type="button" class="btn btn-outline-secondary" @onclick="RunDiscoveryAsync" disabled="@busy">
+                            @(busy ? "Scanning…" : "Run Library Discovery")
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (tags is null)
+            {
+                <LoadingIndicator />
+            }
+            else if (tags.Count == 0)
+            {
+                <p class="text-muted">No tags found.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width: 2.5rem;">
+                                    <input type="checkbox" class="form-check-input" aria-label="Select all"
+                                           checked="@(tags.Count > 0 && tags.All(t => selectedTagIds.Contains(t.Id)))"
+                                           @onchange="e => ToggleSelectAll((bool)(e.Value ?? false))" />
+                                </th>
+                                <th>Name</th>
+                                <th class="text-end">Usage</th>
+                                <th>Added</th>
+                                <th style="width: 220px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var tag in tags)
+                            {
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input" aria-label="Select @tag.Name"
+                                               checked="@selectedTagIds.Contains(tag.Id)"
+                                               @onchange="e => ToggleSelect(tag.Id, (bool)(e.Value ?? false))" />
+                                    </td>
+                                    <td>
+                                        @if (renamingTagId == tag.Id)
+                                        {
+                                            <div class="d-flex gap-2">
+                                                <input type="text" class="form-control form-control-sm" style="max-width: 220px;" @bind="renameValue" @bind:event="oninput" />
+                                                <button type="button" class="btn btn-sm btn-primary" @onclick="() => ConfirmRenameAsync(tag.Id)">Save</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelRename">Cancel</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @if (tag.ParentTagName != null)
+                                            {
+                                                <span class="badge bg-secondary me-1">@tag.ParentTagName</span>
+                                            }
+                                            <span>@tag.Name</span>
+                                            @if (tag.SubtagCount > 0)
+                                            {
+                                                <span class="badge bg-dark-subtle text-body-secondary ms-1">@tag.SubtagCount subtags</span>
+                                            }
+                                            @if (tag.NeedsReview)
+                                            {
+                                                <span class="badge bg-info ms-2">Discovered</span>
+                                            }
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="badge rounded-pill text-bg-secondary">@tag.MovieCount</span>
+                                        @if (tag.SceneCount > 0)
+                                        {
+                                            <span class="movie-tags-scene-count small text-muted ms-1" title="Scenes with this tag">· @tag.SceneCount @(tag.SceneCount == 1 ? "scene" : "scenes")</span>
+                                        }
+                                    </td>
+                                    <td class="text-muted small">@tag.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                    <td>
+                                        @if (pendingConfirm.tagId == tag.Id)
+                                        {
+                                            <span class="me-2 small">@pendingConfirm.label</span>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="ConfirmPendingAsync">Yes</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelPending">No</button>
+                                        }
+                                        else
+                                        {
+                                            <div class="d-flex flex-wrap gap-1">
+                                                @if (tag.NeedsReview)
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-outline-success" title="Approve" @onclick="() => ApproveAsync(tag.Id)">
+                                                        <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" /></svg>
+                                                    </button>
+                                                }
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Filter movies by this tag" @onclick="() => FilterByTag(tag.Name)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2zm1 .5v1.308l4.372 4.858A.5.5 0 0 1 7 8.5v5.306l2-.666V8.5a.5.5 0 0 1 .128-.334L13.5 3.308V2h-11z" /></svg>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Set or change parent tag" @onclick="() => OpenParentModal(tag)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.656 1.944 1.576.242 1.208 1.34 2.08 2.592 2.08H13.5A1.5 1.5 0 0 1 15 7.156v6.344a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 13.5V3.5z" /></svg>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Rename" @onclick="() => StartRename(tag)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z" /></svg>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Merge into another tag" @onclick="() => OpenMergeModal(tag)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5z" /></svg>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-warning" title="Ignore" @onclick="() => RequestConfirm(tag.Id, tag.Name, PendingAction.Ignore)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0zM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM2.5 8a5.5 5.5 0 0 1 8.594-4.55L3.45 11.094A5.478 5.478 0 0 1 2.5 8zm2.906 4.55L13.05 4.906A5.5 5.5 0 0 1 5.406 12.55z" /></svg>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" title="Delete" @onclick="() => RequestConfirm(tag.Id, tag.Name, PendingAction.Delete)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3.5.5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" /><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3h11V2h-11v1z" /></svg>
+                                                </button>
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+        else if (activeRail == RailItem.Rules)
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h2 class="h5">Add Rule</h2>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted mb-1">Source value</label>
+                            <input type="text" class="form-control" @bind="newRuleSource" @bind:event="oninput" placeholder="e.g. Solowork" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1">Match mode</label>
+                            <select class="form-select" @bind="newRuleMatchMode">
+                                <option value="@TagMatchMode.CaseInsensitive">Case-insensitive</option>
+                                <option value="@TagMatchMode.Exact">Exact</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1">Target tag</label>
+                            <input type="text" class="form-control" list="tag-name-options" @bind="newRuleTargetName" @bind:event="oninput" placeholder="e.g. Solo" />
+                            <datalist id="tag-name-options">
+                                @foreach (var t in allTags)
+                                {
+                                    <option value="@t.Name"></option>
+                                }
+                            </datalist>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-primary w-100" @onclick="AddRuleAsync" disabled="@busy">Add Rule</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <button type="button" class="btn btn-outline-secondary" @onclick="ApplyRulesToLibraryAsync" disabled="@busy">
+                    @(busy ? "Applying…" : "Apply Rules to Library")
+                </button>
+            </div>
+
+            @if (rules is null)
+            {
+                <LoadingIndicator />
+            }
+            else if (rules.Count == 0)
+            {
+                <p class="text-muted">No replacement rules yet.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Source</th>
+                                <th>Match mode</th>
+                                <th>Target tag</th>
+                                <th style="width: 100px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var rule in rules)
+                            {
+                                <tr>
+                                    <td>@rule.SourceValue</td>
+                                    <td>@(rule.MatchMode == TagMatchMode.Exact ? "Exact" : "Case-insensitive")</td>
+                                    <td>@rule.TargetTagName</td>
+                                    <td><button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => DeleteRuleAsync(rule.Id)">Delete</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h2 class="h5">Add Ignored Tag</h2>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label small text-muted mb-1">Value</label>
+                            <input type="text" class="form-control" @bind="newIgnoredValue" @bind:event="oninput" placeholder="e.g. Sample" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted mb-1">Match mode</label>
+                            <select class="form-select" @bind="newIgnoredMatchMode">
+                                <option value="@TagMatchMode.CaseInsensitive">Case-insensitive</option>
+                                <option value="@TagMatchMode.Exact">Exact</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-primary w-100" @onclick="AddIgnoredTagAsync" disabled="@busy">Add</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-3 d-flex flex-wrap gap-3 align-items-center">
+                <button type="button" class="btn btn-outline-secondary" @onclick="StripIgnoredFromLibraryAsync" disabled="@busy">
+                    @(busy ? "Stripping…" : "Strip Ignored Tags from Library")
+                </button>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="autoIgnoreNonLatin" checked="@autoIgnoreNonLatin" @onchange="OnAutoIgnoreNonLatinChanged" />
+                    <label class="form-check-label" for="autoIgnoreNonLatin">Automatically ignore non-Latin-script tags</label>
+                </div>
+            </div>
+
+            @if (ignoredTags is null)
+            {
+                <LoadingIndicator />
+            }
+            else if (ignoredTags.Count == 0)
+            {
+                <p class="text-muted">No ignored tags yet.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Value</th>
+                                <th>Match mode</th>
+                                <th style="width: 100px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var ignored in ignoredTags)
+                            {
+                                <tr>
+                                    <td>@ignored.Value</td>
+                                    <td>@(ignored.MatchMode == TagMatchMode.Exact ? "Exact" : "Case-insensitive")</td>
+                                    <td><button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveIgnoredTagAsync(ignored.Id)">Delete</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+<TagMergeModal Show="showMergeModal" SourceTag="mergeSourceTag" SourceTags="mergeSourceTags" OnClose="CloseMergeModal" OnMerged="OnMergedAsync" />
+<TagCreateModal Show="showCreateModal" OnClose="CloseCreateTagModal" OnCreated="OnTagCreatedAsync" />
+<TagParentModal Show="showParentModal" Tag="parentTargetTag" OnClose="CloseParentModal" OnUpdated="OnParentUpdatedAsync" />
+
+@code {
+    private enum RailItem { AllTags, NeedsReview, Rules, Ignored }
+    private enum PendingAction { Delete, Ignore }
+
+    private RailItem activeRail = RailItem.AllTags;
+
+    private IReadOnlyList<TagListItem>? tags;
+    private string search = "";
+    private TagSortOrder sort = TagSortOrder.NameAsc;
+    private List<TagListItem> allTags = new();
+
+    private readonly HashSet<int> selectedTagIds = new();
+    private bool bulkIgnoreConfirming;
+
+    private int? renamingTagId;
+    private string renameValue = "";
+
+    private (int? tagId, string? label, PendingAction action) pendingConfirm;
+
+    private bool showCreateModal;
+    private bool showMergeModal;
+    private Tag? mergeSourceTag;
+    private IReadOnlyList<Tag>? mergeSourceTags;
+
+    private IReadOnlyList<TagReplacementRuleItem>? rules;
+    private string newRuleSource = "";
+    private TagMatchMode newRuleMatchMode = TagMatchMode.CaseInsensitive;
+    private string newRuleTargetName = "";
+
+    private IReadOnlyList<IgnoredTagItem>? ignoredTags;
+    private string newIgnoredValue = "";
+    private TagMatchMode newIgnoredMatchMode = TagMatchMode.CaseInsensitive;
+    private bool autoIgnoreNonLatin;
+
+    private bool busy;
+    private string? statusMessage;
+    private bool statusIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+        await LoadRulesAsync();
+        await LoadIgnoredAsync();
+        autoIgnoreNonLatin = await TagRuleService.GetAutoIgnoreNonLatinAsync();
+    }
+
+    private async Task SwitchRailAsync(RailItem item)
+    {
+        activeRail = item;
+        statusMessage = null;
+        ClearSelection();
+        if (item == RailItem.AllTags || item == RailItem.NeedsReview)
+        {
+            await LoadTagsAsync();
+        }
+    }
+
+    private async Task LoadTagsAsync()
+    {
+        var loaded = await TagService.GetTagsAsync(search, sort);
+        tags = activeRail == RailItem.NeedsReview ? loaded.Where(t => t.NeedsReview).ToList() : loaded;
+    }
+
+    // Rules/Ignored panels' target-tag picker (and the rail's own counts) need the full,
+    // unfiltered catalog regardless of the tag table's own search box — kept as its own query,
+    // refreshed only when the tag catalog itself could have changed (not on every search
+    // keystroke, unlike LoadTagsAsync above).
+    private async Task RefreshAllTagsAsync()
+    {
+        allTags = (await TagService.GetTagsAsync(sort: sort)).ToList();
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        search = e.Value?.ToString() ?? "";
+        await LoadTagsAsync();
+    }
+
+    private async Task LoadRulesAsync() => rules = await TagRuleService.GetReplacementRulesAsync();
+
+    private async Task LoadIgnoredAsync() => ignoredTags = await TagRuleService.GetIgnoredTagsAsync();
+
+    private void SetStatus(string message, bool isError)
+    {
+        statusMessage = message;
+        statusIsError = isError;
+    }
+
+    private void ToggleSelect(int tagId, bool selected)
+    {
+        if (selected) selectedTagIds.Add(tagId);
+        else selectedTagIds.Remove(tagId);
+    }
+
+    private void ToggleSelectAll(bool selected)
+    {
+        if (tags is null) return;
+        if (selected)
+        {
+            foreach (var tag in tags) selectedTagIds.Add(tag.Id);
+        }
+        else
+        {
+            foreach (var tag in tags) selectedTagIds.Remove(tag.Id);
+        }
+    }
+
+    private void ClearSelection()
+    {
+        selectedTagIds.Clear();
+        bulkIgnoreConfirming = false;
+    }
+
+    private async Task BulkApproveAsync()
+    {
+        var count = await TagService.ApproveManyAsync(selectedTagIds.ToList());
+        SetStatus($"Approved {count} tag{(count == 1 ? "" : "s")}.", false);
+        ClearSelection();
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+    }
+
+    private async Task ConfirmBulkIgnoreAsync()
+    {
+        var count = await TagService.IgnoreManyAsync(selectedTagIds.ToList());
+        SetStatus($"Ignored {count} tag{(count == 1 ? "" : "s")}.", false);
+        ClearSelection();
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+        await LoadIgnoredAsync();
+    }
+
+    private void OpenBulkMergeModal()
+    {
+        mergeSourceTag = null;
+        mergeSourceTags = allTags.Where(t => selectedTagIds.Contains(t.Id)).Select(t => new Tag { Id = t.Id, Name = t.Name }).ToList();
+        showMergeModal = true;
+    }
+
+    private void StartRename(TagListItem tag)
+    {
+        renamingTagId = tag.Id;
+        renameValue = tag.Name;
+    }
+
+    private void CancelRename()
+    {
+        renamingTagId = null;
+        renameValue = "";
+    }
+
+    private async Task ConfirmRenameAsync(int tagId)
+    {
+        var result = await TagService.RenameAsync(tagId, renameValue);
+        CancelRename();
+        SetStatus(result.Success ? "Tag renamed." : result.ErrorMessage ?? "Failed to rename tag.", !result.Success);
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+    }
+
+    private async Task ApproveAsync(int tagId)
+    {
+        var result = await TagService.ApproveAsync(tagId);
+        SetStatus(result.Success ? "Tag approved." : result.ErrorMessage ?? "Failed to approve tag.", !result.Success);
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+    }
+
+    private void FilterByTag(string tagName)
+    {
+        FilterNavigationState.SetPendingFilter(genre: tagName);
+        Nav.NavigateTo("/");
+    }
+
+    private void RequestConfirm(int tagId, string tagName, PendingAction action)
+    {
+        var label = action == PendingAction.Delete
+            ? $"Delete \"{tagName}\" from all movies?"
+            : $"Ignore \"{tagName}\" and strip it from all movies?";
+        pendingConfirm = (tagId, label, action);
+    }
+
+    private void CancelPending() => pendingConfirm = (null, null, default);
+
+    private async Task ConfirmPendingAsync()
+    {
+        if (pendingConfirm.tagId is not int tagId) return;
+        var action = pendingConfirm.action;
+        CancelPending();
+
+        if (action == PendingAction.Delete)
+        {
+            await TagService.DeleteAsync(tagId);
+            SetStatus("Tag deleted.", false);
+        }
+        else
+        {
+            var result = await TagService.IgnoreAsync(tagId);
+            SetStatus(result.Success ? "Tag ignored." : result.ErrorMessage ?? "Failed to ignore tag.", !result.Success);
+            await LoadIgnoredAsync();
+        }
+
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+    }
+
+    private void OpenMergeModal(TagListItem tag)
+    {
+        mergeSourceTags = null;
+        mergeSourceTag = new Tag { Id = tag.Id, Name = tag.Name };
+        showMergeModal = true;
+    }
+
+    private void CloseMergeModal()
+    {
+        showMergeModal = false;
+        mergeSourceTag = null;
+        mergeSourceTags = null;
+    }
+
+    private async Task OnMergedAsync(Tag target)
+    {
+        CloseMergeModal();
+        ClearSelection();
+        SetStatus($"Merged into \"{target.Name}\".", false);
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+        await LoadRulesAsync();
+    }
+
+    private void OpenCreateTagModal() => showCreateModal = true;
+
+    private void CloseCreateTagModal() => showCreateModal = false;
+
+    private async Task OnTagCreatedAsync(Tag tag)
+    {
+        CloseCreateTagModal();
+        SetStatus($"Tag \"{tag.Name}\" created.", false);
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+    }
+
+    private bool showParentModal;
+    private TagListItem? parentTargetTag;
+
+    private void OpenParentModal(TagListItem tag)
+    {
+        parentTargetTag = tag;
+        showParentModal = true;
+    }
+
+    private void CloseParentModal()
+    {
+        showParentModal = false;
+        parentTargetTag = null;
+    }
+
+    private async Task OnParentUpdatedAsync()
+    {
+        CloseParentModal();
+        SetStatus("Tag parent updated.", false);
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+    }
+
+    private async Task RunDiscoveryAsync()
+    {
+        busy = true;
+        var count = await TagRuleService.RunDiscoveryAsync();
+        busy = false;
+        SetStatus($"Discovery scanned {count} movie{(count == 1 ? "" : "s")}.", false);
+        await LoadTagsAsync();
+        await RefreshAllTagsAsync();
+    }
+
+    private async Task AddRuleAsync()
+    {
+        var targetTag = allTags.FirstOrDefault(t => string.Equals(t.Name, newRuleTargetName.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (targetTag is null)
+        {
+            SetStatus($"No existing tag named \"{newRuleTargetName}\" — pick a tag from the list.", true);
+            return;
+        }
+
+        busy = true;
+        var result = await TagRuleService.AddReplacementRuleAsync(newRuleSource, newRuleMatchMode, targetTag.Id);
+        busy = false;
+        SetStatus(result.Success ? "Rule added." : result.ErrorMessage ?? "Failed to add rule.", !result.Success);
+        if (result.Success)
+        {
+            newRuleSource = "";
+            newRuleTargetName = "";
+            await LoadRulesAsync();
+        }
+    }
+
+    private async Task DeleteRuleAsync(int ruleId)
+    {
+        await TagRuleService.DeleteReplacementRuleAsync(ruleId);
+        await LoadRulesAsync();
+    }
+
+    private async Task ApplyRulesToLibraryAsync()
+    {
+        busy = true;
+        var count = await TagRuleService.ApplyReplacementRulesToLibraryAsync();
+        busy = false;
+        SetStatus($"Applied rules across {count} movie{(count == 1 ? "" : "s")}.", false);
+        await LoadRulesAsync();
+        await RefreshAllTagsAsync();
+    }
+
+    private async Task AddIgnoredTagAsync()
+    {
+        busy = true;
+        var result = await TagRuleService.AddIgnoredTagAsync(newIgnoredValue, newIgnoredMatchMode);
+        busy = false;
+        SetStatus(result.Success ? "Added to ignore list." : result.ErrorMessage ?? "Failed to add.", !result.Success);
+        if (result.Success)
+        {
+            newIgnoredValue = "";
+            await LoadIgnoredAsync();
+        }
+    }
+
+    private async Task RemoveIgnoredTagAsync(int id)
+    {
+        await TagRuleService.RemoveIgnoredTagAsync(id);
+        await LoadIgnoredAsync();
+    }
+
+    private async Task StripIgnoredFromLibraryAsync()
+    {
+        busy = true;
+        var count = await TagRuleService.StripIgnoredTagsFromLibraryAsync();
+        busy = false;
+        SetStatus($"Stripped ignored tags across {count} movie{(count == 1 ? "" : "s")}.", false);
+        await LoadIgnoredAsync();
+        await RefreshAllTagsAsync();
+    }
+
+    private async Task OnAutoIgnoreNonLatinChanged(ChangeEventArgs e)
+    {
+        autoIgnoreNonLatin = e.Value is bool b && b;
+        await TagRuleService.SetAutoIgnoreNonLatinAsync(autoIgnoreNonLatin);
+    }
+}

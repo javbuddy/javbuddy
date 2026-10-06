@@ -1,0 +1,25 @@
+@using Javbuddy.Services
+@using Javbuddy.Services.Scenes
+
+@* Apex markers drawn above a timeline's highlight track: a small diamond per apex,
+   red for favorites.
+   The data-* attributes are read by ScrubBar.razor.js for its hover preview and click-to-seek, like
+   HighlightSegments'. *@
+@if (DurationSeconds is > 0 && Apexes is { Count: > 0 })
+{
+    <div class="apex-markers">
+        @foreach (var apex in Apexes)
+        {
+            var left = Math.Clamp(apex.Seconds / DurationSeconds.Value * 100, 0, 100);
+            var label = $"{apex.DisplayLabel} ({SceneTimeFormat.Format(apex.Seconds)})";
+            <span class="apex-marker @(apex.IsFavorite ? "apex-marker-fav" : null)" style="@FormattableString.Invariant($"left:{left:0.###}%")" data-start="@apex.Seconds.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-highlight-name="@apex.DisplayLabel" title="@label"></span>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<ApexItem>? Apexes { get; set; }
+
+    /// <summary>The timeline's full length; nothing renders while it's unknown.</summary>
+    [Parameter] public double? DurationSeconds { get; set; }
+}

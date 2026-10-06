@@ -1,0 +1,66 @@
+/* Fixed to the viewport so it covers the whole page or player modal, and above the player modal
+   (z-index 1050) when the editor is in its side panel. */
+.delete-confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1060;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.delete-confirm-dialog {
+    width: min(100%, 24rem);
+    padding: 1.25rem;
+    background: var(--scene-editor-dialog-bg, #1f2430);
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 6px;
+    box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.4);
+    color: var(--scene-editor-fg, #e2e8f0);
+}
+
+    .delete-confirm-dialog h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1.05rem;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+    }
+
+    .delete-confirm-dialog p {
+        margin: 0;
+        color: var(--scene-editor-muted, #94a3b8);
+        font-size: 0.85rem;
+    }
+
+.delete-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1.25rem;
+}
+
+.delete-confirm-btn {
+    appearance: none;
+    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    color: var(--scene-editor-accent, #6ea8fe);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.35rem 0.9rem;
+    white-space: nowrap;
+}
+
+.delete-confirm-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.delete-confirm-confirm-btn {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: #ffffff;
+}

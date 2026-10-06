@@ -1,0 +1,318 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Ffmpeg
+@using Javbuddy.Services.VideoRepair
+@inject IVideoRepairService RepairService
+@inject IVideoRepairJobTracker JobTracker
+@inject IFfmpegBinaryResolver FfmpegResolver
+@inject IMovieCleanupService CleanupService
+@implements IDisposable
+
+@if (show)
+{
+    <div class="videorepair-modal-backdrop" tabindex="0" @onclick="Close">
+        <div class="videorepair-modal-panel" @onclick:stopPropagation="true">
+            <div class="videorepair-modal-header">
+                <h5 class="videorepair-modal-title">Repair Video</h5>
+                <button class="videorepair-modal-close-btn" @onclick="Close" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+            <div class="videorepair-modal-body">
+                <div class="videorepair-intro">
+                    <p class="videorepair-desc">
+                        Lossless container and timestamp repair (stream copy, no quality loss, ~10–30 seconds).
+                        Reconstructs strictly monotonic presentation timestamps from Picture Order Count (POC) and normalizes container headers, fixing choppy or stuttering playback in web browsers.
+                    </p>
+                </div>
+
+                @if (!FfmpegResolver.IsAvailable)
+                {
+                    <div class="alert alert-warning mb-3">
+                        <strong>FFmpeg not found.</strong> Video repair requires <code>ffmpeg</code> and <code>ffprobe</code> to be installed and available on PATH.
+                    </div>
+                }
+
+                @if (candidates.Count > 1)
+                {
+                    <div class="videorepair-section-label">Select version to repair:</div>
+                    <div class="videorepair-version-tabs">
+                        @foreach (var c in candidates)
+                        {
+                            <button type="button" class="videorepair-version-tab @(c == selectedCandidate ? "active" : "")" @onclick="() => SelectCandidate(c)" disabled="@IsRunning">
+                                <span class="version-tag">@c.VersionTag</span>
+                                @if (c.ResolutionDisplay is not null)
+                                {
+                                    <span class="version-badge">@c.ResolutionDisplay</span>
+                                }
+                                @if (c.IsPrimary)
+                                {
+                                    <span class="version-badge-primary">Primary</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+
+                @if (selectedCandidate is not null)
+                {
+                    <div class="videorepair-target-card">
+                        <div class="videorepair-target-row">
+                            <span class="target-label">Target File:</span>
+                            <span class="target-value target-file-name" title="@selectedCandidate.FileName">@selectedCandidate.FileName</span>
+                        </div>
+                        <div class="videorepair-target-row">
+                            <span class="target-label">Size:</span>
+                            <span class="target-value">@ByteSizeFormatter.Format(selectedCandidate.FileSizeBytes)</span>
+                        </div>
+                        @if (selectedCandidate.ResolutionDisplay is not null)
+                        {
+                            <div class="videorepair-target-row">
+                                <span class="target-label">Resolution:</span>
+                                <span class="target-value">@selectedCandidate.ResolutionDisplay</span>
+                            </div>
+                        }
+                        @if (selectedCandidate.DurationSeconds > 0)
+                        {
+                            <div class="videorepair-target-row">
+                                <span class="target-label">Duration:</span>
+                                <span class="target-value">@SceneTimeFormat.Format(selectedCandidate.DurationSeconds)</span>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (IsRunning)
+                {
+                    var job = ActiveJob;
+                    var progress = job?.LatestProgress;
+                    var percent = progress?.PercentComplete ?? 0;
+                    <div class="videorepair-progress-box">
+                        <div class="videorepair-progress-label">
+                            <span>Repairing in progress…</span>
+                            <span>@percent.ToString("F1")%</span>
+                        </div>
+                        <div class="progress mb-2" style="height: 10px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: @percent%;" aria-valuenow="@percent" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="videorepair-progress-note text-muted small">
+                            Running lossless FFmpeg stream-copy remux in background. Navigating away will not interrupt the repair.
+                        </div>
+                    </div>
+                }
+
+                @if (successMessage is not null)
+                {
+                    <div class="alert alert-success mt-3 mb-0">
+                        @successMessage
+                    </div>
+                }
+
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger mt-3 mb-0">
+                        @errorMessage
+                    </div>
+                }
+            </div>
+            <div class="videorepair-modal-footer">
+                @if (IsRunning)
+                {
+                    <button class="btn btn-sm btn-outline-danger" @onclick="CancelRepair">Cancel Repair</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="Close">Close</button>
+                }
+                else
+                {
+                    @if (Movie.HasBrokenBFrames && successMessage is null)
+                    {
+                        <button class="btn btn-sm btn-outline-warning me-auto" @onclick="UnmarkBrokenBFrameAsync" disabled="@(starting || unmarking)">
+                            @(unmarking ? "Unmarking…" : "Unmark Broken Flag")
+                        </button>
+                    }
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="Close">@(successMessage is not null ? "Close" : "Cancel")</button>
+                    @if (successMessage is null)
+                    {
+                        <button class="btn btn-sm btn-primary" @onclick="StartRepairAsync" disabled="@(!FfmpegResolver.IsAvailable || starting || unmarking || selectedCandidate is null)">
+                            @(starting ? "Starting…" : "Start Repair")
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+    [Parameter] public EventCallback OnRepaired { get; set; }
+
+    private bool show;
+    private bool starting;
+    private bool unmarking;
+    private IReadOnlyList<VideoRepairCandidate> candidates = [];
+    private VideoRepairCandidate? selectedCandidate;
+    private string? errorMessage;
+    private string? successMessage;
+    private System.Threading.Timer? pollTimer;
+    private VideoRepairJob? monitoredJob;
+
+    // A chapter-writing job shares the tracker but isn't this modal's to show.
+    private bool IsRunning => JobTracker.IsRunning(Movie.Id) && ActiveJob is { Kind: VideoFileJobKind.Repair };
+    private VideoRepairJob? ActiveJob => JobTracker.Get(Movie.Id) is { Kind: VideoFileJobKind.Repair } job ? job : null;
+
+    public async Task OpenAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+        starting = false;
+        candidates = await RepairService.GetRepairCandidatesAsync(Movie.Id);
+        selectedCandidate = candidates.FirstOrDefault(c => c.IsPrimary) ?? candidates.FirstOrDefault();
+        show = true;
+
+        // A repair may already be running (started from Cleanup, another tab, or before this
+        // component was recreated): show the file it targets and follow it to completion.
+        if (ActiveJob is { Task.IsCompleted: false } running)
+        {
+            selectedCandidate = candidates.FirstOrDefault(c => c.MovieFileId == running.MovieFileId) ?? selectedCandidate;
+            StartPolling();
+            MonitorJob(running);
+        }
+
+        StateHasChanged();
+    }
+
+    private void SelectCandidate(VideoRepairCandidate candidate)
+    {
+        if (IsRunning) return;
+        selectedCandidate = candidate;
+        errorMessage = null;
+    }
+
+    private async Task StartRepairAsync()
+    {
+        if (selectedCandidate is null || IsRunning) return;
+
+        starting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var job = await RepairService.StartRepairJobAsync(Movie.Id, selectedCandidate.MovieFileId);
+            StartPolling();
+            MonitorJob(job);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not start repair: {ex.Message}";
+        }
+        finally
+        {
+            starting = false;
+        }
+    }
+
+    private void MonitorJob(VideoRepairJob job)
+    {
+        if (ReferenceEquals(monitoredJob, job)) return;
+        monitoredJob = job;
+        _ = MonitorJobAsync(job);
+    }
+
+    private async Task MonitorJobAsync(VideoRepairJob job)
+    {
+        if (job.Task is null) return;
+
+        try
+        {
+            var result = await job.Task;
+            await InvokeAsync(async () =>
+            {
+                StopPolling();
+                if (result.Success)
+                {
+                    successMessage = "Video repaired successfully! Presentation timestamps and container headers have been fixed.";
+                    errorMessage = null;
+                    await OnRepaired.InvokeAsync();
+                }
+                else
+                {
+                    errorMessage = result.ErrorMessage ?? "Video repair failed.";
+                }
+                StateHasChanged();
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            await InvokeAsync(() =>
+            {
+                StopPolling();
+                errorMessage = "Video repair was cancelled.";
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex)
+        {
+            await InvokeAsync(() =>
+            {
+                StopPolling();
+                errorMessage = $"Repair error: {ex.Message}";
+                StateHasChanged();
+            });
+        }
+    }
+
+    private void CancelRepair()
+    {
+        JobTracker.Cancel(Movie.Id);
+    }
+
+    private void StartPolling()
+    {
+        pollTimer?.Dispose();
+        pollTimer = new System.Threading.Timer(_ =>
+        {
+            InvokeAsync(StateHasChanged);
+        }, null, 500, 500);
+    }
+
+    private void StopPolling()
+    {
+        pollTimer?.Dispose();
+        pollTimer = null;
+    }
+
+    private async Task UnmarkBrokenBFrameAsync()
+    {
+        unmarking = true;
+        errorMessage = null;
+        try
+        {
+            var result = await CleanupService.UnmarkBrokenBFrameAsync(Movie.Id);
+            if (!result.Success)
+            {
+                errorMessage = result.ErrorMessage;
+                return;
+            }
+
+            Movie.HasBrokenBFrames = false;
+            await OnRepaired.InvokeAsync();
+            Close();
+        }
+        finally
+        {
+            unmarking = false;
+        }
+    }
+
+    private void Close()
+    {
+        StopPolling();
+        show = false;
+    }
+
+    public void Dispose()
+    {
+        StopPolling();
+    }
+}

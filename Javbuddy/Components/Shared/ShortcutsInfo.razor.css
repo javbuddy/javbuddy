@@ -1,0 +1,105 @@
+.shortcuts-info {
+    position: relative;
+    display: inline-flex;
+}
+
+.shortcuts-info-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--shortcuts-info-icon, #94a3b8);
+    cursor: help;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.shortcuts-info-btn:hover,
+.shortcuts-info-btn:focus-visible {
+    color: var(--shortcuts-info-icon-hover, #fff);
+    background-color: var(--shortcuts-info-icon-hover-bg, rgba(255, 255, 255, 0.1));
+}
+
+.shortcuts-info-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 20;
+    min-width: 17rem;
+    max-width: min(24rem, calc(100vw - 32px));
+    padding: 0.6rem 0.75rem;
+    background: var(--shortcuts-info-bg, #1e2430);
+    border: 1px solid var(--shortcuts-info-border, rgba(255, 255, 255, 0.15));
+    border-radius: 6px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    color: var(--shortcuts-info-text, #e2e8f0);
+    font-size: 0.8rem;
+    text-align: left;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.12s ease, visibility 0.12s ease;
+    pointer-events: none;
+}
+
+.shortcuts-info:hover .shortcuts-info-popover,
+.shortcuts-info:focus-within .shortcuts-info-popover {
+    visibility: visible;
+    opacity: 1;
+}
+
+.shortcuts-info-above .shortcuts-info-popover {
+    top: auto;
+    bottom: calc(100% + 6px);
+}
+
+.shortcuts-info-start .shortcuts-info-popover {
+    right: auto;
+    left: 0;
+}
+
+.shortcuts-info-heading {
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+    color: var(--shortcuts-info-heading, #fff);
+}
+
+.shortcuts-info-list {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.35rem 0.75rem;
+    align-items: baseline;
+    margin: 0;
+}
+
+.shortcuts-info-keys {
+    margin: 0;
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+.shortcuts-info-action {
+    margin: 0;
+}
+
+.shortcuts-info-or {
+    margin: 0 0.2rem;
+    color: var(--shortcuts-info-muted, #94a3b8);
+}
+
+.shortcuts-info kbd {
+    display: inline-block;
+    min-width: 1.5em;
+    padding: 0.05rem 0.35rem;
+    font-family: inherit;
+    font-size: 0.75rem;
+    text-align: center;
+    color: var(--shortcuts-info-kbd-text, #e2e8f0);
+    background: var(--shortcuts-info-kbd-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--shortcuts-info-kbd-border, rgba(255, 255, 255, 0.25));
+    border-radius: 3px;
+    box-shadow: none;
+}

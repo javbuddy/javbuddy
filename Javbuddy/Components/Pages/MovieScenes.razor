@@ -1,0 +1,852 @@
+@page "/movies/scenes"
+@using Javbuddy.Services
+@using Javbuddy.Services.SceneMedia
+@using Javbuddy.Components.Shared
+@inject ISceneWallQueryService SceneWall
+@inject ISceneMediaService SceneMedia
+@inject IHighlightMediaService HighlightMedia
+@inject IApexMediaService ApexMedia
+@inject NavigationManager Navigation
+@inject SceneMediaQueue SceneMediaQueue
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<PageTitle>Scenes · Javbuddy</PageTitle>
+
+@* Library-wide, Stash-style scene wall: every scene as a card, filterable by scene
+   tag, scene actor, studio and favorite. ?view=highlights switches it to highlight cards
+, filtered by their own actors and tags. Clicking a card plays just
+   that clip in the ClipPlayerModal over the wall; the card still links to Movie
+   Detail's player (the deep link) for a ctrl/middle-click into a new tab. ?view=apexes shows a card
+   per apex, and scene and highlight cards show how many apexes they contain. *@
+<div class="scene-wall" @ref="wallRef">
+    <div class="scene-wall-header">
+        <h1 class="scene-wall-title">Scenes</h1>
+        <div class="scene-wall-view-toggle" role="group" aria-label="Show">
+            @ViewButton(WallView.Scenes, "scenes", "Scenes")
+            @ViewButton(WallView.Highlights, "highlights", "Highlights")
+            @ViewButton(WallView.Apexes, "apexes", "Apexes")
+        </div>
+        @if (loaded)
+        {
+            <span class="scene-wall-count">@total @Noun(total)</span>
+        }
+        @* Every clip the filters match, one after another in the clip player. *@
+        <div class="scene-wall-play" role="group" aria-label="Play">
+            <button type="button" class="btn btn-sm btn-outline-secondary scene-wall-play-btn" disabled="@(!CanPlayAll)" @onclick="() => PlayAllAsync(shuffle: false)"
+                    title="Play every @Noun(1) shown, in this order">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
+                    <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
+                </svg>
+                Play all
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary scene-wall-play-btn" disabled="@(!CanPlayAll)" @onclick="() => PlayAllAsync(shuffle: true)"
+                    title="Play every @Noun(1) shown, in random order">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
+                    <path fill-rule="evenodd" d="M0 3.5A.5.5 0 0 1 .5 3H1c2.202 0 3.827 1.24 4.874 2.418.49.552.865 1.102 1.126 1.532.26-.43.636-.98 1.126-1.532C9.173 4.24 10.798 3 13 3v1c-1.798 0-3.173 1.01-4.126 2.082A9.624 9.624 0 0 0 7.556 8a9.624 9.624 0 0 0 1.317 1.918C9.828 10.99 11.204 12 13 12v1c-2.202 0-3.827-1.24-4.874-2.418A10.595 10.595 0 0 1 7 9.05c-.26.43-.636.98-1.126 1.532C4.827 11.76 3.202 13 1 13H.5a.5.5 0 0 1 0-1H1c1.798 0 3.173-1.01 4.126-2.082A9.624 9.624 0 0 0 6.444 8a9.624 9.624 0 0 0-1.317-1.918C4.172 5.01 2.796 4 1 4H.5a.5.5 0 0 1-.5-.5z" />
+                    <path d="M13 5.466V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192zm0 9v-3.932a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192z" />
+                </svg>
+                Shuffle
+            </button>
+        </div>
+    </div>
+
+    @if (options is not null)
+    {
+        @* Same controls as the Movies page's toolbar, built from the same shared
+           pieces: text search, a Filter dropdown of multi-select groups with a reset ×, and Sort. *@
+        <div class="scene-wall-filters">
+            <input type="search"
+                   class="form-control form-control-sm w-auto scene-wall-search"
+                   placeholder="@(CurrentView switch { WallView.Highlights => "Filter by highlight, code or title…", WallView.Apexes => "Filter by code or title…", _ => "Filter by scene, code or title…" })"
+                   value="@textFilter"
+                   @oninput="HandleTextInput" />
+
+            @if (showFilterDropdown || showSortDropdown)
+            {
+                <div class="dropdown-backdrop" @onclick="CloseDropdowns"></div>
+            }
+            <div class="sort-dropdown-wrapper">
+                <DropdownMenuButton Label="@($"Filter{(ActiveFilterCount > 0 ? $" ({ActiveFilterCount})" : "")}")"
+                                    Active="ActiveFilterCount > 0"
+                                    ShowClear="HasFilters"
+                                    OnClear="ResetFiltersAsync"
+                                    ShowMenu="showFilterDropdown"
+                                    MenuMinWidth="260px"
+                                    OnToggle="ToggleFilterDropdown">
+                    @if (options.Tags.Count > 0)
+                    {
+                        <MultiSelectFilterGroup GroupLabel="Tag" Options="@TagOptions" Searchable="true"
+                                                 OnSelectAll="labels => SelectAllAsync(tagFilter, options.Tags, labels)"
+                                                 OnSelectNone="() => SelectNoneAsync(tagFilter, OfferedTagIds)" />
+                    }
+                    @* An apex's own tags are the Apex tag selection, so it carries over to the other views. *@
+                    @if (ApexesView && options.ApexTags.Count > 0)
+                    {
+                        <MultiSelectFilterGroup GroupLabel="Tag" Options="@ApexTagOptions" Searchable="true"
+                                                 OnSelectAll="labels => SelectAllAsync(apexTagFilter, options.ApexTags, labels)"
+                                                 OnSelectNone="() => SelectNoneAsync(apexTagFilter, OfferedApexTagIds)" />
+                    }
+                    @if (options.Actors.Count > 0 || options.ActorAttributes.HasAny)
+                    {
+                        <FilterSection Label="Actor" ActiveCount="@(AppliedActors.Count + AppliedActorAttributes.Count)">
+                            @if (options.Actors.Count > 0)
+                            {
+                                <MultiSelectFilterGroup GroupLabel="Name" Options="@ActorOptions" Searchable="true"
+                                                         OnSelectAll="labels => SelectAllAsync(actorFilter, options.Actors, labels)"
+                                                         OnSelectNone="() => SelectNoneAsync(actorFilter, OfferedActorIds)" />
+                            }
+                            <ActorAttributeFilters Options="options.ActorAttributes" Selection="AppliedActorAttributes" SelectionChanged="SetActorAttributesAsync" />
+                        </FilterSection>
+                    }
+                    @if (options.Studios.Count > 0)
+                    {
+                        <MultiSelectFilterGroup GroupLabel="Studio" Options="@StudioOptions" Searchable="true"
+                                                 OnSelectAll="SelectAllStudiosAsync"
+                                                 OnSelectNone="() => SelectNoneAsync(studioFilter, OfferedStudios)" />
+                    }
+                    @* Clips whose range contains an apex, optionally one with a given tag. *@
+                    @if (!ApexesView)
+                    {
+                        <FilterSection Label="Apex" ActiveCount="@(AppliedApexTags.Count + (apexOnly ? 1 : 0))">
+                            <button type="button" class="sort-dropdown-item @(apexOnly ? "active" : "")" aria-pressed="@(apexOnly ? "true" : "false")"
+                                    title="Only @Noun(2) containing an apex" @onclick="ToggleApexOnlyAsync">
+                                <span>Contains an apex</span>
+                                @if (apexOnly)
+                                {
+                                    <span class="ms-2">✓</span>
+                                }
+                            </button>
+                            @if (options.ApexTags.Count > 0)
+                            {
+                                <MultiSelectFilterGroup GroupLabel="Apex tag" Options="@ApexTagOptions" Searchable="true"
+                                                         OnSelectAll="labels => SelectAllAsync(apexTagFilter, options.ApexTags, labels)"
+                                                         OnSelectNone="() => SelectNoneAsync(apexTagFilter, OfferedApexTagIds)" />
+                            }
+                        </FilterSection>
+                    }
+                    <button type="button" class="sort-dropdown-item @(favoritesOnly ? "active" : "")" aria-pressed="@(favoritesOnly ? "true" : "false")" @onclick="ToggleFavoritesOnlyAsync">
+                        <span>Favorites only</span>
+                        @if (favoritesOnly)
+                        {
+                            <span class="ms-2">✓</span>
+                        }
+                    </button>
+                    @* Hiding a scene never hides a highlight or an apex. *@
+                    @if (CurrentView == WallView.Scenes)
+                    {
+                        <button type="button" class="sort-dropdown-item @(showHidden ? "active" : "")" aria-pressed="@(showHidden ? "true" : "false")" title="Also show scenes hidden from the overview, e.g. intros and outros" @onclick="ToggleShowHiddenAsync">
+                            <span>Show hidden scenes</span>
+                            @if (showHidden)
+                            {
+                                <span class="ms-2">✓</span>
+                            }
+                        </button>
+                    }
+                </DropdownMenuButton>
+            </div>
+
+            <div class="sort-dropdown-wrapper">
+                <DropdownMenuButton Label="@($"Sort: {SortLabel(sort)}")" Arrow="" ShowMenu="showSortDropdown" OnToggle="ToggleSortDropdown">
+                    @foreach (var option in Enum.GetValues<SceneWallSort>())
+                    {
+                        <button type="button" class="sort-dropdown-item @(sort == option ? "active" : "")" @onclick="() => SelectSortAsync(option)">
+                            @SortLabel(option)
+                        </button>
+                    }
+                </DropdownMenuButton>
+            </div>
+        </div>
+    }
+
+    @if (!loaded)
+    {
+        <LoadingIndicator />
+    }
+    else if (total == 0)
+    {
+        <p class="scene-wall-empty">
+            @EmptyText
+        </p>
+    }
+
+    @* Every scene/highlight in one scrollable list: only the window around the viewport
+       is rendered, with VirtualizedGrid reserving the height of the rest. Always rendered, like the
+       Movies grid, since its JS holds on to it for the page's lifetime. Its row geometry needs every
+       card to be the same height, which is why CardBody reserves its optional lines. *@
+    <VirtualizedGrid @ref="grid"
+                     WindowStart="windowStart"
+                     WindowCount="WindowCount"
+                     TotalCount="total"
+                     GridSelector=".scene-wall-grid"
+                     CardSelector=".scene-wall-card"
+                     ActivePath="/movies/scenes"
+                     Ready="loaded"
+                     LoadRange="SetVisibleRange">
+        @* Keyed by view: a scene card and a highlight card can share an id, and letting the diff reuse
+           one kind's <a> for the other lost its class and href in the browser. *@
+        <div class="scene-wall-grid" @key="CurrentView">
+            @if (ApexesView)
+            {
+                @foreach (var card in apexCards)
+                {
+                    <ClipCard @key="card.ApexId" Apex="card" OnPlay="PlayClip" />
+                }
+            }
+            else if (HighlightsView)
+            {
+                @foreach (var card in highlightCards)
+                {
+                    <ClipCard @key="card.HighlightId" Highlight="card" OnPlay="PlayClip" />
+                }
+            }
+            else
+            {
+                @foreach (var card in cards)
+                {
+                    <ClipCard @key="card.SceneId" Scene="card" OnPlay="PlayClip" />
+                }
+            }
+        </div>
+    </VirtualizedGrid>
+</div>
+
+<ClipPlayerModal Clip="playingClip"
+                 Position="@(playlist is null ? null : playlistIndex + 1)"
+                 Count="playlist?.Length"
+                 OnEnded="NextClip"
+                 OnNext="@(playlist is null ? default : EventCallback.Factory.Create(this, NextClip))"
+                 OnPrevious="@(playlist is null ? default : EventCallback.Factory.Create(this, PreviousClip))"
+                 OnClose="ClosePlayer" />
+
+@code {
+    // The window the wall starts with, before the browser has reported real layout; from then on the
+    // grid asks for whatever the viewport needs, and MaxWindowItems only backstops a bogus request.
+    private const int InitialWindowSize = 48;
+    private const int MaxWindowItems = 1000;
+    private const string ViewStateCookieName = "javbuddy-scenes-view";
+
+    private SceneWallOptions? options;
+    private bool loaded;
+    private int total;
+    // The loaded window: the cards from windowStart on, of the current view's kind.
+    private int windowStart;
+    private List<SceneWallCard> cards = [];
+    private List<HighlightWallCard> highlightCards = [];
+    private List<ApexWallCard> apexCards = [];
+    // Bumped by every reload, so a window still loading for the old filters is dropped when it lands.
+    private int windowGeneration;
+    // Last column count the grid reported, to keep windowStart on a row boundary.
+    private int columns = 1;
+    private VirtualizedGrid? grid;
+    // The view the cards and filter options were last loaded for; null until the first load.
+    private WallView? loadedView;
+    // The full tag/actor/studio selection, kept (and remembered) across views; only the part the
+    // current view offers is applied.
+    private readonly HashSet<int> tagFilter = [];
+    private readonly HashSet<int> actorFilter = [];
+    private readonly HashSet<string> studioFilter = new(StringComparer.OrdinalIgnoreCase);
+    // Apex tags: the clips containing an apex with one, or in the Apexes view the apexes
+    // themselves. apexOnly keeps clips containing any apex; the Apexes view doesn't apply it.
+    private readonly HashSet<int> apexTagFilter = [];
+    private bool apexOnly;
+    // Actress attributes, kept like the selections above; AppliedActorAttributes is the
+    // part the current view's options still offer.
+    private ActorAttributeSelection actorAttributes = ActorAttributeSelection.Empty;
+    private bool favoritesOnly;
+    private bool showHidden;
+    private string textFilter = "";
+    private SceneWallSort sort = SceneWallSort.ReleaseDate;
+    private int randomSeed = Random.Shared.Next(1, int.MaxValue);
+    private bool loading;
+    private bool disposed;
+    private bool showFilterDropdown;
+    private bool showSortDropdown;
+    private CancellationTokenSource? textDebounceCts;
+    private IJSObjectReference? jsModule;
+    private IJSObjectReference? clipCardModule;
+    private ElementReference wallRef;
+    private PlayerClip? playingClip;
+    // Play all / Shuffle's clips, fixed when started; null for a single card.
+    private PlayerClip[]? playlist;
+    private int playlistIndex;
+
+    /// <summary>What the page remembers between visits, like the Movies page's
+    /// javbuddy-movies-view cookie. The random order's seed isn't kept, so a new visit reshuffles.</summary>
+    private sealed record ScenesViewState(
+        List<int>? TagIds = null,
+        List<int>? ActorIds = null,
+        List<string>? Studios = null,
+        bool FavoritesOnly = false,
+        string Text = "",
+        SceneWallSort Sort = SceneWallSort.ReleaseDate,
+        bool ShowHidden = false,
+        ActorAttributeSelection? ActorAttributes = null,
+        bool ApexOnly = false,
+        List<int>? ApexTagIds = null);
+
+    private enum WallView
+    {
+        Scenes,
+        Highlights,
+        Apexes,
+    }
+
+    /// <summary>?view=highlights shows highlight cards instead of scene cards, ?view=apexes
+    /// apex cards.</summary>
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+
+    private WallView CurrentView => View?.ToLowerInvariant() switch
+    {
+        "highlights" => WallView.Highlights,
+        "apexes" => WallView.Apexes,
+        _ => WallView.Scenes,
+    };
+
+    private bool HighlightsView => CurrentView == WallView.Highlights;
+
+    private bool ApexesView => CurrentView == WallView.Apexes;
+
+    private int WindowCount => CurrentView switch
+    {
+        WallView.Highlights => highlightCards.Count,
+        WallView.Apexes => apexCards.Count,
+        _ => cards.Count,
+    };
+
+    private string Noun(int count) => (CurrentView, count == 1) switch
+    {
+        (WallView.Highlights, true) => "highlight",
+        (WallView.Highlights, false) => "highlights",
+        (WallView.Apexes, true) => "apex",
+        (WallView.Apexes, false) => "apexes",
+        (_, true) => "scene",
+        _ => "scenes",
+    };
+
+    private IEnumerable<int> OfferedTagIds => options?.Tags.Select(t => t.Id) ?? [];
+
+    private IEnumerable<int> OfferedActorIds => options?.Actors.Select(a => a.Id) ?? [];
+
+    private IEnumerable<string> OfferedStudios => options?.Studios ?? [];
+
+    private IEnumerable<int> OfferedApexTagIds => options?.ApexTags.Select(t => t.Id) ?? [];
+
+    private List<int> AppliedApexTags => [.. apexTagFilter.Intersect(OfferedApexTagIds)];
+
+    private bool ShowsHidden => showHidden && CurrentView == WallView.Scenes;
+
+    private bool AppliesApexOnly => apexOnly && !ApexesView;
+
+    private List<int> AppliedTags => [.. tagFilter.Intersect(OfferedTagIds)];
+
+    private List<int> AppliedActors => [.. actorFilter.Intersect(OfferedActorIds)];
+
+    private List<string> AppliedStudios => [.. studioFilter.Intersect(OfferedStudios, StringComparer.OrdinalIgnoreCase)];
+
+    /// <summary>The remembered actress attributes cut down to what this view's options offer: cups nobody has
+    /// are dropped and ranges are pulled inside their bounds, so a stale selection can't narrow the wall
+    /// without showing as active.</summary>
+    private ActorAttributeSelection AppliedActorAttributes =>
+        options is null ? ActorAttributeSelection.Empty : MovieFilterOptions.NormalizeActorAttributes(actorAttributes, options.ActorAttributes);
+
+    private int ActiveFilterCount => AppliedTags.Count + AppliedActors.Count + AppliedStudios.Count + AppliedActorAttributes.Count + AppliedApexTags.Count
+        + (favoritesOnly ? 1 : 0) + (ShowsHidden ? 1 : 0) + (AppliesApexOnly ? 1 : 0);
+
+    private string EmptyText => CurrentView switch
+    {
+        WallView.Highlights => HasFilters ? "No highlights match these filters." : "No highlights yet. Add them from a movie's player (Movie Detail → Edit scenes) or in Review.",
+        WallView.Apexes => HasFilters ? "No apexes match these filters." : "No apexes yet. Mark them from a movie's player (Movie Detail → Edit scenes).",
+        _ => HasFilters ? "No scenes match these filters." : "No scenes yet. Add them from a movie's player (Movie Detail → Edit scenes) or in Review.",
+    };
+
+    private bool HasFilters => ActiveFilterCount > 0 || !string.IsNullOrWhiteSpace(textFilter);
+
+    private SceneWallFilter CurrentFilter => new(
+        AppliedTags is { Count: > 0 } tags ? tags : null,
+        AppliedActors is { Count: > 0 } actors ? actors : null,
+        AppliedStudios is { Count: > 0 } studios ? studios : null,
+        favoritesOnly,
+        textFilter.TrimToNull(),
+        ShowsHidden,
+        AppliedActorAttributes is { IsEmpty: false } attributes ? attributes : null,
+        AppliesApexOnly,
+        AppliedApexTags is { Count: > 0 } apexTags ? apexTags : null);
+
+    private IReadOnlyList<MultiSelectOption> TagOptions => IdOptions(options!.Tags, tagFilter);
+
+    private IReadOnlyList<MultiSelectOption> ActorOptions => IdOptions(options!.Actors, actorFilter);
+
+    private IReadOnlyList<MultiSelectOption> ApexTagOptions => IdOptions(options!.ApexTags, apexTagFilter);
+
+    private IReadOnlyList<MultiSelectOption> StudioOptions => options!.Studios
+        .Select(studio => new MultiSelectOption(studio, studioFilter.Contains(studio), EventCallback.Factory.Create(this, () => ToggleAsync(studioFilter, studio))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> IdOptions(IReadOnlyList<SceneWallOption> source, HashSet<int> selected) => source
+        .Select(option => new MultiSelectOption(option.Name, selected.Contains(option.Id), EventCallback.Factory.Create(this, () => ToggleAsync(selected, option.Id))))
+        .ToList();
+
+    private static string SortLabel(SceneWallSort value) => value switch
+    {
+        SceneWallSort.DateAdded => "Date added",
+        SceneWallSort.Random => "Random",
+        _ => "Release date",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        SceneMediaQueue.Generated += OnMediaGenerated;
+        options = await LoadOptionsAsync(includeHidden: false);
+    }
+
+    // Back/Forward or the sidebar's Scenes link changes ?view on this same instance (the router doesn't
+    // recreate the page), so a view other than the loaded one reloads here.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedView is { } view && view != CurrentView)
+        {
+            await ReloadOptionsAsync();
+            await ReloadAsync();
+        }
+    }
+
+    // The page isn't prerendered, so its remembered filters are read from the browser (the cookie a
+    // live circuit's HttpContext holds can be stale) before the first page loads.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            clipCardModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
+            await clipCardModule.InvokeVoidAsync("preventPlainCardClicks", wallRef);
+            await clipCardModule.InvokeVoidAsync("measureTagOverflow", wallRef);
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/MovieScenes.razor.js");
+            var json = await jsModule.InvokeAsync<string?>("getCookie", ViewStateCookieName);
+            await ApplyViewStateAsync(json);
+        }
+        catch (JSDisconnectedException)
+        {
+            return;
+        }
+        catch (JSException)
+        {
+        }
+
+        await ReloadAsync(scrollToTop: false);
+        StateHasChanged();
+    }
+
+    private async Task ApplyViewStateAsync(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json) || options is null) return;
+
+        ScenesViewState? state;
+        try
+        {
+            state = System.Text.Json.JsonSerializer.Deserialize<ScenesViewState>(json);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return;
+        }
+        if (state is null) return;
+
+        // Hidden scenes offer their own tags, actors and studios, so the options follow the toggle.
+        showHidden = state.ShowHidden;
+        var allScenes = await SceneWall.GetOptionsAsync(includeHidden: true);
+        if (ShowsHidden)
+        {
+            options = allScenes;
+        }
+
+        // Values no view offers (a tag or actor since removed from every scene) are dropped; one only
+        // another view offers is kept, unapplied here.
+        var highlights = HighlightsView ? options : await SceneWall.GetHighlightOptionsAsync();
+        var apexes = ApexesView ? options : await SceneWall.GetApexOptionsAsync();
+        tagFilter.UnionWith((state.TagIds ?? []).Where(id => allScenes.Tags.Any(t => t.Id == id) || highlights.Tags.Any(t => t.Id == id)));
+        actorFilter.UnionWith((state.ActorIds ?? []).Where(id => allScenes.Actors.Any(a => a.Id == id) || highlights.Actors.Any(a => a.Id == id)
+            || apexes.Actors.Any(a => a.Id == id)));
+        studioFilter.UnionWith((state.Studios ?? []).Where(s => allScenes.Studios.Contains(s, StringComparer.OrdinalIgnoreCase)
+            || highlights.Studios.Contains(s, StringComparer.OrdinalIgnoreCase) || apexes.Studios.Contains(s, StringComparer.OrdinalIgnoreCase)));
+        apexTagFilter.UnionWith((state.ApexTagIds ?? []).Where(id => apexes.ApexTags.Any(t => t.Id == id)));
+        apexOnly = state.ApexOnly;
+        // Kept as remembered; AppliedActorAttributes drops what the view doesn't offer.
+        actorAttributes = state.ActorAttributes ?? ActorAttributeSelection.Empty;
+        favoritesOnly = state.FavoritesOnly;
+        textFilter = state.Text ?? "";
+        sort = Enum.IsDefined(state.Sort) ? state.Sort : SceneWallSort.ReleaseDate;
+    }
+
+    private async Task SaveViewStateAsync()
+    {
+        if (jsModule is null) return;
+
+        var json = System.Text.Json.JsonSerializer.Serialize(new ScenesViewState(
+            [.. tagFilter], [.. actorFilter], [.. studioFilter], favoritesOnly, textFilter, sort, showHidden,
+            actorAttributes, apexOnly, [.. apexTagFilter]));
+        try
+        {
+            await jsModule.InvokeVoidAsync("setJsonCookie", ViewStateCookieName, json, 31536000);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task FiltersChangedAsync()
+    {
+        await SaveViewStateAsync();
+        await ReloadAsync();
+    }
+
+    private Task ToggleAsync<T>(HashSet<T> set, T value)
+    {
+        set.Toggle(value);
+        return FiltersChangedAsync();
+    }
+
+    private Task SelectAllAsync(HashSet<int> set, IReadOnlyList<SceneWallOption> source, IReadOnlyList<string> labels)
+    {
+        set.UnionWith(source.Where(o => labels.Contains(o.Name)).Select(o => o.Id));
+        return FiltersChangedAsync();
+    }
+
+    private Task SelectAllStudiosAsync(IReadOnlyList<string> labels)
+    {
+        studioFilter.UnionWith(labels);
+        return FiltersChangedAsync();
+    }
+
+    // Clears only what this view offers; a selection kept for the other view stays.
+    private Task SelectNoneAsync<T>(HashSet<T> set, IEnumerable<T> offered)
+    {
+        set.ExceptWith(offered);
+        return FiltersChangedAsync();
+    }
+
+    private Task ToggleFavoritesOnlyAsync()
+    {
+        favoritesOnly = !favoritesOnly;
+        return FiltersChangedAsync();
+    }
+
+    private Task ToggleApexOnlyAsync()
+    {
+        apexOnly = !apexOnly;
+        return FiltersChangedAsync();
+    }
+
+    private async Task ToggleShowHiddenAsync()
+    {
+        showHidden = !showHidden;
+        await ReloadOptionsAsync();
+        await FiltersChangedAsync();
+    }
+
+    /// <summary>Reloads the filter options for the current view and showHidden. A selected value the
+    /// new options don't offer stays selected but isn't applied, so it applies again once a view or
+    /// the hidden toggle offers it.</summary>
+    private async Task ReloadOptionsAsync()
+    {
+        options = await LoadOptionsAsync(showHidden);
+    }
+
+    private Task<SceneWallOptions> LoadOptionsAsync(bool includeHidden) => CurrentView switch
+    {
+        WallView.Highlights => SceneWall.GetHighlightOptionsAsync(),
+        WallView.Apexes => SceneWall.GetApexOptionsAsync(),
+        _ => SceneWall.GetOptionsAsync(includeHidden),
+    };
+
+    // Clears what this view applies: selections kept for the other view stay, and so
+    // do Show hidden scenes and Contains an apex in a view that doesn't offer them.
+    private async Task ResetFiltersAsync()
+    {
+        var hadHidden = ShowsHidden;
+        tagFilter.ExceptWith(OfferedTagIds);
+        actorFilter.ExceptWith(OfferedActorIds);
+        studioFilter.ExceptWith(OfferedStudios);
+        apexTagFilter.ExceptWith(OfferedApexTagIds);
+        if (!ApexesView) apexOnly = false;
+        if (options is not null)
+        {
+            actorAttributes = MovieFilterOptions.MergeActorAttributes(actorAttributes, ActorAttributeSelection.Empty, options.ActorAttributes);
+        }
+        favoritesOnly = false;
+        if (CurrentView == WallView.Scenes) showHidden = false;
+        textFilter = "";
+        textDebounceCts?.Cancel();
+        showFilterDropdown = false;
+        if (hadHidden)
+        {
+            await ReloadOptionsAsync();
+        }
+        await FiltersChangedAsync();
+    }
+
+    private Task SetActorAttributesAsync(ActorAttributeSelection edited)
+    {
+        actorAttributes = MovieFilterOptions.MergeActorAttributes(actorAttributes, edited, options!.ActorAttributes);
+        return FiltersChangedAsync();
+    }
+
+    // Debounced like MovieFilterToolbar's search box, so typing doesn't reload per keystroke.
+    private async Task HandleTextInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+        textDebounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        textDebounceCts = cts;
+        try
+        {
+            await Task.Delay(250, cts.Token);
+            textFilter = value;
+            await FiltersChangedAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private Task SelectSortAsync(SceneWallSort value)
+    {
+        showSortDropdown = false;
+        sort = value;
+        return FiltersChangedAsync();
+    }
+
+    private void ToggleFilterDropdown()
+    {
+        showFilterDropdown = !showFilterDropdown;
+        showSortDropdown = false;
+    }
+
+    private void ToggleSortDropdown()
+    {
+        showSortDropdown = !showSortDropdown;
+        showFilterDropdown = false;
+    }
+
+    private void CloseDropdowns()
+    {
+        showFilterDropdown = false;
+        showSortDropdown = false;
+    }
+
+    /// <summary>Starts the wall over at the top with the current view, filters and sort.</summary>
+    private async Task ReloadAsync(bool scrollToTop = true)
+    {
+        var generation = ++windowGeneration;
+        if (sort == SceneWallSort.Random)
+        {
+            randomSeed = Random.Shared.Next(1, int.MaxValue);
+        }
+        cards = [];
+        highlightCards = [];
+        apexCards = [];
+        windowStart = 0;
+        loadedView = CurrentView;
+        loading = true;
+        try
+        {
+            await LoadWindowAsync(0, InitialWindowSize);
+        }
+        finally
+        {
+            if (generation == windowGeneration) loading = false;
+        }
+        if (scrollToTop && generation == windowGeneration && grid is not null)
+        {
+            await grid.ScrollToTopAsync();
+        }
+    }
+
+    /// <summary>VirtualizedGrid's LoadRange: moves the window to the range the viewport needs. The grid
+    /// serializes these, so two never overlap.</summary>
+    public async Task SetVisibleRange(int start, int count, int gridColumns)
+    {
+        columns = Math.Max(1, gridColumns);
+        if (total <= 0) return;
+
+        start = AlignDown(Math.Clamp(start, 0, total - 1));
+        count = Math.Min(Math.Clamp(count, 1, MaxWindowItems), total - start);
+        if (start >= windowStart && start + count <= windowStart + WindowCount) return;
+
+        if (await LoadWindowAsync(start, count))
+        {
+            StateHasChanged();
+        }
+    }
+
+    private int AlignDown(int index) => columns > 1 ? index - (index % columns) : index;
+
+    /// <summary>Replaces the window with the cards at [skip, skip + take). Cards are keyed by id, so the
+    /// ones the old window shares with the new one keep their DOM (and loaded thumbnail). Returns false
+    /// when a reload started meanwhile, leaving the newer window alone. A refresh after generated media
+    /// skips queueing generation for the cards still missing some, as the paged wall did.</summary>
+    private async Task<bool> LoadWindowAsync(int skip, int take, bool queueMissingMedia = true)
+    {
+        var generation = windowGeneration;
+        if (ApexesView)
+        {
+            var page = await SceneWall.GetApexPageAsync(CurrentFilter, sort, randomSeed, skip, take);
+            if (generation != windowGeneration) return false;
+            total = page.TotalCount;
+            apexCards = [.. page.Cards];
+            windowStart = skip;
+            loaded = true;
+            if (!queueMissingMedia) return true;
+            foreach (var movieId in page.Cards.Where(c => c.PreviewVersion is null).Select(c => c.MovieId).Distinct())
+            {
+                await ApexMedia.EnsureQueuedAsync(movieId);
+            }
+        }
+        else if (HighlightsView)
+        {
+            var page = await SceneWall.GetHighlightPageAsync(CurrentFilter, sort, randomSeed, skip, take);
+            if (generation != windowGeneration) return false;
+            total = page.TotalCount;
+            highlightCards = [.. page.Cards];
+            windowStart = skip;
+            loaded = true;
+            if (!queueMissingMedia) return true;
+            foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion))))
+            {
+                await HighlightMedia.EnsureQueuedAsync(movieId);
+            }
+        }
+        else
+        {
+            var page = await SceneWall.GetPageAsync(CurrentFilter, sort, randomSeed, skip, take);
+            if (generation != windowGeneration) return false;
+            total = page.TotalCount;
+            cards = [.. page.Cards];
+            windowStart = skip;
+            loaded = true;
+            if (!queueMissingMedia) return true;
+            foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion))))
+            {
+                await SceneMedia.EnsureQueuedAsync(movieId);
+            }
+        }
+        return true;
+    }
+
+    private static IEnumerable<int> MoviesMissingMedia(IEnumerable<(int MovieId, long? Thumb, long? Preview)> loadedCards) =>
+        loadedCards.Where(c => c.Thumb is null || c.Preview is null).Select(c => c.MovieId).Distinct();
+
+    /// <summary>Switches between scene, highlight and apex cards, kept in the URL so
+    /// a link or reload opens the same view. Filters carry over; the options are reloaded for the new view.</summary>
+    private async Task SwitchViewAsync(WallView view)
+    {
+        if (view == CurrentView) return;
+        View = view switch
+        {
+            WallView.Highlights => "highlights",
+            WallView.Apexes => "apexes",
+            _ => null,
+        };
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("view", View));
+        await ReloadOptionsAsync();
+        await ReloadAsync();
+    }
+
+    // Refresh the loaded window when one of its movies got new screenshots/previews.
+    private void OnMediaGenerated(int movieId)
+    {
+        if (disposed) return;
+        var shown = CurrentView switch
+        {
+            WallView.Highlights => highlightCards.Select(c => c.MovieId),
+            WallView.Apexes => apexCards.Select(c => c.MovieId),
+            _ => cards.Select(c => c.MovieId),
+        };
+        if (!shown.Contains(movieId)) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed) return;
+            if (await LoadWindowAsync(windowStart, WindowCount, queueMissingMedia: false))
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    // A plain click on a card (ClipCard leaves modifier clicks to its link).
+    private void PlayClip(PlayerClip clip)
+    {
+        playlist = null;
+        playingClip = clip;
+    }
+
+    private bool CanPlayAll => loaded && !loading && total > 0;
+
+    // Every clip the current filters match, not just the loaded cards, in the wall's order or shuffled.
+    // Clips of movies without a local video file are left out: the player would stop on its error there.
+    private async Task PlayAllAsync(bool shuffle)
+    {
+        var clips = (CurrentView switch
+            {
+                WallView.Highlights => (await SceneWall.GetHighlightPageAsync(CurrentFilter, sort, randomSeed, 0, total)).Cards.Where(c => c.HasLocalVideo).Select(PlayerClip.FromHighlight),
+                WallView.Apexes => (await SceneWall.GetApexPageAsync(CurrentFilter, sort, randomSeed, 0, total)).Cards.Where(c => c.HasLocalVideo).Select(PlayerClip.FromApex),
+                _ => (await SceneWall.GetPageAsync(CurrentFilter, sort, randomSeed, 0, total)).Cards.Where(c => c.HasLocalVideo).Select(PlayerClip.FromScene),
+            })
+            .ToArray();
+        if (clips.Length == 0) return;
+        if (shuffle) Random.Shared.Shuffle(clips);
+        playlist = clips;
+        PlayAt(0);
+    }
+
+    private void PlayAt(int index)
+    {
+        playlistIndex = index;
+        playingClip = playlist![index];
+    }
+
+    // A clip's end or Next: the playlist's next clip, or closing after the last (or a single clip).
+    private void NextClip()
+    {
+        if (playlist is not null && playlistIndex + 1 < playlist.Length)
+        {
+            PlayAt(playlistIndex + 1);
+        }
+        else
+        {
+            ClosePlayer();
+        }
+    }
+
+    // The clip controls restart the first clip themselves; this only goes back one.
+    private void PreviousClip()
+    {
+        if (playlist is not null && playlistIndex > 0) PlayAt(playlistIndex - 1);
+    }
+
+    private void ClosePlayer()
+    {
+        playingClip = null;
+        playlist = null;
+    }
+
+    private RenderFragment ViewButton(WallView view, string name, string label) => @<button type="button" class="scene-wall-view-btn @(CurrentView == view ? "active" : null)" data-view="@name"
+            aria-pressed="@(CurrentView == view ? "true" : "false")" @onclick="() => SwitchViewAsync(view)">@label</button>;
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        textDebounceCts?.Cancel();
+        SceneMediaQueue.Generated -= OnMediaGenerated;
+        try
+        {
+            if (clipCardModule is not null) await clipCardModule.DisposeAsync();
+            if (jsModule is not null) await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

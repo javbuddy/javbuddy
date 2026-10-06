@@ -1,0 +1,245 @@
+@* The full-screen, navigable image viewer shared by MovieGallery.razor, ActorPhotos.razor and
+   ActorPhotoGallery.razor. The caller owns which image is shown (@bind-Index) and
+   renders this only while the viewer is open — closing it (OnClose) is the caller's cue to stop
+   rendering it, which also resets the "Original" toggle for the next open. *@
+
+<div class="gallery-lightbox" tabindex="0" data-zoom-container @ref="lightboxRef" @onkeydown="OnKeyDown" @onclick="CloseAsync" @ontouchstart="OnAnyTouchStart" @ontouchmove:preventDefault="true" @onwheel:preventDefault="true">
+    <div class="gallery-topbar" @onclick:stopPropagation="true">
+        <div class="gallery-progress">
+            @for (var i = 0; i < ProgressSegmentCount; i++)
+            {
+                var idx = i;
+                <button type="button" class="gallery-progress-segment @(idx <= CurrentProgressSegment ? "is-seen" : "") @(idx == CurrentProgressSegment ? "is-current" : "")" @onclick="() => GoToAsync(ProgressSegmentStartIndex(idx))" aria-label="@ProgressSegmentLabel(idx)"></button>
+            }
+        </div>
+        <div class="gallery-topbar-row">
+            <div class="gallery-title-area">
+                @if (Title is not null)
+                {
+                    @Title(Index)
+                }
+                <span class="gallery-index">@(Index + 1) / @Count</span>
+            </div>
+            <div class="gallery-topbar-actions">
+                <ImageZoomControls ResetKey="Index" ZoomedChanged="z => zoomed = z" />
+                @if (OriginalUrl?.Invoke(Index) is not null)
+                {
+                    <button type="button" class="btn btn-sm @(showOriginal ? "btn-primary" : "btn-outline-light") gallery-original-toggle" @onclick="ToggleOriginal" aria-pressed="@(showOriginal ? "true" : "false")">Original</button>
+                }
+                @if (Actions is not null)
+                {
+                    @Actions(Index)
+                }
+                <button class="gallery-close-btn" @onclick="CloseAsync" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M2.146 2.146a.5.5 0 0 1 .708 0L8 7.293l5.146-5.147a.5.5 0 1 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854a.5.5 0 0 1 0-.708z" /></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    @if (Count > 1)
+    {
+        <button class="gallery-nav gallery-nav-prev" @onclick="PrevAsync" @onclick:stopPropagation="true" aria-label="Previous @ItemName">
+            <span class="gallery-nav-icon"><svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z" /></svg></span>
+        </button>
+    }
+    <img class="gallery-image" data-zoom-image src="@CurrentImageUrl" alt="@(ImageAlt?.Invoke(Index) ?? $"Image {Index + 1}")" @onclick:stopPropagation="true" @ontouchstart="OnTouchStart" @ontouchend="OnTouchEndAsync" @onload="() => originalLoading = false" @onerror="() => originalLoading = false" />
+    @if (originalLoading)
+    {
+        <div class="gallery-image-loading" aria-hidden="true">
+            <span class="spinner-border spinner-border-sm text-light" role="status"></span>
+        </div>
+    }
+    @if (Count > 1)
+    {
+        <button class="gallery-nav gallery-nav-next" @onclick="NextAsync" @onclick:stopPropagation="true" aria-label="Next @ItemName">
+            <span class="gallery-nav-icon"><svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z" /></svg></span>
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>Number of images the viewer navigates through. Prev/next wrap around it.</summary>
+    [Parameter, EditorRequired] public int Count { get; set; }
+
+    /// <summary>Zero-based index of the image being shown. Use <c>@bind-Index</c> — navigation
+    /// only raises <see cref="IndexChanged"/>, so the caller has to feed the new value back.</summary>
+    [Parameter] public int Index { get; set; }
+
+    [Parameter] public EventCallback<int> IndexChanged { get; set; }
+
+    /// <summary>Full-size URL for the image at an index.</summary>
+    [Parameter, EditorRequired] public Func<int, string> ImageUrl { get; set; } = default!;
+
+    /// <summary>Uncompressed original URL for the image at an index, shown while the "Original"
+    /// toggle is on. A null result (or no callback) hides the toggle for that image.</summary>
+    [Parameter] public Func<int, string?>? OriginalUrl { get; set; }
+
+    /// <summary>Alt text for the image at an index. Defaults to "Image n".</summary>
+    [Parameter] public Func<int, string>? ImageAlt { get; set; }
+
+    /// <summary>Singular noun used in the nav and progress-bar aria labels ("Next photo",
+    /// "Go to photo 3 of 10"). Defaults to "image".</summary>
+    [Parameter] public string ItemName { get; set; } = "image";
+
+    /// <summary>Optional content shown before the "n / total" index in the top bar.</summary>
+    [Parameter] public RenderFragment<int>? Title { get; set; }
+
+    /// <summary>Optional buttons shown in the top bar between the Original toggle and ✕.</summary>
+    [Parameter] public RenderFragment<int>? Actions { get; set; }
+
+    /// <summary>True while the caller shows a dialog over the viewer (e.g. a delete confirmation),
+    /// which takes keyboard focus. When it goes back to false the viewer focuses itself again, so
+    /// arrows and Esc keep working without a click.</summary>
+    [Parameter] public bool Covered { get; set; }
+
+    /// <summary>Raised by ✕, Esc or a backdrop click. The caller should stop rendering the viewer.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private const double SwipeThreshold = 50;
+    private const int MaxProgressSegments = 100;
+
+    private ElementReference lightboxRef;
+    private bool showOriginal;
+    private bool originalLoading;
+    private int? previousIndex;
+    private bool previousCovered;
+    private bool refocusPending;
+    private double? touchStartX;
+    private double? touchStartY;
+    private bool zoomed;
+
+    protected override void OnParametersSet()
+    {
+        // "Original" mode persists across navigation until toggled off or the viewer closes
+        //, so a newly shown image still has its own original to load — re-arm the
+        // loading indicator even though the toggle itself doesn't change.
+        if (previousIndex is { } previous && previous != Index)
+        {
+            originalLoading = showOriginal;
+        }
+
+        previousIndex = Index;
+
+        if (previousCovered && !Covered) refocusPending = true;
+        previousCovered = Covered;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender || refocusPending)
+        {
+            refocusPending = false;
+            try
+            {
+                await lightboxRef.FocusAsync();
+            }
+            catch (JSException)
+            {
+                // Ignored if the element isn't ready for focus yet.
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+
+    private string CurrentImageUrl =>
+        showOriginal && OriginalUrl?.Invoke(Index) is { } original ? original : ImageUrl(Index);
+
+    private void ToggleOriginal()
+    {
+        showOriginal = !showOriginal;
+        originalLoading = showOriginal;
+    }
+
+    private int ProgressSegmentCount => Math.Min(Count, MaxProgressSegments);
+
+    private int CurrentProgressSegment => Count > 0 ? ((Index + 1) * ProgressSegmentCount - 1) / Count : 0;
+
+    private int ProgressSegmentStartIndex(int segmentIndex) => segmentIndex * Count / ProgressSegmentCount;
+
+    private string ProgressSegmentLabel(int segmentIndex)
+    {
+        var startIndex = ProgressSegmentStartIndex(segmentIndex);
+        var endIndex = ProgressSegmentStartIndex(segmentIndex + 1) - 1;
+        return startIndex == endIndex
+            ? $"Go to {ItemName} {startIndex + 1} of {Count}"
+            : $"Go to {ItemName}s {startIndex + 1} to {endIndex + 1} of {Count}";
+    }
+
+    private Task GoToAsync(int index) =>
+        Count > 0 && index >= 0 && index < Count ? IndexChanged.InvokeAsync(index) : Task.CompletedTask;
+
+    private Task NextAsync() => GoToAsync(Count > 0 ? (Index + 1) % Count : 0);
+
+    private Task PrevAsync() => GoToAsync(Count > 0 ? (Index - 1 + Count) % Count : 0);
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowRight": await NextAsync(); break;
+            case "ArrowLeft": await PrevAsync(); break;
+            case "Escape": await CloseAsync(); break;
+        }
+    }
+
+    private void OnTouchStart(TouchEventArgs e)
+    {
+        if (e.Touches.Length == 1)
+        {
+            touchStartX = e.Touches[0].ClientX;
+            touchStartY = e.Touches[0].ClientY;
+        }
+    }
+
+    // A second finger anywhere on the viewer makes this a pinch-zoom, never a swipe —
+    // it may land off the image, where the image's own touchstart doesn't see it.
+    private void OnAnyTouchStart(TouchEventArgs e)
+    {
+        if (e.Touches.Length > 1)
+        {
+            touchStartX = null;
+            touchStartY = null;
+        }
+    }
+
+    private async Task OnTouchEndAsync(TouchEventArgs e)
+    {
+        // While zoomed in, a one-finger drag pans the image instead.
+        if (zoomed)
+        {
+            touchStartX = null;
+            touchStartY = null;
+            return;
+        }
+
+        if (touchStartX is not { } startX || touchStartY is not { } startY || e.ChangedTouches.Length == 0)
+        {
+            return;
+        }
+
+        touchStartX = null;
+        touchStartY = null;
+
+        var deltaX = e.ChangedTouches[0].ClientX - startX;
+        var deltaY = e.ChangedTouches[0].ClientY - startY;
+
+        // Mostly-vertical swipes (e.g. a scroll attempt) don't navigate.
+        if (Math.Abs(deltaX) < SwipeThreshold || Math.Abs(deltaX) < Math.Abs(deltaY))
+        {
+            return;
+        }
+
+        if (deltaX < 0)
+        {
+            await NextAsync();
+        }
+        else
+        {
+            await PrevAsync();
+        }
+    }
+}

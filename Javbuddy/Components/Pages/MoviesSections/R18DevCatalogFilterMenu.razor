@@ -1,0 +1,93 @@
+@using Javbuddy.Services.R18Dev
+
+@* The Movies page's Filter menu entries while it browses "All releases (r18.dev)",
+   rendered inside MovieFilterToolbar's dropdown under its Studio filter. *@
+
+@if (Options.Categories.Count > 0)
+{
+    <MultiSelectFilterGroup GroupLabel="Genre (r18.dev)" Options="@GenreOptions" Searchable="true"
+                            OnSelectAll="SelectAllGenresAsync"
+                            OnSelectNone="() => ChangeAsync(Filter with { Genres = [] })" />
+    @if (Filter.Genres.Count > 1)
+    {
+        <label class="catalog-filter-check">
+            <input type="checkbox" checked="@Filter.MatchAllGenres"
+                   @onchange="e => ChangeAsync(Filter with { MatchAllGenres = e.Value is true })" />
+            Match all selected genres
+        </label>
+    }
+}
+@if (Options is { MinYear: { } minYear, MaxYear: { } maxYear } && minYear < maxYear)
+{
+    <RangeFilter Label="Release year" Unit=""
+                 BoundsMin="minYear" BoundsMax="maxYear"
+                 SelectedMin="@(Filter.YearFrom ?? minYear)" SelectedMax="@(Filter.YearTo ?? maxYear)"
+                 OnRangeCommitted="r => CommitYearsAsync(r, minYear, maxYear)" />
+}
+<MultiSelectFilterGroup GroupLabel="Cast" Options="@CastOptions" />
+<MultiSelectFilterGroup GroupLabel="VR" Options="@FlagOptions(Filter.Vr, "Only VR", "Hide VR", flag => Filter with { Vr = flag })" />
+<MultiSelectFilterGroup GroupLabel="Compilation" Options="@FlagOptions(Filter.Compilation, "Only compilations", "Hide compilations", flag => Filter with { Compilation = flag })" />
+<p class="catalog-filter-note">VR and compilations are recognized from codes, titles and genres, so a few releases can be misclassified.</p>
+
+@code {
+    /// <summary>The applied catalog filter; edits are raised as a modified copy through FilterChanged.</summary>
+    [Parameter, EditorRequired] public R18DevCatalogFilter Filter { get; set; } = new();
+    [Parameter, EditorRequired] public R18DevCatalogOptions Options { get; set; } = R18DevCatalogOptions.None;
+    [Parameter] public EventCallback<R18DevCatalogFilter> FilterChanged { get; set; }
+
+    private Task ChangeAsync(R18DevCatalogFilter next) => FilterChanged.InvokeAsync(next);
+
+    private IReadOnlyList<MultiSelectOption> GenreOptions => Options.Categories
+        .Select(category => new MultiSelectOption(
+            category.Name,
+            Filter.Genres.Contains(category.Name, StringComparer.OrdinalIgnoreCase),
+            EventCallback.Factory.Create(this, () => ToggleGenreAsync(category.Name))))
+        .ToList();
+
+    private Task ToggleGenreAsync(string genre)
+    {
+        var genres = Filter.Genres.ToList();
+        if (genres.RemoveAll(g => string.Equals(g, genre, StringComparison.OrdinalIgnoreCase)) == 0) genres.Add(genre);
+        return ChangeAsync(Filter with { Genres = genres });
+    }
+
+    private Task SelectAllGenresAsync(IReadOnlyList<string> visible) =>
+        ChangeAsync(Filter with { Genres = Filter.Genres.Union(visible, StringComparer.OrdinalIgnoreCase).ToList() });
+
+    // A thumb at its end stop means "no limit" on that side, like the actress attribute sliders.
+    private Task CommitYearsAsync((int Min, int Max) range, int minYear, int maxYear) => ChangeAsync(Filter with
+    {
+        YearFrom = range.Min <= minYear ? null : range.Min,
+        YearTo = range.Max >= maxYear ? null : range.Max,
+    });
+
+    private static readonly (R18DevCastSize Size, string Label)[] CastSizes =
+    [
+        (R18DevCastSize.Solo, "Solo"),
+        (R18DevCastSize.Multiple, "Multiple actresses"),
+        (R18DevCastSize.Unknown, "No cast listed"),
+    ];
+
+    private IReadOnlyList<MultiSelectOption> CastOptions => CastSizes
+        .Select(c => new MultiSelectOption(
+            c.Label,
+            Filter.CastSizes.Contains(c.Size),
+            EventCallback.Factory.Create(this, () => ToggleCastAsync(c.Size))))
+        .ToList();
+
+    private Task ToggleCastAsync(R18DevCastSize size)
+    {
+        var sizes = Filter.CastSizes.ToList();
+        if (!sizes.Remove(size)) sizes.Add(size);
+        return ChangeAsync(Filter with { CastSizes = sizes });
+    }
+
+    // Picking the active choice again clears it, like the Library filter.
+    private IReadOnlyList<MultiSelectOption> FlagOptions(R18DevCatalogFlag current, string onlyLabel, string hideLabel, Func<R18DevCatalogFlag, R18DevCatalogFilter> with) =>
+    [
+        new(onlyLabel, current == R18DevCatalogFlag.Only,
+            EventCallback.Factory.Create(this, () => ChangeAsync(with(current == R18DevCatalogFlag.Only ? R18DevCatalogFlag.Any : R18DevCatalogFlag.Only)))),
+        new(hideLabel, current == R18DevCatalogFlag.Exclude,
+            EventCallback.Factory.Create(this, () => ChangeAsync(with(current == R18DevCatalogFlag.Exclude ? R18DevCatalogFlag.Any : R18DevCatalogFlag.Exclude)))),
+    ];
+}

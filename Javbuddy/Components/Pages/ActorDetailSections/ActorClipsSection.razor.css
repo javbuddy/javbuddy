@@ -1,0 +1,21 @@
+/* Like ActorPhotoGallery's card (CSS isolation keeps its rules there, so these are copies). */
+.actor-clips { border-color: #dfe3e8; }
+.actor-clips-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.actor-clips-header .card-title { margin: 0; }
+.actor-clips-count { color: #6c757d; font-weight: 400; }
+
+/* The Scenes wall's grid (MovieScenes.razor.css). */
+.actor-clips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.actor-clips-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+:root[data-theme="dark"] .actor-clips { color: #e3e5e8; background: #242833; border-color: #3d4354; }
+:root[data-theme="dark"] .actor-clips ::deep .scene-wall-card { --scene-wall-card-bg: #2b303c; }

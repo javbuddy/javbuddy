@@ -1,0 +1,609 @@
+/* Movie Detail's Scenes section: timeline, highlights shelf and scene grid. Movie
+   Detail is always dark, so these are dark-only colors. */
+.movie-detail-section {
+    margin: 1.75rem 0;
+}
+
+.movie-scenes-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid #363c4a;
+    margin-bottom: 0.9rem;
+    padding-bottom: 0.5rem;
+}
+
+    .movie-scenes-header h2 {
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+.movie-scenes-edit-btn {
+    appearance: none;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 3px;
+    color: #6ea8fe;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+}
+
+    .movie-scenes-edit-btn:hover {
+        background-color: rgba(255, 255, 255, 0.16);
+        color: #8fbcfe;
+    }
+
+.movie-scenes-empty {
+    margin: 0;
+    color: #8a90a0;
+    font-size: 0.85rem;
+}
+
+.movie-scenes-subheader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 1.4rem 0 0.6rem;
+}
+
+    .movie-scenes-subheader h3 {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #d8dae0;
+    }
+
+/* ---- Timeline ---- */
+
+.movie-scenes-timeline {
+    position: relative;
+    margin-bottom: 0.5rem;
+}
+
+/* Hover preview above the bar, placed and filled by MovieScenesSection.razor.js;
+   styled like ScrubBar's. */
+.movie-scenes-timeline-preview {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    transform: translateX(-50%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.movie-scenes-timeline-preview-visible {
+    display: flex;
+}
+
+.movie-scenes-timeline-thumb {
+    background-color: #000;
+    overflow: hidden;
+    border: 2px solid #fff;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    box-sizing: content-box;
+}
+
+.movie-scenes-timeline-time {
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+    background-color: rgba(0, 0, 0, 0.75);
+    border-radius: 3px;
+    padding: 0 0.35rem;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.movie-scenes-timeline-bar {
+    position: relative;
+    height: 30px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+}
+
+/* Clicking the bare bar plays from that moment. */
+.movie-scenes-timeline-bar-playable {
+    cursor: pointer;
+}
+
+.movie-scenes-timeline-segment {
+    appearance: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 0.4rem;
+    border: none;
+    border-right: 2px solid #1b1e26;
+    color: #fff;
+    font-size: 0.75rem;
+    text-align: left;
+    overflow: hidden;
+    cursor: pointer;
+    transition: filter 0.15s ease;
+}
+
+    .movie-scenes-timeline-segment:hover:not(:disabled) {
+        filter: brightness(1.2);
+    }
+
+    .movie-scenes-timeline-segment:disabled {
+        cursor: default;
+    }
+
+.movie-scenes-timeline-segment-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Muted scene colors, cycled by position. */
+.movie-scenes-color-0 { background-color: #3d6a9e; }
+.movie-scenes-color-1 { background-color: #56627a; }
+.movie-scenes-color-2 { background-color: #b58a2e; }
+.movie-scenes-color-3 { background-color: #5c5f7a; }
+.movie-scenes-color-4 { background-color: #5f9a7a; }
+.movie-scenes-color-5 { background-color: #b0674a; }
+.movie-scenes-color-6 { background-color: #3f8a92; }
+.movie-scenes-color-7 { background-color: #6b6f78; }
+
+.movie-scenes-timeline-axis {
+    position: relative;
+    height: 1.1rem;
+    margin-top: 0.2rem;
+    color: #8a90a0;
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.movie-scenes-timeline-tick {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+.movie-scenes-timeline-tick-first {
+    transform: none;
+}
+
+.movie-scenes-timeline-tick-last {
+    transform: translateX(-100%);
+}
+
+/* Highlight pins hang below the axis on a stem that reaches up to the bar. */
+.movie-scenes-timeline-pins {
+    position: relative;
+    margin-top: 0.1rem;
+    padding-bottom: 0.25rem;
+    box-sizing: content-box;
+}
+
+.movie-scenes-timeline-stem {
+    position: absolute;
+    top: -1.5rem;
+    width: 2px;
+    margin-left: -1px;
+    background-color: rgba(32, 201, 151, 0.7);
+    pointer-events: none;
+}
+
+.movie-scenes-timeline-pin {
+    appearance: none;
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    max-width: 22%;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid #20c997;
+    border-radius: 999px;
+    background-color: rgba(18, 60, 50, 0.95);
+    box-shadow: 0 0 8px rgba(32, 201, 151, 0.45);
+    color: #7ff0cd;
+    font-size: 0.72rem;
+    line-height: 1.3;
+    white-space: nowrap;
+    cursor: pointer;
+    z-index: 1;
+}
+
+    .movie-scenes-timeline-pin:hover:not(:disabled) {
+        background-color: rgba(24, 90, 72, 0.98);
+        z-index: 2;
+    }
+
+    .movie-scenes-timeline-pin:disabled {
+        cursor: default;
+    }
+
+.movie-scenes-timeline-pin-start {
+    transform: translateX(-0.5rem);
+}
+
+.movie-scenes-timeline-pin-center {
+    transform: translateX(-50%);
+}
+
+.movie-scenes-timeline-pin-end {
+    transform: translateX(calc(-100% + 0.5rem));
+}
+
+.movie-scenes-timeline-pin-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.movie-scenes-timeline-pin-time {
+    color: #a5d8c8;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---- Cards (shared by the shelf and the grid) ---- */
+
+.movie-scenes-shelf {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 240px;
+    gap: 0.9rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: thin;
+    padding-bottom: 0.4rem;
+}
+
+    .movie-scenes-shelf > .movie-scenes-card {
+        scroll-snap-align: start;
+    }
+
+.movie-scenes-shelf-nav {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.movie-scenes-shelf-arrow {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 50%;
+    background-color: rgba(255, 255, 255, 0.06);
+    color: #d8dae0;
+    cursor: pointer;
+}
+
+    .movie-scenes-shelf-arrow:hover {
+        background-color: rgba(255, 255, 255, 0.16);
+    }
+
+.movie-scenes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.9rem;
+}
+
+.movie-scenes-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    background-color: #242833;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    color: #dfe2e8;
+    transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+    .movie-scenes-card:hover {
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+        transform: translateY(-2px);
+    }
+
+.movie-scenes-card-highlight {
+    box-shadow: 0 0 0 1px rgba(32, 201, 151, 0.35), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+    .movie-scenes-card-highlight:hover {
+        box-shadow: 0 0 0 1px rgba(32, 201, 151, 0.7), 0 6px 16px rgba(0, 0, 0, 0.45);
+    }
+
+.movie-scenes-media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background-color: #15171d;
+}
+
+.movie-scenes-play {
+    appearance: none;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* Overlays sit above the play button but let clicks through to it. */
+.movie-scenes-duration,
+.movie-scenes-highlight-count,
+.movie-scenes-apex-count {
+    position: absolute;
+    pointer-events: none;
+}
+
+.movie-scenes-duration {
+    right: 0.4rem;
+    bottom: 0.4rem;
+    padding: 0.05rem 0.35rem;
+    border-radius: 3px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.movie-scenes-highlight-count {
+    top: 0.4rem;
+    left: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid #20c997;
+    border-radius: 999px;
+    background-color: rgba(18, 60, 50, 0.9);
+    color: #7ff0cd;
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Apex count, in the orange of the timeline's diamonds, top right of a scene card,
+   opposite the highlight count. */
+.movie-scenes-apex-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid #f76707;
+    border-radius: 999px;
+    background-color: rgba(70, 30, 6, 0.9);
+    color: #ffa94d;
+    font-size: 0.7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.movie-scenes-apex-count {
+    top: 0.4rem;
+    right: 0.4rem;
+}
+
+.movie-scenes-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.movie-scenes-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.5rem 0.6rem 0.6rem;
+    min-width: 0;
+}
+
+.movie-scenes-card-title-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.movie-scenes-card-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.movie-scenes-card-title-default {
+    font-style: italic;
+    font-weight: 500;
+    color: #b9bfd1;
+}
+
+.movie-scenes-range {
+    color: #8a90a0;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.movie-scenes-card-meta .movie-scenes-range {
+    margin-right: auto;
+}
+
+.movie-scenes-fav-btn {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem;
+    border: none;
+    background: transparent;
+    color: #8a90a0;
+    cursor: pointer;
+}
+
+    .movie-scenes-fav-btn:hover,
+    .movie-scenes-fav-on {
+        color: #e03131;
+    }
+
+.movie-scenes-actors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    color: #b9bfd1;
+}
+
+/* A highlight's inherited actors: muted and italic, like the editor's implied chips. */
+.movie-scenes-actors-inherited {
+    font-style: italic;
+    color: #8a90a2;
+    cursor: help;
+}
+
+.movie-scenes-actors-inherited .movie-scenes-actor-avatar {
+    opacity: 0.55;
+}
+
+.movie-scenes-actor {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    min-width: 0;
+}
+
+.movie-scenes-actor-avatar {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    object-fit: cover;
+    background-color: #363c4a;
+}
+
+.movie-scenes-actor-initial {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #d8dae0;
+}
+
+.movie-scenes-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.movie-scenes-tag {
+    padding: 0 0.4rem;
+    border: 1px solid #3d4354;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    color: #b9bfd1;
+}
+
+/* Phones: pins keep only their icon (the labels would collide), the shelf swipes a card and a bit,
+   and the grid is one column. */
+@media (max-width: 640.98px) {
+    .movie-scenes-timeline-pin {
+        max-width: none;
+        padding: 0.15rem 0.3rem;
+    }
+
+    .movie-scenes-timeline-pin-name,
+    .movie-scenes-timeline-pin-time,
+    .movie-scenes-timeline-tick-minor {
+        display: none;
+    }
+
+    .movie-scenes-shelf {
+        grid-auto-columns: 78%;
+    }
+
+    .movie-scenes-shelf-nav {
+        display: none;
+    }
+
+    .movie-scenes-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Apex markers: a diamond per apex in a thin row above the bar. */
+.movie-scenes-timeline-apexes {
+    position: relative;
+    height: 14px;
+    margin-bottom: 0.15rem;
+}
+
+.movie-scenes-timeline-apex {
+    appearance: none;
+    position: absolute;
+    top: 2px;
+    width: 10px;
+    height: 10px;
+    margin: 0 0 0 -5px;
+    padding: 0;
+    border: none;
+    background-color: #f76707;
+    transform: rotate(45deg);
+    cursor: pointer;
+}
+
+/* Favorite apexes in the favorite-heart red. */
+.movie-scenes-timeline-apex-fav {
+    background-color: #e03131;
+}
+
+.movie-scenes-timeline-apex:hover:not(:disabled) {
+    filter: brightness(1.3);
+}
+
+.movie-scenes-timeline-apex:disabled {
+    cursor: default;
+}
+
+/* The hovered apex's popover: as wide as the timeline and a container, so the
+   240px card can sit over the marker (--x, its fraction of the runtime) yet stay inside the
+   timeline, with its arrow still on the marker. Never takes the pointer from the marker. */
+.movie-scenes-timeline-apex-popover {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 8px);
+    height: 0;
+    container-type: inline-size;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.movie-scenes-timeline-apex-popover-at {
+    --apex-left: clamp(0px, calc(var(--x) * 100cqw - 120px), calc(100cqw - 240px));
+    --apex-preview-arrow: calc(var(--x) * 100cqw - var(--apex-left));
+    position: absolute;
+    bottom: 0;
+    left: var(--apex-left);
+    width: 240px;
+}

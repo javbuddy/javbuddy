@@ -1,0 +1,64 @@
+@page "/actors/add/new"
+@using Javbuddy.Models
+@using Javbuddy.Services
+@inject IActorService ActorService
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Add an actor · Javbuddy</PageTitle>
+
+<h1>Add an actor</h1>
+
+<div class="card">
+    <div class="card-body">
+        <p class="text-muted">
+            Actors are linked to movies by matching their displayed name (LastName FirstName, case-insensitively)
+            against the cast list javinizer-go or your local .nfo files already fetched for each movie — use the
+            same spelling javinizer-go uses (e.g. last name "Mikami", first name "Yua") so the match works.
+        </p>
+        <EditForm Model="newActor" OnValidSubmit="AddActor" FormName="add-actor">
+            <DataAnnotationsValidator />
+            <div class="row g-2 align-items-start">
+                <div class="col-md-4">
+                    <InputText class="form-control" @bind-Value="newActor.FirstName" placeholder="First name, e.g. Yua" disabled="@adding" />
+                    <ValidationMessage For="() => newActor.FirstName" />
+                </div>
+                <div class="col-md-6">
+                    <InputText class="form-control" @bind-Value="newActor.LastName" placeholder="Last name (optional), e.g. Mikami" disabled="@adding" />
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" type="submit" disabled="@adding">
+                        @(adding ? "Adding…" : "Add")
+                    </button>
+                </div>
+            </div>
+        </EditForm>
+
+        @if (addError is not null)
+        {
+            <div class="alert alert-warning mt-3 mb-0">@addError</div>
+        }
+    </div>
+</div>
+
+@code {
+    private Actor newActor = new();
+    private bool adding;
+    private string? addError;
+
+    private async Task AddActor()
+    {
+        adding = true;
+        addError = null;
+
+        var result = await ActorService.CreateAsync(newActor.FirstName!, newActor.LastName);
+        if (!result.Success)
+        {
+            addError = result.ErrorMessage;
+            adding = false;
+            return;
+        }
+
+        Nav.NavigateTo($"/actors/{Uri.EscapeDataString(result.Actor!.DisplayName)}");
+    }
+}

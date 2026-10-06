@@ -1,0 +1,227 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@inject ITagService TagService
+
+@if (Show && EffectiveSources.Count > 0)
+{
+    <div class="tag-merge-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="tag-merge-modal-panel" @onclick:stopPropagation="true">
+            <div class="tag-merge-modal-header">
+                <h5 class="tag-merge-modal-title">
+                    @(EffectiveSources.Count == 1 ? $"Merge Tag — {EffectiveSources[0].Name}" : $"Merge {EffectiveSources.Count} Tags")
+                </h5>
+                <button type="button" class="tag-merge-modal-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@isMerging">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+
+            <div class="tag-merge-modal-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+                }
+
+                <div class="tag-merge-notice mb-3">
+                    @if (EffectiveSources.Count == 1)
+                    {
+                        <p class="mb-0 small">
+                            Merging re-points all movies tagged <strong>@EffectiveSources[0].Name</strong> onto the target tag.
+                            <strong>@EffectiveSources[0].Name</strong> will be permanently deleted.
+                        </p>
+                    }
+                    else
+                    {
+                        <p class="mb-0 small">
+                            Merging re-points all movies tagged with any of <strong>@string.Join(", ", EffectiveSources.Select(t => t.Name))</strong> onto the target tag.
+                            All @EffectiveSources.Count tags will be permanently deleted.
+                        </p>
+                    }
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold mb-1">Select Target Tag</label>
+                    <input type="text"
+                           class="form-control mb-2"
+                           placeholder="Filter tags…"
+                           value="@searchQuery"
+                           @oninput="OnSearchInput"
+                           disabled="@isMerging" />
+
+                    <div class="tag-candidate-list">
+                        @if (isSearching)
+                        {
+                            <div class="p-3 text-center"><LoadingIndicator /></div>
+                        }
+                        else if (candidates.Count == 0)
+                        {
+                            <div class="p-3 text-center text-muted">No candidate tags found.</div>
+                        }
+                        else
+                        {
+                            @foreach (var candidate in candidates)
+                            {
+                                var isSelected = selectedTarget?.Id == candidate.Id;
+                                <div class="tag-candidate-item @(isSelected ? "selected" : "")" @onclick="() => SelectTarget(candidate)">
+                                    <div class="tag-candidate-name">
+                                        @if (candidate.ParentTagName is not null)
+                                        {
+                                            <span class="badge bg-secondary me-1">@candidate.ParentTagName</span>
+                                        }
+                                        @candidate.Name
+                                        @if (candidate.IsSuggested)
+                                        {
+                                            <span class="badge bg-primary ms-2">Suggested</span>
+                                        }
+                                    </div>
+                                    <div class="text-muted small">@candidate.MovieCount movie@(candidate.MovieCount == 1 ? "" : "s")</div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+
+                @if (selectedTarget is not null)
+                {
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="createRuleCheckbox" @bind="createReplacementRule" disabled="@isMerging" />
+                        <label class="form-check-label small" for="createRuleCheckbox">
+                            @if (EffectiveSources.Count == 1)
+                            {
+                                <text>Also create a replacement rule so future "@EffectiveSources[0].Name" values resolve to "@selectedTarget.Name" automatically</text>
+                            }
+                            else
+                            {
+                                <text>Also create replacement rules so future values matching these @EffectiveSources.Count tags resolve to "@selectedTarget.Name" automatically</text>
+                            }
+                        </label>
+                    </div>
+                }
+            </div>
+
+            <div class="tag-merge-modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isMerging">Cancel</button>
+                <button type="button"
+                        class="btn btn-danger"
+                        @onclick="ConfirmMergeAsync"
+                        disabled="@(selectedTarget is null || isMerging)">
+                    @(isMerging ? "Merging…" : $"Merge into {selectedTarget?.Name ?? "Target"}")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Show { get; set; }
+
+    [Parameter]
+    public Tag? SourceTag { get; set; }
+
+    // Set by a bulk-selection merge entry point instead of SourceTag; when present it takes
+    // priority. SourceTag-only callers (the single-row Merge action) are unaffected — same
+    // GetMergeCandidatesAsync/MergeAsync calls as before.
+    [Parameter]
+    public IReadOnlyList<Tag>? SourceTags { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<Tag> OnMerged { get; set; }
+
+    private string searchQuery = "";
+    private IReadOnlyList<TagMergeCandidate> candidates = [];
+    private TagMergeCandidate? selectedTarget;
+    private bool isSearching;
+    private bool isMerging;
+    private bool createReplacementRule;
+    private string? errorMessage;
+    private List<int>? loadedForIds;
+
+    private IReadOnlyList<Tag> EffectiveSources =>
+        SourceTags is { Count: > 0 } ? SourceTags : SourceTag is not null ? [SourceTag] : [];
+
+    private List<int> SourceIds => EffectiveSources.Select(t => t.Id).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var sourceIds = SourceIds;
+        if (Show && sourceIds.Count > 0 && (loadedForIds is null || !loadedForIds.SequenceEqual(sourceIds)))
+        {
+            loadedForIds = sourceIds;
+            searchQuery = "";
+            selectedTarget = null;
+            errorMessage = null;
+            createReplacementRule = false;
+            await LoadCandidatesAsync();
+        }
+        else if (!Show)
+        {
+            loadedForIds = null;
+        }
+    }
+
+    private async Task LoadCandidatesAsync()
+    {
+        var sourceIds = SourceIds;
+        if (sourceIds.Count == 0) return;
+
+        isSearching = true;
+        var loaded = await TagService.GetMergeCandidatesAsync(sourceIds[0], searchQuery);
+        candidates = loaded.Where(c => !sourceIds.Contains(c.Id)).ToList();
+        if (selectedTarget is null && candidates.Count > 0 && candidates[0].IsSuggested)
+        {
+            selectedTarget = candidates[0];
+        }
+        isSearching = false;
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        searchQuery = e.Value?.ToString() ?? "";
+        await LoadCandidatesAsync();
+    }
+
+    private void SelectTarget(TagMergeCandidate candidate)
+    {
+        if (isMerging) return;
+        selectedTarget = candidate;
+    }
+
+    private async Task ConfirmMergeAsync()
+    {
+        var sourceIds = SourceIds;
+        if (sourceIds.Count == 0 || selectedTarget is null || isMerging) return;
+
+        isMerging = true;
+        errorMessage = null;
+
+        var result = sourceIds.Count == 1
+            ? await TagService.MergeAsync(sourceIds[0], selectedTarget.Id, createReplacementRule)
+            : await TagService.MergeManyAsync(sourceIds, selectedTarget.Id, createReplacementRule);
+        isMerging = false;
+
+        if (!result.Success || result.Tag is null)
+        {
+            errorMessage = result.ErrorMessage ?? "Failed to merge tag.";
+            return;
+        }
+
+        await OnMerged.InvokeAsync(result.Tag);
+    }
+
+    private async Task CloseAsync()
+    {
+        if (isMerging) return;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+}

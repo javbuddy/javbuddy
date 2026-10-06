@@ -1,0 +1,442 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Javinizer
+@using Javbuddy.Services.Torrents.SortWizard
+@inject ISortEditorLookupService Lookup
+
+@* TorrentSort's metadata editor, hosted in a wide SlideOverDrawer. Edits the
+   structured MovieViewDto buffer in MovieEditModalState directly: cast and genres are chips,
+   never comma-separated text. *@
+@{
+    var movie = Editor.EditingMovie!;
+    var issues = SortMetadataQuality.Check(movie);
+}
+<div class="sme">
+    @if (Editor.EditModalError is not null)
+    {
+        <div class="alert alert-danger mb-3">@Editor.EditModalError</div>
+    }
+
+    <div class="sme-toolbar">
+        @if (Editor.Scrapers.Count > 0)
+        {
+            <div class="sme-rescrape-select">
+                <span class="sme-hint-inline">Re-scrape with:</span>
+                @foreach (var scraper in Editor.Scrapers)
+                {
+                    var name = scraper.Name;
+                    <label><input type="checkbox" checked="@rescrapeChoice.Contains(name)" @onchange="e => ToggleScraper(name, e.Value is true)" /> @(scraper.DisplayTitle ?? name)</label>
+                }
+                <button type="button" class="btn btn-sm btn-outline-secondary sme-rescrape-btn"
+                        disabled="@(rescrapeChoice.Count == 0 || Editor.SourcesBusy)" @onclick="() => RescrapeAsync()">
+                    @(Editor.SourcesBusy ? "Working…" : "Re-scrape")
+                </button>
+            </div>
+        }
+        @if (confirmRescrape)
+        {
+            <div class="sme-rescrape-confirm" role="alert">
+                Re-scraping replaces your unsaved edits.
+                <button type="button" class="btn btn-sm btn-warning" @onclick="() => RescrapeAsync(confirmed: true)">Re-scrape anyway</button>
+                <button type="button" class="btn btn-sm btn-link" @onclick="() => confirmRescrape = false">Keep editing</button>
+            </div>
+        }
+        @if (Editor.SourcesError is not null)
+        {
+            <div class="sme-preview-error">@Editor.SourcesError</div>
+        }
+    </div>
+
+    <div class="sme-grid">
+        <div class="sme-field sme-field-wide">
+            <span class="sme-label"><label for="sme-title">Title</label> @SourceBadge("title")</span>
+            <input id="sme-title" class="form-control" data-field="title" @bind="movie.Title" @bind:event="oninput" @bind:after="OnFieldChanged" />
+            @FieldWarning(issues, SortQualityIssue.FallbackTitle)
+            @SourcePanel("title")
+        </div>
+        <div class="sme-field sme-field-wide">
+            <span class="sme-label"><label for="sme-original_title">Original Title</label> @SourceBadge("original_title")</span>
+            <input id="sme-original_title" class="form-control" data-field="original_title" @bind="movie.OriginalTitle" @bind:event="oninput" @bind:after="OnFieldChanged" />
+            @SourcePanel("original_title")
+        </div>
+        <div class="sme-field">
+            <span class="sme-label"><label for="sme-maker">Maker / Studio</label> @SourceBadge("maker")</span>
+            <input id="sme-maker" class="form-control" data-field="maker" @bind="movie.Maker" @bind:event="oninput" @bind:after="OnFieldChanged" />
+            @FieldWarning(issues, SortQualityIssue.MissingMaker)
+            @SourcePanel("maker")
+        </div>
+        <div class="sme-field">
+            <span class="sme-label"><label for="sme-label">Label</label> @SourceBadge("label")</span>
+            <input id="sme-label" class="form-control" data-field="label" @bind="movie.Label" @bind:event="oninput" @bind:after="OnFieldChanged" />
+            @SourcePanel("label")
+        </div>
+        <div class="sme-field">
+            <span class="sme-label"><label for="sme-series">Series</label> @SourceBadge("series")</span>
+            <input id="sme-series" class="form-control" data-field="series" @bind="movie.Series" @bind:event="oninput" @bind:after="OnFieldChanged" />
+            @SourcePanel("series")
+        </div>
+        <div class="sme-field">
+            <span class="sme-label"><label for="sme-director">Director</label> @SourceBadge("director")</span>
+            <input id="sme-director" class="form-control" data-field="director" @bind="movie.Director" @bind:event="oninput" @bind:after="OnFieldChanged" />
+            @SourcePanel("director")
+        </div>
+        <div class="sme-field">
+            <span class="sme-label"><label for="sme-release_date">Release Date</label> @SourceBadge("release_date")</span>
+            <input type="date" id="sme-release_date" class="form-control" data-field="release_date" @bind="Editor.EditingReleaseDate" @bind:after="OnFieldChanged" />
+            @FieldWarning(issues, SortQualityIssue.MissingReleaseDate)
+            @SourcePanel("release_date")
+        </div>
+        <div class="sme-field">
+            <span class="sme-label"><label for="sme-runtime">Runtime (minutes)</label> @SourceBadge("runtime")</span>
+            <input type="number" id="sme-runtime" class="form-control" data-field="runtime" @bind="movie.Runtime" @bind:after="OnFieldChanged" />
+            @SourcePanel("runtime")
+        </div>
+    </div>
+
+    <section class="sme-section">
+        <h6 class="sme-label">Cast @SourceBadge("actresses")</h6>
+        @FieldWarning(issues, SortQualityIssue.MissingActresses)
+        @SourcePanel("actresses")
+        <div class="sme-chips">
+            @for (var i = 0; i < (movie.Actresses?.Count ?? 0); i++)
+            {
+                var index = i;
+                var actress = movie.Actresses![index];
+                var match = index < actorMatches.Count ? actorMatches[index] : null;
+                var name = SortEditorFormat.ActressPrimaryName(actress);
+                <div class="sme-cast-chip @(match is null ? "sme-cast-untracked" : null)" title="@(match is null ? "Not a tracked actor" : null)">
+                    @if (match is { HasImage: true })
+                    {
+                        <img class="sme-avatar" src="@($"/actor-image/{match.ActorId}/thumb")" alt="" loading="lazy" />
+                    }
+                    else if (!string.IsNullOrWhiteSpace(actress.ThumbUrl))
+                    {
+                        <img class="sme-avatar" src="@actress.ThumbUrl" alt="" loading="lazy" referrerpolicy="no-referrer" />
+                    }
+                    else
+                    {
+                        <span class="sme-avatar">@ActorMatching.Initials(name)</span>
+                    }
+                    <span class="sme-cast-names">
+                        <span>@name</span>
+                        @if (SortEditorFormat.ActressSecondaryName(actress) is { } japanese)
+                        {
+                            <span class="sme-cast-jp">@japanese</span>
+                        }
+                        @if (SortSourceHelper.ActressSource(Editor.ActressSources, actress) is { } actressSource)
+                        {
+                            <span class="sme-cast-source" title="Which scraper provided this actress">@actressSource</span>
+                        }
+                    </span>
+                    <button type="button" class="sme-cast-remove" aria-label="Remove @name" title="Remove" @onclick="() => RemoveActressAsync(index)">×</button>
+                </div>
+            }
+        </div>
+        <CastSearchAdd ExcludedActorIds="@TrackedActorIds" OnAdd="AddTrackedAsync" />
+        <button type="button" class="btn btn-link btn-sm sme-untracked-toggle" @onclick="() => showUntracked = !showUntracked">Add untracked…</button>
+        @if (showUntracked)
+        {
+            <form class="sme-untracked-form" @onsubmit="AddUntrackedAsync" @onsubmit:preventDefault="true">
+                <input class="form-control form-control-sm" placeholder="First name" @bind="untrackedFirst" />
+                <input class="form-control form-control-sm" placeholder="Last name" @bind="untrackedLast" />
+                <input class="form-control form-control-sm" placeholder="Japanese name (optional)" @bind="untrackedJapanese" />
+                <button type="submit" class="btn btn-sm btn-outline-primary">Add</button>
+            </form>
+        }
+    </section>
+
+    <section class="sme-section">
+        <h6 class="sme-label">Genres @SourceBadge("genres")</h6>
+        @SourcePanel("genres")
+        <div class="sme-chips">
+            @foreach (var genre in movie.Genres ?? [])
+            {
+                var genreName = genre.Name ?? "";
+                var resolution = genreResolutions.GetValueOrDefault(genreName);
+                <span class="sme-genre-chip">
+                    @genreName
+                    @if (resolution is { IsIgnored: true })
+                    {
+                        <span class="sme-genre-ignored" title="An ignore rule drops this genre on save">ignored</span>
+                    }
+                    else if (resolution is { IsRenamed: true })
+                    {
+                        <span class="sme-genre-renamed" title="Saved as this tag">→ @resolution.Resolved</span>
+                    }
+                    else if (resolution is { IsKnown: false })
+                    {
+                        <span class="sme-genre-new" title="Not a tag yet: it will be created for review">new</span>
+                    }
+                    <button type="button" class="sme-genre-remove" aria-label="Remove @genreName" title="Remove" @onclick="() => RemoveGenreAsync(genreName)">×</button>
+                </span>
+            }
+        </div>
+        @{
+            // Applied genres by raw name and by what they're saved as, so an applied "Big Tits" or an
+            // alias of it also hides the palette's "Body##Big Tits".
+            var applied = (movie.Genres ?? []).Select(g => g.Name)
+                .Concat(genreResolutions.Values.Select(r => r.Resolved))
+                .OfType<string>()
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var suggestions = palette.Where(p => !applied.Contains(p)).ToList();
+        }
+        @if (suggestions.Count > 0)
+        {
+            <div class="sme-palette" aria-label="Frequent genres">
+                @foreach (var suggestion in suggestions)
+                {
+                    <button type="button" class="sme-palette-chip" title="Add genre" @onclick="() => AddGenreTextAsync(suggestion)">@suggestion</button>
+                }
+            </div>
+        }
+        <TagSearchAdd OnAddItem="AddTagAsync" OnAddFreeText="AddGenreTextAsync" />
+    </section>
+
+    @if (Review is not null && Result?.Movie is not null)
+    {
+        <section class="sme-section sme-media">
+            <h6 class="sme-label">Media</h6>
+            @if (Editor.MediaError is not null)
+            {
+                <div class="alert alert-danger py-2 mb-2 sme-media-error">@Editor.MediaError</div>
+            }
+            <SortMediaGallery ResultId="@(Editor.EditingResultId ?? "")" Movie="@Result.Movie" Review="@Review" />
+            <div class="sme-media-actions">
+                <button type="button" class="btn btn-sm btn-outline-secondary sme-crop-btn" @onclick="() => showCrop = true">Crop poster…</button>
+                @if (!string.IsNullOrWhiteSpace(Result.Movie.CoverUrl))
+                {
+                    var cover = Result.Movie.CoverUrl;
+                    <button type="button" class="btn btn-sm btn-outline-secondary sme-full-cover-btn"
+                            @onclick="() => Review.SetPosterFromScreenshotAsync(Editor.EditingResultId ?? string.Empty, cover)">Use full cover uncropped</button>
+                }
+            </div>
+            @if (showCrop)
+            {
+                <SortPosterCropModal Show="true" TorrentDownloadId="@TorrentDownloadId" ResultId="@(Editor.EditingResultId ?? "")"
+                                     MovieId="@(Result.Movie.Id ?? Result.MovieId ?? "")"
+                                     OnClose="() => showCrop = false" OnCropped="OnPosterCroppedAsync" />
+            }
+        </section>
+    }
+
+    <section class="sme-section sme-preview">
+        <h6 class="sme-label">Output preview@(Editor.LivePreviewLoading ? " …" : null)</h6>
+        @if (Editor.LivePreviewError is not null)
+        {
+            <div class="sme-preview-error">Preview unavailable: @Editor.LivePreviewError</div>
+        }
+        else if (Editor.LivePreview is { } preview)
+        {
+            <div class="sme-preview-folder"><code>@preview.FolderName</code>/</div>
+            @foreach (var file in preview.VideoFiles ?? [])
+            {
+                <div class="sme-preview-file"><code>@System.IO.Path.GetFileName(file)</code></div>
+            }
+            @foreach (var segment in SortPathChecks.FindOverlongSegments(preview))
+            {
+                <div class="sme-preview-warning">⚠ Longer than @SortPathChecks.MaxSegmentBytes bytes, may fail to write: <code>@segment</code></div>
+            }
+        }
+        else
+        {
+            <div class="sme-hint">Loading…</div>
+        }
+    </section>
+
+    <div class="sme-field sme-section">
+        <span class="sme-label"><label for="sme-description">Description</label> @SourceBadge("description")</span>
+        <textarea id="sme-description" class="form-control" rows="4" data-field="description" @bind="movie.Description" @bind:event="oninput" @bind:after="OnFieldChanged"></textarea>
+        @SourcePanel("description")
+    </div>
+
+    <div class="sme-footer">
+        @if (Editor.ConfirmingDiscard)
+        {
+            <div class="sme-discard-confirm" role="alert">
+                Discard your unsaved edits?
+                <button type="button" class="btn btn-sm btn-danger sme-discard" @onclick="Editor.CloseEditModal">Discard</button>
+                <button type="button" class="btn btn-sm btn-link sme-keep-editing" @onclick="Editor.KeepEditing">Keep editing</button>
+            </div>
+        }
+        else
+        {
+            <span class="sme-hint">Ctrl+Enter to save · Esc to cancel</span>
+        }
+        <button type="button" class="btn btn-secondary sme-cancel" @onclick="Editor.RequestClose" disabled="@Editor.SavingMovie">Cancel</button>
+        <button type="button" class="btn btn-primary sme-save" @onclick="() => Editor.SaveEditedMovieAsync()" disabled="@(Editor.SavingMovie || Editor.SourcesBusy)">
+            @(Editor.SavingMovie ? "Saving…" : "Save Changes")
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public MovieEditModalState Editor { get; set; } = null!;
+
+    /// <summary>The live job result being edited: its field_sources feed the source badges.</summary>
+    [Parameter] public BatchFileResultDto? Result { get; set; }
+
+    /// <summary>The Review step, whose image actions the Media section reuses (they apply
+    /// immediately, like on the Review card).</summary>
+    [Parameter] public ReviewStep? Review { get; set; }
+
+    [Parameter] public int TorrentDownloadId { get; set; }
+
+    private IReadOnlyList<TrackedActorMatch?> actorMatches = [];
+    private Dictionary<string, GenreResolution> genreResolutions = new(StringComparer.OrdinalIgnoreCase);
+    private bool showUntracked;
+    private string? untrackedFirst;
+    private string? untrackedLast;
+    private string? untrackedJapanese;
+    private IReadOnlyList<string> palette = [];
+    private string? openSourceField;
+    private readonly HashSet<string> rescrapeChoice = new(StringComparer.OrdinalIgnoreCase);
+    private bool confirmRescrape;
+    private bool showCrop;
+
+    /// <summary>Tracked actors already in the cast, hidden from the search results.</summary>
+    private IReadOnlyCollection<int> TrackedActorIds => actorMatches.OfType<TrackedActorMatch>().Select(m => m.ActorId).ToHashSet();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Not awaited: javinizer-go can be slow or hung, and the local lookups (headshots, genre
+        // markers, the first preview) mustn't wait on it. The badges fill in when it answers.
+        _ = Editor.LoadSourcesAsync(Result);
+        palette = await Lookup.GetTopTagsAsync(15);
+        await RefreshLookupsAsync();
+    }
+
+    private void OnFieldChanged()
+    {
+        Editor.MarkDirty();
+        _ = Editor.SchedulePreviewAsync();
+    }
+
+    /// <summary>Re-matches the cast to tracked actors (headshots), re-resolves the genre chips'
+    /// normalization markers and refreshes the output preview; called on open and after every
+    /// chip change.</summary>
+    private async Task RefreshLookupsAsync()
+    {
+        var movie = Editor.EditingMovie;
+        if (movie is null) return;
+        actorMatches = await Lookup.MatchTrackedActorsAsync(movie.Actresses ?? []);
+        var resolutions = await Lookup.ResolveGenresAsync((movie.Genres ?? []).Select(g => g.Name));
+        genreResolutions = resolutions
+            .GroupBy(r => r.Raw, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+        _ = Editor.SchedulePreviewAsync();
+    }
+
+    private async Task RemoveActressAsync(int index)
+    {
+        Editor.RemoveActressAt(index);
+        await RefreshLookupsAsync();
+    }
+
+    private async Task AddTrackedAsync(int actorId)
+    {
+        await Editor.AddTrackedActorAsync(actorId);
+        await RefreshLookupsAsync();
+    }
+
+    private async Task RemoveGenreAsync(string name)
+    {
+        Editor.RemoveGenre(name);
+        await RefreshLookupsAsync();
+    }
+
+    private async Task AddGenreTextAsync(string text)
+    {
+        Editor.AddGenre(text);
+        await RefreshLookupsAsync();
+    }
+
+    private Task AddTagAsync(TagListItem tag) =>
+        AddGenreTextAsync(tag.ParentTagName != null ? $"{tag.ParentTagName}{Tag.HierarchyDelimiter}{tag.Name}" : tag.Name);
+
+    private async Task AddUntrackedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(untrackedFirst) && string.IsNullOrWhiteSpace(untrackedJapanese)) return;
+        Editor.AddActress(new ActressViewDto
+        {
+            FirstName = string.IsNullOrWhiteSpace(untrackedFirst) ? null : untrackedFirst.Trim(),
+            LastName = string.IsNullOrWhiteSpace(untrackedLast) ? null : untrackedLast.Trim(),
+            JapaneseName = string.IsNullOrWhiteSpace(untrackedJapanese) ? null : untrackedJapanese.Trim()
+        });
+        untrackedFirst = untrackedLast = untrackedJapanese = null;
+        showUntracked = false;
+        await RefreshLookupsAsync();
+    }
+
+    /// <summary>A quality warning shown next to the field it concerns.</summary>
+    private static RenderFragment FieldWarning(IReadOnlyList<SortQualityIssue> issues, SortQualityIssue issue) => __builder =>
+    {
+        if (!issues.Contains(issue)) return;
+        <div class="sme-field-warning" data-issue="@issue">⚠ @SortMetadataQuality.Describe(issue)</div>
+    };
+
+    /// <summary>The scraper that provided <paramref name="field"/>; click to compare sources.</summary>
+    private RenderFragment SourceBadge(string field) => __builder =>
+    {
+        <button type="button" class="sme-source-badge" data-field="@field" title="Which scraper provided this: click to compare sources"
+                @onclick="() => ToggleSourcePanel(field)" @onclick:preventDefault="true" @onclick:stopPropagation="true">@(Editor.FieldSources.GetValueOrDefault(field) ?? "—")</button>
+    };
+
+    private RenderFragment SourcePanel(string field) => __builder =>
+    {
+        if (openSourceField != field) return;
+        var options = Editor.Sources
+            .Select(s => (s.Source, Value: SortSourceHelper.FormatValue(s, field)))
+            .Where(o => o.Value is not null)
+            .ToList();
+        <div class="sme-source-panel">
+            <div class="sme-override-note">Applied immediately in javinizer-go: Cancel won't undo it.</div>
+            @foreach (var (source, value) in options)
+            {
+                <button type="button" class="sme-source-option" disabled="@Editor.SourcesBusy"
+                        @onclick="() => ApplyOverrideAsync(field, source)"><strong>@source</strong>: @value</button>
+            }
+            @if (options.Count == 0)
+            {
+                <div class="sme-hint-inline">No source has a value for this field.</div>
+            }
+        </div>
+    };
+
+    private void ToggleSourcePanel(string field) => openSourceField = openSourceField == field ? null : field;
+
+    private async Task ApplyOverrideAsync(string field, string source)
+    {
+        if (await Editor.ApplyFieldOverrideAsync(field, source))
+        {
+            openSourceField = null;
+            await RefreshLookupsAsync();
+        }
+    }
+
+    private void ToggleScraper(string name, bool on)
+    {
+        if (on) rescrapeChoice.Add(name);
+        else rescrapeChoice.Remove(name);
+    }
+
+    private async Task RescrapeAsync(bool confirmed = false)
+    {
+        if (Editor.IsDirty && !confirmed)
+        {
+            confirmRescrape = true;
+            return;
+        }
+
+        confirmRescrape = false;
+        if (await Editor.RescrapeWithAsync(rescrapeChoice.ToList()))
+        {
+            rescrapeChoice.Clear();
+            await RefreshLookupsAsync();
+        }
+    }
+
+    private async Task OnPosterCroppedAsync()
+    {
+        showCrop = false;
+        if (Review is not null) await Review.RefreshJobDataAsync();
+    }
+}

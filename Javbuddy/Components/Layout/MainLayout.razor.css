@@ -1,0 +1,88 @@
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.app-header {
+    display: flex;
+    align-items: center;
+    height: 3.25rem;
+    padding-right: 1rem;
+    background-color: #1c9fc4;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    /* Above every in-page layer (toolbar dropdowns sit at 40-50 in the root stacking context) so scrolled
+       content slides beneath the header, and below the 1050 modal overlays that cover it. */
+    z-index: 1020;
+}
+
+.app-header-brand {
+    display: flex;
+    align-items: center;
+    padding-left: 1rem;
+    color: white;
+    text-decoration: none;
+}
+
+    .app-header-brand:hover {
+        color: white;
+    }
+
+.page {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+    min-width: 0;
+}
+
+.sidebar {
+    background-color: #35394a;
+}
+
+@media (min-width: 641px) {
+    .page {
+        flex-direction: row;
+    }
+
+    .sidebar {
+        width: 230px;
+        flex-shrink: 0;
+        transition: width 0.15s ease;
+    }
+
+    :root[data-sidebar-collapsed="true"] .sidebar {
+        width: 52px;
+    }
+
+    article {
+        padding: 1.75rem 2rem !important;
+    }
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }

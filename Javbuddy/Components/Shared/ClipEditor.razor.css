@@ -1,0 +1,511 @@
+/* Dark by default (player modal); hosts restyle it via the --scene-editor-* custom properties,
+   the same pattern as CastSearchAdd/TagSearchAdd. */
+.scene-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    font-size: 0.85rem;
+    min-width: 0;
+}
+
+/* Header, add buttons and open add forms; a host with a scrolling panel can pin it (VideoPlayerShell does). */
+.clip-editor-top {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.scene-editor-header {
+    /* The box SectionInfo's popover spans. */
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.scene-editor-title {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.scene-editor-heading {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.scene-editor-btn {
+    appearance: none;
+    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    color: var(--scene-editor-accent, #6ea8fe);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    white-space: nowrap;
+}
+
+.scene-editor-btn:disabled,
+.scene-editor-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.scene-editor-save-btn {
+    background-color: #2f8fd6;
+    border-color: #2f8fd6;
+    color: #fff;
+}
+
+.scene-editor-icon-btn {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--scene-editor-muted, #94a3b8);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.scene-editor-icon-btn:hover:not(:disabled) {
+    background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.08));
+    color: var(--scene-editor-fg, #e2e8f0);
+}
+
+.scene-editor-error {
+    margin: 0;
+    color: #fa5252;
+    font-size: 0.8rem;
+}
+
+.scene-editor-empty {
+    margin: 0;
+    color: var(--scene-editor-muted, #94a3b8);
+    font-size: 0.8rem;
+}
+
+.scene-editor-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.scene-editor-item {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.scene-editor-item:has(.scene-editor-form) {
+    display: block;
+}
+
+/* Grid: the thumbnail spans both lines; position and title share the first (the title truncates),
+   the time range, actors and tags take the second. */
+.scene-editor-row {
+    appearance: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    align-items: baseline;
+    column-gap: 0.5rem;
+    row-gap: 0.15rem;
+    padding: 0.25rem 0.4rem;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: inherit;
+    cursor: pointer;
+    font-size: inherit;
+    text-align: left;
+}
+
+.scene-editor-row:hover {
+    background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.08));
+}
+
+.scene-editor-pos {
+    flex: none;
+    min-width: 1.1rem;
+    color: var(--scene-editor-muted, #94a3b8);
+    font-variant-numeric: tabular-nums;
+}
+
+.scene-editor-range {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.scene-editor-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scene-editor-name-default {
+    font-style: italic;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.scene-editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.5rem;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 6px;
+    background-color: var(--scene-editor-form-bg, rgba(255, 255, 255, 0.03));
+}
+
+.scene-editor-times {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.scene-editor-times .scene-editor-field {
+    flex: 1 1 8rem;
+}
+
+.scene-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.scene-editor-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.scene-editor-hint {
+    font-weight: 400;
+}
+
+.scene-editor-time-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.scene-editor-input {
+    width: 100%;
+    min-width: 0;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.8rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background-color: var(--scene-editor-input-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.scene-editor-time-row .scene-editor-input {
+    flex: 1 1 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.scene-editor-form-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
+/* Actors and tags of a scene: a second line in the row, chips while editing. */
+.scene-editor-meta {
+    grid-column: 2 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.35rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.scene-editor-meta-actors {
+    margin-right: 0.15rem;
+}
+
+.scene-editor-meta-tag {
+    padding: 0 0.35rem;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+}
+
+.scene-editor-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    margin-top: 0.45rem;
+}
+
+.scene-editor-links-hint {
+    margin: 0.35rem 0 0;
+    font-size: 0.75rem;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.scene-editor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.scene-editor-chip {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background: transparent;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+}
+
+button.scene-editor-chip {
+    cursor: pointer;
+}
+
+.scene-editor-chip-on {
+    background-color: rgba(47, 143, 214, 0.18);
+    border-color: #2f8fd6;
+}
+
+.scene-editor-chip-remove {
+    appearance: none;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+/* Scene screenshot / hover preview, or the trickplay tile standing in for it. */
+.scene-editor-thumb {
+    flex: none;
+    grid-row: span 2;
+    align-self: center;
+    width: 64px;
+    height: 36px;
+    /* The frame ScenePreviewMedia fills. */
+    position: relative;
+    border-radius: 3px;
+    overflow: hidden;
+    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
+}
+
+/* The scene cards' dark frame under the generating shimmer, so it shows in either theme. */
+.scene-editor-thumb-generating {
+    background-color: #15171d;
+}
+
+.scene-editor-thumb-tile {
+    display: block;
+    background-repeat: no-repeat;
+}
+
+/* Favorite scene toggle, red like the movie favorite heart. */
+.scene-editor-fav-on,
+.scene-editor-fav-on:hover:not(:disabled) {
+    color: #e03131;
+}
+
+/* Hidden from the Scenes overview: still listed here, just marked and dimmed. */
+.scene-editor-item-hidden .scene-editor-row {
+    opacity: 0.6;
+}
+
+.scene-editor-hidden-badge {
+    display: inline-flex;
+    align-self: center;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.scene-editor-hidden-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    font-size: 0.8rem;
+}
+
+    .scene-editor-hidden-toggle input {
+        margin: 0;
+    }
+
+/* Detect scenes / Write chapters row. SceneDetector and SceneChapterWriter mark
+   themselves -expanded while they show more than their button; that extra content then wraps onto
+   full-width lines below the buttons. */
+.scene-editor-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 0.35rem 0.5rem;
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+}
+
+
+/* --- The nested tree --- */
+
+.clip-editor-counts {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-muted, #94a3b8);
+    white-space: nowrap;
+}
+
+.clip-editor-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* The timeline's highlight segment (HighlightSegments) and apex diamond (ApexMarkers), in miniature. */
+.clip-editor-highlight-glyph {
+    width: 10px;
+    height: 5px;
+    border-radius: 2px;
+    background-color: #20c997;
+}
+
+.clip-editor-apex-glyph {
+    width: 7px;
+    height: 7px;
+    background-color: #f76707;
+    transform: rotate(45deg);
+}
+
+.clip-editor-add-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.clip-editor-add-form {
+    display: contents;
+}
+
+/* Highlights and apexes under the scene (or highlight) holding them: indented, with a guide line. */
+.clip-editor-children {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0.15rem 0 0.1rem 0.9rem;
+    padding: 0 0 0 0.5rem;
+    border-left: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    flex-basis: 100%;
+}
+
+.clip-editor-outside {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.clip-editor-outside-heading {
+    margin: 0.3rem 0 0;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+/* Highlight and apex list items (moved from HighlightEditor.razor.css / ApexEditor.razor.css). */
+.highlight-editor-item {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.highlight-editor-item:has(.highlight-editor-form) {
+    display: block;
+}
+
+.apex-editor-item {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.apex-editor-item:has(.apex-editor-form) {
+    display: block;
+}
+
+/* In the tree an item holds its row line, then (for scenes and highlights) its children. */
+.scene-editor-item,
+.highlight-editor-item,
+.apex-editor-item {
+    display: block;
+}
+
+.clip-editor-line {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+/* Collapsing a scene's highlights and apexes. */
+.clip-editor-collapse-btn {
+    width: 1.1rem;
+}
+
+.clip-editor-collapse-btn svg {
+    transition: transform 0.15s ease;
+}
+
+.clip-editor-collapsed svg {
+    transform: rotate(-90deg);
+}
+
+.clip-editor-collapse-spacer {
+    flex: none;
+    width: 1.1rem;
+}
+
+.clip-editor-collapsed-badge {
+    flex: none;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.08));
+    color: var(--scene-editor-muted, #94a3b8);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.clip-editor-collapse-all-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.4rem;
+}

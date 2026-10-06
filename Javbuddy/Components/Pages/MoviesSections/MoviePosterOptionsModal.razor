@@ -1,0 +1,64 @@
+@* The Movies grid's Poster Options dialog. The caller renders it only while open and saves every
+   change OptionsChanged reports. *@
+
+<OptionsModal Title="Poster Options" OnClose="OnClose">
+    <div class="options-row">
+        <label class="options-label" for="poster-size-select">Poster Size</label>
+        <select id="poster-size-select" class="form-select form-select-sm w-auto" value="@Options.PosterSize"
+                @onchange="e => Change(Options with { PosterSize = MoviePosterOptions.NormalizeSize(e.Value?.ToString()) })">
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+        </select>
+    </div>
+    <div class="options-row">
+        <span class="options-label">Show Title</span>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show-title-check" checked="@Options.ShowTitle"
+                   @onchange="e => Change(Options with { ShowTitle = IsChecked(e) })" />
+            <label class="form-check-label" for="show-title-check">Show release code under poster</label>
+        </div>
+    </div>
+    <div class="options-row">
+        <span class="options-label">Show Status</span>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show-status-check" checked="@Options.ShowStatus"
+                   @onchange="e => Change(Options with { ShowStatus = IsChecked(e) })" />
+            <label class="form-check-label" for="show-status-check">Show status under poster</label>
+        </div>
+    </div>
+    <div class="options-row">
+        <span class="options-label">Show Size</span>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show-size-check" checked="@Options.ShowSize"
+                   @onchange="e => Change(Options with { ShowSize = IsChecked(e) })" />
+            <label class="form-check-label" for="show-size-check">Show file size under poster</label>
+        </div>
+    </div>
+    <div class="options-row">
+        <span class="options-label">Show Quality</span>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show-quality-check" checked="@Options.ShowQuality"
+                   @onchange="e => Change(Options with { ShowQuality = IsChecked(e) })" />
+            <label class="form-check-label" for="show-quality-check">Show video resolution under poster</label>
+        </div>
+    </div>
+    <div class="options-row">
+        <span class="options-label">Show VR Badge</span>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show-vr-check" checked="@Options.ShowVrBadge"
+                   @onchange="e => Change(Options with { ShowVrBadge = IsChecked(e) })" />
+            <label class="form-check-label" for="show-vr-check">Show VR format badge on poster</label>
+        </div>
+    </div>
+</OptionsModal>
+
+@code {
+    [Parameter, EditorRequired] public MoviePosterOptions Options { get; set; } = MoviePosterOptions.Default;
+    [Parameter] public EventCallback<MoviePosterOptions> OptionsChanged { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private static bool IsChecked(ChangeEventArgs e) => e.Value is bool b && b;
+
+    private Task Change(MoviePosterOptions options) => OptionsChanged.InvokeAsync(options);
+}

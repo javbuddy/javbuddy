@@ -1,0 +1,802 @@
+@page "/"
+@using System.Text.Json
+@using Microsoft.AspNetCore.Http
+@using Microsoft.Extensions.DependencyInjection
+@using Javbuddy.Components.Pages.MoviesSections
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Infrastructure
+@using Javbuddy.Services.R18Dev
+@implements IAsyncDisposable
+@inject IMovieGridQueryService GridQueries
+@inject MovieChangeNotifier MovieChangeNotifier
+@inject IMovieService MovieService
+@inject TorrentChangeNotifier TorrentChangeNotifier
+@inject MovieFilterNavigationState FilterNavigationState
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ILogger<Movies> Logger
+@inject IServiceProvider ServiceProvider
+@inject NfoDriftPushLauncher NfoPushLauncher
+@inject IR18DevReleaseBrowseService ReleaseBrowseService
+@rendermode InteractiveServer
+
+<PageTitle>Movies · Javbuddy</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="mb-0">Movies</h1>
+    <a class="btn btn-primary" href="add/new">Add New</a>
+</div>
+
+@if (!initialLoadStarted)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <MovieFilterToolbar TotalCount="@totalCount"
+                        MissingCount="@missingCount"
+                        GotCount="@gotCount"
+                        StatusFilter="@filters.Status"
+                        OnStatusFilterChanged="status => ApplyFilterAsync(() => filters.Status = status)"
+                        LibraryNames="@libraryNames"
+                        LibraryFilter="@filters.Library"
+                        OnLibraryFilterChanged="library => ApplyFilterAsync(() => filters.Library = library)"
+                        TextFilter="@filters.Text"
+                        OnTextFilterChanged="OnTextFilterChanged"
+                        ResolutionFilter="@filters.Resolutions"
+                        OnToggleResolution="bucket => ApplyFilterAsync(() => filters.Resolutions.Toggle(bucket))"
+                        ScanTypeFilter="@filters.ScanTypes"
+                        OnToggleScanType="scanType => ApplyFilterAsync(() => filters.ScanTypes.Toggle(scanType))"
+                        NfoDriftFilter="@filters.NfoDriftKinds"
+                        OnToggleNfoDrift="kind => ApplyFilterAsync(() => filters.NfoDriftKinds.Toggle(kind))"
+                        AvailableCodecs="@availableCodecs"
+                        CodecFilter="@filters.Codecs"
+                        OnToggleCodec="codec => ApplyFilterAsync(() => filters.Codecs.Toggle(codec))"
+                        AvailableStudios="@availableStudios"
+                        StudioFilter="@filters.Studios"
+                        OnToggleStudio="studio => ApplyFilterAsync(() => filters.Studios.Toggle(studio))"
+                        OnSelectAllStudios="studios => ApplyFilterAsync(() => filters.Studios.UnionWith(studios))"
+                        OnSelectNoneStudios="() => ApplyFilterAsync(() => filters.Studios.Clear())"
+                        AvailableGenres="@availableGenres"
+                        GenreFilter="@filters.Genres"
+                        OnToggleGenre="genre => ApplyFilterAsync(() => filters.Genres.Toggle(genre))"
+                        OnSelectAllGenres="genres => ApplyFilterAsync(() => filters.Genres.UnionWith(genres))"
+                        OnSelectNoneGenres="() => ApplyFilterAsync(() => filters.Genres.Clear())"
+                        FeatureFilter="@filters.Features"
+                        OnToggleFeature="feature => ApplyFilterAsync(() => filters.Features.Toggle(feature))"
+                        AvailableActors="@availableActors"
+                        ActorFilter="@filters.ActorIds"
+                        OnToggleActor="actorId => ApplyFilterAsync(() => filters.ActorIds.Toggle(actorId))"
+                        OnSelectAllActors="actorIds => ApplyFilterAsync(() => filters.ActorIds.UnionWith(actorIds))"
+                        OnSelectNoneActors="() => ApplyFilterAsync(() => filters.ActorIds.Clear())"
+                        ShowActorAttributes="true"
+                        ActorAttributeOptions="@actorAttributeOptions"
+                        ActorAttributeSelection="@filters.ActorAttributes"
+                        OnActorAttributesChanged="edited => ApplyFilterAsync(() => filters.ActorAttributes = MovieFilterOptions.MergeActorAttributes(filters.ActorAttributes, edited, actorAttributeOptions))"
+                        SortField="@filters.SortField"
+                        SortDescending="@filters.SortDescending"
+                        OnSortChanged="OnSortChanged"
+                        HasActiveFilters="@(filters.HasActiveFilters || (BrowseActive && catalogFilter.ActiveCount > 0))"
+                        ReleasesBrowseMode="@BrowseActive"
+                        ReleasesActiveFilterCount="@catalogFilter.ActiveCount"
+                        HidePreviouslyDeleted="@catalogFilter.HidePreviouslyDeleted"
+                        OnToggleHidePreviouslyDeleted="() => SetCatalogFilter(catalogFilter with { HidePreviouslyDeleted = !catalogFilter.HidePreviouslyDeleted })"
+                        OnResetFilters="ResetFiltersAsync">
+        <ReleasesFilterContent>
+            <R18DevCatalogFilterMenu Filter="@catalogFilter" Options="@catalogOptions" FilterChanged="SetCatalogFilter" />
+        </ReleasesFilterContent>
+        <ChildContent>
+        <StatusFilterButtonGroup Options="@ReleasesModeOptions" />
+        @if (HasNfoDriftFilter)
+        {
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => showNfoPushModal = true" disabled="@NfoPushLauncher.IsRunning">
+                @(NfoPushLauncher.IsRunning ? "Writing .nfo…" : "Write Javbuddy metadata to .nfo")
+            </button>
+        }
+        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => showOptionsModal = true">Options</button>
+        </ChildContent>
+    </MovieFilterToolbar>
+
+    @if (showNfoPushModal)
+    {
+        <NfoDriftPushModal Filter="@filters.ToFilter()" OnClose="() => showNfoPushModal = false" />
+    }
+
+    @if (showOptionsModal)
+    {
+        <MoviePosterOptionsModal Options="@posterOptions" OptionsChanged="SavePosterOptionsAsync" OnClose="() => showOptionsModal = false" />
+    }
+
+    @* Only ever one of these, and neither while a *re*-filter still has the previous results on
+       screen — the old grid staying put until the new one lands beats a "Loading…" line pushing
+       it down and straight back up again. *@
+    @if (BrowseActive)
+    {
+        @* Kept mounted (just hidden, below) rather than swapped out: VirtualizedGrid's JS
+           holds references to the grid and both spacers for the whole lifetime of the page. *@
+        @* A prefix from a badge click also fills the search box with the same text, so the text is
+           only sent as a free-text query when there is no prefix — otherwise the exact prefix match
+           would be diluted into a "contains" match. *@
+        <MovieReleasesBrowser Filter="@EffectiveCatalogFilter" FilterChanged="SetCatalogFilter" />
+    }
+    else if (reloading && window.Visible.Count == 0)
+    {
+        <p class="text-muted"><em>Loading…</em></p>
+    }
+    else if (!reloading && window.FilteredCount == 0)
+    {
+        @if (filters.HasActiveFilters)
+        {
+            <p class="text-muted">No movies match the active filters. <button type="button" class="btn btn-link p-0 align-baseline" @onclick="ResetFiltersAsync">Reset filters</button></p>
+        }
+        else
+        {
+            <p class="text-muted">No movies here yet.</p>
+        }
+    }
+
+    @* Always rendered, even while empty (and only hidden in browse mode): VirtualizedGrid's JS keeps
+       references to the grid and its spacers for the page's whole lifetime. *@
+    <div class="movies-grid @(BrowseActive ? "movies-grid-hidden" : "")">
+        <VirtualizedGrid @ref="grid"
+                         WindowStart="window.Start"
+                         WindowCount="window.Visible.Count"
+                         TotalCount="window.FilteredCount"
+                         GridSelector=".poster-grid"
+                         CardSelector=".poster-card"
+                         ActivePath="/"
+                         ScrollStorageKey="javbuddy-movies-scroll-y"
+                         WindowStartCookie="@WindowStartCookieName"
+                         Ready="initialLoadStarted"
+                         LoadRange="SetVisibleRange">
+            <MoviePosterGrid Movies="window.Visible"
+                             Options="posterOptions"
+                             DownloadingCodes="downloadingCodes"
+                             Loading="PosterImageLoading.NativeLazy"
+                             OnToggleFavorite="ToggleFavorite" />
+        </VirtualizedGrid>
+    </div>
+
+    @if (!BrowseActive)
+    {
+        <div class="movies-stats-footer">
+            <div class="movies-stats-legend">
+                <div class="movies-stats-legend-item"><span class="movies-stats-swatch movies-stats-swatch-missing"></span> Missing</div>
+                <div class="movies-stats-legend-item"><span class="movies-stats-swatch movies-stats-swatch-downloading"></span> Downloading (torrent active or done)</div>
+                <div class="movies-stats-legend-item"><span class="movies-stats-swatch movies-stats-swatch-got"></span> Got</div>
+            </div>
+            <div class="movies-stats-numbers">
+                <div class="movies-stats-group">
+                    <div class="movies-stats-row"><strong>Movies</strong><span>@totalCount</span></div>
+                    <div class="movies-stats-row"><strong>Missing</strong><span>@missingCount</span></div>
+                    <div class="movies-stats-row"><strong>Got</strong><span>@gotCount</span></div>
+                </div>
+                <div class="movies-stats-group">
+                    <div class="movies-stats-row"><strong>Downloading</strong><span>@downloadingCodes.Count</span></div>
+                </div>
+                <div class="movies-stats-group">
+                    <div class="movies-stats-row"><strong>Files</strong><span>@filesCount</span></div>
+                    <div class="movies-stats-row"><strong>Total File Size</strong><span>@ByteSizeFormatter.Format(totalFileSizeBytes)</span></div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")]
+    [Parameter] public string? Q { get; set; }
+
+    private readonly MovieGridFilterState filters = new();
+    private MovieGridWindow window = null!;
+    private MoviePosterOptions posterOptions = MoviePosterOptions.Default;
+
+    // Read once from the WindowStartCookieName cookie in OnInitializedAsync (see
+    // LoadInitialWindowStartFromCookie) and consumed only by the very first ResetAndLoadAsync call
+    // in OnParametersSetAsync — everywhere else (a real filter/sort change) still resets to 0.
+    private int initialWindowStart;
+    private bool reloading;
+    private bool initialLoadStarted;
+    private bool initialized;
+    private bool restoredFromPersistedState;
+
+    // Resolved lazily via ServiceProvider rather than @inject: PersistentComponentState is only
+    // registered by ASP.NET Core's real interactive-server hosting, not by every host that can
+    // render this component (e.g. bUnit tests) — null here just means skip persist/restore and
+    // always do the normal DB load, instead of a hard DI failure.
+    private PersistentComponentState? applicationState;
+    private PersistingComponentStateSubscription persistingSubscription;
+
+    private int totalCount;
+    private int missingCount;
+    private int gotCount;
+    private int filesCount;
+    private long totalFileSizeBytes;
+    private List<string> libraryNames = new();
+    private List<string> availableCodecs = new();
+    private List<string> availableStudios = new();
+    private List<string> availableGenres = new();
+    private IReadOnlyList<MovieActorOption> availableActors = [];
+    private ActorAttributeOptions actorAttributeOptions = ActorAttributeOptions.None;
+
+    private bool showOptionsModal;
+    private bool showNfoPushModal;
+
+    // The bulk .nfo push is only offered while the grid is narrowed to drifting movies.
+    private bool HasNfoDriftFilter => !BrowseActive && filters.NfoDriftKinds.Count > 0;
+
+    /// <summary>Codes of Missing movies with a torrent that's queued, downloading, or completed
+    /// (but not yet imported via javinizer-go) — shown with a yellow poster indicator instead of
+    /// the usual blue "Missing" one as a reminder that something's ready or in progress.</summary>
+    private HashSet<string> downloadingCodes = new(StringComparer.OrdinalIgnoreCase);
+
+    private VirtualizedGrid? grid;
+    private Task<IJSObjectReference>? jsModuleTask;
+    private bool scrollToTopPending;
+
+    protected override async Task OnInitializedAsync()
+    {
+        window = new MovieGridWindow((skip, take) => GridQueries.GetRangeAsync(filters.ToFilter(), filters.ToSort(), skip, take));
+        MovieChangeNotifier.Changed += OnMoviesChangedElsewhere;
+        TorrentChangeNotifier.Changed += OnTorrentsChangedElsewhere;
+
+        // Independent of the persisted-movie-data restore below: the cookies are sent on both the
+        // initial prerendered request and the interactive circuit's own reconnect request, so
+        // reading them fresh here on either pass is enough — no need to thread them through
+        // MoviesPersistedState. The accessor is resolved optionally, like PersistentComponentState
+        // below: bUnit's DI container doesn't register ASP.NET Core's real IHttpContextAccessor.
+        var httpContextAccessor = ServiceProvider.GetService<IHttpContextAccessor>();
+        posterOptions = MoviePosterOptions.Load(httpContextAccessor);
+        LoadInitialWindowStartFromCookie(httpContextAccessor);
+        // Seeds the initial filter values; OnParametersSetAsync's deep-link handling (an incoming
+        // `?q=` or MovieFilterNavigationState target) still overrides these when present.
+        if (JsonCookieState.TryLoad<MoviesViewState>(httpContextAccessor, MoviesViewState.CookieName) is { } viewState)
+        {
+            filters.Apply(viewState);
+            ApplyReleasesBrowseState(viewState);
+        }
+
+        applicationState = ServiceProvider.GetService<PersistentComponentState>();
+        if (applicationState is not null)
+        {
+            persistingSubscription = applicationState.RegisterOnPersisting(PersistState);
+
+            if (applicationState.TryTakeFromJson<MoviesPersistedState>(MoviesPersistedState.Key, out var persisted) && persisted is not null)
+            {
+                RestoreFromPersisted(persisted);
+                availableActors = await GridQueries.GetActorOptionsAsync();
+                restoredFromPersistedState = true;
+                return;
+            }
+        }
+
+        await LoadCountsAsync();
+        await LoadDownloadingCodesAsync();
+    }
+
+    // Captures exactly what the prerendered response already fetched, so the interactive circuit
+    // that reconnects right after can restore it synchronously in OnInitializedAsync instead of
+    // re-running the same DB queries (and showing LoadingIndicator again in the meantime). Only
+    // ever registered when applicationState is non-null, so it's safe to assume that here.
+    private Task PersistState()
+    {
+        applicationState!.PersistAsJson(MoviesPersistedState.Key, new MoviesPersistedState(
+            window.Visible.Select(MoviesPersistedState.PersistedMovie.FromMovie).ToList(), window.Start, window.FilteredCount,
+            totalCount, missingCount, gotCount, filesCount, totalFileSizeBytes, libraryNames, downloadingCodes.ToList(),
+            availableCodecs, availableStudios, availableGenres, actorAttributeOptions,
+            ViewState, filters.RandomSortSeed));
+        return Task.CompletedTask;
+    }
+
+    private void RestoreFromPersisted(MoviesPersistedState state)
+    {
+        window.FilteredCount = state.FilteredCount;
+        window.Replace(state.Visible.Select(p => p.ToMovie()).ToList(), state.WindowStart);
+        totalCount = state.TotalCount;
+        missingCount = state.MissingCount;
+        gotCount = state.GotCount;
+        filesCount = state.FilesCount;
+        totalFileSizeBytes = state.TotalFileSizeBytes;
+        libraryNames = state.LibraryNames;
+        downloadingCodes = new HashSet<string>(state.DownloadingCodes, StringComparer.OrdinalIgnoreCase);
+        availableCodecs = state.AvailableCodecs;
+        availableStudios = state.AvailableStudios;
+        availableGenres = state.AvailableGenres;
+        actorAttributeOptions = state.ActorAttributeOptions;
+        filters.Apply(state.Filters);
+        browseAllReleases = state.Filters.BrowseReleases;
+        catalogFilter = state.Filters.CatalogFilter ?? new();
+        filters.RandomSortSeed = state.RandomSortSeed;
+        initialLoadStarted = true;
+    }
+
+    private const string WindowStartCookieName = "javbuddy-movies-window-start";
+
+    // Written by VirtualizedGrid.razor.js on every scroll (its windowStartCookie option) as a session
+    // cookie. Needed server-side because the first render after an enhanced-nav back-navigation would
+    // otherwise start the grid's window at 0, and the correct window arrives a round trip later with a
+    // different set of PosterCards, which flashes. Reading the last-known window here makes the first
+    // render already right.
+    private void LoadInitialWindowStartFromCookie(IHttpContextAccessor? httpContextAccessor)
+    {
+        var raw = httpContextAccessor?.HttpContext?.Request.Cookies[WindowStartCookieName];
+        if (int.TryParse(raw, out var start) && start > 0)
+        {
+            initialWindowStart = start;
+        }
+    }
+
+    private async Task SavePosterOptionsAsync(MoviePosterOptions options)
+    {
+        posterOptions = options;
+
+        if (jsModuleTask is null) return;
+        var module = await jsModuleTask;
+        try
+        {
+            await module.InvokeVoidAsync("setPosterOptionsCookie", posterOptions.ToJson());
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task SaveViewStateAsync()
+    {
+        if (jsModuleTask is null) return;
+
+        var json = JsonSerializer.Serialize(ViewState);
+        try
+        {
+            var module = await jsModuleTask;
+            await module.InvokeVoidAsync("setJsonCookie", MoviesViewState.CookieName, json, 31536000);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    // Raised by TorrentChangeNotifier whenever a torrent is grabbed, its status changes, or it's
+    // removed — refreshes just the downloading-indicator set, not the whole movie list.
+    private void OnTorrentsChangedElsewhere()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await LoadDownloadingCodesAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                // This callback's Task is discarded (`_ =`) by design — MovieChangeNotifier.Changed
+                // is a plain event, not something the caller awaits — so an exception here would
+                // otherwise vanish as an unobserved task exception: no crash, but also no retry and
+                // no visible sign anything went wrong, permanently missing every refresh after the
+                // first transient failure (e.g. a momentary SQLite lock from a concurrent write)
+                // until the page is manually reloaded. Log it and let the *next* notification try
+                // again normally instead.
+                Logger.LogError(ex, "Failed to refresh downloading-torrent indicators after a cross-tab change notification.");
+            }
+        });
+    }
+
+    private async Task LoadDownloadingCodesAsync()
+    {
+        downloadingCodes = await GridQueries.GetDownloadingCodesAsync();
+    }
+
+    // Flips the heart immediately from the returned value. The service's MovieChangeNotifier call
+    // then refreshes the window in place (OnMoviesChangedElsewhere), which is what drops an
+    // unfavorited movie out of an active Favorites filter or re-sorts a "favorites" sort.
+    private async Task ToggleFavorite(Movie movie)
+    {
+        movie.IsFavorite = await MovieService.ToggleFavoriteAsync(movie.Id);
+    }
+
+    // Raised by MovieChangeNotifier from whatever circuit (browser tab) actually added the
+    // movie(s) — e.g. Add New or Library Import running in another tab — so this already-open
+    // grid picks it up without the user needing to refresh. Runs off this component's own
+    // synchronization context, so it has to marshal back via InvokeAsync before touching state.
+    private void OnMoviesChangedElsewhere()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                // Marshaled onto this circuit's own sync context (not done on the notifier's raw
+                // background thread) so it's properly serialized against MovieGridWindow.EnsureAsync's
+                // own dispatched reads/writes of its data version — see EnsureAsync's comment on why a
+                // racy, cross-thread bump could let a stale window-slide merge slip through.
+                window.MarkDataChanged();
+                await LoadCountsAsync();
+                await RefreshWindowInPlaceAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                // See OnTorrentsChangedElsewhere's comment — same discarded-Task hazard, but here
+                // it's the one that matters most: this is exactly what's supposed to make a newly
+                // added/discovered movie show up on an already-open Movies grid without a manual
+                // reload, so a swallowed exception here reads as "auto-refresh only works once" —
+                // it silently stops working forever after the first failure with no visible error.
+                Logger.LogError(ex, "Failed to refresh the movie grid after a cross-tab change notification.");
+            }
+        });
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var pendingFilter = FilterNavigationState.PeekPendingFilter();
+        var targetStudio = pendingFilter?.Studio;
+        var targetGenre = pendingFilter?.Genre;
+        var targetCodePrefix = pendingFilter?.CodePrefix;
+        var hasTarget = !string.IsNullOrWhiteSpace(targetStudio) || !string.IsNullOrWhiteSpace(targetGenre)
+            || !string.IsNullOrWhiteSpace(targetCodePrefix) || pendingFilter?.IsCatalogTarget == true;
+
+        // A series or label clicked on Movie Detail opens the r18.dev catalog narrowed to just that;
+        // a studio, genre or code prefix filters the library, even when the catalog was open last.
+        if (pendingFilter is { IsCatalogTarget: true })
+        {
+            browseAllReleases = true;
+            catalogFilter = new R18DevCatalogFilter { Series = pendingFilter.CatalogSeries, Label = pendingFilter.CatalogLabel };
+            await LoadCatalogOptionsAsync();
+        }
+        else if (hasTarget)
+        {
+            browseAllReleases = false;
+        }
+
+        // A filter clicked on a movie's detail page (or a tag page) arrives as the only active
+        // filter: everything else, including the restored view-state cookie's
+        // filters, is dropped so the grid shows exactly what was clicked.
+        var otherFiltersCleared = hasTarget && filters.ClearBesidesNavigationTargets();
+
+        // Falls back to the current field (rather than blank) when there's no incoming deep
+        // link, so a persisted view-state cookie restored in OnInitializedAsync
+        // survives this method instead of being reset to empty on every parameter-set pass.
+        var newTextFilter = targetCodePrefix ?? Q ?? (hasTarget ? "" : filters.Text);
+
+        var newStudioFilter = string.IsNullOrWhiteSpace(targetStudio)
+            ? hasTarget ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : filters.Studios
+            : new HashSet<string>(new[] { targetStudio }, StringComparer.OrdinalIgnoreCase);
+        var newGenreFilter = string.IsNullOrWhiteSpace(targetGenre)
+            ? hasTarget ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : filters.Genres
+            : new HashSet<string>(new[] { targetGenre }, StringComparer.OrdinalIgnoreCase);
+        var newCodePrefixFilter = string.IsNullOrWhiteSpace(targetCodePrefix)
+            ? hasTarget ? null : filters.CodePrefix
+            : targetCodePrefix;
+
+        if (restoredFromPersistedState)
+        {
+            restoredFromPersistedState = false;
+            // If we restored a non-empty studio/genre filter from prerendering (which arrived
+            // via MovieFilterNavigationState), retain it across interactive reconnect.
+            if (filters.Studios.Count > 0 && newStudioFilter.Count == 0)
+            {
+                newStudioFilter = filters.Studios;
+            }
+            if (filters.Genres.Count > 0 && newGenreFilter.Count == 0)
+            {
+                newGenreFilter = filters.Genres;
+            }
+
+            if (!otherFiltersCleared && newTextFilter == filters.Text && newCodePrefixFilter == filters.CodePrefix && newStudioFilter.SetEquals(filters.Studios) && newGenreFilter.SetEquals(filters.Genres))
+            {
+                // Prerendering already loaded the right window for this exact request/URL —
+                // nothing to redo (this is the case that avoids the reconnect flash).
+                initialized = true;
+                return;
+            }
+            // Restored state doesn't match this request's filter — shouldn't normally happen,
+            // since prerendering and the interactive reconnect are for the same URL — fall
+            // through to a real reload below.
+        }
+
+        if (!initialized || otherFiltersCleared || newTextFilter != filters.Text || newCodePrefixFilter != filters.CodePrefix || !newStudioFilter.SetEquals(filters.Studios) || !newGenreFilter.SetEquals(filters.Genres))
+        {
+            // The first load is already at the top; only a search term arriving on an
+            // already-rendered grid is worth scrolling back for.
+            var isFirstLoad = !initialized;
+            filters.Text = newTextFilter;
+            filters.CodePrefix = newCodePrefixFilter;
+            filters.Studios = newStudioFilter;
+            filters.Genres = newGenreFilter;
+            initialized = true;
+            await ResetAndLoadAsync(scrollToTop: !isFirstLoad, startAt: isFirstLoad ? initialWindowStart : 0);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                var consumedFilter = FilterNavigationState.ConsumePendingFilter();
+                // OnAfterRenderAsync's returned Task isn't awaited by the renderer, so a second call can
+                // start (e.g. from a MovieChangeNotifier/TorrentChangeNotifier-triggered StateHasChanged)
+                // before this import finishes. Stash the Task itself — not the awaited result — so every
+                // concurrent caller awaits the same in-flight import instead of a field that's still null.
+                jsModuleTask = JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/Movies.razor.js").AsTask();
+                // The navigation target was applied before the JS module existed, so its view state
+                // wasn't saved yet; without this a reload would bring back the filters it cleared.
+                if (consumedFilter is not null)
+                {
+                    await SaveViewStateAsync();
+                }
+
+                // A live circuit's HttpContext can hold a stale cookie: options changed
+                // earlier in this session only reach a revisit through the browser's own copy.
+                try
+                {
+                    var options = MoviePosterOptions.Parse(await JS.InvokeAsync<string?>("lsPosterOptions.get"));
+                    if (options != posterOptions)
+                    {
+                        posterOptions = options;
+                        StateHasChanged();
+                    }
+                }
+                catch (JSException)
+                {
+                }
+            }
+
+            // The grid's JS (VirtualizedGrid) starts itself once initialLoadStarted marks it Ready, and
+            // holds a scroll-to-top asked for before then until it has.
+            if (scrollToTopPending && grid is not null)
+            {
+                scrollToTopPending = false;
+                await grid.ScrollToTopAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    // Status counts reflect whatever other filters are active (so "All (N)" matches what the grid
+    // is showing), while the library totals and filter options stay library-wide.
+    /// <summary>Returns true when the saved Actress Attributes selection no longer fit the library
+    /// and was corrected, so the caller must re-count with the corrected filter.</summary>
+    private async Task<bool> LoadCountsAsync()
+    {
+        var summary = await GridQueries.GetSummaryAsync(filters.ToFilter());
+        totalCount = summary.TotalCount;
+        missingCount = summary.MissingCount;
+        gotCount = summary.GotCount;
+        filesCount = summary.FilesCount;
+        totalFileSizeBytes = summary.TotalFileSizeBytes;
+        libraryNames = summary.LibraryNames;
+        availableCodecs = summary.Codecs;
+        availableStudios = summary.Studios;
+        availableGenres = summary.Genres;
+        actorAttributeOptions = summary.ActorAttributes;
+        availableActors = summary.Actors;
+
+        // A remembered actor no longer linked to any movie (deleted, merged) would match nothing.
+        if (filters.ActorIds.RemoveWhere(id => !availableActors.Any(a => a.Id == id)) > 0)
+        {
+            await LoadCountsAsync();
+            return true;
+        }
+
+        // A remembered selection the library no longer offers (a cup nobody has, a limit outside the new
+        // bounds) is corrected here, and the caller re-counts with the corrected filter.
+        var normalized = MovieFilterOptions.NormalizeActorAttributes(filters.ActorAttributes, actorAttributeOptions);
+        if (normalized.SameAs(filters.ActorAttributes)) return false;
+
+        filters.ActorAttributes = normalized;
+        await LoadCountsAsync();
+        return true;
+    }
+
+    /// <summary>Throws away the current window and starts a fresh one — for anything that changes
+    /// which movies are in the list at all (status/library/text filter, sort order), always at the
+    /// top (<paramref name="startAt"/> 0). The JS side takes over from there and grows the window to
+    /// whatever the viewport needs.
+    ///
+    /// The one exception is the very first load after an enhanced-nav back-navigation, where the
+    /// caller passes the last-known window (from WindowStartCookieName) as <paramref
+    /// name="startAt"/> instead of 0 — see LoadInitialWindowStartFromCookie's comment for why
+    /// starting anywhere else there is what causes the flash this exists to avoid.
+    ///
+    /// Also the single hook point for persisting filter/sort selections: every
+    /// filter/sort mutator already calls this, including the very first (cookie-seeded) load, so
+    /// saving here can't miss a future mutator that reuses it the same way.</summary>
+    private async Task ResetAndLoadAsync(bool scrollToTop = true, int startAt = 0)
+    {
+        var generation = window.BeginReplace();
+        initialLoadStarted = true;
+        reloading = true;
+        _ = SaveViewStateAsync();
+
+        window.FilteredCount = await GridQueries.CountAsync(filters.ToFilter());
+        if (!window.IsCurrent(generation)) return;
+
+        // Keeps "All/Missing/Got (N)" matching whatever the other active filters (resolution,
+        // library, text) currently narrow the grid down to, not just the library's global totals.
+        if (await LoadCountsAsync())
+        {
+            window.FilteredCount = await GridQueries.CountAsync(filters.ToFilter());
+        }
+        if (!window.IsCurrent(generation)) return;
+
+        var filteredCount = window.FilteredCount;
+        var start = filteredCount > 0 ? window.AlignDown(Math.Clamp(startAt, 0, filteredCount - 1)) : 0;
+        var page = await window.FetchAsync(start, Math.Min(MovieGridWindow.InitialSize, filteredCount - start));
+        if (!window.IsCurrent(generation)) return;
+
+        window.Replace(page, start);
+        reloading = false;
+        scrollToTopPending |= scrollToTop;
+    }
+
+    /// <summary>Re-reads the current window in place after movies changed underneath it (an import
+    /// or an Add New in another tab). Deliberately not a ResetAndLoadAsync: yanking the user back
+    /// to the top of the list mid-scroll because a background task added a row is worse than
+    /// showing them a slightly shifted window where they already were.</summary>
+    private async Task RefreshWindowInPlaceAsync()
+    {
+        var generation = window.BeginReplace();
+
+        window.FilteredCount = await GridQueries.CountAsync(filters.ToFilter());
+        if (!window.IsCurrent(generation)) return;
+
+        var filteredCount = window.FilteredCount;
+        var count = Math.Max(window.Visible.Count, MovieGridWindow.InitialSize);
+        var start = window.AlignDown(Math.Clamp(window.Start, 0, Math.Max(0, filteredCount - 1)));
+        var page = await window.FetchAsync(start, Math.Min(count, filteredCount - start));
+        if (!window.IsCurrent(generation)) return;
+
+        window.Replace(page, filteredCount > 0 ? start : 0);
+        reloading = false;
+    }
+
+    /// <summary>VirtualizedGrid's LoadRange: moves the window to the range the viewport needs. The grid
+    /// serializes these, so two never overlap.</summary>
+    public async Task SetVisibleRange(int start, int count, int gridColumns)
+    {
+        window.Columns = gridColumns;
+        if (await window.EnsureAsync(start, count))
+        {
+            StateHasChanged();
+        }
+    }
+
+    private Task ApplyFilterAsync(Action change)
+    {
+        change();
+        return ResetAndLoadAsync();
+    }
+
+    // "All releases (r18.dev)" browse: swaps the local grid for the r18.dev catalog, narrowed by the
+    // search box / studio filter / prefix and its own filters. Saved in the view-state cookie with
+    // them, so coming back to the page keeps it; not reset by clearing filters —
+    // it's a view mode the user picked, not a filter.
+    private bool browseAllReleases;
+    private bool BrowseActive => browseAllReleases;
+
+    private IReadOnlyList<FilterButtonOption> ReleasesModeOptions =>
+    [
+        new("In library", !BrowseActive, EventCallback.Factory.Create(this, LeaveReleasesBrowse)),
+        new("All releases (r18.dev)", BrowseActive, EventCallback.Factory.Create(this, EnterReleasesBrowseAsync)),
+    ];
+
+    private MoviesViewState ViewState => filters.ToViewState() with { BrowseReleases = browseAllReleases, CatalogFilter = catalogFilter };
+
+    // The Filter menu's catalog options load in the background rather than being awaited here: an
+    // awaited OnInitializedAsync renders first, and that first render consumes a pending
+    // MovieFilterNavigationState target before OnParametersSetAsync can read it.
+    private void ApplyReleasesBrowseState(MoviesViewState state)
+    {
+        browseAllReleases = state.BrowseReleases;
+        catalogFilter = state.CatalogFilter ?? new();
+        if (browseAllReleases)
+        {
+            _ = InvokeAsync(async () =>
+            {
+                await LoadCatalogOptionsAsync();
+                StateHasChanged();
+            });
+        }
+    }
+
+    private void LeaveReleasesBrowse()
+    {
+        browseAllReleases = false;
+        _ = SaveViewStateAsync();
+    }
+
+    private void SetCatalogFilter(R18DevCatalogFilter filter)
+    {
+        catalogFilter = filter;
+        _ = SaveViewStateAsync();
+    }
+
+    // The catalog's own filters. The search box, code prefix and Studio filter are
+    // shared with the library grid and joined in by EffectiveCatalogFilter.
+    private R18DevCatalogFilter catalogFilter = new();
+    private R18DevCatalogOptions catalogOptions = R18DevCatalogOptions.None;
+    private bool catalogOptionsLoaded;
+
+    // A prefix from a badge click also fills the search box with the same text, so the text is
+    // only sent as a free-text query when there is no prefix — otherwise the exact prefix match
+    // would be diluted into a "contains" match.
+    private R18DevCatalogFilter EffectiveCatalogFilter => catalogFilter with
+    {
+        CodePrefix = filters.CodePrefix,
+        SearchText = string.IsNullOrWhiteSpace(filters.CodePrefix) ? filters.Text : null,
+        Studios = filters.Studios.ToList(),
+    };
+
+    private async Task EnterReleasesBrowseAsync()
+    {
+        browseAllReleases = true;
+        _ = SaveViewStateAsync();
+        await LoadCatalogOptionsAsync();
+    }
+
+    // Loaded the first time the catalog is opened: the genre list and year range for its Filter menu.
+    private async Task LoadCatalogOptionsAsync()
+    {
+        if (catalogOptionsLoaded) return;
+        catalogOptionsLoaded = true;
+        catalogOptions = await Task.Run(() => ReleaseBrowseService.GetFilterOptionsAsync());
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        filters.Clear();
+        catalogFilter = new();
+        FilterNavigationState.Clear();
+
+        await ResetAndLoadAsync();
+
+        if (Q is not null)
+        {
+            Nav.NavigateTo("/", replace: true);
+        }
+    }
+
+    private Task OnTextFilterChanged(string text) => ApplyFilterAsync(() =>
+    {
+        filters.Text = text;
+        // A prefix badge is a one-shot navigation aid. Once the user edits the search box, return
+        // to its advertised code-or-title search behavior instead of retaining the hidden
+        // code-only predicate from that navigation.
+        filters.CodePrefix = null;
+    });
+
+    private Task OnSortChanged(MovieSortChange sort) => ApplyFilterAsync(() =>
+    {
+        filters.SortField = sort.Field;
+        filters.SortDescending = sort.Descending;
+        if (sort.RandomSortSeed.HasValue)
+        {
+            filters.RandomSortSeed = sort.RandomSortSeed.Value;
+        }
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        MovieChangeNotifier.Changed -= OnMoviesChangedElsewhere;
+        TorrentChangeNotifier.Changed -= OnTorrentsChangedElsewhere;
+        if (applicationState is not null)
+        {
+            persistingSubscription.Dispose();
+        }
+
+        try
+        {
+            if (jsModuleTask is { IsCompletedSuccessfully: true })
+            {
+                await (await jsModuleTask).DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

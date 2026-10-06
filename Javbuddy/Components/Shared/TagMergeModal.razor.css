@@ -1,0 +1,122 @@
+.tag-merge-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+    padding: 1rem;
+}
+
+.tag-merge-modal-panel {
+    background-color: #222631;
+    color: #cfd3de;
+    border: 1px solid #3d4354;
+    border-radius: 6px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.tag-merge-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.25rem;
+    background-color: #2b303c;
+    border-bottom: 1px solid #3d4354;
+}
+
+.tag-merge-modal-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.tag-merge-modal-close-btn {
+    background: none;
+    border: none;
+    color: #9aa1af;
+    padding: 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.tag-merge-modal-close-btn:hover {
+    color: #ffffff;
+    background-color: #3d4354;
+}
+
+.tag-merge-modal-body {
+    padding: 1.25rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.tag-merge-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background-color: #2b303c;
+    border-top: 1px solid #3d4354;
+}
+
+.tag-merge-notice {
+    background-color: rgba(220, 53, 69, 0.1);
+    border: 1px solid rgba(220, 53, 69, 0.25);
+    border-radius: 4px;
+    padding: 0.75rem 1rem;
+    color: #f8d7da;
+}
+
+.tag-candidate-list {
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid #3d4354;
+    border-radius: 4px;
+    background-color: #1a1c23;
+}
+
+.tag-candidate-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #282c37;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.tag-candidate-item:last-child {
+    border-bottom: none;
+}
+
+.tag-candidate-item:hover {
+    background-color: #252a36;
+}
+
+.tag-candidate-item.selected {
+    background-color: #2b3a4a;
+    border-left: 3px solid #2f8fd6;
+}
+
+.tag-candidate-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #ffffff;
+}

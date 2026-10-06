@@ -1,0 +1,42 @@
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Keeps the page behind a modal out of reach while it's rendered: everything outside
+   Root is made inert, so focus can't Tab out onto the page and nothing there can be pressed or
+   clicked. Renders nothing; render it inside the modal's markup so it's removed with it. *@
+
+@code {
+    /// <summary>The modal's outermost element; everything outside it goes inert.</summary>
+    [Parameter, EditorRequired] public ElementReference Root { get; set; }
+
+    private readonly string key = Guid.NewGuid().ToString("N");
+    private IJSObjectReference? jsModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/InertBackground.razor.js");
+            await jsModule.InvokeVoidAsync("init", key, Root);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("dispose", key);
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

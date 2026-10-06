@@ -1,0 +1,696 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.LocalLibrary
+@inject ILocalLibraryClient LocalLibraryClient
+@inject INfoSyncService NfoSyncService
+@inject INfoHistoryService HistoryService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (showRawNfo)
+{
+    <div class="nfo-modal-backdrop" tabindex="0" @onclick="Close">
+        <div class="nfo-modal-panel" @onclick:stopPropagation="true">
+            <div class="nfo-modal-header">
+                <h5 class="nfo-modal-title">@(isConflictReview ? "Resolve .nfo Conflict" : showHistory ? ".nfo History" : "Edit .nfo")</h5>
+                <button class="nfo-modal-close-btn" @onclick="Close" aria-label="Close">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+            <div class="nfo-modal-body">
+                @if (nfoSaveError is not null)
+                {
+                    <div class="alert alert-danger mb-0">@nfoSaveError</div>
+                }
+                @if (nfoSaved)
+                {
+                    <div class="alert alert-success mb-0">Saved. This doesn't refresh the movie's stored metadata — use Refresh &gt; Local for that, if you want.</div>
+                }
+
+                @if (rawNfoContent is not null && monacoReady && showHistory)
+                {
+                    @if (generations is null)
+                    {
+                        <p class="text-muted mb-0">Loading…</p>
+                    }
+                    else if (generations.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No earlier versions stored yet. Each time Javbuddy writes this .nfo, the version it replaces is kept here (the last @NfoHistoryService.GenerationsKept).</p>
+                    }
+                    else
+                    {
+                        <select class="form-select form-select-sm nfo-history-select" aria-label="Earlier version" value="@selectedGenerationId" @onchange="OnGenerationSelected" disabled="@restoring">
+                            @foreach (var generation in generations)
+                            {
+                                <option value="@generation.Id">@FormatGeneration(generation)</option>
+                            }
+                        </select>
+                        <div class="nfo-diff-pane-labels">
+                            <span class="nfo-diff-pane-label"><strong>Earlier version</strong> (selected above)</span>
+                            <span class="nfo-diff-pane-label"><strong>On-disk .nfo</strong> (current file)</span>
+                        </div>
+                        <div @key="@($"history-{historyDiffEditorInstance}")" class="nfo-monaco-wrapper">
+                            @{ var historyEditorId = HistoryDiffEditorId; }
+                            <StandaloneDiffEditor Id="@historyEditorId" CssClass="nfo-monaco-editor" ConstructionOptions="NfoDiffEditorConstructionOptions" OnDidInit="@(() => OnHistoryDiffEditorInit(historyEditorId))" />
+                        </div>
+                    }
+                }
+                else if (rawNfoContent is not null && monacoReady && showDiff)
+                {
+                    <div class="nfo-diff-pane-labels">
+                        <span class="nfo-diff-pane-label"><strong>On-disk .nfo</strong> (current file)</span>
+                        <span class="nfo-diff-pane-label"><strong>Stored / Proposed .nfo</strong> (canonical metadata)</span>
+                    </div>
+                    <div @key="@($"diff-{nfoDiffEditorInstance}")" class="nfo-monaco-wrapper">
+                        @{ var diffEditorId = DiffEditorId; }
+                        <StandaloneDiffEditor Id="@diffEditorId" CssClass="nfo-monaco-editor" ConstructionOptions="NfoDiffEditorConstructionOptions" OnDidInit="@(() => OnNfoDiffEditorInit(diffEditorId))" />
+                    </div>
+                }
+                else if (rawNfoContent is not null && monacoReady)
+                {
+                    <div @key="nfoEditorInstance" class="nfo-monaco-wrapper">
+                        <StandaloneCodeEditor @ref="nfoEditor" Id="@CodeEditorId" CssClass="nfo-monaco-editor" ConstructionOptions="NfoEditorConstructionOptions" OnDidChangeModelContent="OnNfoContentChanged" />
+                    </div>
+                }
+                else if (loadingRawNfo || !monacoReady)
+                {
+                    <p class="text-muted mb-0">Loading…</p>
+                }
+                else
+                {
+                    <p class="text-muted mb-0">No local .nfo file found for this code.</p>
+                }
+            </div>
+            <div class="nfo-modal-footer">
+                @if (rawNfoContent is not null && showHistory)
+                {
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="CloseHistory" disabled="@restoring">Back to editor</button>
+                    <button class="btn btn-sm btn-primary" @onclick="RestoreSelectedGeneration" disabled="@(restoring || SelectedGeneration is null)">
+                        @(restoring ? "Restoring…" : "Restore this version")
+                    </button>
+                }
+                else if (rawNfoContent is not null && showDiff)
+                {
+                    @if (!isConflictReview)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleDiffView">Back to editor</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleDiffView">Edit manually</button>
+                    }
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="DiscardNfoChanges" disabled="@savingNfo">Discard changes</button>
+                    <button class="btn btn-sm btn-primary" @onclick="SaveNfoAndClose" disabled="@savingNfo">
+                        @(savingNfo ? "Saving…" : "Save & close")
+                    </button>
+                }
+                else if (rawNfoContent is not null)
+                {
+                    @if (!isConflictReview)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary me-auto" @onclick="OpenHistory" disabled="@(nfoDirty || savingNfo)"
+                                title="@(nfoDirty ? "Save or discard your changes first" : null)">History</button>
+                    }
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleDiffView" disabled="@(!nfoDirty || savingNfo)">View diff</button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="DiscardNfoChanges" disabled="@(!nfoDirty || savingNfo)">Discard changes</button>
+                    @if (isConflictReview)
+                    {
+                        <button class="btn btn-sm btn-primary" @onclick="SaveNfoAndClose" disabled="@savingNfo">
+                            @(savingNfo ? "Saving…" : "Save & close")
+                        </button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-sm btn-primary" @onclick="SaveNfo" disabled="@(!nfoDirty || savingNfo)">
+                            @(savingNfo ? "Saving…" : "Save")
+                        </button>
+                    }
+                }
+                <button class="btn btn-sm btn-outline-secondary" @onclick="Close" disabled="@(savingNfo || restoring)">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>The .nfo Monaco-editor modal for MovieDetail's "Edit .nfo" toolbar button —
+    /// extracted so the page doesn't carry the editor's theme/marker/dirty-tracking state and
+    /// XML-validation logic alongside its own metadata-fetch/toolbar concerns. Show/loading state
+    /// stays owned here; MovieDetail only needs <see cref="LoadingChanged"/> to relabel/disable its
+    /// own toolbar button, and calls <see cref="OpenAsync"/> via @ref to open this.</summary>
+    [Parameter, EditorRequired] public string Code { get; set; } = "";
+
+    [Parameter] public int MovieId { get; set; }
+
+    [Parameter] public EventCallback<bool> LoadingChanged { get; set; }
+
+    [Parameter] public EventCallback OnConflictResolved { get; set; }
+
+    private bool showRawNfo;
+    private bool loadingRawNfo;
+    private bool isConflictReview;
+    private string? rawNfoContent;
+    private StandaloneCodeEditor? nfoEditor;
+    private int nfoEditorInstance;
+    private bool nfoDirty;
+    private bool savingNfo;
+    private bool nfoSaved;
+    private string? nfoSaveError;
+    private string monacoTheme = "vs-dark";
+    private bool draculaThemeDefined;
+    private bool showDiff;
+    private int nfoDiffEditorInstance;
+    private string? diffModifiedSeed;
+    private bool monacoReady;
+    private IJSObjectReference? monacoModule;
+    private bool showHistory;
+    private IReadOnlyList<NfoGenerationItem>? generations;
+    private int selectedGenerationId;
+    private int historyDiffEditorInstance;
+    private bool restoring;
+
+    private NfoGenerationItem? SelectedGeneration => generations?.FirstOrDefault(g => g.Id == selectedGenerationId);
+
+    // Editor ids key BlazorMonaco's page-wide editor registry, so they're unique per component
+    // instance: disposing a previous movie's editor must never reach the next movie's.
+    private readonly string editorIdPrefix = $"nfo-{Guid.NewGuid():N}";
+    private string CodeEditorId => $"{editorIdPrefix}-editor-{nfoEditorInstance}";
+    private string DiffEditorId => $"{editorIdPrefix}-diff-{nfoDiffEditorInstance}";
+    private string HistoryDiffEditorId => $"{editorIdPrefix}-history-{historyDiffEditorInstance}";
+
+    public async Task OpenConflictReviewAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Code)) return;
+
+        await ReleaseEditorsAsync();
+        isConflictReview = true;
+        showHistory = false;
+        showRawNfo = true;
+        showDiff = true;
+        nfoDirty = false;
+        nfoSaved = false;
+        nfoSaveError = null;
+        nfoDiffEditorInstance++;
+        // Both sides are reloaded below. Left over from an earlier open, they'd mount the diff
+        // editor on this first render, and its init would find no proposed .nfo to seed it with
+        // yet (or a stale one) and never be seeded again.
+        rawNfoContent = null;
+        diffModifiedSeed = null;
+        monacoReady = false;
+
+        StateHasChanged();
+
+        try
+        {
+            var monacoLoad = PrepareMonacoAsync();
+            await SetLoadingAsync(true);
+            try
+            {
+                rawNfoContent = await LocalLibraryClient.GetRawNfoAsync(Code);
+                if (MovieId > 0)
+                {
+                    diffModifiedSeed = await NfoSyncService.GenerateProposedNfoAsync(MovieId);
+                }
+                diffModifiedSeed ??= rawNfoContent;
+            }
+            finally
+            {
+                await SetLoadingAsync(false);
+            }
+
+            if (!await monacoLoad) return;
+            monacoReady = true;
+        }
+        catch (JSDisconnectedException)
+        {
+            return;
+        }
+
+        StateHasChanged();
+    }
+
+    public async Task OpenAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Code)) return;
+
+        await ReleaseEditorsAsync();
+        isConflictReview = false;
+        showHistory = false;
+        showRawNfo = true;
+        showDiff = false;
+        nfoDirty = false;
+        nfoSaved = false;
+        nfoSaveError = null;
+        diffModifiedSeed = null;
+        nfoEditorInstance++;
+
+        // This is called imperatively via @ref from MovieDetail's own click handler, not through an
+        // @onclick on this component's own markup — Blazor only auto-renders the component that owns
+        // the event handler that's actually running (MovieDetail), not a child whose state an outside
+        // caller mutated directly. Without this, reopening after a previous close (where rawNfoContent
+        // is already cached and the loading branch below — the only other place this component
+        // rendered itself — gets skipped) leaves showRawNfo=true in memory with nothing telling the
+        // browser to show it.
+        StateHasChanged();
+
+        try
+        {
+            var monacoLoad = PrepareMonacoAsync();
+            if (rawNfoContent is null)
+            {
+                await SetLoadingAsync(true);
+                rawNfoContent = await LocalLibraryClient.GetRawNfoAsync(Code);
+                await SetLoadingAsync(false);
+            }
+
+            if (!await monacoLoad) return;
+            monacoReady = true;
+        }
+        catch (JSDisconnectedException)
+        {
+            return;
+        }
+
+        // Covers the reopen path: rawNfoContent/monacoReady may already have been set by the time
+        // this runs, which would otherwise skip every StateHasChanged above (see the comment on the
+        // one near the top of this method for why an explicit call is needed at all here).
+        StateHasChanged();
+    }
+
+    // Monaco is loaded on the first open, not with every page, so it runs alongside the
+    // .nfo fetch and has to finish before the theme is defined and BlazorMonaco creates an editor.
+    // Called on every open: ensureMonaco also re-attaches Monaco's <head> nodes, which Blazor's
+    // enhanced navigation strips out (see NfoEditor.razor.js).
+    // Returns false when the circuit went away meanwhile.
+    private async Task<bool> PrepareMonacoAsync()
+    {
+        try
+        {
+            monacoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/MovieDetailSections/NfoEditor.razor.js");
+            await monacoModule.InvokeVoidAsync("ensureMonaco");
+
+            var theme = await JS.InvokeAsync<string?>("document.documentElement.getAttribute", "data-theme");
+            if (theme == "dark")
+            {
+                await DefineDraculaThemeAsync();
+                monacoTheme = "dracula";
+            }
+            else
+            {
+                monacoTheme = "vs";
+            }
+            return true;
+        }
+        catch (JSDisconnectedException)
+        {
+            return false;
+        }
+    }
+
+    private async Task Close()
+    {
+        await ReleaseEditorsAsync();
+        showRawNfo = false;
+    }
+
+    // Disposes the mounted Monaco widget and its models before the markup that hosts it goes
+    // away — BlazorMonaco itself never does (see NfoEditor.razor.js). The code editor's @ref would
+    // otherwise keep pointing at the released widget until the next one mounts.
+    private async Task ReleaseEditorsAsync()
+    {
+        nfoEditor = null;
+        if (monacoModule is null) return;
+
+        try
+        {
+            await monacoModule.InvokeVoidAsync("disposeEditor", CodeEditorId);
+            await monacoModule.InvokeVoidAsync("disposeEditor", DiffEditorId);
+            await monacoModule.InvokeVoidAsync("disposeEditor", HistoryDiffEditorId);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (monacoModule is null) return;
+
+        await ReleaseEditorsAsync();
+
+        try
+        {
+            await monacoModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task SetLoadingAsync(bool value)
+    {
+        loadingRawNfo = value;
+        StateHasChanged();
+        await LoadingChanged.InvokeAsync(value);
+    }
+
+    // https://draculatheme.com/contribute — standard Dracula palette.
+    private async Task DefineDraculaThemeAsync()
+    {
+        if (draculaThemeDefined) return;
+        draculaThemeDefined = true;
+
+        await BlazorMonaco.Editor.Global.DefineTheme(JS, "dracula", new StandaloneThemeData
+        {
+            Base = "vs-dark",
+            Inherit = true,
+            Rules = new List<TokenThemeRule>
+            {
+                new() { Token = "comment", Foreground = "6272a4" },
+                new() { Token = "string", Foreground = "f1fa8c" },
+                new() { Token = "keyword", Foreground = "ff79c6" },
+                new() { Token = "number", Foreground = "bd93f9" },
+                new() { Token = "tag", Foreground = "ff79c6" },
+                new() { Token = "attribute.name", Foreground = "50fa7b" },
+                new() { Token = "attribute.value", Foreground = "f1fa8c" },
+                new() { Token = "delimiter", Foreground = "f8f8f2" },
+                new() { Token = "metatag", Foreground = "ff79c6" },
+            },
+            Colors = new Dictionary<string, string>
+            {
+                ["editor.background"] = "#282a36",
+                ["editor.foreground"] = "#f8f8f2",
+                ["editorCursor.foreground"] = "#f8f8f0",
+                ["editor.lineHighlightBackground"] = "#44475a",
+                ["editorLineNumber.foreground"] = "#6272a4",
+                ["editorLineNumber.activeForeground"] = "#f8f8f2",
+                ["editor.selectionBackground"] = "#44475a",
+                ["editor.inactiveSelectionBackground"] = "#44475a75",
+            },
+        });
+    }
+
+    // Seeded from diffModifiedSeed, not rawNfoContent, when this editor is (re)created after a
+    // round trip through the diff view — that view unmounts this component, so a fresh instance
+    // must be re-seeded with whatever unsaved edits were showing right before the switch.
+    private StandaloneEditorConstructionOptions NfoEditorConstructionOptions(StandaloneCodeEditor editor) => new()
+    {
+        AutomaticLayout = true,
+        Language = "xml",
+        Theme = monacoTheme,
+        Value = diffModifiedSeed ?? rawNfoContent ?? "",
+    };
+
+    private void OnNfoContentChanged(ModelContentChangedEvent e)
+    {
+        nfoDirty = true;
+        nfoSaved = false;
+    }
+
+    private async Task ToggleDiffView()
+    {
+        if (showDiff)
+        {
+            await ReleaseEditorsAsync();
+            showDiff = false;
+            nfoEditorInstance++;
+            return;
+        }
+
+        if (nfoEditor is null || rawNfoContent is null) return;
+
+        diffModifiedSeed = await nfoEditor.GetValue();
+        await ReleaseEditorsAsync();
+        nfoDiffEditorInstance++;
+        showDiff = true;
+    }
+
+    private StandaloneDiffEditorConstructionOptions NfoDiffEditorConstructionOptions(StandaloneDiffEditor editor) => new()
+    {
+        AutomaticLayout = true,
+        Theme = monacoTheme,
+        ReadOnly = true,
+        OriginalEditable = false,
+        RenderSideBySide = true,
+    };
+
+    // The models get a fresh Guid URI per open: the tab's Monaco ModelService outlives this
+    // component across enhanced navigation, so a per-instance counter would repeat URIs between
+    // movies. Created and attached in one JS call, so a widget released before this init ran
+    // never ends up with models nothing owns.
+    private async Task OnNfoDiffEditorInit(string editorId)
+    {
+        if (monacoModule is null || rawNfoContent is null || diffModifiedSeed is null) return;
+
+        try
+        {
+            await monacoModule.InvokeVoidAsync("setDiffModels", editorId, rawNfoContent, diffModifiedSeed, "xml", Guid.NewGuid().ToString("N"));
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task OpenHistory()
+    {
+        if (MovieId <= 0) return;
+
+        await ReleaseEditorsAsync();
+        nfoSaved = false;
+        nfoSaveError = null;
+        showHistory = true;
+        generations = null;
+        StateHasChanged();
+
+        generations = await HistoryService.GetGenerationsAsync(MovieId);
+        selectedGenerationId = generations.FirstOrDefault()?.Id ?? 0;
+        historyDiffEditorInstance++;
+    }
+
+    private async Task CloseHistory()
+    {
+        await ReleaseEditorsAsync();
+        showHistory = false;
+        nfoEditorInstance++;
+    }
+
+    private async Task OnGenerationSelected(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var id)) return;
+
+        await ReleaseEditorsAsync();
+        selectedGenerationId = id;
+        historyDiffEditorInstance++;
+    }
+
+    private async Task OnHistoryDiffEditorInit(string editorId)
+    {
+        if (monacoModule is null || rawNfoContent is null || SelectedGeneration is not { } generation) return;
+
+        try
+        {
+            await monacoModule.InvokeVoidAsync("setDiffModels", editorId, generation.Content, rawNfoContent, "xml", Guid.NewGuid().ToString("N"));
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private async Task RestoreSelectedGeneration()
+    {
+        if (SelectedGeneration is not { } generation) return;
+
+        restoring = true;
+        nfoSaveError = null;
+
+        var restored = await HistoryService.RestoreAsync(MovieId, generation.Id);
+        restoring = false;
+        if (restored is null)
+        {
+            nfoSaveError = "Failed to restore — the local .nfo file could not be found or written.";
+            return;
+        }
+
+        rawNfoContent = restored;
+        diffModifiedSeed = null;
+        nfoDirty = false;
+        await CloseHistory();
+        nfoSaved = true;
+    }
+
+    private static string FormatGeneration(NfoGenerationItem generation) =>
+        $"{generation.ReplacedAtUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss} · replaced by {TriggerLabel(generation.Trigger)}";
+
+    private static string TriggerLabel(NfoWriteTrigger trigger) => trigger switch
+    {
+        NfoWriteTrigger.ManualEdit => "manual edit",
+        NfoWriteTrigger.ConflictResolution => "conflict resolution",
+        NfoWriteTrigger.ActorSync => "actor name sync",
+        NfoWriteTrigger.MetadataSync => "metadata sync",
+        NfoWriteTrigger.DriftPush => "drift push",
+        NfoWriteTrigger.Restore => "restore",
+        _ => trigger.ToString(),
+    };
+
+    private async Task SaveNfo()
+    {
+        if (string.IsNullOrWhiteSpace(Code) || nfoEditor is null) return;
+
+        var content = await nfoEditor.GetValue();
+        nfoSaveError = null;
+        nfoSaved = false;
+
+        try
+        {
+            System.Xml.Linq.XDocument.Parse(content);
+            await ClearNfoMarkers();
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            nfoSaveError = $"Can't save — invalid XML at line {ex.LineNumber}, column {ex.LinePosition}: {ex.Message}";
+            await SetNfoErrorMarker(ex);
+            return;
+        }
+
+        savingNfo = true;
+        StateHasChanged();
+
+        var ok = await HistoryService.SaveAsync(MovieId, content);
+        if (ok)
+        {
+            rawNfoContent = content;
+            diffModifiedSeed = null;
+            nfoDirty = false;
+            nfoSaved = true;
+        }
+        else
+        {
+            nfoSaveError = "Failed to save — the local .nfo file could not be found or written.";
+        }
+
+        savingNfo = false;
+    }
+
+    private async Task SaveNfoAndClose()
+    {
+        string? content = null;
+        if (showDiff)
+        {
+            content = diffModifiedSeed;
+        }
+        else if (nfoEditor is not null)
+        {
+            content = await nfoEditor.GetValue();
+        }
+
+        if (string.IsNullOrWhiteSpace(content)) return;
+
+        nfoSaveError = null;
+        nfoSaved = false;
+
+        try
+        {
+            System.Xml.Linq.XDocument.Parse(content);
+            await ClearNfoMarkers();
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            nfoSaveError = $"Can't save — invalid XML at line {ex.LineNumber}, column {ex.LinePosition}: {ex.Message}";
+            if (nfoEditor is not null)
+            {
+                await SetNfoErrorMarker(ex);
+            }
+            return;
+        }
+
+        savingNfo = true;
+        StateHasChanged();
+
+        if (isConflictReview && MovieId > 0)
+        {
+            var result = await NfoSyncService.ResolveMovieNfoConflictAsync(MovieId, rawNfoContent ?? string.Empty, content);
+            if (result.Success)
+            {
+                rawNfoContent = content;
+                diffModifiedSeed = null;
+                nfoDirty = false;
+                await ReleaseEditorsAsync();
+                showRawNfo = false;
+                savingNfo = false;
+                await OnConflictResolved.InvokeAsync();
+                return;
+            }
+            nfoSaveError = result.FileChanged
+                ? "The on-disk .nfo changed while you were reviewing it. Reopen the conflict to review the latest version."
+                : "Failed to resolve conflict — the local .nfo file could not be written.";
+        }
+        else
+        {
+            var ok = await HistoryService.SaveAsync(MovieId, content);
+            if (ok)
+            {
+                rawNfoContent = content;
+                diffModifiedSeed = null;
+                nfoDirty = false;
+                await ReleaseEditorsAsync();
+                showRawNfo = false;
+                savingNfo = false;
+                return;
+            }
+            nfoSaveError = "Failed to save — the local .nfo file could not be found or written.";
+        }
+
+        savingNfo = false;
+    }
+
+    private async Task DiscardNfoChanges()
+    {
+        if (isConflictReview)
+        {
+            await Close();
+            return;
+        }
+
+        if (nfoEditor is not null && rawNfoContent is not null)
+        {
+            await nfoEditor.SetValue(rawNfoContent);
+        }
+        diffModifiedSeed = null;
+        nfoDirty = false;
+        nfoSaved = false;
+        await ClearNfoMarkers();
+        if (showDiff)
+        {
+            await ReleaseEditorsAsync();
+            showDiff = false;
+            nfoEditorInstance++;
+        }
+    }
+
+    private async Task SetNfoErrorMarker(System.Xml.XmlException ex)
+    {
+        if (nfoEditor is null) return;
+        var model = await nfoEditor.GetModel();
+        var line = Math.Max(1, ex.LineNumber);
+        var column = Math.Max(1, ex.LinePosition);
+        await BlazorMonaco.Editor.Global.SetModelMarkers(JS, model, "nfo-lint", new List<MarkerData>
+        {
+            new()
+            {
+                Severity = MarkerSeverity.Error,
+                Message = ex.Message,
+                StartLineNumber = line,
+                StartColumn = column,
+                EndLineNumber = line,
+                EndColumn = column + 1,
+            },
+        });
+    }
+
+    private async Task ClearNfoMarkers()
+    {
+        if (nfoEditor is null) return;
+        var model = await nfoEditor.GetModel();
+        await BlazorMonaco.Editor.Global.SetModelMarkers(JS, model, "nfo-lint", new List<MarkerData>());
+    }
+}

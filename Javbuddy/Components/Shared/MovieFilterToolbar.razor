@@ -1,0 +1,389 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Movies
+@implements IDisposable
+@inject TimeProvider TimeProvider
+
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    @if (!ReleasesBrowseMode && ShowStatusFilter)
+    {
+        <StatusFilterButtonGroup Options="@StatusFilterOptions" />
+    }
+
+    <input type="search"
+           class="form-control form-control-sm w-auto"
+           style="min-width: 220px;"
+           placeholder="@SearchPlaceholder"
+           value="@localTextFilter"
+           @oninput="HandleTextInput" />
+
+    @if (showFilterDropdown)
+    {
+        <div class="dropdown-backdrop" @onclick="CloseFilterDropdown"></div>
+    }
+    <div class="sort-dropdown-wrapper">
+        <DropdownMenuButton Label="@($"Filter{(ActiveFilterCount > 0 ? $" ({ActiveFilterCount})" : "")}")"
+                            Active="ActiveFilterCount > 0"
+                            ShowClear="ComputedHasActiveFilters"
+                            OnClear="HandleResetFilters"
+                            ClearTitle="Reset all filters"
+                            ClearAriaLabel="Reset all filters"
+                            ShowMenu="showFilterDropdown"
+                            OnToggle="ToggleFilterDropdown">
+            @if (!ReleasesBrowseMode)
+            {
+                @if (LibraryNames.Count > 0)
+                {
+                    <MultiSelectFilterGroup GroupLabel="Library" Options="@LibraryFilterOptions" />
+                }
+                <MultiSelectFilterGroup GroupLabel="Resolution" Options="@ResolutionFilterOptions" />
+                <MultiSelectFilterGroup GroupLabel="Scan Type" Options="@ScanTypeFilterOptions" />
+                <MultiSelectFilterGroup GroupLabel="NFO drift" Options="@NfoDriftFilterOptions" />
+                @if (AvailableCodecs.Count > 0)
+                {
+                    <MultiSelectFilterGroup GroupLabel="Codec" Options="@CodecFilterOptions" />
+                }
+            }
+            @if (ReleasesBrowseMode)
+            {
+                <button type="button" class="sort-dropdown-item @(HidePreviouslyDeleted ? "active" : "")" aria-pressed="@(HidePreviouslyDeleted ? "true" : "false")" @onclick="OnToggleHidePreviouslyDeleted">
+                    <span>Hide previously deleted</span>
+                    @if (HidePreviouslyDeleted)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+            }
+            @if (AvailableStudios.Count > 0)
+            {
+                <MultiSelectFilterGroup GroupLabel="Studio" Options="@StudioFilterOptions" Searchable="true"
+                                         OnSelectAll="OnSelectAllStudios"
+                                         OnSelectNone="OnSelectNoneStudios" />
+            }
+            @if (ReleasesBrowseMode)
+            {
+                @ReleasesFilterContent
+            }
+            else
+            {
+                @if (AvailableGenres.Count > 0)
+                {
+                    <MultiSelectFilterGroup GroupLabel="Genre" Options="@GenreFilterOptions" Searchable="true"
+                                             OnSelectAll="OnSelectAllGenres"
+                                             OnSelectNone="OnSelectNoneGenres" />
+                }
+                <MultiSelectFilterGroup GroupLabel="Features" Options="@FeatureFilterOptions" />
+                @if (AvailableActors.Count > 0 || (ShowActorAttributes && ActorAttributeOptions.HasAny))
+                {
+                    <FilterSection Label="Actor" ActiveCount="@(ActorFilter.Count + (ShowActorAttributes ? ActorAttributeSelection.Count : 0))">
+                        @if (AvailableActors.Count > 0)
+                        {
+                            <MultiSelectFilterGroup GroupLabel="Name" Options="@ActorFilterOptions" Searchable="true"
+                                                     OnSelectAll="SelectAllActors"
+                                                     OnSelectNone="OnSelectNoneActors" />
+                        }
+                        @if (ShowActorAttributes && ActorAttributeOptions.HasAny)
+                        {
+                            <ActorAttributeFilters Options="ActorAttributeOptions" Selection="ActorAttributeSelection" SelectionChanged="OnActorAttributesChanged" />
+                        }
+                    </FilterSection>
+                }
+            }
+        </DropdownMenuButton>
+    </div>
+
+    @if (!ReleasesBrowseMode)
+    {
+        <div class="sort-dropdown-wrapper" @onfocusout="OnSortFocusOut" tabindex="-1">
+            <DropdownMenuButton Label="@($"Sort: {MovieFilterOptions.SortFieldLabel(SortField)}")"
+                                Arrow="@(SortField == "random" ? "" : (SortDescending ? "▼" : "▲"))"
+                                ShowMenu="showSortDropdown"
+                                OnToggle="ToggleSortDropdown">
+                @foreach (var field in MovieFilterOptions.SortFields)
+                {
+                    <button type="button" class="sort-dropdown-item @(SortField == field ? "active" : "")" @onclick="() => SelectSort(field)">
+                        @MovieFilterOptions.SortFieldLabel(field)
+                        @if (SortField == field && field != "random")
+                        {
+                            <span class="sort-dropdown-arrow">@(SortDescending ? "▼" : "▲")</span>
+                        }
+                    </button>
+                }
+            </DropdownMenuButton>
+        </div>
+    }
+
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public int MissingCount { get; set; }
+    [Parameter] public int GotCount { get; set; }
+    [Parameter] public MovieStatus? StatusFilter { get; set; }
+    /// <summary>Off hides the All/Missing/Got buttons, for a host that only ever lists one status
+    /// (the DeoVR group editor lists Got movies only).</summary>
+    [Parameter] public bool ShowStatusFilter { get; set; } = true;
+    [Parameter] public EventCallback<MovieStatus?> OnStatusFilterChanged { get; set; }
+
+    [Parameter] public IReadOnlyList<string> LibraryNames { get; set; } = Array.Empty<string>();
+    [Parameter] public string? LibraryFilter { get; set; }
+    [Parameter] public EventCallback<string?> OnLibraryFilterChanged { get; set; }
+
+    [Parameter] public string TextFilter { get; set; } = "";
+    [Parameter] public EventCallback<string> OnTextFilterChanged { get; set; }
+    [Parameter] public string SearchPlaceholder { get; set; } = "Filter by code or title…";
+
+    [Parameter] public IReadOnlySet<MovieResolutionFilterOption> ResolutionFilter { get; set; } = new HashSet<MovieResolutionFilterOption>();
+    [Parameter] public EventCallback<MovieResolutionFilterOption> OnToggleResolution { get; set; }
+
+    [Parameter] public IReadOnlySet<MovieScanTypeFilterOption> ScanTypeFilter { get; set; } = new HashSet<MovieScanTypeFilterOption>();
+    [Parameter] public EventCallback<MovieScanTypeFilterOption> OnToggleScanType { get; set; }
+    [Parameter] public IReadOnlySet<NfoDriftKind> NfoDriftFilter { get; set; } = new HashSet<NfoDriftKind>();
+    [Parameter] public EventCallback<NfoDriftKind> OnToggleNfoDrift { get; set; }
+
+    [Parameter] public IReadOnlyList<string> AvailableCodecs { get; set; } = Array.Empty<string>();
+    [Parameter] public IReadOnlySet<string> CodecFilter { get; set; } = new HashSet<string>();
+    [Parameter] public EventCallback<string> OnToggleCodec { get; set; }
+
+    [Parameter] public IReadOnlyList<string> AvailableStudios { get; set; } = Array.Empty<string>();
+    [Parameter] public IReadOnlySet<string> StudioFilter { get; set; } = new HashSet<string>();
+    [Parameter] public EventCallback<string> OnToggleStudio { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<string>> OnSelectAllStudios { get; set; }
+    [Parameter] public EventCallback OnSelectNoneStudios { get; set; }
+
+    [Parameter] public IReadOnlyList<string> AvailableGenres { get; set; } = Array.Empty<string>();
+    [Parameter] public IReadOnlySet<string> GenreFilter { get; set; } = new HashSet<string>();
+    [Parameter] public EventCallback<string> OnToggleGenre { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<string>> OnSelectAllGenres { get; set; }
+    [Parameter] public EventCallback OnSelectNoneGenres { get; set; }
+
+    [Parameter] public IReadOnlySet<MovieFeatureFilterOption> FeatureFilter { get; set; } = new HashSet<MovieFeatureFilterOption>();
+    [Parameter] public EventCallback<MovieFeatureFilterOption> OnToggleFeature { get; set; }
+
+    /// <summary>The Actress Attributes filters (cup size, height, measurements, age) of the linked cast
+    ///. Opt-in: Actor Detail embeds this toolbar too, where an actor's own attributes never
+    /// vary. Selection is the applied one; edits come back as a modified copy.</summary>
+    [Parameter] public bool ShowActorAttributes { get; set; }
+    [Parameter] public ActorAttributeOptions ActorAttributeOptions { get; set; } = ActorAttributeOptions.None;
+    [Parameter] public ActorAttributeSelection ActorAttributeSelection { get; set; } = ActorAttributeSelection.Empty;
+    [Parameter] public EventCallback<ActorAttributeSelection> OnActorAttributesChanged { get; set; }
+
+    /// <summary>The actor-name filter, like the Scenes wall's (a movie matches any selected actor). Shown
+    /// only when the host offers actors.</summary>
+    [Parameter] public IReadOnlyList<MovieActorOption> AvailableActors { get; set; } = Array.Empty<MovieActorOption>();
+    [Parameter] public IReadOnlySet<int> ActorFilter { get; set; } = new HashSet<int>();
+    [Parameter] public EventCallback<int> OnToggleActor { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<int>> OnSelectAllActors { get; set; }
+    [Parameter] public EventCallback OnSelectNoneActors { get; set; }
+
+    [Parameter] public string SortField { get; set; } = "added";
+    [Parameter] public bool SortDescending { get; set; } = true;
+    [Parameter] public EventCallback<MovieSortChange> OnSortChanged { get; set; }
+
+    [Parameter] public bool? HasActiveFilters { get; set; }
+    [Parameter] public EventCallback OnResetFilters { get; set; }
+
+    /// <summary>True while the Movies page is browsing r18.dev releases instead of the local
+    /// library: hides the controls that only filter/sort local movies (status, library,
+    /// resolution, scan type, codec, genre, features, sort) so nothing on screen silently does
+    /// nothing. The search box and Studio filter stay — they define what's being browsed — joined by
+    /// <see cref="ReleasesFilterContent"/>.</summary>
+    [Parameter] public bool ReleasesBrowseMode { get; set; }
+
+    /// <summary>The r18.dev catalog's own filters, shown under Studio in the Filter menu
+    /// while <see cref="ReleasesBrowseMode"/> is on; <see cref="ReleasesActiveFilterCount"/> is how many of
+    /// them are set.</summary>
+    [Parameter] public RenderFragment? ReleasesFilterContent { get; set; }
+    [Parameter] public int ReleasesActiveFilterCount { get; set; }
+
+    /// <summary>The releases browse's "Hide previously deleted" filter, shown only in
+    /// <see cref="ReleasesBrowseMode"/>. On by default, so it counts as an active filter like
+    /// the actor Missing page's default-on filters.</summary>
+    [Parameter] public bool HidePreviouslyDeleted { get; set; }
+    [Parameter] public EventCallback OnToggleHidePreviouslyDeleted { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool showFilterDropdown;
+    private bool showSortDropdown;
+    private string localTextFilter = "";
+    private CancellationTokenSource? textFilterDebounceCts;
+
+    private string? lastSyncedTextFilter;
+
+    protected override void OnParametersSet()
+    {
+        if (TextFilter != lastSyncedTextFilter)
+        {
+            textFilterDebounceCts?.Cancel();
+            localTextFilter = TextFilter;
+            lastSyncedTextFilter = TextFilter;
+        }
+    }
+
+    private int ActiveFilterCount => ReleasesBrowseMode
+        ? StudioFilter.Count + (HidePreviouslyDeleted ? 1 : 0) + ReleasesActiveFilterCount
+        : (string.IsNullOrEmpty(LibraryFilter) ? 0 : 1)
+            + ResolutionFilter.Count
+            + ScanTypeFilter.Count
+            + NfoDriftFilter.Count
+            + CodecFilter.Count
+            + StudioFilter.Count
+            + GenreFilter.Count
+            + FeatureFilter.Count
+            + ActorFilter.Count
+            + (ShowActorAttributes ? ActorAttributeSelection.Count : 0);
+
+    private bool ComputedHasActiveFilters => HasActiveFilters ?? (
+        StatusFilter is not null
+        || !string.IsNullOrWhiteSpace(TextFilter)
+        || ActiveFilterCount > 0);
+
+    private IReadOnlyList<FilterButtonOption> StatusFilterOptions =>
+    [
+        new($"All ({TotalCount})", StatusFilter is null, EventCallback.Factory.Create(this, () => OnStatusFilterChanged.InvokeAsync(null))),
+        new($"Missing ({MissingCount})", StatusFilter == MovieStatus.Missing, EventCallback.Factory.Create(this, () => OnStatusFilterChanged.InvokeAsync(MovieStatus.Missing))),
+        new($"Got ({GotCount})", StatusFilter == MovieStatus.Got, EventCallback.Factory.Create(this, () => OnStatusFilterChanged.InvokeAsync(MovieStatus.Got))),
+    ];
+
+    private async Task HandleTextInput(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? "";
+        localTextFilter = val;
+
+        textFilterDebounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        textFilterDebounceCts = cts;
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250), TimeProvider, cts.Token);
+            lastSyncedTextFilter = val;
+            await OnTextFilterChanged.InvokeAsync(val);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void ToggleFilterDropdown()
+    {
+        showFilterDropdown = !showFilterDropdown;
+        showSortDropdown = false;
+    }
+
+    private void CloseFilterDropdown() => showFilterDropdown = false;
+
+    private void ToggleSortDropdown()
+    {
+        showSortDropdown = !showSortDropdown;
+        showFilterDropdown = false;
+    }
+
+    private async Task OnSortFocusOut()
+    {
+        await Task.Delay(150);
+        showSortDropdown = false;
+    }
+
+    private async Task SelectSort(string field)
+    {
+        showSortDropdown = false;
+        if (field == "random")
+        {
+            await OnSortChanged.InvokeAsync(new MovieSortChange(field, SortDescending, Random.Shared.Next(1, int.MaxValue)));
+        }
+        else if (SortField == field)
+        {
+            await OnSortChanged.InvokeAsync(new MovieSortChange(field, !SortDescending));
+        }
+        else
+        {
+            await OnSortChanged.InvokeAsync(new MovieSortChange(field, MovieFilterOptions.DefaultSortDescending(field)));
+        }
+    }
+
+    private async Task HandleResetFilters()
+    {
+        textFilterDebounceCts?.Cancel();
+        showFilterDropdown = false;
+        await OnResetFilters.InvokeAsync();
+    }
+
+    // The library filter holds one library, so picking another replaces it and re-picking the active one clears it.
+    private IReadOnlyList<MultiSelectOption> LibraryFilterOptions => LibraryNames
+        .Select(name => new MultiSelectOption(
+            name,
+            LibraryFilter == name,
+            EventCallback.Factory.Create(this, () => OnLibraryFilterChanged.InvokeAsync(LibraryFilter == name ? null : name))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> ResolutionFilterOptions => MovieFilterOptions.Resolutions
+        .Select(bucket => new MultiSelectOption(
+            MovieFilterOptions.ResolutionLabel(bucket),
+            ResolutionFilter.Contains(bucket),
+            EventCallback.Factory.Create(this, () => OnToggleResolution.InvokeAsync(bucket))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> ScanTypeFilterOptions => MovieFilterOptions.ScanTypes
+        .Select(scanType => new MultiSelectOption(
+            scanType.ToString(),
+            ScanTypeFilter.Contains(scanType),
+            EventCallback.Factory.Create(this, () => OnToggleScanType.InvokeAsync(scanType))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> NfoDriftFilterOptions => MovieFilterOptions.NfoDriftKinds
+        .Select(kind => new MultiSelectOption(
+            MovieFilterOptions.NfoDriftLabel(kind),
+            NfoDriftFilter.Contains(kind),
+            EventCallback.Factory.Create(this, () => OnToggleNfoDrift.InvokeAsync(kind))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> CodecFilterOptions => AvailableCodecs
+        .Select(codec => new MultiSelectOption(
+            codec,
+            CodecFilter.Contains(codec),
+            EventCallback.Factory.Create(this, () => OnToggleCodec.InvokeAsync(codec))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> StudioFilterOptions => AvailableStudios
+        .Select(studio => new MultiSelectOption(
+            studio,
+            StudioFilter.Contains(studio),
+            EventCallback.Factory.Create(this, () => OnToggleStudio.InvokeAsync(studio))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> GenreFilterOptions => AvailableGenres
+        .Select(genre => new MultiSelectOption(
+            genre.Contains(Tag.HierarchyDelimiter) ? genre.Replace(Tag.HierarchyDelimiter, " › ") : genre,
+            GenreFilter.Contains(genre),
+            EventCallback.Factory.Create(this, () => OnToggleGenre.InvokeAsync(genre))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> ActorFilterOptions => AvailableActors
+        .Select(actor => new MultiSelectOption(
+            actor.Name,
+            ActorFilter.Contains(actor.Id),
+            EventCallback.Factory.Create(this, () => OnToggleActor.InvokeAsync(actor.Id))))
+        .ToList();
+
+    // The group hands back the visible options' labels; names aren't unique, so every actor with one counts.
+    private Task SelectAllActors(IReadOnlyList<string> labels)
+    {
+        var names = labels.ToHashSet(StringComparer.Ordinal);
+        return OnSelectAllActors.InvokeAsync(AvailableActors.Where(a => names.Contains(a.Name)).Select(a => a.Id).ToList());
+    }
+
+    private IReadOnlyList<MultiSelectOption> FeatureFilterOptions => MovieFilterOptions.Features
+        .Select(feature => new MultiSelectOption(
+            MovieFilterOptions.FeatureLabel(feature),
+            FeatureFilter.Contains(feature),
+            EventCallback.Factory.Create(this, () => OnToggleFeature.InvokeAsync(feature))))
+        .ToList();
+
+    public void Dispose()
+    {
+        textFilterDebounceCts?.Cancel();
+        textFilterDebounceCts?.Dispose();
+    }
+}

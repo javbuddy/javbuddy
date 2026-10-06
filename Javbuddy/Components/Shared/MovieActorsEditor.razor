@@ -1,0 +1,121 @@
+@using Javbuddy.Services
+@inject IMovieService MovieService
+@inject IMovieDetailQueryService MovieDetailQuery
+
+@* The movie's cast, a collapsed section of the ClipEditor panel so an actor can be
+   added or removed while watching, without leaving the player for Movie Detail's Edit Cast. A scene's
+   own actors are picked from this cast in the scene form. Adds/removes go through IMovieService, which
+   keeps MetaActresses, the tracked-actor links and .nfo drift in sync. Themed by the same
+   --scene-editor-* custom properties as the ClipEditor. *@
+<div class="movie-actors-editor">
+    <button type="button" class="movie-actors-toggle" aria-expanded="@(expanded ? "true" : "false")" @onclick="ToggleAsync">
+        <span class="movie-actors-caret" aria-hidden="true">@(expanded ? "▾" : "▸")</span>
+        Movie actors@(loaded && cast.Count > 0 ? $" ({cast.Count})" : null)
+    </button>
+
+    @if (expanded)
+    {
+        <p class="movie-actors-hint">The movie's cast — each scene's actors are picked from it.</p>
+        @if (error is not null)
+        {
+            <p class="movie-actors-error" role="alert">@error</p>
+        }
+        @if (cast.Count > 0)
+        {
+            @* Movie Detail's Cast avatars, scaled to the panel. Names don't link to the actor's page:
+               that would navigate away from the player. *@
+            <div class="movie-actors-grid">
+                @foreach (var entry in cast)
+                {
+                    <div class="movie-actors-item @(entry.ActorId is null ? "movie-actors-item-unmatched" : null)">
+                        <div class="movie-actors-avatar-wrap">
+                            <div class="movie-actors-avatar @(entry.HasImage ? "movie-actors-avatar-photo" : null)">
+                                @if (entry.HasImage)
+                                {
+                                    <img src="@($"/actor-image/{entry.ActorId}/thumb{(entry.ImageVersion is { } v ? $"?v={v}" : "")}")" alt="@entry.Name" loading="lazy" />
+                                }
+                                else
+                                {
+                                    @ActorMatching.Initials(entry.Name)
+                                }
+                            </div>
+                            @if (entry.ActorId is null)
+                            {
+                                <div class="movie-actors-warning-badge" title="Not matched to a tracked actor" aria-label="Not matched to a tracked actor">
+                                    <svg viewBox="0 0 16 16" width="9" height="9" fill="currentColor" aria-hidden="true"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.891 0 1.439-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" /></svg>
+                                </div>
+                            }
+                            <button type="button" class="movie-actors-remove-btn" aria-label="Remove @entry.Name" title="Remove from the movie" @onclick="() => RemoveAsync(entry)">×</button>
+                        </div>
+                        <span class="movie-actors-name" title="@entry.Name">@entry.Name</span>
+                    </div>
+                }
+            </div>
+        }
+        else if (loaded)
+        {
+            <p class="movie-actors-hint">No cast yet.</p>
+        }
+        <div class="movie-actors-search">
+            <CastSearchAdd ExcludedActorIds="@cast.Where(c => c.ActorId is not null).Select(c => c.ActorId!.Value).ToHashSet()" OnAdd="AddAsync" />
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int MovieId { get; set; }
+
+    /// <summary>Raised after an actor was added to or removed from the movie, so a host showing the
+    /// movie's cast elsewhere can re-read it.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private IReadOnlyList<MovieCastEntry> cast = [];
+    private bool expanded;
+    private bool loaded;
+    private int? loadedMovieId;
+    private string? error;
+
+    protected override void OnParametersSet()
+    {
+        // The host may reuse the component across movies.
+        if (loadedMovieId != MovieId)
+        {
+            loadedMovieId = null;
+            loaded = false;
+            cast = [];
+            error = null;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        expanded = !expanded;
+        if (expanded && !loaded) await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var movieId = MovieId;
+        var entries = await MovieDetailQuery.GetCastAsync(movieId);
+        if (movieId != MovieId) return;
+
+        cast = entries;
+        loadedMovieId = movieId;
+        loaded = true;
+    }
+
+    private Task AddAsync(int actorId) => ApplyAsync(MovieService.AddActorToMovieAsync(MovieId, actorId));
+
+    // An unmatched cast name has no tracked actor to remove by ID; it is removed from the cast text by name.
+    private Task RemoveAsync(MovieCastEntry entry) => ApplyAsync(entry.ActorId is { } actorId
+        ? MovieService.RemoveActorFromMovieAsync(MovieId, actorId)
+        : MovieService.RemoveActorFromMovieAsync(MovieId, entry.Name));
+
+    private async Task ApplyAsync(Task<OperationResult> edit)
+    {
+        var result = await edit;
+        error = result.Success ? null : result.ErrorMessage;
+        await LoadAsync();
+        if (result.Success) await OnChanged.InvokeAsync();
+    }
+}

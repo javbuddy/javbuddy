@@ -1,0 +1,219 @@
+.gallery-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.94);
+    outline: none;
+    touch-action: none;
+    --gallery-nav-min-width: 4.5rem;
+}
+
+.gallery-topbar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.85), transparent);
+    /* Above the full-height .gallery-nav strips, which run underneath it. */
+    z-index: 3;
+}
+
+.gallery-progress {
+    display: flex;
+    gap: 4px;
+}
+
+.gallery-progress-segment {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 3px;
+    padding: 0;
+    border: none;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+}
+
+    .gallery-progress-segment:hover {
+        background-color: rgba(255, 255, 255, 0.55);
+    }
+
+    .gallery-progress-segment.is-seen {
+        background-color: rgba(255, 255, 255, 0.9);
+    }
+
+    .gallery-progress-segment.is-seen:hover {
+        background-color: #ffffff;
+    }
+
+    .gallery-progress-segment.is-current {
+        background-color: #2f8fd6;
+    }
+
+.gallery-topbar-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.gallery-title-area {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #ffffff;
+    min-width: 0;
+}
+
+.gallery-index {
+    color: #a0a6b5;
+    font-size: 0.85rem;
+}
+
+.gallery-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.gallery-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: #ffffff;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.12s ease;
+}
+
+    .gallery-close-btn:hover {
+        opacity: 1;
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+.gallery-image {
+    flex: 0 0 auto;
+    /* Always leaves at least a --gallery-nav-min-width strip either side for .gallery-nav. */
+    max-width: min(90vw, calc(100vw - 2 * var(--gallery-nav-min-width)));
+    max-height: 85vh;
+    object-fit: contain;
+    border-radius: 2px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    cursor: default;
+    user-select: none;
+    touch-action: none;
+}
+
+    /* Zoomed in (set by ImageZoomControls.razor.js): raised over the prev/next strips
+       so the whole visible image can be dragged, but still under the top bar. */
+    .gallery-image.is-zoomed {
+        position: relative;
+        z-index: 2;
+        cursor: grab;
+    }
+
+    .gallery-image.is-panning {
+        cursor: grabbing;
+    }
+
+/* Positioned relative to .gallery-lightbox (position: fixed), which also centers .gallery-image
+   via flex — so this lands centered over the image without needing a shared wrapper element. */
+.gallery-image-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    /* Only fades in if still loading after ~300ms, so a fast load never flashes a spinner. */
+    opacity: 0;
+    animation: gallery-image-loading-fade-in 0.01s linear 300ms forwards;
+}
+
+@keyframes gallery-image-loading-fade-in {
+    to {
+        opacity: 1;
+    }
+}
+
+/* Prev/next are full-height strips filling the space between the screen edge and the image (flex
+   siblings of .gallery-image), not just the round icon — a near miss beside the image navigates
+   instead of landing on the backdrop, which closes the lightbox. Only the space above and below
+   the image still closes it. */
+.gallery-nav {
+    flex: 1 1 0;
+    align-self: stretch;
+    min-width: var(--gallery-nav-min-width);
+    display: flex;
+    align-items: center;
+    padding: 0 1.25rem;
+    background: none;
+    border: none;
+    color: #ffffff;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.12s ease;
+    z-index: 1;
+}
+
+.gallery-nav-prev {
+    justify-content: flex-start;
+}
+
+.gallery-nav-next {
+    justify-content: flex-end;
+}
+
+    .gallery-nav-prev:hover {
+        background: linear-gradient(to right, rgba(255, 255, 255, 0.06), transparent);
+    }
+
+    .gallery-nav-next:hover {
+        background: linear-gradient(to left, rgba(255, 255, 255, 0.06), transparent);
+    }
+
+.gallery-nav-icon {
+    /* Keeps its size when a wide image shrinks the strip to its min width — it then overlaps the
+       strip's inner padding rather than getting squashed. */
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    opacity: 0.8;
+    transition: opacity 0.12s ease, background-color 0.12s ease;
+}
+
+    .gallery-nav:hover .gallery-nav-icon {
+        opacity: 1;
+        background: rgba(0, 0, 0, 0.8);
+    }
+
+@media (max-width: 576px) {
+    .gallery-lightbox {
+        --gallery-nav-min-width: 2.75rem;
+    }
+
+    .gallery-nav {
+        padding: 0 0.5rem;
+    }
+
+    .gallery-nav-icon {
+        width: 36px;
+        height: 36px;
+    }
+}

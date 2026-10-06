@@ -1,0 +1,27 @@
+@* Shimmering placeholder poster cards shown while a poster grid's data loads. Renders 24 cards
+   and lets PosterGridSkeleton.razor.css hide the ones past two rows at the container's width. *@
+<div class="skeleton-wrapper" aria-hidden="true">
+    <div class="skeleton-grid">
+        @for (int i = 0; i < CardCount; i++)
+        {
+            <div class="skeleton-card">
+                <div class="skeleton-poster">
+                    <div class="skeleton-shimmer"></div>
+                </div>
+                <div class="skeleton-meta">
+                    <div class="skeleton-line skeleton-title-line">
+                        <div class="skeleton-shimmer"></div>
+                    </div>
+                    <div class="skeleton-line skeleton-sub-line">
+                        <div class="skeleton-shimmer"></div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    // Two rows of the widest (12-column) layout in the stylesheet.
+    private const int CardCount = 24;
+}

@@ -1,0 +1,191 @@
+@using System.Globalization
+@using Javbuddy.Models
+@using Javbuddy.Services.Javinizer
+@using Microsoft.EntityFrameworkCore
+@inject IPathMappingService PathMappingService
+@inject IConfiguration Configuration
+
+<div class="card mt-4" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">Path Mappings</h5>
+        <p class="text-muted">
+            qBittorrent, javinizer-go and Javbuddy itself may see the same download folder at
+            different paths (different hosts/containers/mounts). Each mapping below describes one
+            folder as all three see it, and Javbuddy rewrites paths between them automatically.
+            Can also be set via the <code>PathMapping__QBittorrentPrefix</code>,
+            <code>PathMapping__JavinizerPrefix</code>, <code>PathMapping__AppPrefix</code>
+            environment variables, which override the mappings below when set.
+        </p>
+
+        @if (envConfigured)
+        {
+            <div class="alert alert-info">Configured via environment variables. These take precedence over the mappings below.</div>
+        }
+
+        @if (drafts is null)
+        {
+            <LoadingIndicator />
+        }
+        else
+        {
+            @if (drafts.Count == 0)
+            {
+                <p class="text-muted">No mappings configured yet — paths are used as-is.</p>
+            }
+
+            @for (var i = 0; i < drafts.Count; i++)
+            {
+                var draft = drafts[i];
+                <div class="path-mapping-card" @key="draft.Key">
+                    <div class="path-mapping-head">
+                        <span class="path-mapping-title">Mapping @(i + 1)</span>
+                        @if (!envConfigured)
+                        {
+                            <button class="btn btn-outline-danger btn-sm" type="button" @onclick="() => DeletePathMapping(draft)">Remove</button>
+                        }
+                    </div>
+
+                    @PrefixFields(draft)
+
+                    @if (!envConfigured)
+                    {
+                        <button class="btn btn-primary btn-sm" type="button" @onclick="() => SavePathMapping(draft)" disabled="@(!draft.IsDirty || !draft.IsComplete)">Save</button>
+                        @if (draft.Saved)
+                        {
+                            <div class="alert alert-success mt-3 mb-0">Saved.</div>
+                        }
+                        @if (draft.Error is not null)
+                        {
+                            <div class="alert alert-danger mt-3 mb-0">@draft.Error</div>
+                        }
+                    }
+                </div>
+            }
+
+            @if (!envConfigured)
+            {
+                <div class="path-mapping-card path-mapping-card-new">
+                    <div class="path-mapping-head">
+                        <span class="path-mapping-title">New mapping</span>
+                    </div>
+
+                    @PrefixFields(newDraft)
+
+                    <button class="btn btn-primary btn-sm" type="button" @onclick="AddPathMapping" disabled="@(!newDraft.IsComplete)">Add</button>
+                    @if (newDraft.Error is not null)
+                    {
+                        <div class="alert alert-danger mt-3 mb-0">@newDraft.Error</div>
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private sealed class MappingDraft(PathMapping? original)
+    {
+        public PathMapping? Original { get; } = original;
+        public string QBittorrentPrefix { get; set; } = original?.QBittorrentPrefix ?? "";
+        public string JavinizerPrefix { get; set; } = original?.JavinizerPrefix ?? "";
+        public string AppPrefix { get; set; } = original?.AppPrefix ?? "";
+        public string? Error { get; set; }
+        public bool Saved { get; set; }
+
+        public string Key => Original is null ? "new" : Original.Id.ToString(CultureInfo.InvariantCulture);
+
+        public bool IsComplete => !string.IsNullOrWhiteSpace(QBittorrentPrefix) && !string.IsNullOrWhiteSpace(JavinizerPrefix);
+
+        public bool IsDirty => Original is not null
+            && (QBittorrentPrefix != Original.QBittorrentPrefix
+                || JavinizerPrefix != Original.JavinizerPrefix
+                || AppPrefix != (Original.AppPrefix ?? ""));
+    }
+
+    private List<MappingDraft>? drafts;
+    private MappingDraft newDraft = new(null);
+    private bool envConfigured;
+
+    protected override async Task OnInitializedAsync()
+    {
+        envConfigured = PathMappingEnvConfig.IsSet(Configuration);
+        await ReloadAsync();
+    }
+
+    private RenderFragment PrefixFields(MappingDraft draft) =>
+        @<div class="path-mapping-fields">
+            <div class="mb-3">
+                <label class="form-label" for="pm-@draft.Key-qbittorrent">qBittorrent prefix</label>
+                <input id="pm-@draft.Key-qbittorrent" class="form-control" @bind="draft.QBittorrentPrefix" @bind:event="oninput" placeholder="/downloads/javinizarr" disabled="@envConfigured" />
+                <div class="form-text">The folder as qBittorrent reports it in a torrent's save path.</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="pm-@draft.Key-javinizer">javinizer-go prefix</label>
+                <input id="pm-@draft.Key-javinizer" class="form-control" @bind="draft.JavinizerPrefix" @bind:event="oninput" placeholder="/scratch/torrent/javinizarr" disabled="@envConfigured" />
+                <div class="form-text">The same folder as javinizer-go sees it — used by the torrent sorting wizard.</div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="pm-@draft.Key-app">App prefix (optional)</label>
+                <input id="pm-@draft.Key-app" class="form-control" @bind="draft.AppPrefix" @bind:event="oninput" placeholder="D:\scratch\torrent\javbuddy" disabled="@envConfigured" />
+                <div class="form-text">
+                    The same folder as Javbuddy's own process sees it — only needed for the VR
+                    part-merge step and for matching an organized movie to its Jellyfin library.
+                </div>
+            </div>
+        </div>;
+
+    private async Task ReloadAsync(int? savedId = null)
+    {
+        var mappings = await PathMappingService.GetAllAsync();
+        var unsaved = (drafts ?? []).Where(d => d.IsDirty && d.Original!.Id != savedId).ToDictionary(d => d.Original!.Id);
+        drafts = mappings
+            .Select(m => unsaved.TryGetValue(m.Id, out var pending) ? pending : new MappingDraft(m) { Saved = m.Id == savedId })
+            .ToList();
+    }
+
+    private async Task AddPathMapping()
+    {
+        newDraft.Error = null;
+        if (!newDraft.IsComplete) return;
+
+        try
+        {
+            await PathMappingService.AddAsync(newDraft.QBittorrentPrefix, newDraft.JavinizerPrefix, newDraft.AppPrefix);
+        }
+        catch (DbUpdateException)
+        {
+            newDraft.Error = $"A mapping for \"{newDraft.QBittorrentPrefix}\" already exists.";
+            return;
+        }
+
+        newDraft = new MappingDraft(null);
+        await ReloadAsync();
+    }
+
+    private async Task SavePathMapping(MappingDraft draft)
+    {
+        draft.Error = null;
+        draft.Saved = false;
+        if (draft.Original is null || !draft.IsComplete) return;
+
+        try
+        {
+            await PathMappingService.UpdateAsync(draft.Original.Id, draft.QBittorrentPrefix, draft.JavinizerPrefix, draft.AppPrefix);
+        }
+        catch (DbUpdateException)
+        {
+            draft.Error = $"A mapping for \"{draft.QBittorrentPrefix}\" already exists.";
+            return;
+        }
+
+        await ReloadAsync(draft.Original.Id);
+    }
+
+    private async Task DeletePathMapping(MappingDraft draft)
+    {
+        if (draft.Original is null) return;
+
+        await PathMappingService.DeleteAsync(draft.Original.Id);
+        await ReloadAsync();
+    }
+}

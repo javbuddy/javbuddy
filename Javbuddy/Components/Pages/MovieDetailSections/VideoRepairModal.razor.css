@@ -1,0 +1,197 @@
+.videorepair-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.55);
+    outline: none;
+    padding: 1.5rem;
+}
+
+.videorepair-modal-panel {
+    width: 100%;
+    max-width: 600px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    border-radius: 6px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.videorepair-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+.videorepair-modal-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.videorepair-modal-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    color: #6c757d;
+}
+
+    .videorepair-modal-close-btn:hover {
+        background-color: #eef0f2;
+        color: #212529;
+    }
+
+.videorepair-modal-body {
+    padding: 1.25rem;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.videorepair-intro {
+    margin-bottom: 1rem;
+}
+
+.videorepair-desc {
+    color: #495057;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    margin: 0;
+}
+
+.videorepair-section-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #6c757d;
+    margin-bottom: 0.4rem;
+}
+
+.videorepair-version-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+    flex-wrap: wrap;
+}
+
+.videorepair-version-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.85rem;
+    background-color: #f8f9fa;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+    .videorepair-version-tab:hover:not(:disabled) {
+        background-color: #e9ecef;
+        border-color: #adb5bd;
+    }
+
+    .videorepair-version-tab.active {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: #ffffff;
+        font-weight: 500;
+    }
+
+    .videorepair-version-tab .version-badge {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.35rem;
+        background-color: rgba(0, 0, 0, 0.08);
+        border-radius: 3px;
+    }
+
+    .videorepair-version-tab.active .version-badge {
+        background-color: rgba(255, 255, 255, 0.25);
+        color: #ffffff;
+    }
+
+    .videorepair-version-tab .version-badge-primary {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.35rem;
+        background-color: #ffc107;
+        color: #000;
+        border-radius: 3px;
+        font-weight: 600;
+    }
+
+.videorepair-target-card {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.88rem;
+}
+
+.videorepair-target-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 0;
+}
+
+.target-label {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.target-value {
+    color: #212529;
+    font-weight: 500;
+}
+
+.target-file-name {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.videorepair-progress-box {
+    margin-top: 1rem;
+    padding: 0.85rem;
+    background-color: #f0f7ff;
+    border: 1px solid #cce3ff;
+    border-radius: 6px;
+}
+
+.videorepair-progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #0a58ca;
+    margin-bottom: 0.4rem;
+}
+
+.videorepair-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.85rem 1.25rem;
+    border-top: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    flex-shrink: 0;
+}

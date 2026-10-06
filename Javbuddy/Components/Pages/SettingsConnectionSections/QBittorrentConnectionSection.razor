@@ -1,0 +1,118 @@
+@using Javbuddy.Data
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.QBittorrent
+@using Microsoft.EntityFrameworkCore
+@inject IQBittorrentClient QBittorrentClient
+@inject IConnectionSettingsSaveService ConnectionSettingsSaveService
+@inject IConfiguration Configuration
+
+<ConnectionSettingsCard TSettings="QBittorrentSettings"
+                         Title="qBittorrent"
+                         EnvConfigured="envConfigured"
+                         Settings="settings"
+                         FormName="qbittorrent-settings"
+                         ShowValidator="false"
+                         OnSave="Save"
+                         OnTest="TestConnection"
+                         Testing="testing"
+                         TestResult="TestResultTuple"
+                         Saved="saved">
+    <Description>
+        Download client used to grab releases found via Prowlarr search, and tracked on the
+        Activity &gt; Queue/History pages.
+    </Description>
+    <EnvBanner>
+        Configured via environment variables (<code>QBittorrent__BaseUrl</code> / <code>QBittorrent__Username</code> / <code>QBittorrent__Password</code>).
+        These take precedence over the form below.
+    </EnvBanner>
+    <FormFields>
+        <div class="mb-3">
+            <label class="form-label">Base URL (internal API)</label>
+            <InputText class="form-control" @bind-Value="settings!.BaseUrl" placeholder="http://localhost:8080" disabled="@envConfigured" />
+            <div class="form-text">Internal address used by this server to talk to qBittorrent WebUI API.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">External URL (optional)</label>
+            <InputText class="form-control" @bind-Value="settings!.ExternalUrl" placeholder="https://torrent.yourdomain.com" disabled="@envConfigured" />
+            <div class="form-text">Public browser URL for opening qBittorrent (falls back to Base URL if empty).</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Username</label>
+            <InputText class="form-control" @bind-Value="settings!.Username" disabled="@envConfigured" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Password</label>
+            <InputText class="form-control" type="password" @bind-Value="settings!.Password" disabled="@envConfigured" />
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Category</label>
+            <InputText class="form-control" @bind-Value="settings!.Category" placeholder="Javbuddy" disabled="@categoryEnvConfigured" />
+            <div class="form-text">
+                Optional. Applied to every torrent this app adds, so they're kept separate from
+                other torrents in the same qBittorrent instance. Can also be set via
+                <code>QBittorrent__Category</code>, independently of the fields above.
+            </div>
+        </div>
+    </FormFields>
+</ConnectionSettingsCard>
+
+@code {
+    private QBittorrentSettings? settings;
+    private QBittorrentTestResult? testResult;
+    private bool testing;
+    private bool saved;
+    private bool envConfigured;
+    private bool categoryEnvConfigured;
+
+    private (bool Success, string Message)? TestResultTuple => testResult is null ? null : (testResult.Success, testResult.Message);
+
+    protected override async Task OnInitializedAsync()
+    {
+        envConfigured = QBittorrentEnvConfig.IsSet(Configuration);
+        if (envConfigured)
+        {
+            // Category is independent of the connection fields above — fall back to whatever
+            // is saved on the DB row when there's no QBittorrent:Category env override, so it
+            // can still be managed from this page even while the rest is env-configured.
+            var envCategory = QBittorrentEnvConfig.GetCategory(Configuration);
+            string? category = envCategory;
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                category = (await ConnectionSettingsSaveService.GetQBittorrentAsync()).Category;
+            }
+
+            settings = new QBittorrentSettings
+            {
+                BaseUrl = QBittorrentEnvConfig.GetBaseUrl(Configuration),
+                ExternalUrl = QBittorrentEnvConfig.GetExternalUrl(Configuration),
+                Username = QBittorrentEnvConfig.GetUsername(Configuration),
+                Password = QBittorrentEnvConfig.GetPassword(Configuration),
+                Category = category
+            };
+            categoryEnvConfigured = !string.IsNullOrWhiteSpace(envCategory);
+        }
+        else
+        {
+            settings = await ConnectionSettingsSaveService.GetQBittorrentAsync();
+            categoryEnvConfigured = !string.IsNullOrWhiteSpace(QBittorrentEnvConfig.GetCategory(Configuration));
+        }
+    }
+
+    private async Task Save()
+    {
+        saved = false;
+        testResult = null;
+        await ConnectionSettingsSaveService.SaveQBittorrentAsync(settings!);
+        saved = true;
+    }
+
+    private async Task TestConnection()
+    {
+        testing = true;
+        testResult = null;
+        await Save();
+        testResult = await QBittorrentClient.TestConnectionAsync();
+        testing = false;
+    }
+}

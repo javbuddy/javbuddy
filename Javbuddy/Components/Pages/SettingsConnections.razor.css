@@ -1,0 +1,10 @@
+.connections-intro {
+    margin-bottom: 1.25rem;
+}
+
+.connections-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    max-width: 1040px;
+}

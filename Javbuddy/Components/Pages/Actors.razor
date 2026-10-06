@@ -1,0 +1,714 @@
+@page "/actors"
+@using Javbuddy.Components.Pages.ActorsSections
+@using Javbuddy.Components.Shared
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Infrastructure
+@using Microsoft.AspNetCore.Http
+@using System.Text.Json
+@implements IAsyncDisposable
+@inject IActorService ActorService
+@inject IJSRuntime JS
+@inject IServiceProvider ServiceProvider
+@rendermode InteractiveServer
+
+<PageTitle>Actors · Javbuddy</PageTitle>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="mb-0">Actors</h1>
+    <a class="btn btn-primary" href="actors/add/new">Add New</a>
+</div>
+
+@if (actors is null)
+{
+    <LoadingIndicator />
+}
+else if (actors.Count == 0)
+{
+    <p class="text-muted">No actors yet. <a href="actors/add/new">Add one</a> or <a href="actors/add/import">import from your movies</a>.</p>
+}
+else
+{
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <input type="search"
+               class="form-control form-control-sm w-auto"
+               style="min-width: 220px;"
+               placeholder="Filter by name…"
+               value="@filter.Text"
+               @oninput="OnTextFilterInput" />
+
+        @if (showFilterDropdown)
+        {
+            <div class="dropdown-backdrop" @onclick="CloseFilterDropdown"></div>
+        }
+        <div class="sort-dropdown-wrapper">
+            <DropdownMenuButton Label="@($"Filter{(filter.ActiveFilterCount > 0 ? $" ({filter.ActiveFilterCount})" : "")}")"
+                                Active="filter.ActiveFilterCount > 0"
+                                ShowClear="filter.HasActiveFilters"
+                                OnClear="ResetFilters"
+                                ClearTitle="Reset all filters"
+                                ClearAriaLabel="Reset all filters"
+                                ShowMenu="showFilterDropdown"
+                                OnToggle="ToggleFilterDropdown">
+                <button type="button" class="sort-dropdown-item @(filter.Movies != ActorMovieFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CycleMovies)">
+                    <span>@filter.MovieFilterLabel</span>
+                    @if (filter.Movies != ActorMovieFilter.All)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+                <button type="button" class="sort-dropdown-item @(filter.Photo != ActorPhotoFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CyclePhoto)">
+                    <span>@filter.PhotoFilterLabel</span>
+                    @if (filter.Photo != ActorPhotoFilter.All)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+                <button type="button" class="sort-dropdown-item @(filter.Images != ActorImageFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CycleImages)">
+                    <span>@filter.ImageFilterLabel</span>
+                    @if (filter.Images != ActorImageFilter.All)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+                <div class="sort-dropdown-divider"></div>
+                @if (jellyfinEnabled)
+                {
+                    <button type="button" class="sort-dropdown-item @(filter.JellyfinLinkedOnly ? "active" : "")" @onclick="() => ApplyFilterAsync(() => filter.JellyfinLinkedOnly = !filter.JellyfinLinkedOnly)">
+                        <span>Linked to Jellyfin</span>
+                        @if (filter.JellyfinLinkedOnly)
+                        {
+                            <span class="ms-2">✓</span>
+                        }
+                    </button>
+                }
+                <button type="button" class="sort-dropdown-item @(filter.FavoritesOnly ? "active" : "")" @onclick="() => ApplyFilterAsync(() => filter.FavoritesOnly = !filter.FavoritesOnly)">
+                    <span>Favorites only</span>
+                    @if (filter.FavoritesOnly)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+                <button type="button" class="sort-dropdown-item @(filter.Status != ActorStatusFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CycleStatus)">
+                    <span>@filter.StatusFilterLabel</span>
+                    @if (filter.Status != ActorStatusFilter.All)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
+                <div class="sort-dropdown-divider"></div>
+                <ChipMultiSelectGroup GroupLabel="Cup Size" Options="@CupSizeFilterOptions" OnSelectAll="() => ApplyFilterAsync(() => filter.CupSizes.UnionWith(availableCupSizes))" OnSelectNone="() => ApplyFilterAsync(filter.CupSizes.Clear)" />
+                @if (filter.HeightBounds is { } heightBounds)
+                {
+                    <RangeFilter BoundsMin="heightBounds.Min" BoundsMax="heightBounds.Max"
+                                       SelectedMin="filter.EffectiveHeightMin" SelectedMax="filter.EffectiveHeightMax"
+                                       OnRangeCommitted="range => ApplyFilterAsync(() => filter.SetHeightRange(range))" />
+                }
+            </DropdownMenuButton>
+        </div>
+
+        <div class="sort-dropdown-wrapper" @onfocusout="OnSortFocusOut" tabindex="-1">
+            <DropdownMenuButton Label="@($"Sort: {ActorCardText.SortFieldLabel(filter.SortField)}")"
+                                Arrow="@(filter.SortDescending ? "▼" : "▲")"
+                                ShowMenu="showSortDropdown"
+                                OnToggle="ToggleSortDropdown">
+                @foreach (var field in ActorListFilter.SortFields)
+                {
+                    <button type="button" class="sort-dropdown-item @(filter.SortField == field ? "active" : "")" @onclick="() => SetSort(field)">
+                        @ActorCardText.SortFieldLabel(field)
+                        @if (filter.SortField == field)
+                        {
+                            <span class="sort-dropdown-arrow">@(filter.SortDescending ? "▼" : "▲")</span>
+                        }
+                    </button>
+                }
+            </DropdownMenuButton>
+        </div>
+
+        <div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+            @if (viewMode == ActorViewMode.Grid)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => showOptionsModal = true">Options</button>
+            }
+            else
+            {
+                <div class="sort-dropdown-wrapper">
+                    <DropdownMenuButton Label="Columns"
+                                        ShowMenu="showColumnsDropdown"
+                                        OnToggle="ToggleColumnsDropdown">
+                        @foreach (var column in ActorCardText.TableColumns.Where(c => c.Optional))
+                        {
+                            var shown = IsColumnVisible(column);
+                            <button type="button" class="sort-dropdown-item @(shown ? "active" : "")" @onclick="() => ToggleColumn(column.Key)">
+                                <span>@column.Label</span>
+                                @if (shown)
+                                {
+                                    <span class="ms-2">✓</span>
+                                }
+                            </button>
+                        }
+                    </DropdownMenuButton>
+                </div>
+            }
+            <div class="btn-group btn-group-sm" role="group" aria-label="View">
+                <button type="button" class="btn @(viewMode == ActorViewMode.Grid ? "btn-secondary" : "btn-outline-secondary")" @onclick="() => SetViewMode(ActorViewMode.Grid)">Grid</button>
+                <button type="button" class="btn @(viewMode == ActorViewMode.Table ? "btn-secondary" : "btn-outline-secondary")" @onclick="() => SetViewMode(ActorViewMode.Table)">Table</button>
+            </div>
+        </div>
+    </div>
+
+    @if (showOptionsModal)
+    {
+        <OptionsModal Title="Actor Options" OnClose="() => showOptionsModal = false">
+            <div class="options-row">
+                <label class="options-label" for="actor-card-size">Card Size</label>
+                <div class="actor-size-control">
+                    <span class="text-muted small">Small</span>
+                    <input type="range" id="actor-card-size" min="0" max="@ActorsViewState.MaxSizeStep" step="1" value="@sizeStep" @oninput="OnSizeChanged" />
+                    <span class="text-muted small">Large</span>
+                </div>
+            </div>
+        </OptionsModal>
+    }
+
+    <div class="actor-attention-chips">
+        <span class="text-muted small">Needs attention:</span>
+        <button type="button" class="actor-attention-chip @(filter.Photo == ActorPhotoFilter.MissingPhoto ? "active" : "")" @onclick="ToggleNoPhotoChip">No photo <b>@attentionCounts.NoPhoto</b></button>
+        <button type="button" class="actor-attention-chip @(filter.NoMetadataOnly ? "active" : "")" @onclick="() => ApplyFilterAsync(() => filter.NoMetadataOnly = !filter.NoMetadataOnly)">No metadata <b>@attentionCounts.NoMetadata</b></button>
+        <button type="button" class="actor-attention-chip @(filter.Movies == ActorMovieFilter.NoMovies ? "active" : "")" @onclick="ToggleNoMoviesChip">No movies <b>@attentionCounts.NoMovies</b></button>
+        <button type="button" class="actor-attention-chip @(filter.MissingMoviesOnly ? "active" : "")" @onclick="() => ApplyFilterAsync(() => filter.MissingMoviesOnly = !filter.MissingMoviesOnly)">Missing movies <b>@attentionCounts.MissingMovies</b></button>
+    </div>
+
+    @if (filteredActors.Count == 0)
+    {
+        @if (filter.OnlyFavoritesFiltered)
+        {
+            <p class="text-muted">No favorite actors yet. Mark an actor with the heart icon to add them to your favorites.</p>
+        }
+        else
+        {
+            <p class="text-muted">No actors match the selected filters.</p>
+        }
+    }
+
+    @if (viewMode == ActorViewMode.Table)
+    {
+        <div class="actor-row actor-table-header" role="row" style="grid-template-columns: @TableTemplate">
+            <span></span>
+            <button type="button" class="actor-table-sort @(filter.SortField == "name" ? "active" : "")" @onclick='() => SetSort("name")'>Name@(SortArrow("name"))</button>
+            @foreach (var column in VisibleTableColumns)
+            {
+                @if (column.SortField is string field)
+                {
+                    <button type="button" class="actor-table-sort @(filter.SortField == field ? "active" : "")" @onclick="() => SetSort(field)">@column.Label@(SortArrow(field))</button>
+                }
+                else
+                {
+                    <span class="actor-table-sort">@column.Label</span>
+                }
+            }
+        </div>
+    }
+
+    @* Windowed through the shared VirtualizedGrid, like the Movies grid: every card and
+       table row has a fixed height (see Actors.razor.css), since the grid measures one card for every row. *@
+    <div class="actor-grid-wrapper">
+        <VirtualizedGrid @ref="grid"
+                         WindowStart="EffectiveWindowStart"
+                         WindowCount="visibleActors.Count"
+                         TotalCount="filteredActors.Count"
+                         GridSelector=".actor-grid"
+                         CardSelector=".actor-card, .actor-row"
+                         ActivePath="/actors"
+                         ScrollStorageKey="javbuddy-actors-scroll-y"
+                         WindowStartCookie="@WindowStartCookieName"
+                         LoadRange="SetVisibleRange">
+            <div class="actor-grid @(viewMode == ActorViewMode.Table ? "actor-table" : $"size-{sizeStep}")">
+                @foreach (var actor in visibleActors)
+                {
+                    @if (viewMode == ActorViewMode.Table)
+                    {
+                        @* Distinct key from the grid card's (actor.Id): when the view mode flips, Blazor must not reuse a card's
+                             element for a row, since the two live at different points in the render tree. *@
+                        <div class="actor-row" role="row" @key="@($"row-{actor.Id}")" style="grid-template-columns: @TableTemplate">
+                            <button type="button"
+                                    class="actor-row-favorite @(actor.IsFavorite ? "active" : "")"
+                                    @onclick="() => ToggleFavorite(actor)"
+                                    title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")"
+                                    aria-label="@(actor.IsFavorite ? $"Unfavorite {actor.DisplayName}" : $"Favorite {actor.DisplayName}")">@(actor.IsFavorite ? "♥" : "♡")</button>
+                            <a class="actor-row-name" href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}")" title="@actor.DisplayName">
+                                @if (actor.HasImage)
+                                {
+                                    <span class="actor-avatar actor-avatar-photo actor-row-avatar"><img class="actor-avatar-img" src="@ActorCardText.ThumbUrl(actor)" alt="" loading="lazy" decoding="async" /></span>
+                                }
+                                else
+                                {
+                                    <span class="actor-avatar actor-row-avatar">@ActorMatching.Initials(actor.DisplayName)</span>
+                                }
+                                <span class="actor-name-text">@actor.DisplayName</span>
+                            </a>
+                            @foreach (var column in VisibleTableColumns)
+                            {
+                                @if (column.Key == "state")
+                                {
+                                    <span class="actor-row-cell actor-pills">@PillsFragment(actor)</span>
+                                }
+                                else
+                                {
+                                    <span class="actor-row-cell">@column.Value(actor)</span>
+                                }
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="actor-card" @key="actor.Id">
+                            <button type="button"
+                                    class="actor-card-favorite @(actor.IsFavorite ? "active" : "")"
+                                    @onclick="() => ToggleFavorite(actor)"
+                                    title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")"
+                                    aria-label="@(actor.IsFavorite ? $"Unfavorite {actor.DisplayName}" : $"Favorite {actor.DisplayName}")">
+                                <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                                    @if (actor.IsFavorite)
+                                    {
+                                        <path fill-rule="evenodd" d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z"/>
+                                    }
+                                    else
+                                    {
+                                        <path d="m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-4.385C13.486.878 10.4.28 8.717 2.01L8 2.748zM8 15C-7.333 4.868 3.279-3.04 7.824 1.143c.06.055.119.112.176.171a3.12 3.12 0 0 1 .176-.17C12.72-3.042 23.333 4.867 8 15z"/>
+                                    }
+                                </svg>
+                            </button>
+                            @if (ActorCardText.NeedsAttention(actor))
+                            {
+                                <span class="actor-attention-dot" title="Needs attention"></span>
+                            }
+                            <a class="actor-card-link" href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}")">
+                                @if (actor.HasImage)
+                                {
+                                    <div class="actor-avatar actor-avatar-photo">
+                                        <img class="actor-avatar-img" src="@ActorCardText.ThumbUrl(actor)" alt="@actor.DisplayName" loading="lazy" decoding="async" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="actor-avatar">@ActorMatching.Initials(actor.DisplayName)</div>
+                                }
+                                <div class="actor-info">
+                                    <div class="actor-name" title="@actor.DisplayName">
+                                        <span class="actor-name-text">@actor.DisplayName</span>
+                                        <BirthdayIndicator BirthDate="actor.BirthDate" />
+                                        @if (actor.IsRetired)
+                                        {
+                                            <span class="actor-retired-pill" title="Retired">Retired</span>
+                                        }
+                                    </div>
+                                    @* Rendered on every card while sorting by an attribute, even one without a value,
+                                       so all cards stay the same height. *@
+                                    @if (ActorCardText.SortsByAttribute(filter.SortField))
+                                    {
+                                        <div class="actor-sort-value-row">
+                                            @if (ActorCardText.SortValueBadge(actor, filter.SortField) is string sortValueBadge)
+                                            {
+                                                <span class="actor-sort-value-pill">@sortValueBadge</span>
+                                            }
+                                        </div>
+                                    }
+                                    <div class="actor-meta">@ActorCardText.CountsText(actor)</div>
+                                    <div class="actor-pills">@PillsFragment(actor)</div>
+                                </div>
+                            </a>
+                        </div>
+                    }
+                }
+            </div>
+        </VirtualizedGrid>
+    </div>
+}
+
+@code {
+    private const int InitialWindowSize = 60;
+    private const string WindowStartCookieName = "javbuddy-actors-window-start";
+
+    private List<ActorCardModel>? actors;
+    private bool jellyfinEnabled;
+    private readonly ActorListFilter filter = new();
+    private CancellationTokenSource? textFilterDebounceCts;
+    private bool showSortDropdown;
+    private bool showFilterDropdown;
+    private bool showColumnsDropdown;
+    private ActorViewMode viewMode = ActorViewMode.Grid;
+    private int sizeStep = ActorsViewState.DefaultSizeStep;
+    private bool showOptionsModal;
+    private readonly HashSet<string> extraColumns = new(ActorCardText.DefaultTableColumns);
+    private (int NoPhoto, int NoMetadata, int NoMovies, int MissingMovies) attentionCounts;
+    private IReadOnlyList<string> availableCupSizes = [];
+
+    private int windowStart;
+    private int windowCount = InitialWindowSize;
+    // Last column count VirtualizedGrid reported, to keep windowStart on a row boundary (the leading
+    // spacer reserves whole rows).
+    private int columns = 1;
+    private bool scrollToTopPending;
+
+    private VirtualizedGrid? grid;
+    private Task<IJSObjectReference>? jsModuleTask;
+
+    private List<ActorCardModel> filteredActors = [];
+    private List<ActorCardModel> visibleActors = [];
+
+    private int AlignDown(int index) => columns > 1 ? index - (index % columns) : index;
+
+    private int EffectiveWindowStart => filteredActors.Count == 0 ? 0 : AlignDown(Math.Min(windowStart, Math.Max(0, filteredActors.Count - 1)));
+
+    private void UpdateVisibleActors()
+    {
+        if (filteredActors.Count == 0)
+        {
+            visibleActors = [];
+            return;
+        }
+        visibleActors = filteredActors.Skip(EffectiveWindowStart).Take(windowCount).ToList();
+    }
+
+    private void UpdateFilteredAndVisibleActors()
+    {
+        filteredActors = actors is null ? [] : filter.Apply(actors).ToList();
+        UpdateVisibleActors();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var httpContextAccessor = ServiceProvider.GetService<IHttpContextAccessor>();
+        LoadInitialWindowStartFromCookie(httpContextAccessor);
+        if (JsonCookieState.TryLoad<ActorsViewState>(httpContextAccessor, ActorsViewState.CookieName) is { } saved)
+        {
+            ApplyViewState(saved);
+        }
+
+        // The cookie read above only sees the live cookies on the prerendered pass. The second pass, where
+        // the interactive circuit resumes this component, reuses the HttpContext captured when the circuit
+        // connected, which never sees a cookie written afterwards, and its stale read would clobber the
+        // correct one. Round-tripping the first pass through PersistentComponentState (as Movies.razor
+        // does) lets the second pass restore from that instead.
+        applicationState = ServiceProvider.GetService<PersistentComponentState>();
+        if (applicationState is not null)
+        {
+            persistingSubscription = applicationState.RegisterOnPersisting(PersistViewState);
+            if (applicationState.TryTakeFromJson<ActorsViewState>(PersistStateKey, out var persisted) && persisted is not null)
+            {
+                ApplyViewState(persisted);
+            }
+        }
+
+        jellyfinEnabled = await ActorService.IsJellyfinEnabledAsync();
+        var items = await ActorService.GetActorCardsAsync();
+        actors = items.ToList();
+        attentionCounts = (
+            actors.Count(a => !a.HasImage),
+            actors.Count(a => !a.HasMetadata),
+            actors.Count(a => a.MovieCount == 0),
+            actors.Count(a => a.MissingCount > 0));
+        // Neither changes while the page is open: only the favorite flag of a loaded actor does.
+        filter.HeightBounds = ActorCardText.HeightBounds(actors);
+        availableCupSizes = ActorCardText.AvailableCupSizes(actors);
+        UpdateFilteredAndVisibleActors();
+    }
+
+    private const string PersistStateKey = "actors-view-state";
+    private PersistentComponentState? applicationState;
+    private PersistingComponentStateSubscription persistingSubscription;
+
+    private Task PersistViewState()
+    {
+        applicationState!.PersistAsJson(PersistStateKey, CurrentViewState());
+        return Task.CompletedTask;
+    }
+
+    private void ApplyViewState(ActorsViewState state)
+    {
+        filter.Apply(state);
+        viewMode = state.ViewMode;
+        sizeStep = Math.Clamp(state.SizeStep, 0, ActorsViewState.MaxSizeStep);
+        if (state.TableColumns is not null)
+        {
+            extraColumns.Clear();
+            extraColumns.UnionWith(state.TableColumns);
+        }
+    }
+
+    private ActorsViewState CurrentViewState() =>
+        filter.ToViewState() with { ViewMode = viewMode, SizeStep = sizeStep, TableColumns = extraColumns.ToList() };
+
+    private async Task SaveViewStateAsync()
+    {
+        if (jsModuleTask is null) return;
+
+        var json = JsonSerializer.Serialize(CurrentViewState());
+        try
+        {
+            var module = await jsModuleTask;
+            await module.InvokeVoidAsync("setJsonCookie", ActorsViewState.CookieName, json, 31536000);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    // Written by VirtualizedGrid.razor.js on every scroll, so the first render after a back-navigation
+    // already shows the window the user left rather than starting at 0 and swapping it a round trip later.
+    private void LoadInitialWindowStartFromCookie(IHttpContextAccessor? httpContextAccessor)
+    {
+        var raw = httpContextAccessor?.HttpContext?.Request.Cookies[WindowStartCookieName];
+        if (int.TryParse(raw, out var start) && start > 0)
+        {
+            windowStart = AlignDown(start);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender)
+            {
+                jsModuleTask = JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/Actors.razor.js").AsTask();
+            }
+
+            // VirtualizedGrid starts its own JS, and holds a scroll-to-top asked for before then until it has.
+            if (scrollToTopPending && grid is not null)
+            {
+                scrollToTopPending = false;
+                await grid.ScrollToTopAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (Exception)
+        {
+            // In test or non-browser environments, JS module import may not resolve
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (applicationState is not null)
+        {
+            persistingSubscription.Dispose();
+        }
+        if (jsModuleTask is not null)
+        {
+            try
+            {
+                var module = await jsModuleTask;
+                await module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    /// <summary>VirtualizedGrid's LoadRange: moves the window to the range the viewport needs. The whole
+    /// filtered list is already in memory, so this only re-slices it.</summary>
+    public Task SetVisibleRange(int start, int count, int gridColumns)
+    {
+        columns = Math.Max(1, gridColumns);
+        var clampedStart = AlignDown(Math.Max(0, start));
+        var clampedCount = Math.Clamp(count, 1, 500);
+
+        if (windowStart != clampedStart || windowCount != clampedCount)
+        {
+            windowStart = clampedStart;
+            windowCount = clampedCount;
+            UpdateVisibleActors();
+            StateHasChanged();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // The single hook point for persisting filter/sort selections: every mutator calls this to
+    // re-window the grid, so saving here can't miss a future one.
+    //
+    // Awaited by every caller (like Missing.razor's ToggleSort): navigating away before the cookie
+    // write's JS interop completed disposed the component and its JS module mid-write, so the write
+    // could be lost.
+    private async Task ResetWindow()
+    {
+        windowStart = 0;
+        scrollToTopPending = true;
+        UpdateFilteredAndVisibleActors();
+        await SaveViewStateAsync();
+    }
+
+    private Task ApplyFilterAsync(Action change)
+    {
+        change();
+        return ResetWindow();
+    }
+
+    private IReadOnlyList<MultiSelectOption> CupSizeFilterOptions => availableCupSizes
+        .Select(cup => new MultiSelectOption(
+            cup,
+            filter.CupSizes.Contains(cup),
+            EventCallback.Factory.Create(this, () => ApplyFilterAsync(() => filter.CupSizes.Toggle(cup)))))
+        .ToList();
+
+    private async Task ResetFilters()
+    {
+        textFilterDebounceCts?.Cancel();
+        filter.Clear();
+        showFilterDropdown = false;
+        await ResetWindow();
+    }
+
+    private void ToggleFilterDropdown()
+    {
+        showFilterDropdown = !showFilterDropdown;
+        showSortDropdown = false;
+    }
+
+    private void CloseFilterDropdown() => showFilterDropdown = false;
+
+    // Debounced (unlike an eager field update): with no windowing, the actor grid re-renders its
+    // full filtered set on every text filter change, so committing the field on every keystroke
+    // forces a full-list re-render per keystroke. Delaying the field update itself — not just some
+    // downstream fetch — means the browser's own native input echo shows what's typed in the
+    // meantime, and only the settled value ever triggers a re-render.
+    private async Task OnTextFilterInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? "";
+
+        textFilterDebounceCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        textFilterDebounceCts = cts;
+
+        try
+        {
+            await Task.Delay(250, cts.Token);
+            await ApplyFilterAsync(() => filter.Text = value);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer keystroke superseded this filter update.
+        }
+    }
+
+    private void ToggleSortDropdown()
+    {
+        showSortDropdown = !showSortDropdown;
+        showFilterDropdown = false;
+        showColumnsDropdown = false;
+    }
+
+    private void ToggleColumnsDropdown()
+    {
+        showColumnsDropdown = !showColumnsDropdown;
+        showSortDropdown = false;
+        showFilterDropdown = false;
+    }
+
+    private async Task OnSortFocusOut()
+    {
+        await Task.Delay(150);
+        showSortDropdown = false;
+    }
+
+    private async Task SetSort(string field)
+    {
+        filter.SetSort(field);
+        showSortDropdown = false;
+        await ResetWindow();
+    }
+
+    private async Task ToggleFavorite(ActorCardModel actor)
+    {
+        var newStatus = await ActorService.ToggleFavoriteAsync(actor.Id);
+        if (actors is not null)
+        {
+            var idx = actors.FindIndex(a => a.Id == actor.Id);
+            if (idx >= 0)
+            {
+                actors[idx] = actors[idx] with { IsFavorite = newStatus };
+            }
+        }
+        if (filter.FavoritesOnly)
+        {
+            await ResetWindow();
+        }
+        else
+        {
+            UpdateFilteredAndVisibleActors();
+        }
+    }
+
+    // The needs-attention chips are one-click shortcuts: "No photo" and "No movies" drive the same
+    // photo / movie filter the Filter dropdown cycles, so the two never disagree.
+    private Task ToggleNoPhotoChip() => ApplyFilterAsync(() =>
+        filter.Photo = filter.Photo == ActorPhotoFilter.MissingPhoto ? ActorPhotoFilter.All : ActorPhotoFilter.MissingPhoto);
+
+    private Task ToggleNoMoviesChip() => ApplyFilterAsync(() =>
+        filter.Movies = filter.Movies == ActorMovieFilter.NoMovies ? ActorMovieFilter.All : ActorMovieFilter.NoMovies);
+
+    private async Task SetViewMode(ActorViewMode mode)
+    {
+        if (viewMode == mode) return;
+        viewMode = mode;
+        showColumnsDropdown = false;
+        await ResetWindow();
+    }
+
+    private async Task OnSizeChanged(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var step)) return;
+        sizeStep = Math.Clamp(step, 0, ActorsViewState.MaxSizeStep);
+        await SaveViewStateAsync();
+    }
+
+    private async Task ToggleColumn(string key)
+    {
+        extraColumns.Toggle(key);
+        await SaveViewStateAsync();
+    }
+
+    // Age / height / cup stay hidden unless picked in the Columns menu — except while the list is
+    // sorted by one of them, where its column shows up on its own so the sort is visible.
+    private bool IsColumnVisible(ActorTableColumn column) =>
+        extraColumns.Contains(column.Key) || (column.SortField is not null && column.SortField == filter.SortField);
+
+    private IEnumerable<ActorTableColumn> VisibleTableColumns => ActorCardText.TableColumns.Where(IsColumnVisible);
+
+    private string TableTemplate => "32px minmax(180px, 2fr) " + string.Join(' ', VisibleTableColumns.Select(c => c.Width));
+
+    private MarkupString SortArrow(string field) =>
+        filter.SortField == field ? new MarkupString(filter.SortDescending ? " ▼" : " ▲") : new MarkupString("");
+
+    private RenderFragment PillsFragment(ActorCardModel actor) => __builder =>
+    {
+        if (actor.HasJellyfin)
+        {
+            <span class="actor-pill actor-pill-jellyfin">Jellyfin</span>
+        }
+        if (actor.ImageCount > 0)
+        {
+            <span class="actor-pill actor-pill-ok">@actor.ImageCount image@(actor.ImageCount == 1 ? "" : "s")</span>
+        }
+        if (!actor.HasImage)
+        {
+            <span class="actor-pill actor-pill-warn">No photo</span>
+        }
+        if (!actor.HasMetadata)
+        {
+            <span class="actor-pill actor-pill-warn">No metadata</span>
+        }
+        if (viewMode == ActorViewMode.Table && actor.IsRetired)
+        {
+            <span class="actor-pill">Retired</span>
+        }
+    };
+}

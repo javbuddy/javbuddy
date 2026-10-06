@@ -1,0 +1,57 @@
+@using Javbuddy.Components.Pages.MoviesSections
+@using Javbuddy.Models
+
+@* The movie poster grid shared by the Movies page and Actor Detail's Movies section,
+   so both render the same cards under the same poster display options. Each page keeps its own data
+   loading, link target and image-loading strategy. *@
+<div class="movie-poster-grid movie-poster-size-@Options.PosterSize @(Options.ShowTitle ? "" : "movie-poster-hide-title") @(Options.ShowStatus ? "" : "movie-poster-hide-status") @(Options.AnyInfoVisible ? "" : "movie-poster-hide-info")">
+    <PosterGrid>
+        @{ var index = 0; }
+        @foreach (var movie in Movies)
+        {
+            var hasImage = !string.IsNullOrWhiteSpace(movie.MetaSourceName) && !string.IsNullOrWhiteSpace(movie.Code);
+            var loading = index++ < EagerImageCount ? PosterImageLoading.Eager : Loading;
+            <PosterCard @key="movie.Id"
+                        Href="@(MovieHref(movie) + HrefQuery)"
+                        StatusCssClass="@MoviePosterText.StatusCssClass(movie, IsDownloading(movie))"
+                        ImageUrl="@(hasImage ? MoviePosterText.ThumbUrl(movie.Code!, movie.PosterVersion) : null)"
+                        Loading="loading"
+                        AltText="@movie.DisplayName"
+                        PlaceholderText="@(movie.Code ?? "?")"
+                        TitleText="@(movie.Code ?? movie.DisplayName)"
+                        TitleTooltip="@movie.DisplayName"
+                        MetaLine="@movie.Status.ToString()"
+                        MetaSubLines="@Options.MetaSubLines(movie)"
+                        CornerBadge="@(Options.ShowVrBadge ? VrFormat.BadgeText(movie.VrType) : null)"
+                        CornerBadgeTooltip="@(Options.ShowVrBadge ? movie.VrType : null)"
+                        WarningTooltip="@MoviePosterText.ActorWarningTooltip(movie)"
+                        IsFavorite="@movie.IsFavorite"
+                        OnToggleFavorite="@(() => OnToggleFavorite.InvokeAsync(movie))" />
+        }
+    </PosterGrid>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<Movie> Movies { get; set; } = [];
+
+    [Parameter] public MoviePosterOptions Options { get; set; } = MoviePosterOptions.Default;
+
+    /// <summary>Codes with an active or finished torrent; a Missing movie among them shows as
+    /// Downloading.</summary>
+    [Parameter] public IReadOnlySet<string>? DownloadingCodes { get; set; }
+
+    /// <summary>Appended to each card's /movies/{code} link, e.g. Actor Detail's "?actor=" back link.</summary>
+    [Parameter] public string? HrefQuery { get; set; }
+
+    /// <summary>How images past the first <see cref="EagerImageCount"/> load.</summary>
+    [Parameter] public PosterImageLoading Loading { get; set; } = PosterImageLoading.NativeLazy;
+
+    /// <summary>How many leading cards load their image eagerly.</summary>
+    [Parameter] public int EagerImageCount { get; set; }
+
+    [Parameter] public EventCallback<Movie> OnToggleFavorite { get; set; }
+
+    private static string MovieHref(Movie movie) => $"/movies/{Uri.EscapeDataString(movie.Code ?? string.Empty)}";
+
+    private bool IsDownloading(Movie movie) => movie.Code is not null && DownloadingCodes?.Contains(movie.Code) == true;
+}

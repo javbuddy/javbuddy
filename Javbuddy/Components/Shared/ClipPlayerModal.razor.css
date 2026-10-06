@@ -1,0 +1,28 @@
+/* Same look as the player header's "Open in Jellyfin" button (VideoPlayerShell.razor.css). */
+.clip-player-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 4px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.clip-player-edit-btn:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+    color: #fff;
+}
+
+.clip-player-position {
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #94a3b8;
+    white-space: nowrap;
+}

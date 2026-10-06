@@ -1,0 +1,16 @@
+@if (Generating)
+{
+    <div class="scene-preview-shimmer" title="Generating preview"></div>
+}
+else
+{
+    <span class="scene-preview-none">No preview</span>
+}
+
+@code {
+    /// <summary>What a scene or highlight card without a screenshot shows: the
+    /// Missing page's skeleton shimmer while its generation is queued, or "No preview" when none can
+    /// be made (the cache mode doesn't keep screenshots or the movie has no local video to take one
+    /// from). Fills the card's positioned 16:9 frame.</summary>
+    [Parameter] public bool Generating { get; set; }
+}

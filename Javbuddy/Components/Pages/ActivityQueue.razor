@@ -1,0 +1,230 @@
+@page "/activity/queue"
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.QBittorrent
+@using Javbuddy.Services.Tasks
+@implements IAsyncDisposable
+@inject ITorrentQueueService QueueService
+@inject IQBittorrentClient QBittorrentClient
+@inject TorrentChangeNotifier ChangeNotifier
+@inject IServiceScopeFactory ScopeFactory
+@rendermode InteractiveServer
+
+<PageTitle>Queue · Javbuddy</PageTitle>
+
+<div class="activity-toolbar">
+    <button class="activity-toolbar-btn" @onclick="Refresh" disabled="@refreshing">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" /><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" /></svg>
+        @(refreshing ? "Refreshing…" : "Refresh")
+    </button>
+    <button class="activity-toolbar-btn activity-toolbar-btn-danger" @onclick="RemoveSelected" disabled="@(selected.Count == 0 || removing)">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+        Remove Selected
+    </button>
+    @if (!string.IsNullOrWhiteSpace(qbittorrentUrl))
+    {
+        <a class="activity-toolbar-btn" href="@qbittorrentUrl" target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg>
+            Open qBittorrent
+        </a>
+    }
+</div>
+
+<h1 class="activity-title">Queue</h1>
+
+@if (rows is null)
+{
+    <LoadingIndicator />
+}
+else if (rows.Count == 0)
+{
+    <div class="alert alert-info" style="max-width: 640px;">Queue is empty</div>
+}
+else
+{
+    <div class="activity-table">
+        <div class="activity-row activity-header activity-row-queue">
+            <span><input type="checkbox" checked="@AllSelected" @onchange="ToggleSelectAll" /></span>
+            <span>Movie</span>
+            <span>Release</span>
+            <span>Indexer</span>
+            <span>Size</span>
+            <span>Status</span>
+            <span>Speed</span>
+            <span>ETA</span>
+            <span></span>
+        </div>
+        @foreach (var row in rows)
+        {
+            <div class="activity-row activity-row-queue">
+                <span><input type="checkbox" checked="@selected.Contains(row.Id)" @onchange="e => ToggleSelect(row.Id, (bool)e.Value!)" /></span>
+                <a class="activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(row.MovieCode)}")">@row.MovieCode</a>
+                <span class="text-break">@row.ReleaseTitle</span>
+                <span>@row.Indexer</span>
+                <span>@(row.Size is long size ? ByteSizeFormatter.Format(size) : "—")</span>
+                <span class="activity-status">
+                    <span class="activity-badge activity-badge-@(row.Status.ToString().ToLowerInvariant())">@row.Status</span>
+                    @if (row.Progress is double p)
+                    {
+                        <div class="activity-progress" title="@($"{p:P0}")">
+                            <div class="activity-progress-bar" style="width: @((p * 100).ToString("0"))%"></div>
+                        </div>
+                    }
+                </span>
+                <span>@(row.DownloadSpeedBytesPerSec is long s and > 0 ? ByteSizeFormatter.Format(s) + "/s" : "—")</span>
+                <span>@FormatEta(row.EtaSeconds)</span>
+                <span>
+                    @if (row.Status is TorrentDownloadStatus.Completed or TorrentDownloadStatus.Seeding)
+                    {
+                        <a class="activity-sort-link" href="@($"/activity/sort/{row.Id}")">
+                            <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M0 3.5A.5.5 0 0 1 .5 3H15a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5zM0 8a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 0 8zm0 4.5a.5.5 0 0 1 .5-.5H10a.5.5 0 0 1 0 1H.5a.5.5 0 0 1-.5-.5z" /></svg>
+                            Sort
+                        </a>
+                    }
+                </span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<TorrentDownload>? rows;
+    private readonly HashSet<int> selected = new();
+    private bool refreshing;
+    private bool removing;
+    private CancellationTokenSource? liveCts;
+    private string? qbittorrentUrl;
+
+    private bool AllSelected => rows is { Count: > 0 } && rows.All(r => selected.Contains(r.Id));
+
+    protected override async Task OnInitializedAsync()
+    {
+        qbittorrentUrl = await QBittorrentClient.GetExternalUrlAsync();
+        ChangeNotifier.Changed += OnChangedElsewhere;
+        await LoadAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            liveCts = new CancellationTokenSource();
+            _ = LivePollLoopAsync(liveCts.Token);
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        rows = await QueueService.GetActiveAsync();
+        selected.RemoveWhere(id => rows.All(r => r.Id != id));
+    }
+
+    private void OnChangedElsewhere() => _ = InvokeAsync(LoadAsync);
+
+    /// <summary>Polls qBittorrent directly every few seconds while this page is open, for live
+    /// progress/speed/ETA — separate from QBittorrentSyncTask, which is the durable ~1-minute
+    /// background reconciliation that keeps History accurate even with no one watching. Only
+    /// updates the in-memory rows already loaded; never writes to the database.</summary>
+    private async Task LivePollLoopAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                await RefreshLiveProgressAsync(ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task RefreshLiveProgressAsync(CancellationToken ct)
+    {
+        if (rows is not { Count: > 0 }) return;
+        if (!rows.Any(r => r.Hash is not null)) return;
+
+        var live = await QBittorrentClient.GetTorrentsAsync(ct);
+        var byHash = live
+            .Where(t => t.Hash is not null)
+            .ToDictionary(t => t.Hash!, t => t, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var row in rows)
+        {
+            if (row.Hash is not null && byHash.TryGetValue(row.Hash, out var liveTorrent))
+            {
+                row.Progress = liveTorrent.Progress;
+                row.DownloadSpeedBytesPerSec = liveTorrent.DlSpeed;
+                row.EtaSeconds = liveTorrent.Eta;
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Refresh()
+    {
+        refreshing = true;
+
+        using (var scope = ScopeFactory.CreateScope())
+        {
+            var task = scope.ServiceProvider.GetServices<IScheduledTask>().FirstOrDefault(t => t is QBittorrentSyncTask);
+            if (task is not null)
+            {
+                var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
+                await runner.RunAsync(task, CancellationToken.None);
+            }
+        }
+
+        await LoadAsync();
+        refreshing = false;
+    }
+
+    private void ToggleSelect(int id, bool isChecked)
+    {
+        if (isChecked) selected.Add(id);
+        else selected.Remove(id);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        var isChecked = (bool)e.Value!;
+        selected.Clear();
+        if (isChecked && rows is not null)
+        {
+            foreach (var row in rows) selected.Add(row.Id);
+        }
+    }
+
+    private async Task RemoveSelected()
+    {
+        if (rows is null || selected.Count == 0) return;
+
+        removing = true;
+
+        await QueueService.RemoveAsync(selected.ToList());
+
+        selected.Clear();
+        await LoadAsync();
+        removing = false;
+    }
+
+    private static string FormatEta(long? seconds)
+    {
+        // qBittorrent reports 8640000 ("100 days") as its sentinel for "unknown/infinite".
+        if (seconds is null || seconds <= 0 || seconds >= 8640000) return "—";
+        var span = TimeSpan.FromSeconds(seconds.Value);
+        if (span.TotalDays >= 1) return $"{(int)span.TotalDays}d {span.Hours}h";
+        if (span.TotalHours >= 1) return $"{(int)span.TotalHours}h {span.Minutes}m";
+        return $"{(int)span.TotalMinutes}m {span.Seconds}s";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        ChangeNotifier.Changed -= OnChangedElsewhere;
+        liveCts?.Cancel();
+        liveCts?.Dispose();
+        await Task.CompletedTask;
+    }
+}

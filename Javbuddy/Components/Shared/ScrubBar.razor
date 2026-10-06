@@ -1,0 +1,149 @@
+@using Javbuddy.Services.Trickplay
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Timeline under a <video> that shows trickplay thumbnails on hover and seeks the video on
+   click. All pointer handling lives in ScrubBar.razor.js — a preview per mouse move
+   over a SignalR round-trip would lag — so this component only renders the markup and hands the JS
+   module the trickplay layout. Without trickplay it's the same bar with just the time
+   and scene name on hover, so the player never falls back to the browser's seek bar, plus a loading
+   frame with progress while it's being generated. With PlayerControls it also carries
+   the player's play/pause, time readout and mute + volume, in place of the browser's
+   controls, as the clip player's ClipControls does. Without them the track is hidden from assistive
+   tech: the video's native controls already provide keyboard/screen-reader seeking. *@
+<div class="scrub-bar" @ref="root">
+    @if (PlayerControls)
+    {
+        <button type="button" class="scrub-bar-btn scrub-bar-play" aria-label="Play or pause" title="Play/pause (space)">
+            <svg class="scrub-bar-icon-play" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
+            </svg>
+            <svg class="scrub-bar-icon-pause" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" />
+            </svg>
+        </button>
+    }
+    <div class="scrub-bar-track-wrap" aria-hidden="true" title="Click to jump to that point">
+        <div class="scrub-bar-preview">
+            @if (Trickplay is not null)
+            {
+                <div class="scrub-bar-thumb"></div>
+            }
+            else if (Generating is not null)
+            {
+                <TrickplayGeneratingPreview Generating="Generating" />
+            }
+            <span class="scrub-bar-time"></span>
+        </div>
+        <ApexMarkers Apexes="Apexes" DurationSeconds="Duration" />
+        <HighlightSegments Highlights="Highlights" DurationSeconds="Duration" />
+        <div class="scrub-bar-track">
+            <div class="scrub-bar-progress"></div>
+            <SceneSegments Scenes="Scenes" Suggestions="Suggestions" DurationSeconds="Duration" />
+        </div>
+    </div>
+    @if (PlayerControls)
+    {
+        <span class="scrub-bar-clock"></span>
+        <button type="button" class="scrub-bar-btn scrub-bar-mute" aria-label="Mute or unmute" title="Mute/unmute">
+            <svg class="scrub-bar-icon-sound" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z" />
+                <path d="M10.121 12.596A6.48 6.48 0 0 0 12.025 8a6.48 6.48 0 0 0-1.904-4.596l-.707.707A5.483 5.483 0 0 1 11.025 8a5.483 5.483 0 0 1-1.61 3.89l.706.706z" />
+                <path d="M8.707 11.182A4.486 4.486 0 0 0 10.025 8a4.486 4.486 0 0 0-1.318-3.182L8 5.525A3.489 3.489 0 0 1 9.025 8 3.49 3.49 0 0 1 8 10.475l.707.707zM6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06z" />
+            </svg>
+            <svg class="scrub-bar-icon-muted" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                <path d="M6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06zm7.137 2.096a.5.5 0 0 1 0 .708L12.207 8l1.647 1.646a.5.5 0 0 1-.708.708L11.5 8.707l-1.646 1.647a.5.5 0 0 1-.708-.708L10.793 8 9.146 6.354a.5.5 0 1 1 .708-.708L11.5 7.293l1.646-1.647a.5.5 0 0 1 .708 0z" />
+            </svg>
+        </button>
+        <input type="range" class="scrub-bar-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume" title="Volume" />
+    }
+    <button type="button" class="scrub-bar-fullscreen" aria-label="Toggle fullscreen" title="Toggle fullscreen (f, double-click video)">
+        <svg class="scrub-bar-fs-icon-enter" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 0 1 0V2h3.5a.5.5 0 0 0 0-1h-4zm13 0h-4a.5.5 0 0 0 0 1H14v3.5a.5.5 0 0 0 1 0v-4a.5.5 0 0 0-.5-.5zM1 10.5a.5.5 0 0 0 .5.5H5a.5.5 0 0 0 0-1H2v-3.5a.5.5 0 0 0-1 0v4zm14 0a.5.5 0 0 0-1 0V14h-3.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 .5-.5v-4z" />
+        </svg>
+        <svg class="scrub-bar-fs-icon-exit" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+            <path d="M5.5 0a.5.5 0 0 1 .5.5v4A1.5 1.5 0 0 1 4.5 6h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5zm5 0a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 10.5 4.5v-4a.5.5 0 0 1 .5-.5zM0 10.5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 6 11.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zm10.5 1a1.5 1.5 0 0 1 1.5-1.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4z" />
+        </svg>
+    </button>
+</div>
+
+@code {
+    /// <summary>Trickplay layout and tile URL template for the item being played; the bar shows no
+    /// thumbnails when null.</summary>
+    [Parameter] public TrickplayLayout? Trickplay { get; set; }
+
+    /// <summary>Set while the bar has no Trickplay but it's being generated: the hover
+    /// preview shows that in the thumbnail's place.</summary>
+    [Parameter] public TrickplayGenerating? Generating { get; set; }
+
+    /// <summary>The video's length, for a bar without Trickplay (which carries its own).</summary>
+    [Parameter] public double? DurationSeconds { get; set; }
+
+    /// <summary>CSS selector of the <c>&lt;video&gt;</c> to seek and to follow for the playhead. Resolved
+    /// lazily in JS, so the video may be (re)created after this component renders.</summary>
+    [Parameter, EditorRequired] public string VideoSelector { get; set; } = default!;
+
+    /// <summary>Scene ranges to mark on the track; none when null or empty.</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.SceneItem>? Scenes { get; set; }
+
+    /// <summary>Suggested boundaries to mark as ghost ticks.</summary>
+    [Parameter] public IReadOnlyList<double>? Suggestions { get; set; }
+
+    /// <summary>Highlights to draw as a thin track above the scenes.</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem>? Highlights { get; set; }
+
+    /// <summary>Apex markers to draw above the highlights.</summary>
+    [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? Apexes { get; set; }
+
+    /// <summary>Adds play/pause, the time readout and mute + volume, for a player whose
+    /// browser controls are hidden; the host sets it together with its video's <c>controls</c> off.</summary>
+    [Parameter] public bool PlayerControls { get; set; }
+
+    private double? Duration => Trickplay?.DurationSeconds ?? DurationSeconds;
+
+    private ElementReference root;
+    private IJSObjectReference? jsModule;
+    private bool initialised;
+    private TrickplayLayout? initialisedWith;
+    private Task initialising = Task.CompletedTask;
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Trickplay loading after the bar is up re-initialises it, now with thumbnails. Chained, so
+        // an init still waiting on the module import can't land after a newer one.
+        if (initialised && Equals(Trickplay, initialisedWith)) return Task.CompletedTask;
+        initialised = true;
+        initialisedWith = Trickplay;
+        initialising = InitAsync(initialising, Trickplay);
+        return initialising;
+    }
+
+    private async Task InitAsync(Task previous, TrickplayLayout? trickplay)
+    {
+        await previous;
+        try
+        {
+            jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ScrubBar.razor.js");
+            await jsModule.InvokeVoidAsync("init", root, (object?)trickplay ?? new { durationSeconds = DurationSeconds }, VideoSelector);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // An init still in flight would otherwise bind its listeners after this dispose.
+        await initialising;
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("dispose", root);
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

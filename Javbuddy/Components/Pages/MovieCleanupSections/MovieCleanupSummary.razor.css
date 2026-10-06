@@ -1,0 +1,272 @@
+/* Button rules copied from MovieCleanup.razor.css (CSS isolation). */
+.cleanup-btn {
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border-radius: 6px;
+    padding: 0.5rem 0.8rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cleanup-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.cleanup-btn-outline {
+    background: transparent;
+    border-color: #ced4da;
+    color: #212529;
+}
+
+.cleanup-btn-outline:hover:not(:disabled) {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+}
+
+:root[data-theme="dark"] .cleanup-btn-outline {
+    border-color: #4a5062;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .cleanup-btn-outline:hover:not(:disabled) {
+    background-color: #363c4a;
+    border-color: #5a6275;
+}
+
+/* End-of-session summary */
+.cleanup-summary {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.cleanup-summary-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #333;
+    margin: 0;
+}
+
+.cleanup-summary-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 0.75rem;
+}
+
+.cleanup-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.75rem 1rem;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
+
+.cleanup-stat-value {
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.cleanup-stat-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.cleanup-summary-empty {
+    color: #6c757d;
+    margin: 0;
+}
+
+.cleanup-summary-heading {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #333;
+    margin: 0 0 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cleanup-summary-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    background-color: #e9ecef;
+    color: #495057;
+}
+
+.cleanup-summary-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+    gap: 0.5rem;
+}
+
+.cleanup-summary-item {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    min-width: 0;
+}
+
+.cleanup-summary-cover {
+    flex: 0 0 auto;
+    width: 3rem;
+    height: 4.5rem;
+    object-fit: cover;
+    overflow: hidden;
+    border-radius: 4px;
+    background-color: #dee2e6;
+    font-size: 0.6rem;
+}
+
+.cleanup-summary-cover-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #6c757d;
+}
+
+.cleanup-summary-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.cleanup-summary-code {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #333;
+}
+
+a.cleanup-summary-code {
+    text-decoration: none;
+}
+
+    a.cleanup-summary-code:hover,
+    a.cleanup-summary-code:focus-visible {
+        text-decoration: underline;
+    }
+
+.cleanup-summary-item-title {
+    font-size: 0.8rem;
+    color: #6c757d;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cleanup-summary-item-size {
+    font-size: 0.75rem;
+    color: #2fa84f;
+}
+
+.cleanup-summary-edits {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.cleanup-summary-edit {
+    background-color: #e9ecef;
+    border: 1px solid #ced4da;
+    border-radius: 3px;
+    color: #495057;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.1rem 0.45rem;
+}
+
+.cleanup-summary-edit-count {
+    margin-left: 0.25rem;
+    color: #6c757d;
+    font-weight: 600;
+}
+
+.cleanup-summary-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding-bottom: 0.5rem;
+}
+
+.cleanup-new-session-btn {
+    background-color: #2f8fd6;
+    border-color: #2f8fd6;
+    color: #fff;
+}
+
+.cleanup-new-session-btn:hover:not(:disabled) {
+    background-color: #2578b5;
+    border-color: #2578b5;
+}
+
+:root[data-theme="dark"] .cleanup-summary-title,
+:root[data-theme="dark"] .cleanup-summary-heading,
+:root[data-theme="dark"] .cleanup-stat-value,
+:root[data-theme="dark"] .cleanup-summary-code {
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .cleanup-stat,
+:root[data-theme="dark"] .cleanup-summary-item {
+    background-color: #242833;
+    border-color: #363c4a;
+}
+
+:root[data-theme="dark"] .cleanup-stat-label,
+:root[data-theme="dark"] .cleanup-summary-empty,
+:root[data-theme="dark"] .cleanup-summary-item-title,
+:root[data-theme="dark"] .cleanup-summary-cover-placeholder {
+    color: #9aa1af;
+}
+
+:root[data-theme="dark"] .cleanup-summary-count {
+    background-color: #363c4a;
+    color: #c5cad3;
+}
+
+:root[data-theme="dark"] .cleanup-summary-edit {
+    background-color: #363c4a;
+    border-color: #4a5160;
+    color: #c5cad3;
+}
+
+:root[data-theme="dark"] .cleanup-summary-edit-count {
+    color: #9aa1af;
+}
+
+:root[data-theme="dark"] .cleanup-summary-cover {
+    background-color: #363c4a;
+}
+
+@media (max-width: 899px) {
+    /* MovieCleanup's container is height:auto here, so the desktop flex-fill would resolve to 0. */
+    .cleanup-summary {
+        flex: none;
+        overflow-y: visible;
+    }
+}

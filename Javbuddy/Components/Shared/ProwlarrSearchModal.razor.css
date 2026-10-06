@@ -1,0 +1,133 @@
+.prowlarr-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, 0.55);
+    outline: none;
+    padding: 1.5rem;
+}
+
+.prowlarr-modal-panel {
+    width: 100%;
+    max-width: 900px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    border-radius: 6px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.prowlarr-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+.prowlarr-modal-title {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.prowlarr-modal-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    color: #6c757d;
+}
+
+    .prowlarr-modal-close-btn:hover {
+        background-color: #eef0f2;
+        color: #212529;
+    }
+
+.prowlarr-modal-body {
+    padding: 1.25rem;
+    overflow-y: auto;
+}
+
+.seeds-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+.seeds-badge-none {
+    background-color: #dc3545;
+}
+
+.seeds-badge-low {
+    background-color: #d9822b;
+}
+
+.seeds-badge-good {
+    background-color: #2fa84f;
+}
+
+:root[data-theme="dark"] .prowlarr-modal-panel {
+    background-color: #242833;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .prowlarr-modal-header {
+    border-bottom-color: #363c4a;
+}
+
+:root[data-theme="dark"] .prowlarr-modal-close-btn {
+    color: #b9bfd1;
+}
+
+    :root[data-theme="dark"] .prowlarr-modal-close-btn:hover {
+        background-color: #3a4150;
+        color: #ffffff;
+    }
+
+/* Bootstrap's own table theming only kicks in under [data-bs-theme=dark], which this app never
+   sets (it uses its own [data-theme] attribute instead) — so .table stays on Bootstrap's light
+   CSS variables unless overridden here, same as every other Bootstrap component this app patches
+   for dark mode in app.css. */
+:root[data-theme="dark"] .prowlarr-modal-body .table {
+    --bs-table-color: #dfe2e8;
+    --bs-table-bg: transparent;
+    --bs-table-border-color: #3d4452;
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
+    --bs-table-striped-color: #dfe2e8;
+    --bs-table-active-bg: rgba(255, 255, 255, 0.06);
+    --bs-table-active-color: #dfe2e8;
+    --bs-table-hover-bg: rgba(255, 255, 255, 0.04);
+    --bs-table-hover-color: #dfe2e8;
+}
+
+@media (max-width: 700px) {
+    .prowlarr-modal-backdrop {
+        padding: 0;
+    }
+
+    .prowlarr-modal-panel {
+        max-width: none;
+        height: 100%;
+        max-height: none;
+        border-radius: 0;
+    }
+}

@@ -1,0 +1,80 @@
+/* A card above the apex marker with an arrow pointing down at it (where the caller sets
+   --apex-preview-arrow, else the middle); pops in on mount. */
+.apex-preview {
+    position: relative;
+    box-sizing: border-box;
+    width: 240px;
+    padding: 4px;
+    border: 1px solid #3d4354;
+    border-radius: 6px;
+    background-color: #242833;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    transform-origin: 50% 100%;
+    animation: apex-preview-pop 120ms ease-out;
+}
+
+.apex-preview::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: var(--apex-preview-arrow, 50%);
+    margin-left: -6px;
+    border: 6px solid transparent;
+    border-top-color: #3d4354;
+}
+
+@keyframes apex-preview-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.apex-preview-media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 4px;
+    background-color: #15171d;
+}
+
+.apex-preview-details {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.3rem 0.15rem 0.1rem;
+}
+
+.apex-preview-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.apex-preview-actors {
+    font-size: 0.75rem;
+    color: #f1f3f5;
+}
+
+.apex-preview-tag {
+    padding: 0 0.4rem;
+    border: 1px solid #f76707;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    color: #ffc9a3;
+    white-space: nowrap;
+}
+
+.apex-preview-time {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+}

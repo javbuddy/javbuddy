@@ -1,0 +1,504 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.MinnanoAv
+@inject IMinnanoAvClient MinnanoAvClient
+@inject IActorService ActorService
+
+@if (Show && Actor is not null)
+{
+    <div class="search-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="search-modal-panel" @onclick:stopPropagation="true">
+            <div class="search-modal-header">
+                <h5 class="search-modal-title">Search minnano-av.com — @Actor.DisplayName</h5>
+                <button type="button" class="search-modal-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@isEnriching">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+                </button>
+            </div>
+
+            <div class="search-modal-body">
+                @if (errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+                }
+
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control search-input" placeholder="Search performer name (kanji) or alias…"
+                           @bind="searchQuery" @bind:event="oninput" @onkeydown="HandleInputKeyDown" disabled="@isSearching" />
+                    <button class="btn btn-primary" type="button" @onclick="ExecuteSearch" disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
+                        @(isSearching ? "Searching…" : "Search")
+                    </button>
+                </div>
+
+                @if (isSearching)
+                {
+                    <div class="text-center py-4 text-muted">
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span> Searching minnano-av.com...
+                    </div>
+                }
+                else if (searchResults is not null)
+                {
+                    @if (searchResults.Count == 0)
+                    {
+                        <p class="text-muted small my-3 text-center">No matching performers found on minnano-av.com.</p>
+                    }
+                    else
+                    {
+                        <div class="search-results-list">
+                            @foreach (var res in searchResults)
+                            {
+                                var isSelected = selectedPath == res.PathOrUrl;
+                                <div class="search-result-item @(isSelected ? "selected" : "")" @onclick="() => SelectPerformer(res)">
+                                    @if (!string.IsNullOrWhiteSpace(res.ImageUrl))
+                                    {
+                                        <img src="@res.ImageUrl" alt="@res.Name" class="search-result-thumb" />
+                                    }
+                                    <div class="flex-grow-1 min-w-0">
+                                        <div class="fw-semibold text-truncate">
+                                            @res.Name
+                                            @if (!string.IsNullOrWhiteSpace(res.Romaji))
+                                            {
+                                                <span class="text-muted fw-normal ms-1">(@res.Romaji)</span>
+                                            }
+                                            @if (res.IsExactMatch)
+                                            {
+                                                <span class="badge bg-success ms-1">Exact match</span>
+                                            }
+                                        </div>
+                                        @if (res.KnownAliases.Count > 0)
+                                        {
+                                            <div class="text-muted small text-truncate">AKA: @string.Join(", ", res.KnownAliases)</div>
+                                        }
+                                    </div>
+                                    <button class="btn btn-sm @(isSelected ? "btn-primary" : "btn-outline-secondary") flex-shrink-0"
+                                            type="button" disabled="@isLoadingDetail">
+                                        @(isLoadingDetail && isSelected ? "Loading…" : (isSelected ? "Selected" : "Inspect"))
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+
+                @if (selectedDetail is not null)
+                {
+                    <div class="performer-detail-card mt-3">
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">
+                                    @selectedDetail.Name
+                                    @if (!string.IsNullOrWhiteSpace(selectedDetail.Romaji))
+                                    {
+                                        <span class="text-muted ms-1">· @selectedDetail.Romaji</span>
+                                    }
+                                </h6>
+
+                                <div class="performer-badges">
+                                    @if (selectedDetail.HeightCm.HasValue)
+                                    {
+                                        <span class="badge bg-secondary">Height: @selectedDetail.HeightCm cm</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(selectedDetail.CupSize))
+                                    {
+                                        <span class="badge bg-info text-dark">Cup: @selectedDetail.CupSize</span>
+                                    }
+                                    @if (selectedDetail.Bust.HasValue && selectedDetail.Waist.HasValue && selectedDetail.Hips.HasValue)
+                                    {
+                                        <span class="badge bg-secondary">B/W/H: @selectedDetail.Bust-@selectedDetail.Waist-@selectedDetail.Hips</span>
+                                    }
+                                    @if (selectedDetail.BirthDate.HasValue)
+                                    {
+                                        <span class="badge bg-secondary">Born: @selectedDetail.BirthDate.Value.ToString("MMM d, yyyy")</span>
+                                    }
+                                    @if (selectedDetail.IsRetired.HasValue)
+                                    {
+                                        <span class="badge @(selectedDetail.IsRetired.Value ? "bg-warning text-dark" : "bg-success")">
+                                            @(selectedDetail.IsRetired.Value ? "Retired" : "Active")
+                                        </span>
+                                    }
+                                </div>
+
+                                @if (selectedDetail.Aliases.Count > 0)
+                                {
+                                    <div class="text-muted small mt-2">
+                                        <strong>Aliases:</strong> @string.Join(", ", selectedDetail.Aliases)
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="import-fields-card mt-3">
+                            @if (!selectedDetail.HasKnownAttributes)
+                            {
+                                <div class="alert alert-warning py-2 mb-3 small">
+                                    All biographical and physical attributes are unknown for this performer on minnano-av.com.
+                                </div>
+                            }
+
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <span class="fw-semibold text-white small">Select fields to import:</span>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none field-toggle-btn" @onclick="SelectAllAvailableFields">Select all</button>
+                                    <span class="text-muted small">·</span>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none field-toggle-btn" @onclick="DeselectAllFields">Deselect all</button>
+                                </div>
+                            </div>
+
+                            <div class="import-fields-table">
+                                @{
+                                    var hasName = !string.IsNullOrWhiteSpace(selectedDetail.Name);
+                                    var hasHeight = selectedDetail.HeightCm.HasValue;
+                                    var hasCup = !string.IsNullOrWhiteSpace(selectedDetail.CupSize);
+                                    var hasMeasurements = selectedDetail.Bust.HasValue || selectedDetail.Waist.HasValue || selectedDetail.Hips.HasValue;
+                                    var hasBirthDate = selectedDetail.BirthDate.HasValue;
+                                    var hasRetired = selectedDetail.IsRetired.HasValue;
+                                    var hasAliases = selectedDetail.Aliases.Count > 0;
+                                }
+
+                                <!-- Japanese Name -->
+                                <div class="import-field-item @(hasName ? "" : "field-unavailable")">
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" id="field-kanji"
+                                               @bind="importOptions.ImportJapaneseName" disabled="@(!hasName || isEnriching)" />
+                                        <label class="form-check-label fw-medium" for="field-kanji">Japanese Name</label>
+                                    </div>
+                                    <div class="field-values">
+                                        <span class="field-new-value">@(hasName ? $"{selectedDetail.Name} ({selectedDetail.Kana})" : "—")</span>
+                                        <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Actor.JapaneseNameKanji) ? "None" : Actor.JapaneseNameKanji)</span>
+                                    </div>
+                                </div>
+
+                                <!-- Height -->
+                                <div class="import-field-item @(hasHeight ? "" : "field-unavailable")">
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" id="field-height"
+                                               @bind="importOptions.ImportHeight" disabled="@(!hasHeight || isEnriching)" />
+                                        <label class="form-check-label fw-medium" for="field-height">Height</label>
+                                    </div>
+                                    <div class="field-values">
+                                        <span class="field-new-value">@(hasHeight ? $"{selectedDetail.HeightCm} cm" : "—")</span>
+                                        <span class="field-current-value">Current: @(Actor.HeightCm.HasValue ? $"{Actor.HeightCm} cm" : "None")</span>
+                                    </div>
+                                </div>
+
+                                <!-- Cup Size -->
+                                <div class="import-field-item @(hasCup ? "" : "field-unavailable")">
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" id="field-cup"
+                                               @bind="importOptions.ImportCupSize" disabled="@(!hasCup || isEnriching)" />
+                                        <label class="form-check-label fw-medium" for="field-cup">Cup Size</label>
+                                    </div>
+                                    <div class="field-values">
+                                        <span class="field-new-value">@(hasCup ? selectedDetail.CupSize : "—")</span>
+                                        <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Actor.CupSize) ? "None" : Actor.CupSize)</span>
+                                    </div>
+                                </div>
+
+                                <!-- Measurements -->
+                                <div class="import-field-item @(hasMeasurements ? "" : "field-unavailable")">
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" id="field-measurements"
+                                               @bind="importOptions.ImportMeasurements" disabled="@(!hasMeasurements || isEnriching)" />
+                                        <label class="form-check-label fw-medium" for="field-measurements">Measurements</label>
+                                    </div>
+                                    <div class="field-values">
+                                        <span class="field-new-value">@(hasMeasurements ? $"{selectedDetail.Bust ?? 0}-{selectedDetail.Waist ?? 0}-{selectedDetail.Hips ?? 0}" : "—")</span>
+                                        <span class="field-current-value">Current: @(string.IsNullOrWhiteSpace(Actor.FormattedMeasurements) ? "None" : Actor.FormattedMeasurements)</span>
+                                    </div>
+                                </div>
+
+                                <!-- Birth Date -->
+                                <div class="import-field-item @(hasBirthDate ? "" : "field-unavailable")">
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" id="field-birthdate"
+                                               @bind="importOptions.ImportBirthDate" disabled="@(!hasBirthDate || isEnriching)" />
+                                        <label class="form-check-label fw-medium" for="field-birthdate">Birth Date</label>
+                                    </div>
+                                    <div class="field-values">
+                                        <span class="field-new-value">@(hasBirthDate ? selectedDetail.BirthDate!.Value.ToString("yyyy-MM-dd") : "—")</span>
+                                        <span class="field-current-value">Current: @(Actor.BirthDate.HasValue ? Actor.BirthDate.Value.ToString("yyyy-MM-dd") : "None")</span>
+                                    </div>
+                                </div>
+
+                                <!-- Retirement Status -->
+                                <div class="import-field-item @(hasRetired ? "" : "field-unavailable")">
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" id="field-retired"
+                                               @bind="importOptions.ImportRetiredStatus" disabled="@(!hasRetired || isEnriching)" />
+                                        <label class="form-check-label fw-medium" for="field-retired">Retirement Status</label>
+                                    </div>
+                                    <div class="field-values">
+                                        <span class="field-new-value">@(hasRetired ? (selectedDetail.IsRetired!.Value ? "Retired" : "Active") : "—")</span>
+                                        <span class="field-current-value">Current: @(Actor.IsRetired ? "Retired" : "Active")</span>
+                                    </div>
+                                </div>
+
+                                <!-- Aliases -->
+                                <div class="import-field-item @(hasAliases ? "" : "field-unavailable")">
+                                    <div class="form-check m-0">
+                                        <input class="form-check-input" type="checkbox" id="field-aliases"
+                                               @bind="importOptions.ImportAliases" disabled="@(!hasAliases || isEnriching)" />
+                                        <label class="form-check-label fw-medium" for="field-aliases">Aliases</label>
+                                    </div>
+                                    <div class="field-values">
+                                        <span class="field-new-value text-truncate" style="max-width: 180px;" title="@string.Join(", ", selectedDetail.Aliases)">
+                                            @(hasAliases ? string.Join(", ", selectedDetail.Aliases) : "—")
+                                        </span>
+                                        <span class="field-current-value">Current: @(Actor.Aliases.Count > 0 ? $"{Actor.Aliases.Count} alias(es)" : "None")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="search-modal-footer">
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@isEnriching">Cancel</button>
+                @if (selectedDetail is not null)
+                {
+                    var count = importOptions.SelectedCount(selectedDetail);
+                    <button type="button" class="btn btn-primary" @onclick="EnrichActor" disabled="@(isEnriching || count == 0)">
+                        @(isEnriching ? "Enriching…" : $"Enrich {Actor.DisplayName} ({count})")
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public Actor? Actor { get; set; }
+    [Parameter] public string? InitialSelectedPath { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnEnriched { get; set; }
+
+    private string searchQuery = string.Empty;
+    private bool isSearching;
+    private bool isLoadingDetail;
+    private bool isEnriching;
+    private string? errorMessage;
+    private IReadOnlyList<MinnanoAvSearchResult>? searchResults;
+    private MinnanoAvPerformerDetail? selectedDetail;
+    private string? selectedPath;
+    private int? lastActorId;
+    private MinnanoAvImportOptions importOptions = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && Actor is not null && lastActorId != Actor.Id)
+        {
+            lastActorId = Actor.Id;
+            errorMessage = null;
+            searchResults = null;
+            selectedDetail = null;
+            selectedPath = null;
+            importOptions = new MinnanoAvImportOptions();
+
+            if (!string.IsNullOrWhiteSpace(InitialSelectedPath))
+            {
+                // Handed off from the combined "Search all providers" picker — the candidate is
+                // already chosen, so skip straight to its detail instead of re-searching by name.
+                searchQuery = Actor.DisplayName;
+                await SelectPerformerByPath(InitialSelectedPath);
+            }
+            else
+            {
+                searchQuery = !string.IsNullOrWhiteSpace(Actor.JapaneseNameKanji)
+                    ? Actor.JapaneseNameKanji
+                    : Actor.DisplayName;
+                await ExecuteSearch();
+            }
+        }
+        else if (!Show)
+        {
+            lastActorId = null;
+        }
+    }
+
+    private async Task HandleInputKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ExecuteSearch();
+        }
+        else if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && !isEnriching)
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task ExecuteSearch()
+    {
+        if (string.IsNullOrWhiteSpace(searchQuery)) return;
+
+        isSearching = true;
+        errorMessage = null;
+        selectedDetail = null;
+        selectedPath = null;
+
+        try
+        {
+            var query = searchQuery.Trim();
+            searchResults = await MinnanoAvClient.SearchPerformersAsync(query);
+
+            // Auto-select exact match only if it has known attributes
+            var exact = searchResults.FirstOrDefault(r => r.IsExactMatch);
+            if (exact != null)
+            {
+                var detail = await MinnanoAvClient.GetPerformerDetailAsync(exact.PathOrUrl);
+                if (detail != null && detail.HasKnownAttributes)
+                {
+                    selectedPath = exact.PathOrUrl;
+                    selectedDetail = detail;
+                    InitializeImportOptions();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Search failed: {ex.Message}";
+            searchResults = Array.Empty<MinnanoAvSearchResult>();
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private Task SelectPerformer(MinnanoAvSearchResult result) => SelectPerformerByPath(result.PathOrUrl);
+
+    private async Task SelectPerformerByPath(string path)
+    {
+        isLoadingDetail = true;
+        selectedPath = path;
+        errorMessage = null;
+
+        try
+        {
+            selectedDetail = await MinnanoAvClient.GetPerformerDetailAsync(path);
+            if (selectedDetail is not null)
+            {
+                InitializeImportOptions();
+                searchQuery = selectedDetail.Name;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load performer details: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingDetail = false;
+        }
+    }
+
+    private void InitializeImportOptions()
+    {
+        if (selectedDetail is null) return;
+
+        if (!selectedDetail.HasKnownAttributes)
+        {
+            importOptions = new MinnanoAvImportOptions
+            {
+                ImportJapaneseName = false,
+                ImportHeight = false,
+                ImportCupSize = false,
+                ImportMeasurements = false,
+                ImportBirthDate = false,
+                ImportRetiredStatus = false,
+                ImportAliases = false
+            };
+            return;
+        }
+
+        var hasNewKanji = !string.IsNullOrWhiteSpace(selectedDetail.Name) &&
+                          (Actor is null || !string.Equals(Actor.JapaneseNameKanji, selectedDetail.Name, StringComparison.Ordinal));
+
+        importOptions = new MinnanoAvImportOptions
+        {
+            ImportJapaneseName = hasNewKanji,
+            ImportHeight = selectedDetail.HeightCm.HasValue,
+            ImportCupSize = !string.IsNullOrWhiteSpace(selectedDetail.CupSize),
+            ImportMeasurements = selectedDetail.Bust.HasValue || selectedDetail.Waist.HasValue || selectedDetail.Hips.HasValue,
+            ImportBirthDate = selectedDetail.BirthDate.HasValue,
+            ImportRetiredStatus = selectedDetail.IsRetired.HasValue,
+            ImportAliases = selectedDetail.Aliases.Count > 0
+        };
+    }
+
+    private void SelectAllAvailableFields()
+    {
+        if (selectedDetail is null) return;
+        importOptions.ImportJapaneseName = !string.IsNullOrWhiteSpace(selectedDetail.Name);
+        importOptions.ImportHeight = selectedDetail.HeightCm.HasValue;
+        importOptions.ImportCupSize = !string.IsNullOrWhiteSpace(selectedDetail.CupSize);
+        importOptions.ImportMeasurements = selectedDetail.Bust.HasValue || selectedDetail.Waist.HasValue || selectedDetail.Hips.HasValue;
+        importOptions.ImportBirthDate = selectedDetail.BirthDate.HasValue;
+        importOptions.ImportRetiredStatus = selectedDetail.IsRetired.HasValue;
+        importOptions.ImportAliases = selectedDetail.Aliases.Count > 0;
+    }
+
+    private void DeselectAllFields()
+    {
+        importOptions.ImportJapaneseName = false;
+        importOptions.ImportHeight = false;
+        importOptions.ImportCupSize = false;
+        importOptions.ImportMeasurements = false;
+        importOptions.ImportBirthDate = false;
+        importOptions.ImportRetiredStatus = false;
+        importOptions.ImportAliases = false;
+    }
+
+    private async Task EnrichActor()
+    {
+        if (selectedDetail is null || Actor is null) return;
+
+        isEnriching = true;
+        errorMessage = null;
+        var succeeded = false;
+
+        try
+        {
+            var res = await ActorService.ImportOrEnrichFromMinnanoAvAsync(selectedDetail, Actor.Id, importOptions);
+            if (res.Success)
+            {
+                await OnEnriched.InvokeAsync();
+                succeeded = true;
+            }
+            else
+            {
+                errorMessage = res.ErrorMessage;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Enrichment failed: {ex.Message}";
+        }
+        finally
+        {
+            isEnriching = false;
+        }
+
+        if (succeeded)
+        {
+            await CloseAsync();
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (!isEnriching)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+}
