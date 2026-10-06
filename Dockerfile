@@ -7,6 +7,8 @@ ARG FFMPEG_RELEASE=autobuild-2026-08-31-13-27
 ARG FFMPEG_ASSET=ffmpeg-n9.0.1-11-ge47273f4d9-linux64-gpl-9.0.tar.xz
 ARG FFMPEG_SHA256=182c1b509720e939bb47bfb47dc29cc0c298640401128e3dce8627d10707eb5a
 WORKDIR /ffmpeg
+# Unpinned apt packages: the base image tag floats, and exact distro versions disappear from the archive.
+# hadolint ignore=DL3008
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates curl xz-utils \
@@ -34,6 +36,8 @@ FROM mcr.microsoft.com/dotnet/aspnet:11.0-resolute AS final
 WORKDIR /app
 
 # libfontconfig1: SkiaSharp. tzdata: honors TZ. libcurl3t64-gnutls, libmms0: libmediainfo.so.
+# Unpinned apt packages: the base image tag floats, and exact distro versions disappear from the archive.
+# hadolint ignore=DL3008
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         libfontconfig1 tzdata libcurl3t64-gnutls libmms0 \
@@ -52,7 +56,7 @@ ENV LD_LIBRARY_PATH=/opt/mediainfo-libs
 COPY --from=build /root/.nuget/packages/mediainfo.core.native/*/runtimes/ubuntu.25.10-x64/native/libmediainfo.so /root/.nuget/packages/mediainfo.core.native/*/runtimes/ubuntu.25.10-x64/native/libzen.so.0 $LD_LIBRARY_PATH/
 
 # Storage tiers, owned by the unprivileged app user
-RUN mkdir -p /data /cache /objects && chown -R $APP_UID:$APP_UID /data /cache /objects /app
+RUN mkdir -p /data /cache /objects && chown -R "$APP_UID:$APP_UID" /data /cache /objects /app
 
 COPY --from=build --chown=$APP_UID:$APP_UID /app/publish .
 
