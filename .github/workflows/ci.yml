@@ -45,7 +45,7 @@ jobs:
           dotnet-quality: preview
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg fontconfig
       - run: dotnet build Javbuddy.E2ETests/Javbuddy.E2ETests.csproj
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('Directory.Packages.props') }}
