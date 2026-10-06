@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file, in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. This project adheres to [Semantic Versioning](https://semver.org/) (pre-1.0: breaking changes may land in a minor bump).
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-10-06
 
 First release.
 
