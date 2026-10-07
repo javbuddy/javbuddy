@@ -16,7 +16,9 @@ TestResults/
 # Local caches and test directories
 /cache/
 Javbuddy/cache/
-test-jav/
+**/test-jav/
+**/test-jav-nfo/
+**/test-vr-nfo/
 r18.dev/
 
 # IDE and tooling
