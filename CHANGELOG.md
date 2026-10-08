@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-08
+
 ### Fixed
 
 - Docker ARM64 image: publish the app assembly for ARM64 instead of defaulting to x86-64.

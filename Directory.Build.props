@@ -1,7 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <!-- .NET 11's Runtime Async (preview): the runtime tracks async suspension/resumption
          natively instead of the compiler emitting state-machine classes, giving cleaner live
          stack traces and lower overhead. See:
