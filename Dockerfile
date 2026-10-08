@@ -35,7 +35,7 @@ RUN ./configure --prefix=/out --disable-doc --disable-debug --disable-ffplay --d
 FROM mcr.microsoft.com/dotnet/sdk:11.0-resolute AS build
 # Set by BuildKit to the platform being built (amd64 or arm64). Each architecture is built natively
 # (CI uses a runner per platform), so the SDK here already matches it; only the RID needs mapping.
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 WORKDIR /src
 
 COPY Directory.Build.props Directory.Packages.props ./
