@@ -54,11 +54,12 @@ RUN dotnet publish Javbuddy/Javbuddy.csproj -c Release -r "$(cat /rid)" --self-c
 FROM mcr.microsoft.com/dotnet/aspnet:11.0-resolute AS native-libs
 # libfontconfig1: SkiaSharp. libwebp7, libvpx12, libdav1d7: shared libraries the ffmpeg build links
 # against. libmediainfo0v5: native MediaInfo (pulls in libzen and its own dependencies).
+# busybox-static: a ~3 MB shell and basic tools, so `docker exec <container> sh` works.
 # Unpinned apt packages: the base image tag floats, and exact distro versions disappear from the archive.
 # hadolint ignore=DL3008
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        libfontconfig1 libmediainfo0v5 libwebp7 libvpx12 libdav1d7 \
+        libfontconfig1 libmediainfo0v5 libwebp7 libvpx12 libdav1d7 busybox-static \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ffmpeg /out/bin/ffmpeg /out/bin/ffprobe /rootfs/usr/local/bin/
@@ -80,6 +81,7 @@ RUN set -eu; \
     done; \
     cp -L "$mi" "/rootfs${mi%.0}"; \
     cp -a --parents /etc/fonts /usr/share/fontconfig /rootfs; \
+    mkdir -p /rootfs/usr/bin && cp /bin/busybox /rootfs/usr/bin/busybox && for a in $(/rootfs/usr/bin/busybox --list); do [ "$a" = busybox ] || ln -sf busybox "/rootfs/usr/bin/$a"; done; \
     mkdir -p /dirs/data /dirs/cache /dirs/objects
 
 # chiseled-extra: distroless (no shell, apt or root-owned writable dirs) with ICU and tzdata, so
@@ -88,7 +90,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:11.0-resolute-chiseled-extra AS final
 
 COPY --from=native-libs /rootfs/ /
 
-# Storage tiers, owned by the unprivileged app user (a chiseled image has no RUN to mkdir/chown them,
+# Storage tiers, owned by the unprivileged app user (a chiseled image has no apt, and busybox's sh is not worth a RUN layer just to mkdir/chown them,
 # so copy empty directories in with --chown instead). WORKDIR creates /app root-owned, so /app
 # itself is copied the same way.
 COPY --from=native-libs --chown=$APP_UID:$APP_UID /dirs/data /data

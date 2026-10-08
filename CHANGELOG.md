@@ -8,7 +8,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 - Docker image: MediaInfo now comes from the distro's `libmediainfo0v5` package instead of native libraries copied out of the NuGet cache.
 - Docker image: FFmpeg is now a minimal build from the upstream release source (decode everything; encode only WebP and VP9), replacing the full static build.
-- Docker image: now based on the chiseled `aspnet` image (no shell or package manager), with the native libraries it needs copied in. Together with the FFmpeg change, the image shrinks from about 940 MB to about 475 MB. There is no shell in the container, so `docker exec <container> sh` no longer works.
+- Docker image: now based on the chiseled `aspnet` image (no package manager), with the native libraries it needs copied in and a small busybox shell for `docker exec <container> sh`. Together with the FFmpeg change, the image shrinks from about 940 MB to about 478 MB.
 - Docker image: published images now carry an SBOM and build provenance attestations. FFmpeg itself is built from source, so it does not appear in the SBOM.
 
 ### Added
