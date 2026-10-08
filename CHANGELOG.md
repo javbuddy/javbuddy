@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-08
+
 ### Changed
 
 - Docker image: MediaInfo now comes from the distro's `libmediainfo0v5` package instead of native libraries copied out of the NuGet cache.
