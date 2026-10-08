@@ -11,10 +11,9 @@
          which ships native assets under version/distro-specific RIDs (debian-x64, ubuntu-x64,
          alpine-x64, ...) that none of the .NET 8+ SDK's own RID graph recognizes — a plain dotnet
          build/test (no -r flag) doesn't need these assets and correctly skips them, and NETSDK1206
-         just flags that as informational. The Dockerfile doesn't rely on RID-based publish
-         selection for this package at all (it never resolves on any RID, recognized or not — see
-         the Dockerfile's own comment); it copies the .so files straight out of the NuGet cache
-         instead, so this warning has nothing to catch anywhere in this repo. -->
+         just flags that as informational. The Dockerfile doesn't use this package's native assets
+         at all (it installs libmediainfo0v5 from apt), so this warning has nothing to catch
+         anywhere in this repo. -->
     <NoWarn>$(NoWarn);NETSDK1206</NoWarn>
   </PropertyGroup>
 

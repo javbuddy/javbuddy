@@ -22,9 +22,9 @@
   <ItemGroup>
     <PackageReference Include="BlazorMonaco" />
     <!-- Managed wrapper around MediaInfoLib (see Services/MediaInfo) — pulls in MediaInfo.Core.Native
-         transitively, which bundles the native libmediainfo binary itself (win-x64 for dev,
-         debian-x64 for the Docker image — see the Dockerfile's LD_LIBRARY_PATH setup) so nothing
-         needs installing separately at the OS level. -->
+         transitively, which bundles the native libmediainfo binary for win-x64 (dev). The Docker
+         image doesn't use it: `-r linux-x64` skips the distro-specific RIDs, and the Dockerfile
+         installs libmediainfo0v5 from apt instead. -->
     <PackageReference Include="MediaInfo.Wrapper.Core" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
