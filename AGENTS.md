@@ -48,16 +48,19 @@ A .NET Blazor Server app for tracking wanted/owned JAV movies, modeled on Sonarr
 
 ## Versioning
 
+- Javbuddy follows Semantic Versioning (`MAJOR.MINOR.PATCH`); the current version is shared by all projects through `<Version>` in `Directory.Build.props`.
 - `CHANGELOG.md` (Keep a Changelog format) is the source of truth for shipped history. Every user-facing change adds an entry under `## [Unreleased]` as part of the same change, not a follow-up step — see `docs/feature-workflow.md` step 6.
-- A version bump = move `[Unreleased]`'s entries under a new dated `## [x.y.z]` heading, and update `<Version>` in `Directory.Build.props` (shared by all three projects) to match.
+- For releases before `1.0.0`, breaking changes may increment the minor version, as stated in `CHANGELOG.md`. After `1.0.0`, use a major increment for breaking changes, a minor increment for backward-compatible features, and a patch increment for backward-compatible fixes.
+- A release bump = move `[Unreleased]`'s entries under a new dated `## [x.y.z]` heading, and update `<Version>` in `Directory.Build.props` to match.
 
 ## Git hygiene
 
 - Don't bundle an unrelated README edit into a feature commit.
 - Don't commit unless explicitly asked.
-- Commit message convention (observed and consistent across this repo's history):
-  - Subject line: imperative, capitalized, no type-prefix (`Add`/`Fix`/`Refactor`/`Remove`/`Consolidate`/`Enforce`/`Restyle`/`Extract`/`Support` + what changed), roughly 50-70 characters.
-  - Body: prose explaining the root cause/why and how the change was verified — not a Conventional Commits-style bullet list.
+- Use the Conventional Commits format for commit messages: `<type>[optional scope][!]: <description>` (for example, `feat(movies): add actor filter`). Use a concise imperative description.
+  - Common types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, and `revert`.
+  - `feat` indicates a minor release and `fix` indicates a patch release. Add `!` after the type or scope for a breaking change and explain it in a `BREAKING CHANGE:` footer. Breaking changes indicate a major release after `1.0.0`; before `1.0.0`, this project permits them in a minor release. Other types do not by themselves determine the version bump.
+  - Use a prose body to explain the reason for the change and how it was verified. Add issue references such as `Refs #<n>` or `Closes #<n>` when relevant.
   - Trailers: `Co-Authored-By: <current model name> <noreply@example.com>`, naming whichever model actually made the change — not a hardcoded name. No agent-specific session metadata line.
   - Full request-to-commit workflow: **docs/feature-workflow.md**.
 
