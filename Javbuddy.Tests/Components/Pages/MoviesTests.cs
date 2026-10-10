@@ -2005,14 +2005,16 @@ public class MoviesTests : BunitContext
         cut.WaitForAssertion(() => Assert.Contains("No releases on r18.dev match", cut.Markup));
 
         cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Filter")).Click();
+        // The catalog's genre options load after the page renders, so the group isn't in the menu straight away.
         // Labelled apart from the library's own Genre filter.
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button"), b => b.TextContent.Trim().StartsWith("Genre (r18.dev)")));
         cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Genre (r18.dev)")).Click();
         cut.FindAll("button").First(b => b.TextContent.Trim() == "Creampie").Click();
 
         cut.WaitForAssertion(() => browse.Received().BrowseAsync(
             Arg.Is<R18DevCatalogFilter>(f => f.Genres.SequenceEqual(new[] { "Creampie" })), 0, null, Arg.Any<CancellationToken>()));
         // The genre plus "Hide previously deleted", which is on by default.
-        Assert.Contains("Filter (2)", cut.Markup);
+        cut.WaitForAssertion(() => Assert.Contains("Filter (2)", cut.Markup));
         browse.ClearReceivedCalls();
 
         cut.Find("button[title='Reset all filters']").Click();
