@@ -53,33 +53,33 @@ RUN dotnet publish Javbuddy/Javbuddy.csproj -c Release -r "$(cat /rid)" --self-c
 # rootfs. Built on the full aspnet image, which shares the chiseled image's glibc.
 FROM mcr.microsoft.com/dotnet/aspnet:11.0-resolute AS native-libs
 # libfontconfig1: SkiaSharp. libwebp7, libvpx12, libdav1d7: shared libraries the ffmpeg build links
-# against. libmediainfo0v5: native MediaInfo (pulls in libzen and its own dependencies).
+# against. libcurl3-gnutls, libmms0: shared libraries the NuGet package's libmediainfo.so links against.
 # busybox-static: a ~3 MB shell and basic tools, so `docker exec <container> sh` works.
 # Unpinned apt packages: the base image tag floats, and exact distro versions disappear from the archive.
 # hadolint ignore=DL3008
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        libfontconfig1 libmediainfo0v5 libwebp7 libvpx12 libdav1d7 busybox-static \
+        libfontconfig1 libcurl3-gnutls libmms0 libwebp7 libvpx12 libdav1d7 busybox-static \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ffmpeg /out/bin/ffmpeg /out/bin/ffprobe /rootfs/usr/local/bin/
-COPY --from=build /app/publish/libSkiaSharp.so /tmp/libSkiaSharp.so
+COPY --from=build /app/publish/libSkiaSharp.so /app/publish/libmediainfo.so /app/publish/libzen.so.0 /tmp/
 
 # Copy each binary's resolved shared-library closure into /rootfs at the same paths, minus the
 # libraries the chiseled base already ships (glibc, libgcc, libstdc++, zlib). cp -L stores the real
-# file under the soname the loader asks for. The package ships only libmediainfo.so.0, but the .NET
-# wrapper DllImports "mediainfo" and so probes libmediainfo.so, which the -dev package would
-# normally provide; add that name too. /etc/fonts is fontconfig's configuration. ldd fails the
-# build if a dependency is missing, so a broken closure can't ship.
+# file under the soname the loader asks for. libmediainfo.so ships in the app folder (from the NuGet
+# package) and is loaded from there, but it has no RUNPATH, so its libzen.so.0 must sit in a system
+# library directory (copied below); both are resolved from /tmp here and the libmediainfo.so copy is
+# not repeated. /etc/fonts is fontconfig's configuration. ldd fails the build if a dependency is
+# missing, so a broken closure can't ship.
 # hadolint ignore=DL4006
 RUN set -eu; \
-    mi="$(find /usr/lib -name libmediainfo.so.0 | head -n1)"; \
-    for bin in /rootfs/usr/local/bin/ffmpeg /rootfs/usr/local/bin/ffprobe /tmp/libSkiaSharp.so "$mi"; do \
-        ldd "$bin" | grep -q "not found" && { ldd "$bin"; exit 1; }; \
-        ldd "$bin" | awk '$3 ~ /^\// {print $3}' | grep -Ev '/(libc|libm|libdl|libpthread|librt|libgcc_s|libstdc\+\+|libz)\.so' \
+    for bin in /rootfs/usr/local/bin/ffmpeg /rootfs/usr/local/bin/ffprobe /tmp/libSkiaSharp.so /tmp/libmediainfo.so; do \
+        LD_LIBRARY_PATH=/tmp ldd "$bin" | grep -q "not found" && { LD_LIBRARY_PATH=/tmp ldd "$bin"; exit 1; }; \
+        LD_LIBRARY_PATH=/tmp ldd "$bin" | awk '$3 ~ /^\// {print $3}' | grep -Ev '^/tmp/|/(libc|libm|libdl|libpthread|librt|libgcc_s|libstdc\+\+|libz)\.so' \
             | while read -r lib; do cp -L --parents "$lib" /rootfs; done; \
     done; \
-    cp -L "$mi" "/rootfs${mi%.0}"; \
+    libdir="/rootfs/usr/lib/$(uname -m)-linux-gnu"; mkdir -p "$libdir"; cp /tmp/libzen.so.0 "$libdir/"; \
     cp -a --parents /etc/fonts /usr/share/fontconfig /rootfs; \
     mkdir -p /rootfs/usr/bin && cp /bin/busybox /rootfs/usr/bin/busybox && for a in $(/rootfs/usr/bin/busybox --list); do [ "$a" = busybox ] || ln -sf busybox "/rootfs/usr/bin/$a"; done; \
     mkdir -p /dirs/data /dirs/cache /dirs/objects

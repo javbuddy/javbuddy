@@ -7,7 +7,7 @@
   <ItemGroup>
     <!-- Application packages -->
     <PackageVersion Include="BlazorMonaco" Version="3.5.0" />
-    <PackageVersion Include="MediaInfo.Wrapper.Core" Version="26.1.0" />
+    <PackageVersion Include="MediaInfo.Wrapper.Core" Version="26.10.0" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0-rc.1.26425.128" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="11.0.0-rc.1.26425.128" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />

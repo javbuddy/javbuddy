@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- Docker image: MediaInfo now comes from the `MediaInfo.Wrapper.Core` NuGet package (bumped to 26.10.0, which ships generic Linux runtime identifiers) instead of the distro's `libmediainfo0v5`; only its `libcurl3-gnutls` and `libmms0` dependencies are installed from apt.
+
 ### Fixed
 
 - Movie Detail's Delete dialog no longer offers "Delete files from disk" for a movie with no files on disk, such as a wanted movie.
