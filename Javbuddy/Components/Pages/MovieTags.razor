@@ -567,10 +567,7 @@
 
     // The create and parent modals pick parents from the actor tags (roots only, which they filter on ParentTagId).
     private async Task<IReadOnlyList<TagListItem>> LoadActorTagItemsAsync() =>
-        [.. (await ActorTagService.GetActorTagsAsync()).Select(ToTagListItem)];
-
-    private static TagListItem ToTagListItem(ActorTagListItem t) =>
-        new(t.Id, t.Name, t.UseCount, false, t.CreatedAt, t.ParentTagId, t.ParentTagName, t.SubtagCount);
+        [.. (await ActorTagService.GetActorTagsAsync()).Select(t => t.ToTagListItem())];
 
     private Task<TagOperationResult> CreateActorTagAsync(string name, int? parentTagId) =>
         ActorTagService.CreateActorTagAsync(name, parentTagId);
@@ -584,7 +581,7 @@
 
     private void OpenActorParentModal(ActorTagListItem tag)
     {
-        actorParentTarget = ToTagListItem(tag);
+        actorParentTarget = tag.ToTagListItem();
         showActorParentModal = true;
     }
 

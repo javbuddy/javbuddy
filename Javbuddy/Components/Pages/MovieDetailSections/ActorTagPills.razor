@@ -92,9 +92,7 @@
     private string LabelOf(int tagId) => ActorTagPillStyle.Label(Library, tagId);
 
     private async Task<IReadOnlyList<TagListItem>> SearchAsync(string query) =>
-        (await ActorTagService.GetActorTagsAsync(query))
-            .Select(t => new TagListItem(t.Id, t.Name, t.UseCount, false, DateTime.UtcNow, t.ParentTagId, t.ParentTagName, t.SubtagCount))
-            .ToList();
+        [.. (await ActorTagService.GetActorTagsAsync(query)).Select(t => t.ToTagListItem())];
 
     private async Task SetAsync(IEnumerable<int> tagIds)
     {

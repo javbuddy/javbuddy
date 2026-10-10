@@ -25,6 +25,9 @@ public sealed record ActorTagListItem(int Id, string Name, int UseCount, int? Pa
 
     /// <summary>"Hair › Long" for a subtag, else the name.</summary>
     public string Label => ParentTagName is null ? Name : $"{ParentTagName}{ActorTagOptions.LabelSeparator}{Name}";
+
+    /// <summary>As the tag library's item, for the shared tag components (TagSearchAdd, the create and parent modals).</summary>
+    public TagListItem ToTagListItem() => new(Id, Name, UseCount, false, CreatedAt, ParentTagId, ParentTagName, SubtagCount);
 }
 
 public interface IActorTagService
