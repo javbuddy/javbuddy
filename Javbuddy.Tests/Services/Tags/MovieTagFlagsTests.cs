@@ -109,15 +109,27 @@ public class MovieTagFlagsTests
     {
         using var factory = new TestDbContextFactory();
         var (movieId, tagIds) = await SeedAsync(factory, "Squirt", ("Squirt", false, true));
+        int otherSceneId;
         await using (var db = await factory.CreateDbContextAsync())
         {
+            var other = new Movie { Code = "ABC-562" };
+            db.Movies.Add(other);
             var scene = new Scene { MovieId = movieId, Title = "S", StartSeconds = 0, EndSeconds = 10 };
             var highlight = new MovieHighlight { MovieId = movieId, StartSeconds = 1, EndSeconds = 2 };
+            var apex = new MovieApex { MovieId = movieId, Seconds = 5 };
             db.Scenes.Add(scene);
             db.MovieHighlights.Add(highlight);
+            db.MovieApexes.Add(apex);
             await db.SaveChangesAsync();
+            var otherScene = new Scene { MovieId = other.Id, Title = "O", StartSeconds = 0, EndSeconds = 10 };
+            db.Scenes.Add(otherScene);
+            await db.SaveChangesAsync();
+            otherSceneId = otherScene.Id;
             db.SceneTags.Add(new SceneTag { SceneId = scene.Id, TagId = tagIds["Squirt"] });
             db.HighlightTags.Add(new HighlightTag { HighlightId = highlight.Id, TagId = tagIds["Squirt"] });
+            db.ApexTags.Add(new ApexTag { ApexId = apex.Id, TagId = tagIds["Squirt"] });
+            // Another movie's scene carries the same tag and keeps it.
+            db.SceneTags.Add(new SceneTag { SceneId = otherSceneId, TagId = tagIds["Squirt"] });
             await db.SaveChangesAsync();
         }
 
@@ -126,9 +138,26 @@ public class MovieTagFlagsTests
         Assert.True(result.Success, result.ErrorMessage);
         Assert.Empty(await LinksAsync(factory, movieId));
         await using var check = await factory.CreateDbContextAsync();
-        Assert.Empty(await check.SceneTags.ToListAsync());
+        Assert.Equal([otherSceneId], await check.SceneTags.Select(t => t.SceneId).ToListAsync());
         Assert.Empty(await check.HighlightTags.ToListAsync());
+        Assert.Empty(await check.ApexTags.ToListAsync());
         Assert.Null((await check.Movies.SingleAsync(m => m.Id == movieId)).MetaGenres);
+    }
+
+    [Fact]
+    public async Task RemoveTagFromMovie_ALeftoverActorTagLink_DeletesRow()
+    {
+        using var factory = new TestDbContextFactory();
+        var (movieId, tagIds) = await SeedAsync(factory, null, ("Blonde", false, true));
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            await db.Tags.Where(t => t.Id == tagIds["Blonde"]).ExecuteUpdateAsync(s => s.SetProperty(t => t.IsActorTag, true));
+        }
+
+        var result = await CreateService(factory).RemoveTagFromMovieAsync(movieId, tagIds["Blonde"]);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Empty(await LinksAsync(factory, movieId));
     }
 
     [Fact]

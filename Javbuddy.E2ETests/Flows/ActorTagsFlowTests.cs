@@ -6,7 +6,7 @@ using static Microsoft.Playwright.Assertions;
 namespace Javbuddy.E2ETests.Flows;
 
 /// <summary>Actor tags on Movie Detail over a real circuit: tagging an actor in the cast section saves at once, survives a
-/// reload, and the tag reaches the movie's plain tags.</summary>
+/// reload, and can be removed again.</summary>
 [Collection(E2ECollection.Name)]
 public class ActorTagsFlowTests
 {
@@ -19,7 +19,7 @@ public class ActorTagsFlowTests
     }
 
     [Fact]
-    public async Task TaggingAnActorOnMovieDetail_SavesAtOnce_AndTheMovieGetsThePlainTag()
+    public async Task TaggingAnActorOnMovieDetail_SavesAtOnce_AndCanBeRemoved()
     {
         var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-ATAG-1", MovieStatus.Got);
         var actor = await DbSeeding.SeedActorAsync(fixture.DbFactory, "Mei Tagged");
@@ -45,7 +45,7 @@ public class ActorTagsFlowTests
         await pills.Locator(".tag-search-candidate", new() { HasText = "E2E Blonde" }).ClickAsync();
         await Expect(pills.Locator(".actor-pills-row .actor-pill").First).ToHaveTextAsync("E2E Blonde");
 
-        // Saved: it is still there after a reload, and the movie carries the plain tag.
+        // Saved: it is still there after a reload.
         await page.GotoInteractiveAsync($"/movies/{movie.Code}");
         await Expect(page.Locator(".actor-pills-row .actor-pill").First).ToHaveTextAsync("E2E Blonde");
         await Expect(page.Locator(".actor-pill-add")).ToHaveCountAsync(0);

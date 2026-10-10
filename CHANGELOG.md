@@ -4,7 +4,14 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- Movie Detail's Genres editor: hovering a tag that comes from scenes, highlights or apexes now explains that removing it also removes it from them; before, the tooltip could be missing.
+- Movie Detail's Genres editor: an actor tag left on the movie by an earlier version is now removed directly, without the scenes-and-highlights confirmation that didn't apply to it.
+- Removing a tag from a movie together with its scenes, highlights and apexes either completes in full or changes nothing.
+
 ## [0.2.1] - 2026-10-10
+
 ### Changed
 
 - Actor tags no longer become plain tags on the movie: they stay on their actors, so they no longer appear in Movie Detail's Genres, `MetaGenres` or the `.nfo`. The Movies grid's actor-tag filter, the Scenes wall and the cast pills work as before. A leftover link from an earlier version is dropped by Apply Rules to Library or the next edit of that movie's clips.

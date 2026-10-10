@@ -773,14 +773,15 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var link = await db.MovieTags.FirstOrDefaultAsync(mt => mt.MovieId == movieId && mt.TagId == tagId, ct);
+        var link = await db.MovieTags.Include(mt => mt.Tag).FirstOrDefaultAsync(mt => mt.MovieId == movieId && mt.TagId == tagId, ct);
         if (link is null)
         {
             return OperationResult.Fail("Tag is not on this movie.");
         }
 
-        // While a scene, highlight or apex still carries it, the movie keeps it as a clip-only tag.
-        if (link.FromClips)
+        // While a scene, highlight or apex still carries it, the movie keeps it as a clip-only tag. An actor tag's
+        // link is one an earlier version left (clips never give one now), so it just goes.
+        if (link.FromClips && !link.Tag.IsActorTag)
         {
             link.IsExplicit = false;
         }
@@ -809,13 +810,19 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
             return OperationResult.Fail("Tag is not on this movie.");
         }
 
-        await db.SceneTags.Where(t => t.TagId == tagId && t.Scene.MovieId == movieId).ExecuteDeleteAsync(ct);
-        await db.HighlightTags.Where(t => t.TagId == tagId && t.Highlight.MovieId == movieId).ExecuteDeleteAsync(ct);
-        await db.ApexTags.Where(t => t.TagId == tagId && t.Apex.MovieId == movieId).ExecuteDeleteAsync(ct);
+        // All or nothing: the clips lose the tag and the movie its explicit flag together.
+        await using (var transaction = await db.Database.BeginTransactionAsync(ct))
+        {
+            await db.SceneTags.Where(t => t.TagId == tagId && t.Scene.MovieId == movieId).ExecuteDeleteAsync(ct);
+            await db.HighlightTags.Where(t => t.TagId == tagId && t.Highlight.MovieId == movieId).ExecuteDeleteAsync(ct);
+            await db.ApexTags.Where(t => t.TagId == tagId && t.Apex.MovieId == movieId).ExecuteDeleteAsync(ct);
+            await db.MovieTags.Where(mt => mt.MovieId == movieId && mt.TagId == tagId)
+                .ExecuteUpdateAsync(s => s.SetProperty(mt => mt.IsExplicit, false), ct);
+            await transaction.CommitAsync(ct);
+        }
 
-        // Drop the explicit flag too, then let the roll-up delete the now-unreferenced row.
-        await db.MovieTags.Where(mt => mt.MovieId == movieId && mt.TagId == tagId)
-            .ExecuteUpdateAsync(s => s.SetProperty(mt => mt.IsExplicit, false), ct);
+        // Then let the roll-up delete the now-unreferenced row. After the commit, not inside it: ClipTagSync waits for
+        // other refreshes of its own, and one of them may be waiting for this transaction's write lock.
         await ClipTagSync.RefreshAsync(db, movieId, ct);
 
         await TagNormalization.SyncMetaGenresAsync(db, [movieId], ct);

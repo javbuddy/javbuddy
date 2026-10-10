@@ -160,7 +160,7 @@ button.movie-detail-badge {
         color: #ff8a93;
     }
 
-/* A clip-derived tag with no remove button: dashed and muted, like the implied chips elsewhere. */
+/* A clip-derived tag while editing: dashed and muted, like the implied chips elsewhere; removing it asks first. */
 .movie-detail-tag-item-implied {
     opacity: 0.65;
     outline: 1px dashed rgba(255, 255, 255, 0.25);
