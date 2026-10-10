@@ -247,6 +247,9 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
         }
         if (distinctActorIds is not null)
         {
+            // An actor who leaves the highlight's own actors takes their own tags on it along.
+            var removedActorIds = highlight.HighlightActors.Where(ha => !distinctActorIds.Contains(ha.ActorId)).Select(ha => ha.ActorId).ToList();
+            db.HighlightActorTags.RemoveRange(await db.HighlightActorTags.Where(t => t.HighlightId == highlight.Id && removedActorIds.Contains(t.ActorId)).ToListAsync(ct));
             foreach (var removed in highlight.HighlightActors.Where(ha => !distinctActorIds.Contains(ha.ActorId)).ToList())
             {
                 highlight.HighlightActors.Remove(removed);

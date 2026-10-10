@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- Removing an actor from a scene, highlight or apex now also removes their actor tags on it, so the Scenes wall's tag filter no longer matches a clip the tagged actor has left, and the movie drops a plain tag only that actor's tag gave it.
 - Deleting, ignoring, renaming, merging or re-parenting a tag, or making a tag an actor tag, now re-checks the affected movies for `.nfo` drift (in the background, so a tag on hundreds of movies doesn't block the Tags page).
 - Two refreshes of the same movie's clip tags running at once no longer fail on a duplicate tag link (they now run one at a time).
 - In the video player's VR 2D mode, the projection picker now fades out with the scrub bar and header when the player is idle, and comes back with them.

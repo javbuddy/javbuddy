@@ -252,6 +252,9 @@ public class MovieApexService(
         }
         if (distinctActorIds is not null)
         {
+            // An actor who leaves the apex's own actors takes their own tags on it along.
+            var removedActorIds = apex.ApexActors.Where(aa => !distinctActorIds.Contains(aa.ActorId)).Select(aa => aa.ActorId).ToList();
+            db.ApexActorTags.RemoveRange(await db.ApexActorTags.Where(t => t.ApexId == apex.Id && removedActorIds.Contains(t.ActorId)).ToListAsync(ct));
             foreach (var removed in apex.ApexActors.Where(aa => !distinctActorIds.Contains(aa.ActorId)).ToList())
             {
                 apex.ApexActors.Remove(removed);

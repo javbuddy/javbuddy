@@ -154,6 +154,43 @@ public sealed class ActorTagServiceTests : IDisposable
         queue.Received(1).Enqueue(Arg.Is<IReadOnlyCollection<int>>(ids => ids.SequenceEqual(new[] { movieId })));
     }
 
+    [Theory]
+    [InlineData(ActorTagLevel.Scene)]
+    [InlineData(ActorTagLevel.Highlight)]
+    [InlineData(ActorTagLevel.Apex)]
+    public async Task RemovingAnActorFromAClipsOwnActors_DropsTheirOwnTagsThere_AndTheMoviesPlainTag(ActorTagLevel level)
+    {
+        await SeedAsync();
+        var nfo = Substitute.For<INfoSyncService>();
+        var clipTags = new ClipTagSyncService(factory, nfo);
+        var ownerId = level switch { ActorTagLevel.Scene => sceneId, ActorTagLevel.Highlight => highlightId, _ => apexId };
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            if (level == ActorTagLevel.Scene) db.SceneActors.Add(new SceneActor { SceneId = sceneId, MovieId = movieId, ActorId = meiId });
+            if (level == ActorTagLevel.Highlight) db.HighlightActors.Add(new HighlightActor { HighlightId = highlightId, MovieId = movieId, ActorId = meiId });
+            if (level == ActorTagLevel.Apex) db.ApexActors.Add(new ApexActor { ApexId = apexId, MovieId = movieId, ActorId = meiId });
+            await db.SaveChangesAsync();
+        }
+        await service.SetAsync(level, ownerId, meiId, [blondeId]);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            Assert.True(await db.MovieTags.AnyAsync(t => t.MovieId == movieId && t.TagId == blondeId));
+        }
+
+        switch (level)
+        {
+            case ActorTagLevel.Scene: await new MovieSceneService(factory, null, clipTags).SetSceneActorsAsync(sceneId, []); break;
+            case ActorTagLevel.Highlight: await new MovieHighlightService(factory, null, clipTags).UpdateHighlightAsync(highlightId, 10, 100, null, actorIds: []); break;
+            default: await new MovieApexService(factory, clipTags: clipTags).UpdateApexAsync(apexId, 50, [], []); break;
+        }
+
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Empty(await verify.SceneActorTags.ToListAsync());
+        Assert.Empty(await verify.HighlightActorTags.ToListAsync());
+        Assert.Empty(await verify.ApexActorTags.ToListAsync());
+        Assert.False(await verify.MovieTags.AnyAsync(t => t.MovieId == movieId && t.TagId == blondeId));
+    }
+
     [Fact]
     public async Task MakingAGenreAnActorTag_RemovesItFromTheMoviesGenres()
     {

@@ -273,7 +273,9 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
         {
             // A tracked delete, so ClipActorStaleInterceptor marks the movie and wakes the refresh.
             db.SceneActors.Remove(link);
+            db.SceneActorTags.RemoveRange(await db.SceneActorTags.Where(t => t.SceneId == sceneId && t.ActorId == actorId).ToListAsync(ct));
             await db.SaveChangesAsync(ct);
+            if (clipTags is not null) await clipTags.RefreshAsync(link.MovieId, ct);
         }
         return SceneOperationResult.Ok(sceneId);
     }
@@ -292,15 +294,19 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
         {
             return SceneOperationResult.Fail("Only actors in the movie's cast can be added to a scene.");
         }
+        var removedIds = scene.SceneActors.Where(sa => !wanted.Contains(sa.ActorId)).Select(sa => sa.ActorId).ToList();
         foreach (var link in scene.SceneActors.Where(sa => !wanted.Contains(sa.ActorId)).ToList())
         {
             scene.SceneActors.Remove(link);
         }
+        // An actor who leaves the scene's own actors takes their own tags on it along.
+        db.SceneActorTags.RemoveRange(await db.SceneActorTags.Where(t => t.SceneId == sceneId && removedIds.Contains(t.ActorId)).ToListAsync(ct));
         foreach (var actorId in wanted.Where(id => scene.SceneActors.All(sa => sa.ActorId != id)))
         {
             scene.SceneActors.Add(new SceneActor { SceneId = sceneId, MovieId = scene.MovieId, ActorId = actorId });
         }
         await db.SaveChangesAsync(ct);
+        if (removedIds.Count > 0 && clipTags is not null) await clipTags.RefreshAsync(scene.MovieId, ct);
         return SceneOperationResult.Ok(sceneId);
     }
 
