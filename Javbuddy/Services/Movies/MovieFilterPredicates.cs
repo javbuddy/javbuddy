@@ -200,6 +200,12 @@ public static class MovieFilterPredicates
                 genreNames.Add(name);
             }
         }
-        return genreNames.OrderBy(g => g, StringComparer.OrdinalIgnoreCase).ToList();
+        // Grouped by parent, the parent first and its subtags after it, so the filter menu can nest them: ordering by the
+        // whole string would slip "Hair colour" between "Hair" and "Hair##Short".
+        return genreNames
+            .OrderBy(g => g.Split(Tag.HierarchyDelimiter, 2)[0], StringComparer.OrdinalIgnoreCase)
+            .ThenBy(g => g.Contains(Tag.HierarchyDelimiter))
+            .ThenBy(g => g, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 }

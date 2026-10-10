@@ -371,9 +371,10 @@
 
     private IReadOnlyList<MultiSelectOption> GenreFilterOptions => AvailableGenres
         .Select(genre => new MultiSelectOption(
-            genre.Contains(Tag.HierarchyDelimiter) ? genre.Replace(Tag.HierarchyDelimiter, " › ") : genre,
+            genre.Contains(Tag.HierarchyDelimiter) ? genre.Replace(Tag.HierarchyDelimiter, MultiSelectOption.Separator) : genre,
             GenreFilter.Contains(genre),
-            EventCallback.Factory.Create(this, () => OnToggleGenre.InvokeAsync(genre))))
+            EventCallback.Factory.Create(this, () => OnToggleGenre.InvokeAsync(genre)),
+            genre.Contains(Tag.HierarchyDelimiter)))
         .ToList();
 
     private IReadOnlyList<MultiSelectOption> ActorFilterOptions => AvailableActors

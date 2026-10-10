@@ -81,6 +81,14 @@ public class MovieFilterPredicatesTests
         Assert.Equal(["drama", "Play", "Play##Rough"], options);
     }
 
+    [Fact]
+    public void BuildGenreOptions_ListsEachParentRightBeforeItsSubtags()
+    {
+        var options = MovieFilterPredicates.BuildGenreOptions([("Short", "Hair"), ("Long", "Hair"), ("Hair colour", null)]);
+
+        Assert.Equal(["Hair", "Hair##Long", "Hair##Short", "Hair colour"], options);
+    }
+
     private static IQueryable<Movie> WithMedia() => new[]
     {
         new Movie { Code = "SD", MediaWidth = 720, MediaScanType = "Progressive", MediaVideoCodec = "AVC", MetaStudio = "S1", NfoDriftKind = NfoDriftKind.None },
