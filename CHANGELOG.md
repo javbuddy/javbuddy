@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- In the video player's VR 2D mode, the projection picker now fades out with the scrub bar and header when the player is idle, and comes back with them.
 - The VR 2D player no longer has a second fullscreen button over the video; the player's own fullscreen button (and the F key or a double-click) does the job.
 - Movie Detail's Delete dialog no longer offers "Delete files from disk" for a movie with no files on disk, such as a wanted movie.
 

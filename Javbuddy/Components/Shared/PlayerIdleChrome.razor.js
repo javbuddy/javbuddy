@@ -1,9 +1,10 @@
 // Idle-hides a player's chrome: after IDLE_MS without mouse, touch or key activity while
 // the video plays, `root` gets the `player-idle` class; any activity removes it and restarts the timer.
 // It stays off while the video is paused or ended, while the pointer is over the header, scrub bar,
-// clip controls or side panel, and while focus is inside the header (an open version dropdown).
+// clip controls, VR projection picker or side panel, and while focus is inside the header or on the
+// picker (an open dropdown).
 const IDLE_MS = 3000;
-const KEEP_VISIBLE = '.video-player-modal-header, .scrub-bar, .clip-controls, .video-player-side-panel';
+const KEEP_VISIBLE = '.video-player-modal-header, .scrub-bar, .clip-controls, .video-player-side-panel, .vr-viewer-projection';
 // :hover has to follow each selector, not the list.
 const KEEP_VISIBLE_HOVERED = KEEP_VISIBLE.split(', ').map((s) => s + ':hover').join(', ');
 const IDLE_CLASS = 'player-idle';
@@ -21,8 +22,9 @@ export function init(key, root, selector) {
         if (!v || v.paused || v.ended) return true;
         if (root.querySelector(KEEP_VISIBLE_HOVERED)) return true;
         const header = root.querySelector('.video-player-modal-header');
-        return header !== null && header.contains(document.activeElement)
-            && document.activeElement instanceof Element && document.activeElement.matches('select, input, textarea');
+        const active = document.activeElement;
+        if (!(active instanceof Element) || !active.matches('select, input, textarea')) return false;
+        return (header !== null && header.contains(active)) || active.matches('.vr-viewer-projection');
     };
 
     const schedule = () => {

@@ -232,16 +232,18 @@
 
 /* Idle chrome: PlayerIdleChrome adds .player-idle to the panel after a few seconds of
    inactivity while playing. Opacity only, so nothing shifts and the video keeps its size. The scrub bar,
-   clip controls and video live in child components, hence ::deep. */
+   clip controls, VR projection picker and video live in child components, hence ::deep. */
 .video-player-modal-header,
 .video-player-modal-panel ::deep .scrub-bar,
-.video-player-modal-panel ::deep .clip-controls {
+.video-player-modal-panel ::deep .clip-controls,
+.video-player-modal-panel ::deep .vr-viewer-projection {
     transition: opacity 0.3s ease;
 }
 
 .video-player-modal-panel.player-idle .video-player-modal-header,
 .video-player-modal-panel.player-idle ::deep .scrub-bar,
-.video-player-modal-panel.player-idle ::deep .clip-controls {
+.video-player-modal-panel.player-idle ::deep .clip-controls,
+.video-player-modal-panel.player-idle ::deep .vr-viewer-projection {
     opacity: 0;
     pointer-events: none;
 }
