@@ -35,7 +35,13 @@ jobs:
           dotnet-version: 11.0.x
           dotnet-quality: preview
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg fontconfig
-      - run: dotnet test Javbuddy.Tests/Javbuddy.Tests.csproj
+      - run: dotnet test Javbuddy.Tests/Javbuddy.Tests.csproj --logger "trx;LogFileName=unit.trx" --results-directory TestResults/unit
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-unit
+          path: TestResults/unit/*.trx
+          if-no-files-found: ignore
 
   e2e:
     runs-on: ubuntu-latest
@@ -52,7 +58,23 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('Directory.Packages.props') }}
       - run: pwsh Javbuddy.E2ETests/bin/Debug/net11.0/playwright.ps1 install --with-deps chromium
-      - run: dotnet test Javbuddy.E2ETests/Javbuddy.E2ETests.csproj --no-build
+      - run: dotnet test Javbuddy.E2ETests/Javbuddy.E2ETests.csproj --no-build --logger "trx;LogFileName=e2e.trx" --results-directory TestResults/e2e
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-e2e
+          path: TestResults/e2e/*.trx
+          if-no-files-found: ignore
+
+  # Test results are published by test-results.yml (workflow_run), which works for fork PRs; it
+  # needs this PR event payload to know which PR the results belong to.
+  event-file:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/upload-artifact@v7
+        with:
+          name: event-file
+          path: ${{ github.event_path }}
 
   # Each platform builds natively on its own runner (compiling ffmpeg under QEMU emulation would be
   # far too slow) and pushes by digest; docker-merge then stitches the digests into one multi-arch tag.
