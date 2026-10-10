@@ -167,14 +167,3 @@ a.movie-detail-cast-avatar {
     font-weight: 600;
     cursor: help;
 }
-
-.movie-detail-actor-tags {
-    margin-top: 0.75rem;
-}
-
-.movie-detail-actor-tags-title {
-    margin: 0 0 0.35rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #94a3b8;
-}

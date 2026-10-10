@@ -71,9 +71,7 @@
     private string NameOf(int tagId) => library.FirstOrDefault(t => t.Id == tagId)?.Label ?? $"Tag {tagId}";
 
     private async Task<IReadOnlyList<TagListItem>> SearchAsync(string query) =>
-        (await ActorTagService.GetActorTagsAsync(query))
-            .Select(t => new TagListItem(t.Id, t.Name, t.UseCount, false, DateTime.UtcNow, t.ParentTagId, t.ParentTagName, t.SubtagCount))
-            .ToList();
+        [.. (await ActorTagService.GetActorTagsAsync(query)).Select(t => t.ToTagListItem())];
 
     private Task AddAsync(int actorId, List<EffectiveActorTag> current, int tagId) =>
         SetAsync(actorId, OwnTagIds(current).Append(tagId));

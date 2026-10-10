@@ -918,6 +918,53 @@ public class ActorServiceTests
     }
 
     [Fact]
+    public async Task MergeAsync_MovesActorTagsOntoTheTarget()
+    {
+        using var factory = new TestDbContextFactory();
+        int sourceId, targetId, sharedMovieId, soloMovieId, sceneId, blondeId, longId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // The merge re-syncs the cast from MetaActresses, so it must name the target. In the solo movie only
+            // the source is cast, so the merge replaces the cast link the tags hang off.
+            var shared = new Movie { Code = "MOV-001", MetaActresses = "Target" };
+            var solo = new Movie { Code = "MOV-002", MetaActresses = "Target" };
+            var source = new Actor { FirstName = "Source" };
+            var target = new Actor { FirstName = "Target" };
+            var blonde = new Tag { Name = "Blonde", IsActorTag = true };
+            var hairLong = new Tag { Name = "Long", IsActorTag = true };
+            db.AddRange(shared, solo, source, target, blonde, hairLong);
+            await db.SaveChangesAsync();
+            (sourceId, targetId, sharedMovieId, soloMovieId, blondeId, longId) = (source.Id, target.Id, shared.Id, solo.Id, blonde.Id, hairLong.Id);
+            db.MovieActors.AddRange(
+                new MovieActor { MovieId = sharedMovieId, ActorId = sourceId },
+                new MovieActor { MovieId = sharedMovieId, ActorId = targetId },
+                new MovieActor { MovieId = soloMovieId, ActorId = sourceId });
+            var scene = new Scene { MovieId = soloMovieId, StartSeconds = 0 };
+            db.Scenes.Add(scene);
+            await db.SaveChangesAsync();
+            sceneId = scene.Id;
+            // In the shared movie both have Blonde (deduplicated) and only the source has Long.
+            db.MovieActorTags.AddRange(
+                new MovieActorTag { MovieId = sharedMovieId, ActorId = sourceId, TagId = blondeId },
+                new MovieActorTag { MovieId = sharedMovieId, ActorId = sourceId, TagId = longId },
+                new MovieActorTag { MovieId = sharedMovieId, ActorId = targetId, TagId = blondeId });
+            db.SceneActorTags.Add(new SceneActorTag { SceneId = sceneId, MovieId = soloMovieId, ActorId = sourceId, TagId = blondeId });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await new ActorService(factory, Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>()).MergeAsync(sourceId, targetId);
+
+        Assert.True(result.Success);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movieTags = await db.MovieActorTags.OrderBy(t => t.TagId).Select(t => new { t.MovieId, t.ActorId, t.TagId }).ToListAsync();
+            Assert.Equal([new { MovieId = sharedMovieId, ActorId = targetId, TagId = blondeId }, new { MovieId = sharedMovieId, ActorId = targetId, TagId = longId }], movieTags);
+            var sceneTags = await db.SceneActorTags.Select(t => new { t.SceneId, t.ActorId, t.TagId }).ToListAsync();
+            Assert.Equal([new { SceneId = sceneId, ActorId = targetId, TagId = blondeId }], sceneTags);
+        }
+    }
+
+    [Fact]
     public async Task MergeAsync_PreservesFavorite_WhenSourceOrTargetIsFavorite()
     {
         using var factory = new TestDbContextFactory();
