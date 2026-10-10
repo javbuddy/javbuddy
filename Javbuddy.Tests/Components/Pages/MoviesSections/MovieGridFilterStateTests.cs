@@ -50,6 +50,20 @@ public class MovieGridFilterStateTests
     }
 
     [Fact]
+    public void ClearBesidesNavigationTargets_WithAnActorTagTarget_LeavesJustThatActorTag()
+    {
+        var state = new MovieGridFilterState();
+        state.ActorTagIds.Add(3);
+
+        Assert.True(state.ClearBesidesNavigationTargets(actorTagTarget: 7));
+        Assert.Equal([7], state.ActorTagIds);
+        // Already exactly that target (the prerendered pass applied it): nothing changes.
+        Assert.False(state.ClearBesidesNavigationTargets(actorTagTarget: 7));
+        Assert.True(state.ClearBesidesNavigationTargets());
+        Assert.Empty(state.ActorTagIds);
+    }
+
+    [Fact]
     public void Clear_ResetsEveryFilterButKeepsTheSort()
     {
         var state = new MovieGridFilterState { Text = "abc", CodePrefix = "ABC", SortField = "title" };

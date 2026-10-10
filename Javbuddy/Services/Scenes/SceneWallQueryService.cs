@@ -2,6 +2,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.SceneMedia;
+using Javbuddy.Services.Tags;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Scenes;
@@ -47,10 +48,6 @@ public sealed record SceneWallCard(
     long? ThumbVersion,
     long? PreviewVersion)
 {
-    /// <summary>The card's actors with their actor tags ("Mei (Brunette)"), when any have some; the card shows these in place of
-    /// Actors.</summary>
-    public IReadOnlyList<string>? ActorLabels { get; init; }
-
     /// <summary>Whether the movie has a local video file the clip player can stream.</summary>
     public bool HasLocalVideo { get; init; }
 
@@ -86,10 +83,6 @@ public sealed record HighlightWallCard(
     long? ThumbVersion,
     long? PreviewVersion)
 {
-    /// <summary>The card's actors with their actor tags ("Mei (Brunette)"), when any have some; the card shows these in place of
-    /// Actors.</summary>
-    public IReadOnlyList<string>? ActorLabels { get; init; }
-
     /// <summary>Whether the movie has a local video file the clip player can stream.</summary>
     public bool HasLocalVideo { get; init; }
 
@@ -125,10 +118,6 @@ public sealed record ApexWallCard(
     bool IsFavorite,
     long? PreviewVersion)
 {
-    /// <summary>The card's actors with their actor tags ("Mei (Brunette)"), when any have some; the card shows these in place of
-    /// Actors.</summary>
-    public IReadOnlyList<string>? ActorLabels { get; init; }
-
     /// <summary>Whether the movie has a local video file the clip player can stream.</summary>
     public bool HasLocalVideo { get; init; }
 
@@ -251,9 +240,7 @@ public sealed class SceneWallQueryService(
                 ImplicitTags = rollups[x.Row.MovieId].Scenes.GetValueOrDefault(x.Item.Id, []),
             })
             .ToList();
-        var sceneTags = await ActorTagLookup.LoadAsync(db, ids => db.SceneEffectiveActorTags.Where(r => !r.IsRolledUp && ids.Contains(r.SceneId)).Select(r => new ActorTagRow(r.SceneId, r.ActorId, r.Tag.ParentTag != null ? r.Tag.ParentTag.Name + " › " + r.Tag.Name : r.Tag.Name)),
-            cards.Select(c => c.SceneId), ct);
-        return new SceneWallPage([.. cards.Select(c => c with { ActorLabels = sceneTags.Labels(c.SceneId, c.Actors) })], total);
+        return new SceneWallPage(cards, total);
     }
 
     public async Task<SceneWallOptions> GetOptionsAsync(bool includeHidden = false, CancellationToken ct = default)
@@ -382,9 +369,7 @@ public sealed class SceneWallQueryService(
                 ImplicitTags = rollups[p.MovieId].Highlights.GetValueOrDefault(p.Id, []),
             };
         }).ToList();
-        var highlightTags = await ActorTagLookup.LoadAsync(db, ids => db.HighlightEffectiveActorTags.Where(r => !r.IsRolledUp && ids.Contains(r.HighlightId)).Select(r => new ActorTagRow(r.HighlightId, r.ActorId, r.Tag.ParentTag != null ? r.Tag.ParentTag.Name + " › " + r.Tag.Name : r.Tag.Name)),
-            cards.Select(c => c.HighlightId), ct);
-        return new HighlightWallPage([.. cards.Select(c => c with { ActorLabels = highlightTags.Labels(c.HighlightId, c.Actors) })], total);
+        return new HighlightWallPage(cards, total);
     }
 
     public async Task<ApexWallPage> GetApexPageAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, int skip, int take, CancellationToken ct = default)
@@ -435,9 +420,7 @@ public sealed class SceneWallQueryService(
                 };
             })
             .ToList();
-        var apexTags = await ActorTagLookup.LoadAsync(db, ids => db.ApexEffectiveActorTags.Where(r => ids.Contains(r.ApexId)).Select(r => new ActorTagRow(r.ApexId, r.ActorId, r.Tag.ParentTag != null ? r.Tag.ParentTag.Name + " › " + r.Tag.Name : r.Tag.Name)),
-            cards.Select(c => c.ApexId), ct);
-        return new ApexWallPage([.. cards.Select(c => c with { ActorLabels = apexTags.Labels(c.ApexId, c.Actors) })], total);
+        return new ApexWallPage(cards, total);
     }
 
     public async Task<SceneWallOptions> GetApexOptionsAsync(CancellationToken ct = default)
@@ -464,17 +447,9 @@ public sealed class SceneWallQueryService(
         };
     }
 
-    // The tags some clip has for an actor, "Hair › Long" for a subtag, and the parents of those (a parent matches its subtags).
-    private static async Task<IReadOnlyList<SceneWallOption>> ActorTagOptionsAsync(IQueryable<Tag> usedTags, CancellationToken ct)
-    {
-        var used = await usedTags.Select(t => new { t.Id, t.Name, t.ParentTagId, Parent = t.ParentTag != null ? t.ParentTag.Name : null }).Distinct().ToListAsync(ct);
-        // Grouped by parent, the parent first and its subtags after it: ordering by the full label would slip "Hair colour"
-        // between "Hair" and "Hair › Short".
-        var rows = used.Select(t => (Option: new SceneWallOption(t.Id, t.Parent is null ? t.Name : $"{t.Parent} › {t.Name}"), Group: t.Parent ?? t.Name, IsSubtag: t.Parent is not null, t.Name)).ToList();
-        rows.AddRange(used.Where(t => t.ParentTagId is not null && used.All(u => u.Id != t.ParentTagId))
-            .DistinctBy(t => t.ParentTagId).Select(t => (Option: new SceneWallOption(t.ParentTagId!.Value, t.Parent!), Group: t.Parent!, IsSubtag: false, Name: t.Parent!)));
-        return rows.OrderBy(r => r.Group, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.IsSubtag).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => r.Option).ToList();
-    }
+    // The tags some clip of the view has for an actor.
+    private static async Task<IReadOnlyList<SceneWallOption>> ActorTagOptionsAsync(IQueryable<Tag> usedTags, CancellationToken ct) =>
+        [.. (await ActorTagOptions.LoadAsync(usedTags, ct)).Select(o => new SceneWallOption(o.Id, o.Label))];
 
     private static async Task<IReadOnlyList<SceneWallOption>> ApexTagOptionsAsync(AppDbContext db, CancellationToken ct)
     {

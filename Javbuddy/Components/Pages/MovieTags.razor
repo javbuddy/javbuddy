@@ -197,6 +197,12 @@
                                                 <button type="button" class="btn btn-sm btn-outline-secondary" title="Merge into another tag" @onclick="() => OpenMergeModal(tag)">
                                                     <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5z" /></svg>
                                                 </button>
+                                                @if (tag.ParentTagId is null && tag.SubtagCount == 0)
+                                                {
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" title="Make an actor tag (removes it from its movies' genres)" @onclick="() => RequestMakeActorTag(tag)">
+                                                        <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z" /></svg>
+                                                    </button>
+                                                }
                                                 <button type="button" class="btn btn-sm btn-outline-warning" title="Ignore" @onclick="() => RequestConfirm(tag.Id, tag.Name, PendingAction.Ignore)">
                                                     <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0zM8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM2.5 8a5.5 5.5 0 0 1 8.594-4.55L3.45 11.094A5.478 5.478 0 0 1 2.5 8zm2.906 4.55L13.05 4.906A5.5 5.5 0 0 1 5.406 12.55z" /></svg>
                                                 </button>
@@ -291,7 +297,7 @@
                                         else
                                         {
                                             <div class="d-flex flex-wrap gap-1">
-                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Filter movies by this tag" @onclick="() => FilterByTag(tag.Name)">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Filter movies by this tag" @onclick="() => FilterByActorTag(tag.Id)">
                                                     <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2zm1 .5v1.308l4.372 4.858A.5.5 0 0 1 7 8.5v5.306l2-.666V8.5a.5.5 0 0 1 .128-.334L13.5 3.308V2h-11z" /></svg>
                                                 </button>
                                                 <button type="button" class="btn btn-sm btn-outline-secondary" title="Set or change parent tag" @onclick="() => OpenActorParentModal(tag)">
@@ -470,7 +476,7 @@
 
 @code {
     private enum RailItem { AllTags, NeedsReview, ActorTags, Rules, Ignored }
-    private enum PendingAction { Delete, Ignore }
+    private enum PendingAction { Delete, Ignore, MakeActorTag }
 
     private RailItem activeRail = RailItem.AllTags;
 
@@ -727,6 +733,13 @@
         Nav.NavigateTo("/");
     }
 
+    // Actor tags aren't Genre options: they have the Actor tag filter.
+    private void FilterByActorTag(int tagId)
+    {
+        FilterNavigationState.SetPendingActorTagFilter(tagId);
+        Nav.NavigateTo("/");
+    }
+
     private void RequestConfirm(int tagId, string tagName, PendingAction action)
     {
         var label = action == PendingAction.Delete
@@ -734,6 +747,11 @@
             : $"Ignore \"{tagName}\" and strip it from all movies?";
         pendingConfirm = (tagId, label, action);
     }
+
+    private void RequestMakeActorTag(TagListItem tag) =>
+        pendingConfirm = (tag.Id, tag.MovieCount > 0
+            ? $"Make \"{tag.Name}\" an actor tag and remove it from {tag.MovieCount} {(tag.MovieCount == 1 ? "movie's" : "movies'")} genres?"
+            : $"Make \"{tag.Name}\" an actor tag?", PendingAction.MakeActorTag);
 
     private void CancelPending() => pendingConfirm = (null, null, default);
 
@@ -747,6 +765,11 @@
         {
             await TagService.DeleteAsync(tagId);
             SetStatus("Tag deleted.", false);
+        }
+        else if (action == PendingAction.MakeActorTag)
+        {
+            var result = await ActorTagService.SetIsActorTagAsync(tagId, true);
+            SetStatus(result.Success ? "The tag is an actor tag now." : result.ErrorMessage ?? "Failed to change the tag.", !result.Success);
         }
         else
         {

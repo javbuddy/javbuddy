@@ -349,6 +349,30 @@ public class TagNormalizationTests
     }
 
     [Fact]
+    public async Task ApplyToMovieAsync_HierarchicalString_UnderAnActorTag_CreatesNoPlainSubtag()
+    {
+        using var factory = new TestDbContextFactory();
+        var movie = new Movie { Code = "ABC-010", MetaGenres = "Hair##Long" };
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Tags.Add(new Tag { Name = "Hair", IsActorTag = true });
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var tracked = await db.Movies.FindAsync(movie.Id);
+            await TagNormalization.ApplyToMovieAsync(db, tracked!);
+            await db.SaveChangesAsync();
+        }
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.False(await verifyDb.Tags.AnyAsync(t => t.Name == "Long"));
+        Assert.False(await verifyDb.MovieTags.AnyAsync(mt => mt.MovieId == movie.Id));
+    }
+
+    [Fact]
     public async Task ApplyToMovieAsync_DeduplicatesParent_WhenSubtagIsPresent()
     {
         using var factory = new TestDbContextFactory();

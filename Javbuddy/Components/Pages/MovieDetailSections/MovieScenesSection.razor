@@ -309,6 +309,9 @@
     // The actors' tags per clip, shown in a popover on hovering an actor.
     private ClipActorTagsResult actorTags = new(new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>());
     private IReadOnlyList<ActorTagListItem> actorTagLibrary = [];
+    // What the actor tags were last loaded for. Any change to the clips, the cast or an actor tag reaches here as new
+    // lists from the page (the editor reloads them after each save); a render with the same ones needn't query again.
+    private (int MovieId, object Cast, object Scenes, object Highlights, object Apexes)? actorTagsLoadedFor;
     private int? hoveredSceneId;
     private int? hoveredHighlightId;
     private int? hoveredApexId;
@@ -340,8 +343,7 @@
         var clipActors = ClipActors.Compute(Cast, Scenes, Highlights, Apexes);
         highlightActors = clipActors.Highlights;
         sceneActors = clipActors.Scenes;
-        actorTags = await ActorTagService.GetEffectiveAsync(Movie.Id);
-        actorTagLibrary = await ActorTagService.GetActorTagsAsync();
+        await LoadActorTagsAsync();
         await LoadTrickplayAsync();
         await LoadHighlightTrickplayAsync();
     }
@@ -599,6 +601,18 @@
             @onclick="toggle">
         <FavoriteHeartIcon Filled="isFavorite" Size="14" />
     </button>;
+
+    private async Task LoadActorTagsAsync()
+    {
+        if (actorTagsLoadedFor is { } loaded && loaded.MovieId == Movie.Id && ReferenceEquals(loaded.Cast, Cast)
+            && ReferenceEquals(loaded.Scenes, Scenes) && ReferenceEquals(loaded.Highlights, Highlights) && ReferenceEquals(loaded.Apexes, Apexes))
+        {
+            return;
+        }
+        actorTagsLoadedFor = (Movie.Id, Cast, Scenes, Highlights, Apexes);
+        actorTags = await ActorTagService.GetEffectiveAsync(Movie.Id);
+        actorTagLibrary = await ActorTagService.GetActorTagsAsync();
+    }
 
     // A card's actors with their avatars; inheritedFrom (a highlight's "scene 2" / "the cast")
     // grays them out, as the editor does.

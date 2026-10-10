@@ -9,7 +9,7 @@ namespace Javbuddy.Components.Shared;
 /// the name, until a search is typed and the full label shows flat.</summary>
 public readonly record struct MultiSelectOption(string Label, bool IsSelected, EventCallback OnClick, bool IsNested = false)
 {
-    public const string Separator = " › ";
+    public const string Separator = Javbuddy.Services.Tags.ActorTagOptions.LabelSeparator;
 
     /// <summary>The part of a nested label after its parent.</summary>
     public string NestedLabel => IsNested && Label.LastIndexOf(Separator, StringComparison.Ordinal) is var at and >= 0 ? Label[(at + Separator.Length)..] : Label;

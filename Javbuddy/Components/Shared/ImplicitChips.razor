@@ -8,7 +8,7 @@
             @if (ActorTags is not null && item.ActorId is { } actorId)
             {
                 @* An inherited actor: a popover with where they come from and their tags, in place of the title. *@
-                <ActorTagHover Tags="@ActorTags.Where(t => t.ActorId == actorId).ToList()" Library="Library" InheritedFrom="@item.Tooltip.Replace("From ", "")">
+                <ActorTagHover Tags="@ActorTags.Where(t => t.ActorId == actorId).ToList()" Library="Library" InheritedFrom="@item.From">
                     <span class="implicit-chip" aria-label="@item.Label, implied">@item.Label</span>
                 </ActorTagHover>
             }

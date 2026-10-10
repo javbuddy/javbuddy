@@ -180,4 +180,64 @@ public class ActorTagsFlowTests
         await Expect(page.Locator(".poster-card", new() { HasText = "E2E-ATAG-F1" })).ToHaveCountAsync(1);
         await Expect(page.Locator(".poster-card", new() { HasText = "E2E-ATAG-F2" })).ToHaveCountAsync(0);
     }
+
+    [Fact]
+    public async Task ActorTagsPage_FilterButton_OpensTheMoviesGridOnTheActorTagFilter()
+    {
+        var tagged = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-ATAG-N1", MovieStatus.Got);
+        var other = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-ATAG-N2", MovieStatus.Got);
+        var actor = await DbSeeding.SeedActorAsync(fixture.DbFactory, "Mei Navigate");
+        await using (var db = await fixture.DbFactory.CreateDbContextAsync())
+        {
+            db.MovieActors.AddRange(new MovieActor { MovieId = tagged.Id, ActorId = actor.Id }, new MovieActor { MovieId = other.Id, ActorId = actor.Id });
+            var tag = new Tag { Name = "E2E Navigate Redhead", IsActorTag = true };
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+            db.MovieActorTags.Add(new MovieActorTag { MovieId = tagged.Id, ActorId = actor.Id, TagId = tag.Id });
+            await db.SaveChangesAsync();
+        }
+
+        var page = await fixture.NewPageAsync();
+        await page.GotoInteractiveAsync("/movies/tags");
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Actor Tags" }).ClickAsync();
+        await page.GetByPlaceholder("Search tags…").FillAsync("E2E Navigate");
+        await page.Locator(".tags-panel tbody tr", new() { HasText = "E2E Navigate Redhead" }).GetByTitle("Filter movies by this tag").ClickAsync();
+
+        await Expect(page.Locator(".poster-card", new() { HasText = "E2E-ATAG-N1" })).ToHaveCountAsync(1);
+        await Expect(page.Locator(".poster-card", new() { HasText = "E2E-ATAG-N2" })).ToHaveCountAsync(0);
+
+        // It is the Actor tag filter, ticked in its menu, not a Genre the menu doesn't list.
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Filter" }).First.ClickAsync();
+        await page.Locator(".sort-dropdown-item", new() { HasText = "Actor" }).First.ClickAsync();
+        await page.Locator(".sort-dropdown-item", new() { HasText = "Actor tag" }).ClickAsync();
+        await Expect(page.Locator(".sort-dropdown-subitem.active", new() { HasText = "E2E Navigate Redhead" })).ToHaveCountAsync(1);
+    }
+
+    [Fact]
+    public async Task AGenreBecomesAnActorTag_AndLeavesTheMoviesGenres()
+    {
+        var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-ATAG-C1", MovieStatus.Got);
+        await using (var db = await fixture.DbFactory.CreateDbContextAsync())
+        {
+            var genre = new Tag { Name = "E2E Convert Blonde" };
+            db.Tags.Add(genre);
+            await db.SaveChangesAsync();
+            db.MovieTags.Add(new MovieTag { MovieId = movie.Id, TagId = genre.Id, IsExplicit = true });
+            await db.SaveChangesAsync();
+        }
+
+        var page = await fixture.NewPageAsync();
+        await page.GotoInteractiveAsync("/movies/tags");
+        await page.GetByPlaceholder("Search tags…").First.FillAsync("E2E Convert");
+        var row = page.Locator(".tags-panel tbody tr", new() { HasText = "E2E Convert Blonde" });
+        await row.GetByTitle("Make an actor tag (removes it from its movies' genres)").ClickAsync();
+        await Expect(row).ToContainTextAsync("remove it from 1 movie's genres");
+        await row.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Yes" }).ClickAsync();
+        await Expect(page.Locator(".tags-panel tbody tr", new() { HasText = "E2E Convert Blonde" })).ToHaveCountAsync(0);
+
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Actor Tags" }).ClickAsync();
+        await Expect(page.Locator(".tags-panel table")).ToContainTextAsync("E2E Convert Blonde");
+        await using var check = await fixture.DbFactory.CreateDbContextAsync();
+        Assert.Empty(check.MovieTags.Where(mt => mt.MovieId == movie.Id).ToList());
+    }
 }

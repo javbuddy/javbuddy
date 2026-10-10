@@ -1,7 +1,7 @@
 @* Wraps an actor's name (or chip) in a clip row or card: hovering or focusing it opens a popover with the actor's tags
    for that clip (own and inherited ones, then those only the clips inside carry, grayed) and, for an inherited actor,
    where they come from. Without either, it just shows the content. A popover instead of a title, so the browser's own
-   tooltip doesn't appear beside it. It is a top-layer popover (App.razor's script opens and places it), so a card's
+   tooltip doesn't appear beside it. It is a top-layer popover (ActorTagHover.razor.js, loaded by App.razor, opens and places it), so a card's
    overflow or a modal can't cut it off. *@
 @if (HasPopover)
 {
