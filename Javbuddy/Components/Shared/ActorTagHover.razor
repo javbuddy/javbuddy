@@ -1,13 +1,13 @@
 @* Wraps an actor's name (or chip) in a clip row or card: hovering or focusing it opens a popover with the actor's tags
    for that clip (own and inherited ones, then those only the clips inside carry, grayed) and, for an inherited actor,
    where they come from. Without either, it just shows the content. A popover instead of a title, so the browser's own
-   tooltip doesn't appear beside it. It is a top-layer popover (ActorTagHover.razor.js, loaded by App.razor, opens and places it), so a card's
+   tooltip doesn't appear beside it, and described by it (aria-describedby) for screen readers. It is a top-layer popover (ActorTagHover.razor.js, loaded by App.razor, opens and places it), so a card's
    overflow or a modal can't cut it off. *@
 @if (HasPopover)
 {
-    <span class="actor-hover" tabindex="0">
+    <span class="actor-hover" tabindex="0" aria-describedby="@popoverId">
         @ChildContent
-        <span class="actor-hover-popover" popover="manual" role="tooltip">
+        <span id="@popoverId" class="actor-hover-popover" popover="manual" role="tooltip">
             @if (InheritedFrom is not null)
             {
                 <span class="actor-hover-from">From @InheritedFrom</span>
@@ -42,6 +42,11 @@ else
 
     /// <summary>Where an inherited actor comes from ("scene 2", "the cast"); null for an explicit one.</summary>
     [Parameter] public string? InheritedFrom { get; set; }
+
+    // Unique per instance and stable across renders, so the host's aria-describedby can name the popover. A closed
+    // popover is display:none, which aria-describedby still reads, so the tags are announced on focus either way.
+    private static int nextId;
+    private readonly string popoverId = $"actor-hover-{Interlocked.Increment(ref nextId)}";
 
     private bool HasPopover => Tags.Count > 0 || InheritedFrom is not null;
 }
