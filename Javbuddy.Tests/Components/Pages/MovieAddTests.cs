@@ -12,9 +12,11 @@ public class MovieAddTests : BunitContext
 {
     private readonly IR18DevReleaseBrowseService catalog = Substitute.For<IR18DevReleaseBrowseService>();
 
+    private readonly IMovieAddService addService = Substitute.For<IMovieAddService>();
+
     public MovieAddTests()
     {
-        Services.AddSingleton(Substitute.For<IMovieAddService>());
+        Services.AddSingleton(addService);
         Services.AddSingleton(catalog);
         catalog.SuggestAsync(default!, default, default).ReturnsForAnyArgs(Array.Empty<R18DevReleaseRow>());
     }
@@ -53,5 +55,19 @@ public class MovieAddTests : BunitContext
         cut.Find("input.form-control").Input("");
 
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("button.add-suggestion")));
+    }
+
+    [Fact]
+    public void Adding_ShowsSearchingStatusUntilLookupFinishes()
+    {
+        var gate = new TaskCompletionSource<MovieAddResult>();
+        addService.AddAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(gate.Task);
+        var cut = Render<MovieAdd>();
+        Assert.DoesNotContain("Searching for metadata", cut.Markup);
+
+        cut.Find("input.form-control").Change("IPX-535");
+        cut.Find("form").Submit();
+
+        cut.WaitForAssertion(() => Assert.Contains("Searching for metadata", cut.Markup));
     }
 }

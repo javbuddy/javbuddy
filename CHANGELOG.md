@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- Add a movie: a spinner and "Searching for metadata…" status show while the metadata lookup runs.
+
 ## [0.1.2] - 2026-10-08
 
 ### Fixed
