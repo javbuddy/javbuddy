@@ -30,6 +30,13 @@
     padding-left: 2rem;
 }
 
+/* A subtag, under its parent's row: indented one more level, with a guide line like the tags page's hierarchy. */
+.sort-dropdown-nested {
+    padding-left: 3rem;
+    font-size: 0.85rem;
+    color: #c4c8d4;
+}
+
 .multiselect-search-row {
     padding: 0.4rem 1rem 0.25rem;
 }

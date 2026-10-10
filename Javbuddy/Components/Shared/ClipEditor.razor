@@ -4,6 +4,7 @@
 @inject IMovieSceneService SceneService
 @inject IMovieHighlightService HighlightService
 @inject IMovieApexService ApexService
+@inject IActorTagService ActorTagService
 @inject ISceneChapterImportService ChapterImportService
 @inject ISceneMediaService SceneMedia
 @inject IHighlightMediaService HighlightMedia
@@ -221,6 +222,8 @@
     private IReadOnlyList<HighlightItem> highlights = [];
     private IReadOnlyList<ApexItem> apexes = [];
     private IReadOnlyList<SceneActorItem> cast = [];
+    private IReadOnlyList<ActorTagListItem> actorTagLibrary = [];
+    private ClipActorTagsResult actorTags = new(new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>());
     private ClipTreeModel tree = new([], [], []);
     private FileChapters? fileChapters;
     private bool chaptersProbed;
@@ -301,6 +304,8 @@
         apexes = await ApexService.GetApexesAsync(MovieId);
         defaultApexWindow = await ApexService.GetDefaultWindowAsync();
         cast = await SceneService.GetCastOptionsAsync(MovieId);
+        actorTags = await ActorTagService.GetEffectiveAsync(MovieId);
+        actorTagLibrary = await ActorTagService.GetActorTagsAsync();
         tree = ClipTree.Build(cast, scenes, highlights, apexes);
         loaded = true;
         await OnScenesChanged.InvokeAsync(scenes);
@@ -415,9 +420,16 @@
                 <span class="scene-editor-range">@SceneTimeFormat.Format(scene.StartSeconds)–@(scene.EffectiveEndSeconds is { } end ? SceneTimeFormat.Format(end) : "end")</span>
                 @if (scene.Actors.Count > 0)
                 {
-                    <span class="scene-editor-meta-actors">@string.Join(", ", scene.Actors.Select(a => a.Name))</span>
+                    var sceneActorTags = actorTags.Scenes.GetValueOrDefault(scene.Id) ?? [];
+                    <span class="scene-editor-meta-actors">
+                        @for (var i = 0; i < scene.Actors.Count; i++)
+                        {
+                            var actor = scene.Actors[i];
+                            <ActorTagHover Tags="@sceneActorTags.Where(t => t.ActorId == actor.ActorId).ToList()" Library="actorTagLibrary">@actor.Name</ActorTagHover>@(i < scene.Actors.Count - 1 ? ", " : null)
+                        }
+                    </span>
                 }
-                <ImplicitChips Items="@ImplicitChip.ForActors(node.Actors)" />
+                <ImplicitChips Items="@ImplicitChip.ForActors(node.Actors)" ActorTags="@(actorTags.Scenes.GetValueOrDefault(scene.Id) ?? [])" Library="actorTagLibrary" />
                 @foreach (var tag in scene.Tags)
                 {
                     <span class="scene-editor-meta-tag">@ImplicitChip.TagLabel(tag)</span>
@@ -495,11 +507,37 @@
             }
         </li>;
 
-    private RenderFragment HighlightFormFragment(HighlightFormModel model) =>
-        @<ClipHighlightForm Model="model" Cast="cast" Scenes="scenes" Busy="busy" RolledUpTags="RolledUpTags(model.HighlightId)"
-                            Position="@(model.HighlightId is { } id ? highlights.FirstOrDefault(h => h.Id == id)?.Position ?? 1 : highlights.Count + 1)"
-                            OnSave="SaveHighlightAsync" OnCancel="() => { highlightForm = null; error = null; }"
-                            OnNow="end => SetHighlightTimeFromPlayerAsync(end)" />;
+    private RenderFragment HighlightFormFragment(HighlightFormModel model) => __builder =>
+    {
+        <ClipHighlightForm Model="model" Cast="cast" Scenes="scenes" Busy="busy" RolledUpTags="RolledUpTags(model.HighlightId)"
+                           Position="@(model.HighlightId is { } id ? highlights.FirstOrDefault(h => h.Id == id)?.Position ?? 1 : highlights.Count + 1)"
+                           OnSave="SaveHighlightAsync" OnCancel="() => { highlightForm = null; error = null; }"
+                           OnNow="end => SetHighlightTimeFromPlayerAsync(end)" />
+        @if (model.HighlightId is { } highlightId && highlights.FirstOrDefault(h => h.Id == highlightId) is { } highlight)
+        {
+            @ActorTagsFragment(ActorTagLevel.Highlight, highlightId, highlight.EffectiveActors, actorTags.Highlights.GetValueOrDefault(highlightId) ?? [])
+        }
+    };
+
+    // Actor tags apply at once, like the scene's actors and tags, so an add form (no clip yet) has none.
+    private RenderFragment ActorTagsFragment(ActorTagLevel level, int ownerId, EffectiveActors effective, IReadOnlyList<EffectiveActorTag> tags) => __builder =>
+    {
+        var actors = effective.Actors
+            .Concat(tags.Where(t => effective.Actors.All(a => a.ActorId != t.ActorId)).Select(t => t.ActorId).Distinct()
+                .Select(id => cast.FirstOrDefault(c => c.ActorId == id) ?? new SceneActorItem(id, $"Actor {id}")))
+            .ToList();
+        <div class="scene-editor-field">
+            <span class="scene-editor-label">Actor tags</span>
+            <ActorTagsEditor Level="level" OwnerId="ownerId" Actors="actors" Tags="tags" Disabled="busy" OnChanged="ActorTagsChangedAsync" />
+        </div>
+    };
+
+    private async Task ActorTagsChangedAsync(ActorTagResult result)
+    {
+        error = result.Success ? null : result.ErrorMessage;
+        await ReloadAsync();
+        if (result.MovieTagsChanged) await OnMovieTagsMayHaveChanged.InvokeAsync();
+    }
 
     // Every tag an edited highlight's apexes roll up to it, its own included: the form
     // grays the ones it doesn't hold and marks the ones it does as redundant.
@@ -510,10 +548,16 @@
                 .ThenBy(t => t.Tag.Name, StringComparer.OrdinalIgnoreCase)]
             : [];
 
-    private RenderFragment ApexFormFragment(ApexFormModel model) =>
-        @<ClipApexForm Model="model" Cast="cast" Scenes="scenes" Highlights="highlights" Apexes="apexes" DefaultWindow="defaultApexWindow" Busy="busy"
-                       OnSave="SaveApexAsync" OnCancel="() => { apexForm = null; error = null; }"
-                       OnNow="SetApexTimeFromPlayerAsync" OnWindowNow="tail => SetApexWindowFromPlayerAsync(tail)" />;
+    private RenderFragment ApexFormFragment(ApexFormModel model) => __builder =>
+    {
+        <ClipApexForm Model="model" Cast="cast" Scenes="scenes" Highlights="highlights" Apexes="apexes" DefaultWindow="defaultApexWindow" Busy="busy"
+                      OnSave="SaveApexAsync" OnCancel="() => { apexForm = null; error = null; }"
+                      OnNow="SetApexTimeFromPlayerAsync" OnWindowNow="tail => SetApexWindowFromPlayerAsync(tail)" />
+        @if (model.ApexId is { } apexId && apexes.FirstOrDefault(a => a.Id == apexId) is { } apex)
+        {
+            @ActorTagsFragment(ActorTagLevel.Apex, apexId, apex.EffectiveActors, actorTags.Apexes.GetValueOrDefault(apexId) ?? [])
+        }
+    };
 
     // Without a screenshot or a trickplay tile, it shimmers while one is generated, like the scene
     // cards.
@@ -1127,6 +1171,7 @@
                 }
                 <TagSearchAdd ExcludedTagIds="@editing.Tags.Select(t => t.TagId).ToHashSet()" OnAdd="tagId => AddSceneTagAsync(editing.Id, tagId)" />
             </div>
+            @ActorTagsFragment(ActorTagLevel.Scene, editing.Id, editing.EffectiveActors, actorTags.Scenes.GetValueOrDefault(editing.Id) ?? [])
         </div>
     }
     else if (sceneForm is { SceneId: null })

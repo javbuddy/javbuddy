@@ -72,14 +72,21 @@
                                              OnSelectNone="OnSelectNoneGenres" />
                 }
                 <MultiSelectFilterGroup GroupLabel="Features" Options="@FeatureFilterOptions" />
-                @if (AvailableActors.Count > 0 || (ShowActorAttributes && ActorAttributeOptions.HasAny))
+                @if (AvailableActors.Count > 0 || AvailableActorTags.Count > 0 || (ShowActorAttributes && ActorAttributeOptions.HasAny))
                 {
-                    <FilterSection Label="Actor" ActiveCount="@(ActorFilter.Count + (ShowActorAttributes ? ActorAttributeSelection.Count : 0))">
+                    <FilterSection Label="Actor" ActiveCount="@(ActorFilter.Count + ActorTagFilter.Count + (ShowActorAttributes ? ActorAttributeSelection.Count : 0))">
                         @if (AvailableActors.Count > 0)
                         {
                             <MultiSelectFilterGroup GroupLabel="Name" Options="@ActorFilterOptions" Searchable="true"
                                                      OnSelectAll="SelectAllActors"
                                                      OnSelectNone="OnSelectNoneActors" />
+                        }
+                        @if (AvailableActorTags.Count > 0)
+                        {
+                            @* With Name selected, it is those actors who must have the tag. *@
+                            <MultiSelectFilterGroup GroupLabel="Actor tag" Options="@ActorTagFilterOptions" Searchable="true"
+                                                     OnSelectAll="SelectAllActorTags"
+                                                     OnSelectNone="OnSelectNoneActorTags" />
                         }
                         @if (ShowActorAttributes && ActorAttributeOptions.HasAny)
                         {
@@ -176,6 +183,14 @@
     [Parameter] public EventCallback<IReadOnlyList<int>> OnSelectAllActors { get; set; }
     [Parameter] public EventCallback OnSelectNoneActors { get; set; }
 
+    /// <summary>The actor-tag filter ("blonde"): a movie matches when an actor has one of the tags in it or one of its
+    /// clips, and with the actor filter, one of those actors. Shown only when the host offers actor tags.</summary>
+    [Parameter] public IReadOnlyList<MovieActorOption> AvailableActorTags { get; set; } = Array.Empty<MovieActorOption>();
+    [Parameter] public IReadOnlySet<int> ActorTagFilter { get; set; } = new HashSet<int>();
+    [Parameter] public EventCallback<int> OnToggleActorTag { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<int>> OnSelectAllActorTags { get; set; }
+    [Parameter] public EventCallback OnSelectNoneActorTags { get; set; }
+
     [Parameter] public string SortField { get; set; } = "added";
     [Parameter] public bool SortDescending { get; set; } = true;
     [Parameter] public EventCallback<MovieSortChange> OnSortChanged { get; set; }
@@ -232,6 +247,7 @@
             + GenreFilter.Count
             + FeatureFilter.Count
             + ActorFilter.Count
+            + ActorTagFilter.Count
             + (ShowActorAttributes ? ActorAttributeSelection.Count : 0);
 
     private bool ComputedHasActiveFilters => HasActiveFilters ?? (
@@ -366,6 +382,20 @@
             ActorFilter.Contains(actor.Id),
             EventCallback.Factory.Create(this, () => OnToggleActor.InvokeAsync(actor.Id))))
         .ToList();
+
+    private IReadOnlyList<MultiSelectOption> ActorTagFilterOptions => AvailableActorTags
+        .Select(tag => new MultiSelectOption(
+            tag.Name,
+            ActorTagFilter.Contains(tag.Id),
+            EventCallback.Factory.Create(this, () => OnToggleActorTag.InvokeAsync(tag.Id)),
+            tag.Name.Contains(MultiSelectOption.Separator)))
+        .ToList();
+
+    private Task SelectAllActorTags(IReadOnlyList<string> labels)
+    {
+        var names = labels.ToHashSet(StringComparer.Ordinal);
+        return OnSelectAllActorTags.InvokeAsync(AvailableActorTags.Where(t => names.Contains(t.Name)).Select(t => t.Id).ToList());
+    }
 
     // The group hands back the visible options' labels; names aren't unique, so every actor with one counts.
     private Task SelectAllActors(IReadOnlyList<string> labels)

@@ -1,0 +1,115 @@
+@* One cast member's movie-level actor tags on Movie Detail, as small pills under their name: the first two own tags, then a
+   "+N" pill for the rest and for the tags only the movie's clips carry. Hovering or focusing the pills opens a popover with
+   all of them (own ones, then the clip-derived ones grayed). With Edit Cast on, a "+ tag" pill opens the genre tags' search box
+   in the popover and own pills get a remove ×. Saves at once, through IActorTagService. *@
+@inject IActorTagService ActorTagService
+
+@if (Editing || Tags.Count > 0)
+{
+    var own = Tags.Where(t => !t.IsRolledUp).ToList();
+    var clipTags = Tags.Where(t => t.IsRolledUp).ToList();
+    var hidden = Math.Max(0, own.Count - VisibleCount) + clipTags.Count;
+    <div class="actor-pills @(adding ? "actor-pills-open" : null)" tabindex="0" role="group" aria-label="Actor tags of @ActorName">
+        <div class="actor-pills-row">
+            @foreach (var tag in own.Take(VisibleCount))
+            {
+                <span class="actor-pill" aria-label="@LabelOf(tag.TagId)">@NameOf(tag.TagId)</span>
+            }
+            @if (hidden > 0)
+            {
+                <span class="actor-pill actor-pill-more" aria-label="@hidden more actor tags">+@hidden</span>
+            }
+            @if (Editing)
+            {
+                <button type="button" class="actor-pill actor-pill-add" disabled="@Busy" aria-label="Add an actor tag to @ActorName" aria-expanded="@(adding ? "true" : "false")"
+                        @onclick="() => adding = !adding">+ tag</button>
+            }
+        </div>
+        @if (own.Count > VisibleCount || clipTags.Count > 0 || Editing)
+        {
+            <div class="actor-pills-popover">
+                @foreach (var tag in own)
+                {
+                    <span class="actor-pill">
+                        @LabelOf(tag.TagId)
+                        @if (Editing)
+                        {
+                            <button type="button" class="actor-pill-remove" disabled="@Busy" aria-label="Remove @LabelOf(tag.TagId) from @ActorName" @onclick="() => SetAsync(own.Where(t => t.TagId != tag.TagId).Select(t => t.TagId))">×</button>
+                        }
+                    </span>
+                }
+                @if (clipTags.Count > 0)
+                {
+                    <span class="actor-pills-heading">From its scenes, highlights and apexes</span>
+                    @foreach (var tag in clipTags)
+                    {
+                        <span class="actor-pill actor-pill-clip">@LabelOf(tag.TagId)</span>
+                    }
+                }
+                @if (Editing && adding)
+                {
+                    <TagSearchAdd Search="SearchAsync" ExcludedTagIds="@own.Select(t => t.TagId).ToHashSet()"
+                                  OnAdd="tagId => SetAsync(own.Select(t => t.TagId).Append(tagId))" />
+                }
+            </div>
+        }
+        @if (error is not null)
+        {
+            <span class="actor-pills-error" role="alert">@error</span>
+        }
+    </div>
+}
+
+@code {
+    private const int VisibleCount = 2;
+
+    private bool adding;
+    private bool busy;
+    private string? error;
+
+    [Parameter, EditorRequired] public int MovieId { get; set; }
+
+    [Parameter, EditorRequired] public int ActorId { get; set; }
+
+    [Parameter, EditorRequired] public string ActorName { get; set; } = string.Empty;
+
+    /// <summary>This actor's tags: the movie's own ones, and the ones only its clips carry (IsRolledUp).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<EffectiveActorTag> Tags { get; set; } = [];
+
+    /// <summary>The actor-tag library, for names and parents.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<ActorTagListItem> Library { get; set; } = [];
+
+    /// <summary>Edit Cast is on: tags can be added and removed.</summary>
+    [Parameter] public bool Editing { get; set; }
+
+    /// <summary>Raised after a change was saved; the host re-reads the tags.</summary>
+    [Parameter] public EventCallback<ActorTagResult> OnChanged { get; set; }
+
+    private bool Busy => busy;
+
+    private string NameOf(int tagId) => Library.FirstOrDefault(t => t.Id == tagId)?.Name ?? $"Tag {tagId}";
+
+    private string LabelOf(int tagId) => ActorTagPillStyle.Label(Library, tagId);
+
+    private async Task<IReadOnlyList<TagListItem>> SearchAsync(string query) =>
+        (await ActorTagService.GetActorTagsAsync(query))
+            .Select(t => new TagListItem(t.Id, t.Name, t.UseCount, false, DateTime.UtcNow, t.ParentTagId, t.ParentTagName, t.SubtagCount))
+            .ToList();
+
+    private async Task SetAsync(IEnumerable<int> tagIds)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await ActorTagService.SetAsync(ActorTagLevel.Movie, MovieId, ActorId, [.. tagIds.Distinct()]);
+            if (!result.Success) error = result.ErrorMessage;
+            adding = false;
+            await OnChanged.InvokeAsync(result);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

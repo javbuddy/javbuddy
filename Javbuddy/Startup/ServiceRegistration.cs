@@ -117,6 +117,7 @@ public static class ServiceRegistration
         services.AddScoped<IApexPlaybackSettingsService, ApexPlaybackSettingsService>();
         services.AddScoped<IMovieApexService, MovieApexService>();
         services.AddScoped<IClipTagSyncService, ClipTagSyncService>();
+        services.AddScoped<IActorTagService, ActorTagService>();
         services.AddSingleton<ClipActorRefreshSignal>();
         services.AddSingleton<ClipActorStaleInterceptor>();
         services.AddHostedService<ClipActorRefreshWorker>();

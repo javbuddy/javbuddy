@@ -2,6 +2,7 @@
    plus adding and removing cast. OnChanged asks the page to reload the movie. *@
 @using Javbuddy.Models
 @inject IMovieService MovieService
+@inject IActorTagService ActorTagService
 
 <div class="movie-detail-section">
     <div class="movie-detail-section-header">
@@ -45,6 +46,8 @@
                         {
                             <span class="movie-detail-cast-age">Age @cast.Age</span>
                         }
+                        <ActorTagPills MovieId="Movie.Id" ActorId="cast.ActorId!.Value" ActorName="@cast.Name" Library="actorTagLibrary"
+                                       Tags="@actorTags.Where(t => t.ActorId == cast.ActorId).ToList()" Editing="editingCast" OnChanged="ActorTagsChangedAsync" />
                     }
                     else
                     {
@@ -89,6 +92,21 @@
 
     private bool editingCast;
     private string? castEditError;
+    private IReadOnlyList<EffectiveActorTag> actorTags = [];
+    private IReadOnlyList<ActorTagListItem> actorTagLibrary = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        actorTags = await ActorTagService.GetMovieTagsAsync(Movie.Id);
+        actorTagLibrary = await ActorTagService.GetActorTagsAsync();
+    }
+
+    // Their tags reach the movie's plain tags, so the page re-reads them when that changed.
+    private async Task ActorTagsChangedAsync(ActorTagResult result)
+    {
+        actorTags = await ActorTagService.GetMovieTagsAsync(Movie.Id);
+        if (result.MovieTagsChanged) await OnChanged.InvokeAsync();
+    }
 
     private void ToggleCastEdit()
     {

@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Javbuddy.Services.Scenes;
 
 /// <summary>Keeps MovieTag.FromClips in step with the explicit tags of a movie's scenes, highlights and
-/// apexes: the movie-level end of the tag roll-up, stored so every MovieTag reader (the
+/// apexes and its actor tags (Tag.IsActorTag, at any level): the movie-level end of the tag roll-up, stored so every MovieTag reader (the
 /// Movies grid, MetaGenres, .nfo sync and drift, Actor Detail) sees it unchanged. A row only the clips
 /// held goes when they stop carrying the tag; an explicit row just loses the flag.</summary>
 public static class ClipTagSync
@@ -16,9 +16,36 @@ public static class ClipTagSync
     /// added, removed or changed a flag.</summary>
     public static async Task<bool> RefreshAsync(AppDbContext db, int movieId, CancellationToken ct)
     {
+        // One refresh at a time in the app: the stored-actor worker's and an editor's would otherwise both find a link
+        // missing and both add it, and the unique (MovieId, TagId) key refuses the second (and EF logs that as an error).
+        await Gate.WaitAsync(ct);
+        try
+        {
+            return await RefreshOnceAsync(db, movieId, ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Still possible from outside this process; start over from what it saved.
+            db.ChangeTracker.Clear();
+            return await RefreshOnceAsync(db, movieId, ct);
+        }
+        finally
+        {
+            Gate.Release();
+        }
+    }
+
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+
+    private static async Task<bool> RefreshOnceAsync(AppDbContext db, int movieId, CancellationToken ct)
+    {
         var wanted = (await db.SceneTags.Where(st => st.Scene.MovieId == movieId).Select(st => st.TagId)
                 .Concat(db.HighlightTags.Where(ht => ht.Highlight.MovieId == movieId).Select(ht => ht.TagId))
                 .Concat(db.ApexTags.Where(at => at.Apex.MovieId == movieId).Select(at => at.TagId))
+                .Concat(db.MovieActorTags.Where(t => t.MovieId == movieId).Select(t => t.TagId))
+                .Concat(db.SceneActorTags.Where(t => t.MovieId == movieId).Select(t => t.TagId))
+                .Concat(db.HighlightActorTags.Where(t => t.MovieId == movieId).Select(t => t.TagId))
+                .Concat(db.ApexActorTags.Where(t => t.MovieId == movieId).Select(t => t.TagId))
                 .ToListAsync(ct))
             .ToHashSet();
         var links = await db.MovieTags.Where(mt => mt.MovieId == movieId).ToListAsync(ct);

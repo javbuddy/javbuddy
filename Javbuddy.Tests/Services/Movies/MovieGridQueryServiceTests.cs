@@ -646,4 +646,23 @@ public sealed class MovieGridQueryServiceTests : IDisposable
 
         Assert.Equal(["Amy", "Zed"], summary.Actors.Select(a => a.Name));
     }
+
+    [Fact]
+    public async Task GenreOptions_LeaveOutActorTags_WhichHaveTheirOwnFilter()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            var cosplay = new Tag { Name = "Cosplay" };
+            var blonde = new Tag { Name = "Blonde", IsActorTag = true };
+            var movie = new Movie { Code = "GEN-001" };
+            db.AddRange(cosplay, blonde, movie);
+            db.SaveChanges();
+            db.MovieTags.AddRange(new MovieTag { MovieId = movie.Id, TagId = cosplay.Id, IsExplicit = true }, new MovieTag { MovieId = movie.Id, TagId = blonde.Id, FromClips = true });
+            db.SaveChanges();
+        }
+
+        var summary = await service.GetSummaryAsync(new MovieGridFilter());
+
+        Assert.Equal(["Cosplay"], summary.Genres);
+    }
 }

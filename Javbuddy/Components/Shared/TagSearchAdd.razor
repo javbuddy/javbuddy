@@ -30,6 +30,9 @@
     /// that aren't a tag yet.</summary>
     [Parameter] public EventCallback<string> OnAddFreeText { get; set; }
 
+    /// <summary>Looks the tags up in place of the tag library's search, e.g. for actor tags (ActorTagsEditor).</summary>
+    [Parameter] public Func<string, Task<IReadOnlyList<TagListItem>>>? Search { get; set; }
+
     private string query = "";
     private IReadOnlyList<TagListItem> results = [];
 
@@ -44,7 +47,7 @@
 
         // Only approved tags can be added to a movie by hand (unapproved ones go through the Tags
         // page's review flow first).
-        var matches = await TagService.GetTagsAsync(query);
+        var matches = Search is not null ? await Search(query) : await TagService.GetTagsAsync(query);
         results = matches.Where(t => !ExcludedTagIds.Contains(t.Id) && !t.NeedsReview).Take(10).ToList();
     }
 

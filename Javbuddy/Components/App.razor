@@ -110,6 +110,41 @@
             };
         })();
     </script>
+    <script>
+        // Actor-tag popovers (ActorTagHover): a top-layer popover, so no card's overflow or a modal clips it. Shown under the
+        // actor on hover or focus, pulled back inside the window, and hidden when the pointer or focus leaves (or on Escape).
+        (function () {
+            var open = null;
+            function hide() {
+                if (open) { try { open.hidePopover(); } catch (e) { } open = null; }
+            }
+            function show(host) {
+                var pop = host.querySelector(':scope > .actor-hover-popover');
+                if (!pop || !pop.showPopover) return;
+                if (open === pop) return;
+                hide();
+                pop.showPopover();
+                var r = host.getBoundingClientRect();
+                var w = pop.offsetWidth, h = pop.offsetHeight;
+                var left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+                var top = r.bottom + 4;
+                if (top + h > window.innerHeight - 8 && r.top - h - 4 > 8) top = r.top - h - 4;
+                pop.style.left = left + 'px';
+                pop.style.top = top + 'px';
+                open = pop;
+            }
+            document.addEventListener('mouseover', function (e) {
+                var host = e.target.closest && e.target.closest('.actor-hover');
+                if (host) show(host); else hide();
+            });
+            document.addEventListener('focusin', function (e) {
+                var host = e.target.closest && e.target.closest('.actor-hover');
+                if (host) show(host); else hide();
+            });
+            document.addEventListener('focusout', hide);
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
+        })();
+    </script>
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />

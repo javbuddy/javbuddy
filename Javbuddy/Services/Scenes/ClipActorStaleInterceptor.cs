@@ -105,6 +105,10 @@ public sealed class ClipActorStaleInterceptor(ClipActorRefreshSignal signal) : S
                 case SceneActor link when AddedOrDeleted(entry): movieIds.Add(link.MovieId); break;
                 case HighlightActor link when AddedOrDeleted(entry): movieIds.Add(link.MovieId); break;
                 case ApexActor link when AddedOrDeleted(entry): movieIds.Add(link.MovieId); break;
+                case MovieActorTag link when AddedOrDeleted(entry): movieIds.Add(link.MovieId); break;
+                case SceneActorTag link when AddedOrDeleted(entry): movieIds.Add(link.MovieId); break;
+                case HighlightActorTag link when AddedOrDeleted(entry): movieIds.Add(link.MovieId); break;
+                case ApexActorTag link when AddedOrDeleted(entry): movieIds.Add(link.MovieId); break;
                 case MovieActor link when AddedOrDeleted(entry): movieIds.Add(link.MovieId); break;
                 case Movie movie when entry.State == EntityState.Modified && entry.Property(nameof(Movie.MediaDurationSeconds)).IsModified: movieIds.Add(movie.Id); break;
                 case Actor actor when entry.State == EntityState.Deleted: deletedActorIds.Add(actor.Id); break;

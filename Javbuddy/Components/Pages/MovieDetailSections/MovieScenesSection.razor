@@ -8,6 +8,7 @@
 @inject ISceneMediaService SceneMedia
 @inject IHighlightMediaService HighlightMedia
 @inject IMovieApexService ApexService
+@inject IActorTagService ActorTagService
 @inject IApexMediaService ApexMedia
 @inject ITrickplayService TrickplayService
 @inject IHighlightTrickplayService HighlightTrickplay
@@ -160,7 +161,7 @@
                             </div>
                             @if (highlightActors.GetValueOrDefault(highlight.Id) is { } actors)
                             {
-                                @ActorList(actors.Actors, actors.From)
+                                @ActorList(actors.Actors, actors.From, actorTags.Highlights.GetValueOrDefault(highlight.Id) ?? [])
                             }
                         </div>
                     </div>
@@ -212,7 +213,7 @@
                             </div>
                             @if (sceneActors.GetValueOrDefault(scene.Id) is { } actors)
                             {
-                                @ActorList(actors.Actors, actors.From)
+                                @ActorList(actors.Actors, actors.From, actorTags.Scenes.GetValueOrDefault(scene.Id) ?? [])
                             }
                             @if (scene.Tags.Count > 0)
                             {
@@ -305,6 +306,9 @@
     // Each highlight's own actors, else what it inherits, by highlight id.
     private IReadOnlyDictionary<int, EffectiveActors> highlightActors = new Dictionary<int, EffectiveActors>();
     private IReadOnlyDictionary<int, EffectiveActors> sceneActors = new Dictionary<int, EffectiveActors>();
+    // The actors' tags per clip, shown in a popover on hovering an actor.
+    private ClipActorTagsResult actorTags = new(new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>());
+    private IReadOnlyList<ActorTagListItem> actorTagLibrary = [];
     private int? hoveredSceneId;
     private int? hoveredHighlightId;
     private int? hoveredApexId;
@@ -336,6 +340,8 @@
         var clipActors = ClipActors.Compute(Cast, Scenes, Highlights, Apexes);
         highlightActors = clipActors.Highlights;
         sceneActors = clipActors.Scenes;
+        actorTags = await ActorTagService.GetEffectiveAsync(Movie.Id);
+        actorTagLibrary = await ActorTagService.GetActorTagsAsync();
         await LoadTrickplayAsync();
         await LoadHighlightTrickplayAsync();
     }
@@ -596,13 +602,14 @@
 
     // A card's actors with their avatars; inheritedFrom (a highlight's "scene 2" / "the cast")
     // grays them out, as the editor does.
-    private RenderFragment ActorList(IReadOnlyList<SceneActorItem> actors, string? inheritedFrom) => __builder =>
+    private RenderFragment ActorList(IReadOnlyList<SceneActorItem> actors, string? inheritedFrom, IReadOnlyList<EffectiveActorTag> tags) => __builder =>
     {
         if (actors.Count == 0) return;
-        <div class="movie-scenes-actors @(inheritedFrom is null ? null : "movie-scenes-actors-inherited")"
-             title="@(inheritedFrom is null ? null : $"From {inheritedFrom}")">
+        @* Hovering an actor opens a popover with where they come from, when inherited, and their tags. *@
+        <div class="movie-scenes-actors @(inheritedFrom is null ? null : "movie-scenes-actors-inherited")">
             @foreach (var actor in actors)
             {
+                <ActorTagHover Tags="@tags.Where(t => t.ActorId == actor.ActorId).ToList()" Library="actorTagLibrary" InheritedFrom="@inheritedFrom">
                 <span class="movie-scenes-actor">
                     @if (ActorImageUrl(actor.ActorId) is { } imageUrl)
                     {
@@ -614,6 +621,7 @@
                     }
                     @actor.Name
                 </span>
+                </ActorTagHover>
             }
         </div>
     };

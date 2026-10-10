@@ -1,11 +1,12 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Tags;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Scenes;
 
-/// <summary>Keeps the stored effective actors (SceneEffectiveActor, HighlightEffectiveActor, ApexEffectiveActor)
-/// equal to what ClipActors computes, one movie at a time, for movies flagged
+/// <summary>Keeps the stored effective actors (SceneEffectiveActor, HighlightEffectiveActor, ApexEffectiveActor) and
+/// effective actor tags (SceneEffectiveActorTag and its siblings) equal to what ClipActors and ClipActorTags compute, one movie at a time, for movies flagged
 /// Movie.ClipActorsStale. ClipActors stays the only definition of inheritance; the Scenes wall filters on the
 /// stored rows. ClipActorRefreshWorker runs RefreshStaleAsync in the app; tests call it directly.</summary>
 public static class ClipActorSync
@@ -27,8 +28,31 @@ public static class ClipActorSync
             r => (r.HighlightId, r.ActorId), (owner, actor) => new HighlightEffectiveActor { HighlightId = owner, MovieId = movieId, ActorId = actor });
         Apply(db, await db.ApexEffectiveActors.Where(r => r.MovieId == movieId).ToListAsync(ct), Pairs(effective.Apexes),
             r => (r.ApexId, r.ActorId), (owner, actor) => new ApexEffectiveActor { ApexId = owner, MovieId = movieId, ActorId = actor });
+        var tags = await ClipAssignments.LoadEffectiveActorTagsAsync(db, movieId, ct);
+        Apply(db, await db.SceneEffectiveActorTags.Where(r => r.MovieId == movieId).ToListAsync(ct), Triples(tags.Scenes),
+            r => (r.SceneId, r.ActorId, r.TagId), r => r.IsRolledUp, (r, rolledUp) => r.IsRolledUp = rolledUp,
+            (owner, actor, tag, rolledUp) => new SceneEffectiveActorTag { SceneId = owner, MovieId = movieId, ActorId = actor, TagId = tag, IsRolledUp = rolledUp });
+        Apply(db, await db.HighlightEffectiveActorTags.Where(r => r.MovieId == movieId).ToListAsync(ct), Triples(tags.Highlights),
+            r => (r.HighlightId, r.ActorId, r.TagId), r => r.IsRolledUp, (r, rolledUp) => r.IsRolledUp = rolledUp,
+            (owner, actor, tag, rolledUp) => new HighlightEffectiveActorTag { HighlightId = owner, MovieId = movieId, ActorId = actor, TagId = tag, IsRolledUp = rolledUp });
+        Apply(db, await db.ApexEffectiveActorTags.Where(r => r.MovieId == movieId).ToListAsync(ct), Triples(tags.Apexes),
+            r => (r.ApexId, r.ActorId, r.TagId), _ => false, (_, _) => { },
+            (owner, actor, tag, _) => new ApexEffectiveActorTag { ApexId = owner, MovieId = movieId, ActorId = actor, TagId = tag });
         await db.SaveChangesAsync(ct);
+
+        // Leaving the cast drops an actor's tags by DB cascade, which no service sees: bring the movie's plain tags
+        // back in step, for the movies that have any actor tags. After the commit, not inside it: ClipTagSync waits for
+        // other refreshes of its own, and one of them may be waiting for this transaction's write lock.
+        var hasActorTags = await db.MovieTags.AnyAsync(mt => mt.MovieId == movieId && mt.Tag.IsActorTag, ct)
+            || await db.MovieActorTags.AnyAsync(t => t.MovieId == movieId, ct)
+            || tags.Scenes.Values.Concat(tags.Highlights.Values).Concat(tags.Apexes.Values).Any(list => list.Count > 0);
         await transaction.CommitAsync(ct);
+
+        if (hasActorTags && await ClipTagSync.RefreshAsync(db, movieId, ct))
+        {
+            await TagNormalization.SyncMetaGenresAsync(db, [movieId], ct);
+            await db.SaveChangesAsync(ct);
+        }
         return true;
     }
 
@@ -75,6 +99,31 @@ public static class ClipActorSync
 
     private static HashSet<(int Owner, int Actor)> Pairs(IReadOnlyDictionary<int, EffectiveActors> byOwner) =>
         byOwner.SelectMany(owner => owner.Value.Actors.Select(a => (owner.Key, a.ActorId))).ToHashSet();
+
+    private static Dictionary<(int Owner, int Actor, int Tag), bool> Triples(IReadOnlyDictionary<int, IReadOnlyList<EffectiveActorTag>> byOwner) =>
+        byOwner.SelectMany(owner => owner.Value.Select(t => (Key: (owner.Key, t.ActorId, t.TagId), t.IsRolledUp))).ToDictionary(t => t.Key, t => t.IsRolledUp);
+
+    // Like Apply for the actor-tag rows, which also carry whether the tag only rolled up.
+    private static void Apply<TRow>(AppDbContext db, List<TRow> stored, Dictionary<(int Owner, int Actor, int Tag), bool> wanted,
+        Func<TRow, (int Owner, int Actor, int Tag)> key, Func<TRow, bool> isRolledUp, Action<TRow, bool> setRolledUp,
+        Func<int, int, int, bool, TRow> create) where TRow : class
+    {
+        var kept = new HashSet<(int Owner, int Actor, int Tag)>();
+        foreach (var row in stored)
+        {
+            if (!wanted.TryGetValue(key(row), out var rolledUp))
+            {
+                db.Remove(row);
+                continue;
+            }
+            kept.Add(key(row));
+            if (isRolledUp(row) != rolledUp) setRolledUp(row, rolledUp);
+        }
+        foreach (var (triple, rolledUp) in wanted.Where(kv => !kept.Contains(kv.Key)))
+        {
+            db.Add(create(triple.Owner, triple.Actor, triple.Tag, rolledUp));
+        }
+    }
 
     // Removes stored rows no longer wanted and adds the missing ones, leaving the rest untouched.
     private static void Apply<TRow>(AppDbContext db, List<TRow> stored, HashSet<(int Owner, int Actor)> wanted,

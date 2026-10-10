@@ -7,7 +7,7 @@
     <div class="tag-create-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
         <div class="tag-create-modal-panel" @onclick:stopPropagation="true">
             <div class="tag-create-modal-header">
-                <h5 class="tag-create-modal-title">Create Tag</h5>
+                <h5 class="tag-create-modal-title">@Title</h5>
                 <button type="button" class="tag-create-modal-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@isCreating">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
                 </button>
@@ -114,6 +114,17 @@
     [Parameter]
     public int? DefaultParentTagId { get; set; }
 
+    [Parameter]
+    public string Title { get; set; } = "Create Tag";
+
+    /// <summary>Lists the tags a parent can be picked from, in place of the tag library's (actor tags).</summary>
+    [Parameter]
+    public Func<Task<IReadOnlyList<TagListItem>>>? LoadTags { get; set; }
+
+    /// <summary>Creates the tag (name, parent id), in place of the tag library's (actor tags).</summary>
+    [Parameter]
+    public Func<string, int?, Task<TagOperationResult>>? CreateTag { get; set; }
+
     private string tagName = "";
     private string parentSearchQuery = "";
     private TagListItem? selectedParent;
@@ -131,7 +142,7 @@
             errorMessage = null;
             isCreating = false;
 
-            var all = await TagService.GetTagsAsync();
+            var all = LoadTags is not null ? await LoadTags() : await TagService.GetTagsAsync();
             rootTags = all
                 .Where(t => t.ParentTagId == null && !t.NeedsReview)
                 .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
@@ -219,9 +230,11 @@
         isCreating = true;
         errorMessage = null;
 
-        var result = selectedParentId.HasValue
-            ? await TagService.CreateTagAsync(tagName, selectedParentId.Value)
-            : await TagService.CreateTagAsync(tagName);
+        var result = CreateTag is not null
+            ? await CreateTag(tagName, selectedParentId)
+            : selectedParentId.HasValue
+                ? await TagService.CreateTagAsync(tagName, selectedParentId.Value)
+                : await TagService.CreateTagAsync(tagName);
         isCreating = false;
 
         if (result.Success && result.Tag is not null)

@@ -17,8 +17,9 @@
     <div class="@(Searchable ? "multiselect-scroll-area" : null)">
         @foreach (var option in FilteredOptions)
         {
-            <button type="button" class="sort-dropdown-item sort-dropdown-subitem @(option.IsSelected ? "active" : "")" @onclick="option.OnClick">
-                @option.Label
+            var nested = option.IsNested && string.IsNullOrWhiteSpace(searchTerm);
+            <button type="button" class="sort-dropdown-item sort-dropdown-subitem @(nested ? "sort-dropdown-nested" : null) @(option.IsSelected ? "active" : "")" @onclick="option.OnClick">
+                @(nested ? option.NestedLabel : option.Label)
                 @if (option.IsSelected)
                 {
                     <span class="ms-2">✓</span>

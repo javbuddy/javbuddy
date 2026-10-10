@@ -14,6 +14,25 @@ internal static class ClipAssignments
     /// just the times, positions and own actors <see cref="ClipActors"/> needs.</summary>
     public static async Task<ClipActorsResult> LoadEffectiveActorsAsync(AppDbContext db, int movieId, CancellationToken ct)
     {
+        var (cast, sceneItems, highlightItems, apexItems) = await LoadClipItemsAsync(db, movieId, ct);
+        return ClipActors.Compute(cast, sceneItems, highlightItems, apexItems);
+    }
+
+    /// <summary>Every scene's, highlight's and apex's effective actor tags (<see cref="ClipActorTags"/>) for the movie.</summary>
+    public static async Task<ClipActorTagsResult> LoadEffectiveActorTagsAsync(AppDbContext db, int movieId, CancellationToken ct)
+    {
+        var (cast, scenes, highlights, apexes) = await LoadClipItemsAsync(db, movieId, ct);
+        var sets = new ActorTagSets(
+            Group((await db.MovieActorTags.AsNoTracking().Where(t => t.MovieId == movieId).Select(t => new { t.ActorId, t.TagId }).ToListAsync(ct)).Select(t => (0, t.ActorId, t.TagId))).GetValueOrDefault(0) ?? new Dictionary<int, IReadOnlySet<int>>(),
+            Group((await db.SceneActorTags.AsNoTracking().Where(t => t.MovieId == movieId).Select(t => new { Owner = t.SceneId, t.ActorId, t.TagId }).ToListAsync(ct)).Select(t => (t.Owner, t.ActorId, t.TagId))),
+            Group((await db.HighlightActorTags.AsNoTracking().Where(t => t.MovieId == movieId).Select(t => new { Owner = t.HighlightId, t.ActorId, t.TagId }).ToListAsync(ct)).Select(t => (t.Owner, t.ActorId, t.TagId))),
+            Group((await db.ApexActorTags.AsNoTracking().Where(t => t.MovieId == movieId).Select(t => new { Owner = t.ApexId, t.ActorId, t.TagId }).ToListAsync(ct)).Select(t => (t.Owner, t.ActorId, t.TagId))));
+        return ClipActorTags.Compute(ClipActors.Compute(cast, scenes, highlights, apexes), scenes, highlights, apexes, sets);
+    }
+
+    private static async Task<(IReadOnlyList<SceneActorItem> Cast, List<SceneItem> Scenes, List<HighlightItem> Highlights, List<ApexItem> Apexes)> LoadClipItemsAsync(
+        AppDbContext db, int movieId, CancellationToken ct)
+    {
         var cast = await LoadCastAsync(db, movieId, ct);
         var duration = await db.Movies.Where(m => m.Id == movieId).Select(m => m.MediaDurationSeconds).FirstOrDefaultAsync(ct);
         var scenes = await db.Scenes.AsNoTracking()
@@ -48,8 +67,14 @@ internal static class ClipAssignments
                 Actors = a.ApexActors.Select(aa => new SceneActorItem(aa.ActorId, aa.MovieActor.Actor.DisplayName)).ToList(),
             })
             .ToList();
-        return ClipActors.Compute(cast, sceneItems, highlightItems, apexItems);
+        return (cast, sceneItems, highlightItems, apexItems);
     }
+
+    private static Dictionary<int, IReadOnlyDictionary<int, IReadOnlySet<int>>> Group(IEnumerable<(int Owner, int ActorId, int TagId)> rows) =>
+        rows.GroupBy(r => r.Owner).ToDictionary(
+            owner => owner.Key,
+            owner => (IReadOnlyDictionary<int, IReadOnlySet<int>>)owner.GroupBy(r => r.ActorId)
+                .ToDictionary(actor => actor.Key, actor => (IReadOnlySet<int>)actor.Select(r => r.TagId).ToHashSet()));
 
     /// <summary>Returns an error message when an actor isn't in the movie's cast, else null.</summary>
     public static async Task<string?> ValidateActorsAsync(AppDbContext db, int movieId, List<int> actorIds, CancellationToken ct) =>

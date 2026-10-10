@@ -21,7 +21,8 @@ public sealed record MovieGridFilter(
     string? CodePrefix = null,
     IReadOnlyCollection<NfoDriftKind>? NfoDriftKinds = null,
     ActorAttributeSelection? ActorAttributes = null,
-    IReadOnlyCollection<int>? ActorIds = null);
+    IReadOnlyCollection<int>? ActorIds = null,
+    IReadOnlyCollection<int>? ActorTagIds = null);
 
 /// <summary>A tracked actor offered by an actor-name filter.</summary>
 public sealed record MovieActorOption(int Id, string Name);
@@ -47,6 +48,9 @@ public sealed record MovieGridSummary(
     /// <summary>The actor-name filter's options: tracked actors linked to any movie, by name. Like the
     /// lists above, unaffected by the active filters.</summary>
     public IReadOnlyList<MovieActorOption> Actors { get; init; } = [];
+
+    /// <summary>The actor-tag filter's options: actor tags (Tag.IsActorTag) some actor has in a movie or one of its clips.</summary>
+    public IReadOnlyList<MovieActorOption> ActorTags { get; init; } = [];
 }
 
 public interface IMovieGridQueryService
@@ -68,6 +72,10 @@ public interface IMovieGridQueryService
     /// <see cref="MovieGridSummary.Actors"/>, on its own for a caller that already has the rest of
     /// the summary.</summary>
     Task<List<MovieActorOption>> GetActorOptionsAsync(CancellationToken ct = default);
+
+    /// <summary>The actor-tag filter's options (as in <see cref="MovieGridSummary.ActorTags"/>), for a page restored from its
+    /// prerendered state, which carries the other options but not these.</summary>
+    Task<List<MovieActorOption>> GetActorTagOptionsAsync(CancellationToken ct = default);
 
     /// <summary>The tracked actors linked to a movie GetWithFilesAsync can list, by name — the DeoVR
     /// group editor's actor-name filter.</summary>
@@ -158,7 +166,24 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
             actorAttributes)
         {
             Actors = await LoadLinkedActorOptionsAsync(db, ct),
+            ActorTags = await LoadActorTagOptionsAsync(db, ct),
         };
+    }
+
+    // The actor tags in use, "Hair › Long" for a subtag, and the parents of those (a parent matches its subtags).
+    private static async Task<List<MovieActorOption>> LoadActorTagOptionsAsync(AppDbContext db, CancellationToken ct)
+    {
+        var used = await db.Tags.AsNoTracking()
+            .Where(t => t.IsActorTag && (db.MovieActorTags.Any(a => a.TagId == t.Id) || db.SceneActorTags.Any(a => a.TagId == t.Id)
+                || db.HighlightActorTags.Any(a => a.TagId == t.Id) || db.ApexActorTags.Any(a => a.TagId == t.Id)))
+            .Select(t => new { t.Id, t.Name, t.ParentTagId, Parent = t.ParentTag != null ? t.ParentTag.Name : null })
+            .ToListAsync(ct);
+        // Grouped by parent, the parent first and its subtags after it: ordering by the full label would slip "Hair colour"
+        // between "Hair" and "Hair › Short".
+        var rows = used.Select(t => (Option: new MovieActorOption(t.Id, t.Parent is null ? t.Name : $"{t.Parent} › {t.Name}"), Group: t.Parent ?? t.Name, IsSubtag: t.Parent is not null, t.Name)).ToList();
+        rows.AddRange(used.Where(t => t.ParentTagId is not null && used.All(u => u.Id != t.ParentTagId))
+            .DistinctBy(t => t.ParentTagId).Select(t => (Option: new MovieActorOption(t.ParentTagId!.Value, t.Parent!), Group: t.Parent!, IsSubtag: false, Name: t.Parent!)));
+        return rows.OrderBy(r => r.Group, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.IsSubtag).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => r.Option).ToList();
     }
 
     /// <summary>Sourced from the canonical Tags/MovieTags relation, not MetaGenres's comma-joined
@@ -167,7 +192,9 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
     /// linked (tag, parent) pair, not one per movie.</summary>
     private static async Task<List<string>> LoadGenreOptionsAsync(AppDbContext db, CancellationToken ct)
     {
+        // Actor tags (they reach every movie as plain tags) have their own "Actor tag" filter, as on the Scenes wall.
         var linkedTags = await db.MovieTags
+            .Where(mt => !mt.Tag.IsActorTag)
             .Select(mt => new { mt.Tag.Name, ParentName = mt.Tag.ParentTag != null ? mt.Tag.ParentTag.Name : null })
             .Distinct()
             .ToListAsync(ct);
@@ -269,6 +296,12 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
             .ToListAsync(ct);
     }
 
+    public async Task<List<MovieActorOption>> GetActorTagOptionsAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await LoadActorTagOptionsAsync(db, ct);
+    }
+
     public async Task<List<MovieActorOption>> GetActorOptionsAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -355,6 +388,20 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         {
             // Any selected actor, like the Scenes wall's actor filter.
             query = query.Where(m => m.MovieActors.Any(ma => actorIds.Contains(ma.ActorId)));
+        }
+        if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
+        {
+            // An actor tag (Tag.IsActorTag) on the movie or on any of its scenes, highlights or apexes; with the actor
+            // filter, one of those actors must have it. Own rows are enough: what flows down or rolls up never adds a pair.
+            var anyActor = filter.ActorIds is not { Count: > 0 };
+            var onlyActors = filter.ActorIds ?? [];
+            // A parent tag matches its subtags, as for plain tags.
+            var matching = db.Tags.Where(t => actorTagIds.Contains(t.Id) || (t.ParentTagId != null && actorTagIds.Contains(t.ParentTagId.Value))).Select(t => t.Id);
+            var withActorTag = db.MovieActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId)
+                .Union(db.SceneActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId))
+                .Union(db.HighlightActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId))
+                .Union(db.ApexActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId));
+            query = query.Where(m => withActorTag.Contains(m.Id));
         }
         query = MovieFilterPredicates.WhereActorAttributes(query, filter.ActorAttributes ?? ActorAttributeSelection.Empty, DateOnly.FromDateTime(DateTime.UtcNow));
         if (!string.IsNullOrWhiteSpace(filter.Text))

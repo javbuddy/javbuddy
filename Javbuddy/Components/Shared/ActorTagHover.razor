@@ -1,0 +1,47 @@
+@* Wraps an actor's name (or chip) in a clip row or card: hovering or focusing it opens a popover with the actor's tags
+   for that clip (own and inherited ones, then those only the clips inside carry, grayed) and, for an inherited actor,
+   where they come from. Without either, it just shows the content. A popover instead of a title, so the browser's own
+   tooltip doesn't appear beside it. It is a top-layer popover (App.razor's script opens and places it), so a card's
+   overflow or a modal can't cut it off. *@
+@if (HasPopover)
+{
+    <span class="actor-hover" tabindex="0">
+        @ChildContent
+        <span class="actor-hover-popover" popover="manual" role="tooltip">
+            @if (InheritedFrom is not null)
+            {
+                <span class="actor-hover-from">From @InheritedFrom</span>
+            }
+            @foreach (var tag in Tags.Where(t => !t.IsRolledUp))
+            {
+                <span class="actor-hover-pill">@ActorTagPillStyle.Label(Library, tag.TagId)</span>
+            }
+            @if (Tags.Any(t => t.IsRolledUp))
+            {
+                <span class="actor-hover-from">From the clips inside</span>
+                @foreach (var tag in Tags.Where(t => t.IsRolledUp))
+                {
+                    <span class="actor-hover-pill actor-hover-pill-clip">@ActorTagPillStyle.Label(Library, tag.TagId)</span>
+                }
+            }
+        </span>
+    </span>
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>This actor's tags on the clip (ClipActorTags): own, inherited and rolled-up.</summary>
+    [Parameter] public IReadOnlyList<EffectiveActorTag> Tags { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<ActorTagListItem> Library { get; set; } = [];
+
+    /// <summary>Where an inherited actor comes from ("scene 2", "the cast"); null for an explicit one.</summary>
+    [Parameter] public string? InheritedFrom { get; set; }
+
+    private bool HasPopover => Tags.Count > 0 || InheritedFrom is not null;
+}

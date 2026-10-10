@@ -52,6 +52,7 @@ public class MovieCleanupTests : BunitContext
         Services.AddSingleton<IMovieDetailQueryService>(new MovieDetailQueryService(factory));
         Services.AddSingleton<IMovieHighlightService>(new MovieHighlightService(factory));
         Services.AddSingleton<IMovieApexService>(new MovieApexService(factory));
+        Services.AddSingleton<IActorTagService>(new ActorTagService(factory));
         Services.AddSingleton(Substitute.For<ISceneChapterImportService>());
         Services.AddSingleton(Substitute.For<ISceneChapterWriteService>());
         Services.AddSingleton(Substitute.For<ISceneDetectionService>());

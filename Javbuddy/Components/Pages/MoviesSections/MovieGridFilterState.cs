@@ -19,6 +19,7 @@ public sealed class MovieGridFilterState
     public HashSet<string> Genres { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<MovieFeatureFilterOption> Features { get; private set; } = [];
     public HashSet<int> ActorIds { get; private set; } = [];
+    public HashSet<int> ActorTagIds { get; private set; } = [];
     public ActorAttributeSelection ActorAttributes { get; set; } = ActorAttributeSelection.Empty;
     public string Text { get; set; } = "";
     public string? CodePrefix { get; set; }
@@ -45,12 +46,13 @@ public sealed class MovieGridFilterState
         CodePrefix,
         [.. NfoDriftKinds],
         ActorAttributes.IsEmpty ? null : ActorAttributes,
-        [.. ActorIds]);
+        [.. ActorIds],
+        [.. ActorTagIds]);
 
     public MovieGridSort ToSort() => new(SortField, SortDescending, RandomSortSeed);
 
     private int ActiveFilterCount => Resolutions.Count + ScanTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count
-        + ActorIds.Count + ActorAttributes.Count;
+        + ActorIds.Count + ActorTagIds.Count + ActorAttributes.Count;
 
     public bool HasActiveFilters =>
         Status is not null
@@ -65,7 +67,7 @@ public sealed class MovieGridFilterState
     {
         var anyActive = Status is not null || !string.IsNullOrEmpty(Library) || Resolutions.Count > 0
             || ScanTypes.Count > 0 || NfoDriftKinds.Count > 0 || Codecs.Count > 0 || Features.Count > 0
-            || ActorIds.Count > 0 || ActorAttributes.Count > 0;
+            || ActorIds.Count > 0 || ActorTagIds.Count > 0 || ActorAttributes.Count > 0;
         Status = null;
         Library = null;
         Resolutions.Clear();
@@ -74,6 +76,7 @@ public sealed class MovieGridFilterState
         Codecs.Clear();
         Features.Clear();
         ActorIds.Clear();
+        ActorTagIds.Clear();
         ActorAttributes = ActorAttributeSelection.Empty;
         return anyActive;
     }
@@ -92,7 +95,7 @@ public sealed class MovieGridFilterState
         Status, Library, [.. Resolutions], [.. ScanTypes], [.. Codecs],
         [.. Studios], [.. Genres], [.. Features], Text, CodePrefix,
         SortField, SortDescending, [.. NfoDriftKinds],
-        ActorAttributes, [.. ActorIds]);
+        ActorAttributes, [.. ActorIds], ActorTagFilter: [.. ActorTagIds]);
 
     /// <summary>Applies a saved selection; a list the state doesn't carry (a cookie written before
     /// that filter existed) keeps its current value.</summary>
@@ -109,6 +112,7 @@ public sealed class MovieGridFilterState
         if (state.NfoDriftFilter is not null) NfoDriftKinds = [.. state.NfoDriftFilter];
         if (state.ActorAttributes is not null) ActorAttributes = state.ActorAttributes;
         if (state.ActorFilter is not null) ActorIds = [.. state.ActorFilter];
+        if (state.ActorTagFilter is not null) ActorTagIds = [.. state.ActorTagFilter];
         MovieFilterOptions.MigrateLegacyNfoFeatures(Features, NfoDriftKinds);
         Text = state.TextFilter;
         CodePrefix = state.CodePrefixFilter;
@@ -142,7 +146,8 @@ public sealed record MoviesViewState(
     ActorAttributeSelection? ActorAttributes = null,
     List<int>? ActorFilter = null,
     bool BrowseReleases = false,
-    R18DevCatalogFilter? CatalogFilter = null)
+    R18DevCatalogFilter? CatalogFilter = null,
+    List<int>? ActorTagFilter = null)
 {
     public const string CookieName = "javbuddy-movies-view";
 }

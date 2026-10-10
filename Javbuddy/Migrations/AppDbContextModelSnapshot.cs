@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261006123418_Baseline";
+    public override string LastMigrationId => "20261010082056_ActorTags";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -298,6 +298,29 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("ApexActors");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.ApexActorTag", b =>
+            {
+                b.Property<int>("ApexId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("ActorId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("ApexId", "ActorId", "TagId");
+
+                b.HasIndex("MovieId", "ActorId");
+
+                b.HasIndex("TagId", "ActorId", "ApexId");
+
+                b.ToTable("ApexActorTags");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.ApexEffectiveActor", b =>
             {
                 b.Property<int>("ApexId")
@@ -316,6 +339,29 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.HasIndex("MovieId", "ActorId");
 
                 b.ToTable("ApexEffectiveActors");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.ApexEffectiveActorTag", b =>
+            {
+                b.Property<int>("ApexId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("ActorId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("ApexId", "ActorId", "TagId");
+
+                b.HasIndex("MovieId", "ActorId");
+
+                b.HasIndex("TagId", "ActorId", "ApexId");
+
+                b.ToTable("ApexEffectiveActorTags");
             });
 
         modelBuilder.Entity("Javbuddy.Models.ApexPlaybackSettings", b =>
@@ -616,6 +662,29 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("HighlightActors");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.HighlightActorTag", b =>
+            {
+                b.Property<int>("HighlightId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("ActorId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("HighlightId", "ActorId", "TagId");
+
+                b.HasIndex("MovieId", "ActorId");
+
+                b.HasIndex("TagId", "ActorId", "HighlightId");
+
+                b.ToTable("HighlightActorTags");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.HighlightEffectiveActor", b =>
             {
                 b.Property<int>("HighlightId")
@@ -634,6 +703,32 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.HasIndex("MovieId", "ActorId");
 
                 b.ToTable("HighlightEffectiveActors");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.HighlightEffectiveActorTag", b =>
+            {
+                b.Property<int>("HighlightId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("ActorId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("IsRolledUp")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("HighlightId", "ActorId", "TagId");
+
+                b.HasIndex("MovieId", "ActorId");
+
+                b.HasIndex("TagId", "ActorId", "HighlightId");
+
+                b.ToTable("HighlightEffectiveActorTags");
             });
 
         modelBuilder.Entity("Javbuddy.Models.HighlightTag", b =>
@@ -1161,6 +1256,24 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("MovieActors");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.MovieActorTag", b =>
+            {
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("ActorId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("MovieId", "ActorId", "TagId");
+
+                b.HasIndex("TagId", "ActorId", "MovieId");
+
+                b.ToTable("MovieActorTags");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.MovieApex", b =>
             {
                 b.Property<int>("Id")
@@ -1656,6 +1769,29 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("SceneActors");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.SceneActorTag", b =>
+            {
+                b.Property<int>("SceneId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("ActorId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("SceneId", "ActorId", "TagId");
+
+                b.HasIndex("MovieId", "ActorId");
+
+                b.HasIndex("TagId", "ActorId", "SceneId");
+
+                b.ToTable("SceneActorTags");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.SceneEffectiveActor", b =>
             {
                 b.Property<int>("SceneId")
@@ -1674,6 +1810,32 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.HasIndex("MovieId", "ActorId");
 
                 b.ToTable("SceneEffectiveActors");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.SceneEffectiveActorTag", b =>
+            {
+                b.Property<int>("SceneId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("ActorId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("IsRolledUp")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("SceneId", "ActorId", "TagId");
+
+                b.HasIndex("MovieId", "ActorId");
+
+                b.HasIndex("TagId", "ActorId", "SceneId");
+
+                b.ToTable("SceneEffectiveActorTags");
             });
 
         modelBuilder.Entity("Javbuddy.Models.SceneSuggestion", b =>
@@ -1778,6 +1940,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.Property<DateTime>("CreatedAt")
                     .HasColumnType("TEXT");
+
+                b.Property<bool>("IsActorTag")
+                    .HasColumnType("INTEGER");
 
                 b.Property<string>("Name")
                     .IsRequired()
@@ -2113,6 +2278,33 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("MovieActor");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.ApexActorTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.MovieApex", "Apex")
+                    .WithMany()
+                    .HasForeignKey("ApexId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.MovieActor", "MovieActor")
+                    .WithMany()
+                    .HasForeignKey("MovieId", "ActorId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Apex");
+
+                b.Navigation("MovieActor");
+
+                b.Navigation("Tag");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.ApexEffectiveActor", b =>
             {
                 b.HasOne("Javbuddy.Models.MovieApex", "Apex")
@@ -2130,6 +2322,33 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Apex");
 
                 b.Navigation("MovieActor");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.ApexEffectiveActorTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.MovieApex", "Apex")
+                    .WithMany()
+                    .HasForeignKey("ApexId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.MovieActor", "MovieActor")
+                    .WithMany()
+                    .HasForeignKey("MovieId", "ActorId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Apex");
+
+                b.Navigation("MovieActor");
+
+                b.Navigation("Tag");
             });
 
         modelBuilder.Entity("Javbuddy.Models.ApexTag", b =>
@@ -2170,6 +2389,33 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("MovieActor");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.HighlightActorTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.MovieHighlight", "Highlight")
+                    .WithMany()
+                    .HasForeignKey("HighlightId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.MovieActor", "MovieActor")
+                    .WithMany()
+                    .HasForeignKey("MovieId", "ActorId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Highlight");
+
+                b.Navigation("MovieActor");
+
+                b.Navigation("Tag");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.HighlightEffectiveActor", b =>
             {
                 b.HasOne("Javbuddy.Models.MovieHighlight", "Highlight")
@@ -2187,6 +2433,33 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Highlight");
 
                 b.Navigation("MovieActor");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.HighlightEffectiveActorTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.MovieHighlight", "Highlight")
+                    .WithMany()
+                    .HasForeignKey("HighlightId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.MovieActor", "MovieActor")
+                    .WithMany()
+                    .HasForeignKey("MovieId", "ActorId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Highlight");
+
+                b.Navigation("MovieActor");
+
+                b.Navigation("Tag");
             });
 
         modelBuilder.Entity("Javbuddy.Models.HighlightTag", b =>
@@ -2225,6 +2498,25 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Actor");
 
                 b.Navigation("Movie");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.MovieActorTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.MovieActor", "MovieActor")
+                    .WithMany()
+                    .HasForeignKey("MovieId", "ActorId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("MovieActor");
+
+                b.Navigation("Tag");
             });
 
         modelBuilder.Entity("Javbuddy.Models.MovieApex", b =>
@@ -2320,6 +2612,33 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Scene");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.SceneActorTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.Scene", "Scene")
+                    .WithMany()
+                    .HasForeignKey("SceneId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.MovieActor", "MovieActor")
+                    .WithMany()
+                    .HasForeignKey("MovieId", "ActorId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("MovieActor");
+
+                b.Navigation("Scene");
+
+                b.Navigation("Tag");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.SceneEffectiveActor", b =>
             {
                 b.HasOne("Javbuddy.Models.Scene", "Scene")
@@ -2337,6 +2656,33 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("MovieActor");
 
                 b.Navigation("Scene");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.SceneEffectiveActorTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.Scene", "Scene")
+                    .WithMany()
+                    .HasForeignKey("SceneId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.MovieActor", "MovieActor")
+                    .WithMany()
+                    .HasForeignKey("MovieId", "ActorId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("MovieActor");
+
+                b.Navigation("Scene");
+
+                b.Navigation("Tag");
             });
 
         modelBuilder.Entity("Javbuddy.Models.SceneSuggestion", b =>

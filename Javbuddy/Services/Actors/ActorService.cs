@@ -889,6 +889,9 @@ public class ActorService(
             }
         }
 
+        // Actor tags hang off the cast links too; the target keeps its own and gains the source's.
+        await RepointActorTagsAsync(db, source.Id, target.Id, ct);
+
         // 4. Transfer cached and custom images
         if (imageCacheService is not null)
         {
@@ -1345,5 +1348,52 @@ public class ActorService(
         }
 
         return trimmed;
+    }
+
+    private static async Task RepointActorTagsAsync(AppDbContext db, int sourceId, int targetId, CancellationToken ct)
+    {
+        var targetMovie = (await db.MovieActorTags.Where(t => t.ActorId == targetId).Select(t => new { t.MovieId, t.TagId }).ToListAsync(ct))
+            .Select(t => (t.MovieId, t.TagId)).ToHashSet();
+        foreach (var row in await db.MovieActorTags.Where(t => t.ActorId == sourceId).ToListAsync(ct))
+        {
+            db.MovieActorTags.Remove(row);
+            if (targetMovie.Add((row.MovieId, row.TagId)))
+            {
+                db.MovieActorTags.Add(new MovieActorTag { MovieId = row.MovieId, ActorId = targetId, TagId = row.TagId });
+            }
+        }
+
+        var targetScene = (await db.SceneActorTags.Where(t => t.ActorId == targetId).Select(t => new { t.SceneId, t.TagId }).ToListAsync(ct))
+            .Select(t => (t.SceneId, t.TagId)).ToHashSet();
+        foreach (var row in await db.SceneActorTags.Where(t => t.ActorId == sourceId).ToListAsync(ct))
+        {
+            db.SceneActorTags.Remove(row);
+            if (targetScene.Add((row.SceneId, row.TagId)))
+            {
+                db.SceneActorTags.Add(new SceneActorTag { SceneId = row.SceneId, MovieId = row.MovieId, ActorId = targetId, TagId = row.TagId });
+            }
+        }
+
+        var targetHighlight = (await db.HighlightActorTags.Where(t => t.ActorId == targetId).Select(t => new { t.HighlightId, t.TagId }).ToListAsync(ct))
+            .Select(t => (t.HighlightId, t.TagId)).ToHashSet();
+        foreach (var row in await db.HighlightActorTags.Where(t => t.ActorId == sourceId).ToListAsync(ct))
+        {
+            db.HighlightActorTags.Remove(row);
+            if (targetHighlight.Add((row.HighlightId, row.TagId)))
+            {
+                db.HighlightActorTags.Add(new HighlightActorTag { HighlightId = row.HighlightId, MovieId = row.MovieId, ActorId = targetId, TagId = row.TagId });
+            }
+        }
+
+        var targetApex = (await db.ApexActorTags.Where(t => t.ActorId == targetId).Select(t => new { t.ApexId, t.TagId }).ToListAsync(ct))
+            .Select(t => (t.ApexId, t.TagId)).ToHashSet();
+        foreach (var row in await db.ApexActorTags.Where(t => t.ActorId == sourceId).ToListAsync(ct))
+        {
+            db.ApexActorTags.Remove(row);
+            if (targetApex.Add((row.ApexId, row.TagId)))
+            {
+                db.ApexActorTags.Add(new ApexActorTag { ApexId = row.ApexId, MovieId = row.MovieId, ActorId = targetId, TagId = row.TagId });
+            }
+        }
     }
 }

@@ -5,11 +5,26 @@
     <span class="implicit-chips">
         @foreach (var item in Items)
         {
-            <span class="implicit-chip" title="@item.Tooltip" aria-label="@item.Label, implied">@item.Label</span>
+            @if (ActorTags is not null && item.ActorId is { } actorId)
+            {
+                @* An inherited actor: a popover with where they come from and their tags, in place of the title. *@
+                <ActorTagHover Tags="@ActorTags.Where(t => t.ActorId == actorId).ToList()" Library="Library" InheritedFrom="@item.Tooltip.Replace("From ", "")">
+                    <span class="implicit-chip" aria-label="@item.Label, implied">@item.Label</span>
+                </ActorTagHover>
+            }
+            else
+            {
+                <span class="implicit-chip" title="@item.Tooltip" aria-label="@item.Label, implied">@item.Label</span>
+            }
         }
     </span>
 }
 
 @code {
     [Parameter, EditorRequired] public IReadOnlyList<ImplicitChip> Items { get; set; } = [];
+
+    /// <summary>For inherited-actor chips: the clip's actor tags, shown in a hover popover instead of a title.</summary>
+    [Parameter] public IReadOnlyList<EffectiveActorTag>? ActorTags { get; set; }
+
+    [Parameter] public IReadOnlyList<ActorTagListItem> Library { get; set; } = [];
 }
