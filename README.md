@@ -118,7 +118,7 @@ dotnet run --project Javbuddy
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md) — deploy javinizer-go, Prowlarr and qBittorrent, and the first run end to end
+- [Getting started](docs/getting-started.md) — deploy javinizer-go, Prowlarr and qBittorrent, folder permissions, and the first run end to end
 - [Library guide](docs/library-guide.md) — folder layout, importing an existing collection, Torrent sort, path mappings
 - [Configuration reference](docs/configuration.md) — every setting, storage tiers, Compose and Kubernetes examples
 - [Local library format](docs/local-library-format.md) — folder layout, `.nfo` dialects, `.actors/`

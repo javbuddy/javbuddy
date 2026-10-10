@@ -6,6 +6,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Added
 
+- Getting started: a "Folder permissions" section covering the non-root container user, checking and fixing mount ownership, and common access errors.
+
+### Added
+
 - Add a movie: a spinner and "Searching for metadata…" status show while the metadata lookup runs.
 
 ## [0.1.2] - 2026-10-08

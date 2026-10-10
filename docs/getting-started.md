@@ -93,6 +93,85 @@ Start it with `docker compose up -d`. Services in the same compose project reach
 
 Open its web UI, add your indexers (**Indexers → Add Indexer**), and copy the API key from **Settings → General**.
 
+## Folder permissions
+
+The Javbuddy container does not run as root. It runs as an unprivileged user (UID `1654` in the published image), so every host folder you mount must be accessible to that user. Folders that aren't produce access errors, even though the same path works fine for you on the host.
+
+| Mount | What Javbuddy needs |
+|---|---|
+| `/data`, `/cache`, `/objects` | Read and write. They are empty folders owned by the app user when you use a named volume. A bind mount (`./javbuddy/data:/data`) uses the *host* folder's ownership instead. |
+| `/media` (library) | Read to scan and play. Write to save NFO files, covers and extra images, or to delete and clean up movies. Don't mount it `:ro` unless you accept the warning below. |
+| `/downloads` | Read and write, for merging VR parts. |
+
+> **Warning: `:ro` on the library breaks several features.** A read-only `/media` still lets Javbuddy browse and play, but these fail with a permission error:
+>
+> - resolving NFO drift (writing the NFO back),
+> - VR merge,
+> - deleting movies,
+> - adding extrafanart images to a movie.
+>
+> Mount the library read/write if you use any of them. Jellyfin is the one service in this setup that is fine with `:ro`.
+
+If Docker creates a missing bind-mount folder for you, it is owned by root and the app user can't write to it. Create the folders yourself first (`mkdir -p javbuddy/data javbuddy/cache javbuddy/objects`).
+
+### Check who the container runs as
+
+```bash
+docker exec javbuddy id          # uid=1654 gid=1654 ...
+docker inspect javbuddy --format '{{.Config.User}}'
+```
+
+### Check the host folder and the mount
+
+```bash
+ls -ldn /srv/jav/library                  # numeric owner, group and mode of the folder
+ls -ln /srv/jav/library | head            # and of what's inside it
+docker exec javbuddy ls -ld /media        # the same folder as the container sees it
+docker exec javbuddy touch /media/.write-test && docker exec javbuddy rm /media/.write-test
+```
+
+If `/media` is empty or missing inside the container, the mount itself is wrong (check the `volumes:` line and the host path). If it is there but the `touch` fails, it is a permission problem.
+
+### Fix it
+
+Pick one. Don't use `chmod 777`, which lets every user and process on the host change your library.
+
+- **Give the folder to the container user.** Simplest when only Javbuddy writes to the folder.
+
+  ```bash
+  sudo chown -R 1654:1654 /srv/jav/library javbuddy/data javbuddy/cache javbuddy/objects
+  ```
+
+- **Share a group** when other services (javinizer-go, qBittorrent, Jellyfin) or you also use the library. Give the folder to a shared group, make it group-writable, and run the containers with that group:
+
+  ```bash
+  sudo groupadd -g 2000 media          # pick an unused GID
+  sudo chgrp -R media /srv/jav/library
+  sudo chmod -R g+rwX /srv/jav/library
+  sudo find /srv/jav/library -type d -exec chmod g+s {} +   # new files inherit the group
+  ```
+
+  ```yaml
+  services:
+    javbuddy:
+      group_add:
+        - "2000"
+  ```
+
+- **Run as your own user** so the container matches the folder owner. Find your IDs with `id -u` and `id -g`, then set `user: "1000:1000"` on the service. Also `chown` `/data`, `/cache` and `/objects` to that user.
+
+- **SELinux hosts** (Fedora, RHEL): ownership can be fine and access still denied. Add `:z` to the bind mount (`/srv/jav/library:/media:z`) so the container may use the folder. Use `:Z` only for folders no other container shares.
+
+### Common errors
+
+| Error | Likely cause |
+|---|---|
+| `UnauthorizedAccessException: Access to the path '/media/...' is denied` or `Permission denied` when saving an NFO, image or moving a movie | The library is read-only for the container user, or mounted `:ro`. |
+| Library Import or the rescan finds no folders, or a library folder shows as missing | The container user can't read the folder (no read or execute bit on a parent folder), or the mount path is wrong. |
+| `SQLite Error 14: 'unable to open database file'` or `attempt to write a readonly database` at startup | `/data` isn't writable by the container user (often a root-owned bind mount). |
+| The app can't write `dataprotection-keys`, or sessions reset on every restart | The same: `/data` is not writable. |
+| It worked as root or in a test, but not in the container | The path is accessible to you but not to UID `1654`. Compare `ls -ldn` on the host with `docker exec ... id`. |
+
 ## 3. First run in Javbuddy
 
 Open <http://localhost:8080>.
