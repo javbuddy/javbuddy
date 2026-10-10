@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-10
+
 ### Fixed
 
 - Movie Detail's Genres editor: hovering a tag that comes from scenes, highlights or apexes now explains that removing it also removes it from them; before, the tooltip could be missing.
