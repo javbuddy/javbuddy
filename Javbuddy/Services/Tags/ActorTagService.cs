@@ -9,8 +9,8 @@ namespace Javbuddy.Services.Tags;
 /// <summary>Where an actor tag sits: on the actor within the movie, or within one scene, highlight or apex.</summary>
 public enum ActorTagLevel { Movie, Scene, Highlight, Apex }
 
-/// <summary>MovieTagsChanged: the change altered the movie's plain tags through its clips, so a host showing them
-/// should re-read them.</summary>
+/// <summary>MovieTagsChanged: the change altered the movie's plain tags (a leftover actor-tag link was dropped), so a host
+/// showing them should re-read them.</summary>
 public sealed record ActorTagResult(bool Success, string? ErrorMessage = null)
 {
     public bool MovieTagsChanged { get; init; }
@@ -58,7 +58,7 @@ public interface IActorTagService
 }
 
 /// <summary>Actor-scoped tags (Tag.IsActorTag): "blonde" for one actor in a movie or clip. They flow down and roll up
-/// per actor (ClipActorTags), and reach the movie as plain MovieTags through ClipTagSync.</summary>
+/// per actor (ClipActorTags); they never become plain MovieTags.</summary>
 public class ActorTagService(IDbContextFactory<AppDbContext> dbFactory, IClipTagSyncService? clipTags = null, INfoDriftCheckQueue? driftChecks = null) : IActorTagService
 {
     public async Task<IReadOnlyList<ActorTagListItem>> GetActorTagsAsync(string? search = null, CancellationToken ct = default)

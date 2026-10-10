@@ -19,15 +19,15 @@
         <div class="movie-detail-badges">
             @foreach (var tag in TagChips)
             {
-                <span class="movie-detail-tag-item">
+                <span class="movie-detail-tag-item @(editingTags && tag.IsImplicit ? "movie-detail-tag-item-implied" : "")">
                     @if (tag.ParentName != null)
                     {
                         <span class="movie-detail-badge-group">
-                            <button type="button" class="movie-detail-badge movie-detail-badge-parent" @onclick="() => FilterByGenre(tag.ParentName)" disabled="@editingTags" title="Filter by @tag.ParentName">
+                            <button type="button" class="movie-detail-badge movie-detail-badge-parent" @onclick="() => FilterByGenre(tag.ParentName)" disabled="@editingTags" title="@(editingTags && tag.IsImplicit ? ImpliedTitle : $"Filter by {tag.ParentName}")">
                                 @tag.ParentName
                             </button>
                             <span class="movie-detail-badge-delimiter" aria-hidden="true">›</span>
-                            <button type="button" class="movie-detail-badge movie-detail-badge-child @(tag.NeedsReview ? "movie-detail-badge-flagged" : "")" @onclick="() => FilterByGenre(tag.Name)" disabled="@editingTags" title="@(tag.NeedsReview ? "Not yet approved in the tag library" : $"Filter by {tag.Name}")">
+                            <button type="button" class="movie-detail-badge movie-detail-badge-child @(tag.NeedsReview ? "movie-detail-badge-flagged" : "")" @onclick="() => FilterByGenre(tag.Name)" disabled="@editingTags" title="@(editingTags && tag.IsImplicit ? ImpliedTitle : tag.NeedsReview ? "Not yet approved in the tag library" : $"Filter by {tag.Name}")">
                                 @if (tag.NeedsReview)
                                 {
                                     <svg viewBox="0 0 16 16" width="10" height="10" fill="#ffc107" aria-hidden="true"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.891 0 1.439-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" /></svg>
@@ -38,7 +38,7 @@
                     }
                     else
                     {
-                        <button type="button" class="movie-detail-badge @(tag.NeedsReview ? "movie-detail-badge-flagged" : "")" @onclick="() => FilterByGenre(tag.Name)" disabled="@editingTags" title="@(tag.NeedsReview ? "Not yet approved in the tag library" : null)">
+                        <button type="button" class="movie-detail-badge @(tag.NeedsReview ? "movie-detail-badge-flagged" : "")" @onclick="() => FilterByGenre(tag.Name)" disabled="@editingTags" title="@(editingTags && tag.IsImplicit ? ImpliedTitle : tag.NeedsReview ? "Not yet approved in the tag library" : null)">
                             @if (tag.NeedsReview)
                             {
                                 <svg viewBox="0 0 16 16" width="10" height="10" fill="#ffc107" aria-hidden="true"><path d="M8.982 1.566a1.13 1.13 0 0 0-1.964 0L.165 13.233c-.457.778.091 1.767.982 1.767h13.706c.891 0 1.439-.99.982-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" /></svg>
@@ -48,7 +48,7 @@
                     }
                     @if (editingTags)
                     {
-                        <button type="button" class="movie-detail-tag-remove-btn" @onclick="() => RemoveTagAsync(tag.Id)" aria-label="Remove @tag.Name">×</button>
+                        <button type="button" class="movie-detail-tag-remove-btn" @onclick="() => RequestRemoveTag(tag)" aria-label="Remove @tag.Name">×</button>
                     }
                 </span>
             }
@@ -60,6 +60,13 @@
     }
 </div>
 
+@if (pendingImplied is { } pending)
+{
+    <DeleteConfirmDialog ItemName="@pending.Name"
+                         Message="This tag comes from the movie's scenes, highlights or apexes. Removing it also removes it from all of them — this can't be undone."
+                         Busy="removing" OnConfirm="ConfirmRemoveImplied" OnCancel="CancelRemoveImplied" />
+}
+
 @code {
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
     [Parameter] public EventCallback OnChanged { get; set; }
@@ -69,14 +76,17 @@
 
     /// <summary>One tag chip — sourced from the movie's real MovieTag/Tag relationships (not the
     /// MetaGenres string cache) so add/remove and the NeedsReview flag have a Tag.Id to work with.</summary>
-    private sealed record TagChip(int Id, string Name, string? ParentName, bool NeedsReview);
+    private sealed record TagChip(int Id, string Name, string? ParentName, bool NeedsReview, bool IsImplicit);
 
     private List<TagChip> TagChips =>
         Movie.MovieTags
-            .Select(mt => new TagChip(mt.TagId, mt.Tag.Name, mt.Tag.ParentTag?.Name, mt.Tag.NeedsReview))
+            .Select(mt => new TagChip(mt.TagId, mt.Tag.Name, mt.Tag.ParentTag?.Name, mt.Tag.NeedsReview, !mt.IsExplicit))
             .OrderBy(t => t.ParentName ?? t.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    // A tag the movie only has because a scene, highlight or apex carries it can't be removed here.
+    private const string ImpliedTitle = "From scenes, highlights or apexes — removing it removes it from those too";
 
     private void FilterByGenre(string genre)
     {
@@ -98,9 +108,37 @@
         await OnChanged.InvokeAsync();
     }
 
-    private async Task RemoveTagAsync(int tagId)
+    private TagChip? pendingImplied;
+    private bool removing;
+
+    // A tag only the clips carry needs a confirmation: removing it strips it from them too.
+    private async Task RequestRemoveTag(TagChip tag)
     {
-        await TagService.RemoveTagFromMovieAsync(Movie.Id, tagId);
+        if (tag.IsImplicit)
+        {
+            pendingImplied = tag;
+            return;
+        }
+        await TagService.RemoveTagFromMovieAsync(Movie.Id, tag.Id);
+        await OnChanged.InvokeAsync();
+    }
+
+    private void CancelRemoveImplied() => pendingImplied = null;
+
+    private async Task ConfirmRemoveImplied()
+    {
+        if (pendingImplied is not { } tag) return;
+        removing = true;
+        try
+        {
+            var result = await TagService.RemoveTagFromMovieAndClipsAsync(Movie.Id, tag.Id);
+            tagEditError = result.Success ? null : result.ErrorMessage;
+        }
+        finally
+        {
+            removing = false;
+            pendingImplied = null;
+        }
         await OnChanged.InvokeAsync();
     }
 }

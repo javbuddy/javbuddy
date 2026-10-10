@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Javbuddy.Services.Scenes;
 
 /// <summary>Keeps MovieTag.FromClips in step with the explicit tags of a movie's scenes, highlights and
-/// apexes and its actor tags (Tag.IsActorTag, at any level): the movie-level end of the tag roll-up, stored so every MovieTag reader (the
+/// apexes (not actor tags, Tag.IsActorTag, which stay on their actors): the movie-level end of the tag roll-up, stored so every MovieTag reader (the
 /// Movies grid, MetaGenres, .nfo sync and drift, Actor Detail) sees it unchanged. A row only the clips
 /// held goes when they stop carrying the tag; an explicit row just loses the flag.</summary>
 public static class ClipTagSync
@@ -43,17 +43,20 @@ public static class ClipTagSync
         var wanted = (await db.SceneTags.Where(st => st.Scene.MovieId == movieId).Select(st => st.TagId)
                 .Concat(db.HighlightTags.Where(ht => ht.Highlight.MovieId == movieId).Select(ht => ht.TagId))
                 .Concat(db.ApexTags.Where(at => at.Apex.MovieId == movieId).Select(at => at.TagId))
-                .Concat(db.MovieActorTags.Where(t => t.MovieId == movieId).Select(t => t.TagId))
-                .Concat(db.SceneActorTags.Where(t => t.MovieId == movieId).Select(t => t.TagId))
-                .Concat(db.HighlightActorTags.Where(t => t.MovieId == movieId).Select(t => t.TagId))
-                .Concat(db.ApexActorTags.Where(t => t.MovieId == movieId).Select(t => t.TagId))
                 .ToListAsync(ct))
             .ToHashSet();
-        var links = await db.MovieTags.Where(mt => mt.MovieId == movieId).ToListAsync(ct);
+        var links = await db.MovieTags.Where(mt => mt.MovieId == movieId).Include(mt => mt.Tag).ToListAsync(ct);
 
         var changed = false;
         foreach (var link in links)
         {
+            // Actor tags no longer reach the movie; a link left by an earlier version goes.
+            if (link.Tag.IsActorTag)
+            {
+                db.MovieTags.Remove(link);
+                changed = true;
+                continue;
+            }
             var fromClips = wanted.Contains(link.TagId);
             if (link.FromClips == fromClips) continue;
 

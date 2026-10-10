@@ -56,7 +56,7 @@ public sealed class ClipActorTagSyncTests : IDisposable
     }
 
     [Fact]
-    public async Task Refresh_StoresEffectiveAndRolledUpActorTags_AndGivesTheMovieThePlainTags()
+    public async Task Refresh_StoresEffectiveAndRolledUpActorTags_AndLeavesTheMoviesPlainTagsAlone()
     {
         await SeedAsync();
         await using (var db = await factory.CreateDbContextAsync())
@@ -76,9 +76,7 @@ public sealed class ClipActorTagSyncTests : IDisposable
         Assert.Equal(
             [brunetteId],
             await check.HighlightEffectiveActorTags.Where(r => r.HighlightId == highlightId).Select(r => r.TagId).ToListAsync());
-        Assert.Equal(
-            [blondeId, brunetteId],
-            (await check.MovieTags.Where(mt => mt.MovieId == movieId && mt.FromClips && !mt.IsExplicit).Select(mt => mt.TagId).ToListAsync()).Order());
+        Assert.Empty(await check.MovieTags.ToListAsync());
     }
 
     [Fact]
@@ -97,32 +95,21 @@ public sealed class ClipActorTagSyncTests : IDisposable
     }
 
     [Fact]
-    public async Task Refresh_AfterTheActorLeavesTheCast_RemovesThePlainTagTheirTagsGave()
+    public async Task Refresh_DropsAPlainTagLinkAnEarlierVersionGaveAnActorTag()
     {
         await SeedAsync();
         await using (var db = await factory.CreateDbContextAsync())
         {
-            db.SceneActorTags.Add(new SceneActorTag { SceneId = sceneId, MovieId = movieId, ActorId = meiId, TagId = blondeId });
-            await db.SaveChangesAsync();
-        }
-        await RefreshAsync();
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            Assert.Single(await db.MovieTags.ToListAsync());
-            db.MovieActors.RemoveRange(await db.MovieActors.ToListAsync());
+            db.MovieTags.Add(new MovieTag { MovieId = movieId, TagId = blondeId, IsExplicit = false, FromClips = true });
             await db.SaveChangesAsync();
         }
 
-        var tagsChanged = new List<int>();
         await using (var db = await factory.CreateDbContextAsync())
         {
-            Assert.Equal(1, await ClipActorSync.RefreshStaleAsync(db, onMovieTagsChanged: (id, _) => { tagsChanged.Add(id); return Task.CompletedTask; }));
+            Assert.True(await ClipTagSync.RefreshAsync(db, movieId, default));
         }
 
         await using var check = await factory.CreateDbContextAsync();
         Assert.Empty(await check.MovieTags.ToListAsync());
-        Assert.Empty(await check.SceneEffectiveActorTags.ToListAsync());
-        // The worker's .nfo drift check runs for it.
-        Assert.Equal([movieId], tagsChanged);
     }
 }

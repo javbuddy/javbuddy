@@ -144,10 +144,6 @@ public static class TagNormalization
         var movieIds = await db.SceneTags.Select(st => st.Scene.MovieId)
             .Concat(db.HighlightTags.Select(ht => ht.Highlight.MovieId))
             .Concat(db.ApexTags.Select(at => at.Apex.MovieId))
-            .Concat(db.MovieActorTags.Select(t => t.MovieId))
-            .Concat(db.SceneActorTags.Select(t => t.MovieId))
-            .Concat(db.HighlightActorTags.Select(t => t.MovieId))
-            .Concat(db.ApexActorTags.Select(t => t.MovieId))
             .Concat(db.MovieTags.Where(mt => mt.FromClips).Select(mt => mt.MovieId))
             .Distinct()
             .ToListAsync(ct);

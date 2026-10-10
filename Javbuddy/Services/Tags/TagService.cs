@@ -1,6 +1,7 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Nfo;
+using Javbuddy.Services.Scenes;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Tags;
@@ -75,6 +76,10 @@ public interface ITagService
     Task<TagOperationResult> MergeManyAsync(IReadOnlyList<int> sourceTagIds, int targetTagId, bool createReplacementRule = false, CancellationToken ct = default);
     Task<TagOperationResult> AddTagToMovieAsync(int movieId, int tagId, CancellationToken ct = default);
     Task<OperationResult> RemoveTagFromMovieAsync(int movieId, int tagId, CancellationToken ct = default);
+
+    /// <summary>Removes the tag from the movie and from every scene, highlight and apex of the
+    /// movie that carries it, so a tag the movie only has through its clips goes too.</summary>
+    Task<OperationResult> RemoveTagFromMovieAndClipsAsync(int movieId, int tagId, CancellationToken ct = default);
 }
 
 public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncService nfoSyncService, INfoDriftCheckQueue? driftChecks = null) : ITagService
@@ -790,6 +795,31 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         // See AddTagToMovieAsync's matching comment: re-check .nfo drift immediately instead of
         // only on the next scheduled Library Rescan.
+        await nfoSyncService.CheckMovieNfoConflictAsync(movieId, ct);
+
+        return OperationResult.Ok();
+    }
+
+    public async Task<OperationResult> RemoveTagFromMovieAndClipsAsync(int movieId, int tagId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        if (!await db.MovieTags.AnyAsync(mt => mt.MovieId == movieId && mt.TagId == tagId, ct))
+        {
+            return OperationResult.Fail("Tag is not on this movie.");
+        }
+
+        await db.SceneTags.Where(t => t.TagId == tagId && t.Scene.MovieId == movieId).ExecuteDeleteAsync(ct);
+        await db.HighlightTags.Where(t => t.TagId == tagId && t.Highlight.MovieId == movieId).ExecuteDeleteAsync(ct);
+        await db.ApexTags.Where(t => t.TagId == tagId && t.Apex.MovieId == movieId).ExecuteDeleteAsync(ct);
+
+        // Drop the explicit flag too, then let the roll-up delete the now-unreferenced row.
+        await db.MovieTags.Where(mt => mt.MovieId == movieId && mt.TagId == tagId)
+            .ExecuteUpdateAsync(s => s.SetProperty(mt => mt.IsExplicit, false), ct);
+        await ClipTagSync.RefreshAsync(db, movieId, ct);
+
+        await TagNormalization.SyncMetaGenresAsync(db, [movieId], ct);
+        await db.SaveChangesAsync(ct);
         await nfoSyncService.CheckMovieNfoConflictAsync(movieId, ct);
 
         return OperationResult.Ok();

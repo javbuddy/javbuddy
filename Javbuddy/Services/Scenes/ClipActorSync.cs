@@ -44,12 +44,10 @@ public static class ClipActorSync
             (owner, actor, tag, _) => new ApexEffectiveActorTag { ApexId = owner, MovieId = movieId, ActorId = actor, TagId = tag });
         await db.SaveChangesAsync(ct);
 
-        // Leaving the cast drops an actor's tags by DB cascade, which no service sees: bring the movie's plain tags
-        // back in step, for the movies that have any actor tags. After the commit, not inside it: ClipTagSync waits for
-        // other refreshes of its own, and one of them may be waiting for this transaction's write lock.
-        var hasActorTags = await db.MovieTags.AnyAsync(mt => mt.MovieId == movieId && mt.Tag.IsActorTag, ct)
-            || await db.MovieActorTags.AnyAsync(t => t.MovieId == movieId, ct)
-            || tags.Scenes.Values.Concat(tags.Highlights.Values).Concat(tags.Apexes.Values).Any(list => list.Count > 0);
+        // Actor tags no longer reach the movie as plain tags; drop a link an earlier version left. After the commit,
+        // not inside it: ClipTagSync waits for other refreshes of its own, and one of them may be waiting for this
+        // transaction's write lock.
+        var hasActorTags = await db.MovieTags.AnyAsync(mt => mt.MovieId == movieId && mt.Tag.IsActorTag, ct);
         await transaction.CommitAsync(ct);
 
         if (hasActorTags && await ClipTagSync.RefreshAsync(db, movieId, ct))

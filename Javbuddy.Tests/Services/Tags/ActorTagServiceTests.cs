@@ -46,11 +46,11 @@ public sealed class ActorTagServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Set_StoresOwnTagsAtEachLevel_AndGivesTheMovieThePlainTag()
+    public async Task Set_StoresOwnTagsAtEachLevel_AndLeavesTheMoviesPlainTagsAlone()
     {
         await SeedAsync();
 
-        Assert.True((await service.SetAsync(ActorTagLevel.Apex, apexId, meiId, [blondeId])).MovieTagsChanged);
+        Assert.False((await service.SetAsync(ActorTagLevel.Apex, apexId, meiId, [blondeId])).MovieTagsChanged);
         Assert.True((await service.SetAsync(ActorTagLevel.Scene, sceneId, meiId, [blondeId])).Success);
         Assert.True((await service.SetAsync(ActorTagLevel.Highlight, highlightId, meiId, [blondeId])).Success);
         Assert.True((await service.SetAsync(ActorTagLevel.Movie, movieId, meiId, [blondeId])).Success);
@@ -60,9 +60,7 @@ public sealed class ActorTagServiceTests : IDisposable
         Assert.Single(await db.SceneActorTags.ToListAsync());
         Assert.Single(await db.HighlightActorTags.ToListAsync());
         Assert.Single(await db.MovieActorTags.ToListAsync());
-        var link = await db.MovieTags.SingleAsync(mt => mt.MovieId == movieId);
-        Assert.True(link.FromClips);
-        Assert.False(link.IsExplicit);
+        Assert.Empty(await db.MovieTags.ToListAsync());
     }
 
     [Fact]
@@ -76,7 +74,6 @@ public sealed class ActorTagServiceTests : IDisposable
         await using (var db = await factory.CreateDbContextAsync())
         {
             Assert.Equal([other.Id], await db.SceneActorTags.Select(t => t.TagId).ToListAsync());
-            Assert.Equal([other.Id], await db.MovieTags.Select(mt => mt.TagId).ToListAsync());
         }
 
         Assert.True((await service.SetAsync(ActorTagLevel.Scene, sceneId, meiId, [])).Success);
@@ -158,7 +155,7 @@ public sealed class ActorTagServiceTests : IDisposable
     [InlineData(ActorTagLevel.Scene)]
     [InlineData(ActorTagLevel.Highlight)]
     [InlineData(ActorTagLevel.Apex)]
-    public async Task RemovingAnActorFromAClipsOwnActors_DropsTheirOwnTagsThere_AndTheMoviesPlainTag(ActorTagLevel level)
+    public async Task RemovingAnActorFromAClipsOwnActors_DropsTheirOwnTagsThere(ActorTagLevel level)
     {
         await SeedAsync();
         var nfo = Substitute.For<INfoSyncService>();
@@ -172,10 +169,6 @@ public sealed class ActorTagServiceTests : IDisposable
             await db.SaveChangesAsync();
         }
         await service.SetAsync(level, ownerId, meiId, [blondeId]);
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            Assert.True(await db.MovieTags.AnyAsync(t => t.MovieId == movieId && t.TagId == blondeId));
-        }
 
         switch (level)
         {
@@ -188,7 +181,6 @@ public sealed class ActorTagServiceTests : IDisposable
         Assert.Empty(await verify.SceneActorTags.ToListAsync());
         Assert.Empty(await verify.HighlightActorTags.ToListAsync());
         Assert.Empty(await verify.ApexActorTags.ToListAsync());
-        Assert.False(await verify.MovieTags.AnyAsync(t => t.MovieId == movieId && t.TagId == blondeId));
     }
 
     [Fact]

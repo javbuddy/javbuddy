@@ -105,6 +105,33 @@ public class MovieTagFlagsTests
     }
 
     [Fact]
+    public async Task RemoveTagFromMovieAndClips_StripsTheTagFromScenesHighlightsAndApexes()
+    {
+        using var factory = new TestDbContextFactory();
+        var (movieId, tagIds) = await SeedAsync(factory, "Squirt", ("Squirt", false, true));
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var scene = new Scene { MovieId = movieId, Title = "S", StartSeconds = 0, EndSeconds = 10 };
+            var highlight = new MovieHighlight { MovieId = movieId, StartSeconds = 1, EndSeconds = 2 };
+            db.Scenes.Add(scene);
+            db.MovieHighlights.Add(highlight);
+            await db.SaveChangesAsync();
+            db.SceneTags.Add(new SceneTag { SceneId = scene.Id, TagId = tagIds["Squirt"] });
+            db.HighlightTags.Add(new HighlightTag { HighlightId = highlight.Id, TagId = tagIds["Squirt"] });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await CreateService(factory).RemoveTagFromMovieAndClipsAsync(movieId, tagIds["Squirt"]);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.Empty(await LinksAsync(factory, movieId));
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.Empty(await check.SceneTags.ToListAsync());
+        Assert.Empty(await check.HighlightTags.ToListAsync());
+        Assert.Null((await check.Movies.SingleAsync(m => m.Id == movieId)).MetaGenres);
+    }
+
+    [Fact]
     public async Task RemoveTagFromMovie_WhenExplicitOnly_DeletesRow()
     {
         using var factory = new TestDbContextFactory();
