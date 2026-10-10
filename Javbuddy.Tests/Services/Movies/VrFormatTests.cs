@@ -99,4 +99,16 @@ public class VrFormatTests
     [Fact]
     public void EveryFormat_FitsTheColumn() =>
         Assert.All(VrFormat.All, f => Assert.True(f.Length <= 20));
+
+    [Theory]
+    [InlineData("VR180 SBS", "equirect")]
+    [InlineData("Fisheye SBS", "fisheye")]
+    [InlineData("VR180 TB", null)]
+    [InlineData("VR360 SBS", null)]
+    [InlineData("VR180", null)]
+    [InlineData("3D SBS", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void ViewerProjection_IsSetOnlyForSideBySide180(string? vrType, string? expected) =>
+        Assert.Equal(expected, VrFormat.ViewerProjection(vrType));
 }

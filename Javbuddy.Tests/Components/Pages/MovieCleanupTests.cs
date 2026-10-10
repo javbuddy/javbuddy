@@ -645,6 +645,24 @@ public class MovieCleanupTests : BunitContext
     }
 
     [Fact]
+    public void AVrMovieTheViewerSupports_OpensInTheViewer_WithItsProjection()
+    {
+        var cleanupService = Substitute.For<IMovieCleanupService>();
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        Queued([
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000, VrType = VrFormat.FisheyeSbs },
+        ]));
+        var jellyfinClient = Substitute.For<IJellyfinClient>();
+        using var factory = SetUpServices(cleanupService, jellyfinClient);
+
+        var cut = Render<MovieCleanup>();
+
+        Assert.Single(cut.FindAll(".video-player-area .vr-viewer"));
+        Assert.Equal("true", cut.Find(".cleanup-vr-toggle").GetAttribute("aria-pressed"));
+        Assert.Equal("fisheye", cut.Find(".vr-viewer-projection option[selected]").GetAttribute("value"));
+    }
+
+    [Fact]
     public void VrMode_DoesNotCarryOverToTheNextCard()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();

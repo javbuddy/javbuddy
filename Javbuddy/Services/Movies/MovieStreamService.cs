@@ -17,6 +17,10 @@ public interface IMovieStreamService
     /// of the movie's files, isn't on disk, or resolves outside every library root.</summary>
     Task<string?> GetFilePathAsync(int movieId, int fileId, CancellationToken ct = default);
 
+    /// <summary>The VR / 3D format (see <see cref="VrFormat"/>) of the version <paramref name="fileId"/>, or of
+    /// the movie's main file when null; null for flat video or an unknown file.</summary>
+    Task<string?> GetVrTypeAsync(int movieId, int? fileId = null, CancellationToken ct = default);
+
     /// <summary>The movie's versions the player can switch between, primary first.</summary>
     Task<IReadOnlyList<MovieVersionOption>> GetVersionsAsync(int movieId, CancellationToken ct = default);
 }
@@ -35,6 +39,22 @@ public sealed class MovieStreamService(IDbContextFactory<AppDbContext> dbFactory
 
     public async Task<string?> GetFilePathAsync(int movieId, int fileId, CancellationToken ct = default) =>
         await InsideRootsAsync(await MovieVideoFiles.FindAsync(dbFactory, localLibraryClient, movieId, fileId, ct), ct);
+
+    public async Task<string?> GetVrTypeAsync(int movieId, int? fileId = null, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var files = db.MovieFiles.AsNoTracking().Where(f => f.MovieId == movieId);
+        if (fileId is { } id) return await files.Where(f => f.Id == id).Select(f => f.VrType).FirstOrDefaultAsync(ct);
+
+        // The main file is the primary version (see MovieVideoFiles.FindMainAsync), else the first by name.
+        var main = (await files.Select(f => new { f.FileName, f.IsPrimary, f.VrType }).ToListAsync(ct))
+            .OrderByDescending(f => f.IsPrimary)
+            .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        return main is not null
+            ? main.VrType
+            : await db.Movies.AsNoTracking().Where(m => m.Id == movieId).Select(m => m.VrType).FirstOrDefaultAsync(ct);
+    }
 
     public async Task<IReadOnlyList<MovieVersionOption>> GetVersionsAsync(int movieId, CancellationToken ct = default)
     {

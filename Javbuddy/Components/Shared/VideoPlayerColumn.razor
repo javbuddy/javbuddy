@@ -19,7 +19,7 @@
             </video>
             @if (VrMode)
             {
-                <VrViewer VideoSelector="@VideoSelector" />
+                <VrViewer @key="VrProjection" VideoSelector="@VideoSelector" Projection="@VrProjection" />
             }
             @if (SeekKeys)
             {
@@ -78,6 +78,9 @@
     [Parameter] public IReadOnlyList<Javbuddy.Services.Scenes.ApexItem>? CountdownApexes { get; set; }
 
     [Parameter] public bool VrMode { get; set; }
+
+    /// <summary>The projection the VR 2D viewer starts with ("equirect" or "fisheye"); see <see cref="VrViewer"/>.</summary>
+    [Parameter] public string? VrProjection { get; set; }
 
     /// <summary>False hides the browser's own video controls, for a host that brings its own Controls.</summary>
     [Parameter] public bool NativeControls { get; set; } = true;

@@ -120,6 +120,7 @@
                                Highlights="currentHighlights"
                                Apexes="currentApexes"
                                VrMode="vrMode"
+                               VrProjection="@vrProjection"
                                SeekKeys="reviewMode"
                                ScrubBarShownChanged="shown => scrubBarShown = shown">
                 @if (showPlayer && streamUrl is not null)
@@ -331,6 +332,7 @@
         KeyboardShortcut.MarkApex,
     ];
     private bool vrMode;
+    private string? vrProjection;
     private bool loadingPlayer;
     private string? streamUrl;
     private TrickplayLayout? trickplay;
@@ -907,6 +909,9 @@
             if (currentMovie?.Id != requestedMovieId) return;
             streamUrl = path is not null ? MovieStreamService.StreamUrl(requestedMovieId) : null;
             showPlayer = streamUrl is not null;
+            // A video the VR 2D viewer can unwarp opens in it, as in the video player.
+            vrProjection = showPlayer ? VrFormat.ViewerProjection(movie.VrType) : null;
+            vrMode = vrProjection is not null;
             // The scrub bar is a nicety: load it in the background so a slow Jellyfin fallback
             // round-trip never delays the video itself.
             if (showPlayer)

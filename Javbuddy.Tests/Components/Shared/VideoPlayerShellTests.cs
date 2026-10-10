@@ -147,6 +147,44 @@ public class VideoPlayerShellTests : BunitContext
         Assert.Equal(["M", "←", ",", "F", "Esc"], ListedKeys(cut));
     }
 
+    [Theory]
+    [InlineData("VR180 SBS", "equirect")]
+    [InlineData("Fisheye SBS", "fisheye")]
+    public void AVideoTheViewerSupports_OpensInTheVr2dViewer_WithItsProjection(string vrType, string projection)
+    {
+        streamService.GetVrTypeAsync(1, Arg.Any<int?>()).Returns(vrType);
+
+        var cut = Render<VideoPlayerShell>(p => p.Add(x => x.Show, true).Add(x => x.MovieId, 1));
+
+        Assert.Equal("true", cut.Find(".video-player-vr-toggle").GetAttribute("aria-pressed"));
+        Assert.Equal(projection, cut.Find(".vr-viewer-projection option[selected]").GetAttribute("value"));
+    }
+
+    [Theory]
+    [InlineData("VR180 TB")]
+    [InlineData("VR360 SBS")]
+    [InlineData(null)]
+    public void AnyOtherVideo_PlaysFlat(string? vrType)
+    {
+        streamService.GetVrTypeAsync(1, Arg.Any<int?>()).Returns(vrType);
+
+        var cut = Render<VideoPlayerShell>(p => p.Add(x => x.Show, true).Add(x => x.MovieId, 1));
+
+        Assert.Equal("false", cut.Find(".video-player-vr-toggle").GetAttribute("aria-pressed"));
+        Assert.Empty(cut.FindAll(".vr-viewer"));
+    }
+
+    [Fact]
+    public void TheVr2dToggle_TurnsAnAutoOpenedViewerOff()
+    {
+        streamService.GetVrTypeAsync(1, Arg.Any<int?>()).Returns("VR180 SBS");
+        var cut = Render<VideoPlayerShell>(p => p.Add(x => x.Show, true).Add(x => x.MovieId, 1));
+
+        cut.Find(".video-player-vr-toggle").Click();
+
+        Assert.Empty(cut.FindAll(".vr-viewer"));
+    }
+
     [Fact]
     public void HighlightsAndApexes_AreJumpedBetween_AndTheirKeysListed()
     {

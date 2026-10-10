@@ -41,6 +41,24 @@ public class MovieStreamServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetVrTypeAsync_ReturnsTheRequestedVersionsFormat_OrThePrimarys()
+    {
+        var (movieId, primaryId, otherId) = await AddMovieWithTwoVersionsAsync();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            db.MovieFiles.Single(f => f.Id == primaryId).VrType = VrFormat.Vr180Sbs;
+            db.MovieFiles.Single(f => f.Id == otherId).VrType = VrFormat.FisheyeSbs;
+            await db.SaveChangesAsync();
+        }
+        var service = new MovieStreamService(dbFactory, localLibraryClient);
+
+        Assert.Equal(VrFormat.FisheyeSbs, await service.GetVrTypeAsync(movieId, otherId));
+        Assert.Equal(VrFormat.Vr180Sbs, await service.GetVrTypeAsync(movieId, primaryId));
+        Assert.Equal(VrFormat.Vr180Sbs, await service.GetVrTypeAsync(movieId));
+        Assert.Null(await service.GetVrTypeAsync(movieId + 1));
+    }
+
+    [Fact]
     public async Task GetMainFilePathAsync_ReturnsTheMainFile_InsideALibraryRoot()
     {
         var movieId = await AddMovieWithFileAsync("ABC-123", "ABC-123.mp4");

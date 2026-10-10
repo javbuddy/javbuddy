@@ -32,7 +32,7 @@ Javbuddy is a self-hosted manager for JAV collections, modeled on Sonarr/Radarr:
 - Mark **scenes** (non-overlapping chapters of a movie), tag the performers in each and write them back to the file as chapters.
 - Mark **highlights** (favorite clips with their own performers and tags) and **apexes** (single favorite moments). Tags roll up from clips to scenes and the movie, and actors are inherited downwards. The rules are in [Scenes, highlights and apexes](docs/scenes-and-apexes.md).
 - The **Scenes** wall (`/movies/scenes`) shows clips from the whole library, filterable by actor and tag, with Play all and Shuffle.
-- **VR 2D** unwarps side-by-side 180° equirectangular or fisheye video into a flat view you can drag around, for watching VR releases without a headset.
+- **VR 2D** unwarps side-by-side 180° equirectangular or fisheye video into a flat view you can drag around, for watching VR releases without a headset. It opens automatically for movies tagged VR180 SBS or Fisheye SBS, with the matching projection.
 - Optional **DeoVR** support (off by default): browse and play your movies in the DeoVR player, with every version as a source, scenes as chapters, and your own filtered and sorted lists (**Settings > DeoVR**).
 
 ### Actors

@@ -1,5 +1,6 @@
 @using Javbuddy.Models
 @using Javbuddy.Services
+@using Javbuddy.Services.Movies
 @using Javbuddy.Services.Trickplay
 @inject IMovieStreamService StreamService
 @inject ITrickplayService TrickplayService
@@ -109,6 +110,7 @@
                                        Apexes="Apexes"
                                        CountdownApexes="CountdownApexes"
                                        VrMode="vrMode"
+                                       VrProjection="@vrProjection"
                                        NativeControls="NativeControls"
                                        Controls="@(Controls?.Invoke(new ControlsContext(trickplay, streamMovieId == MovieId, trickplay is null ? generating : null)))"
                                        SeekMinSeconds="SeekMinSeconds"
@@ -245,6 +247,7 @@
     private TrickplayGenerating? generating;
     private bool disposed;
     private bool vrMode;
+    private string? vrProjection;
     private bool loading;
     private string? errorMessage;
     private double? openedAtSeconds;
@@ -305,6 +308,7 @@
             generating = null;
             scrubBarShown = false;
             vrMode = false;
+            vrProjection = null;
             loading = false;
             errorMessage = null;
             versions = [];
@@ -339,12 +343,14 @@
         string? url = null;
         string? error = null;
         IReadOnlyList<MovieVersionOption> loadedVersions = [];
+        string? loadedVrType = null;
         try
         {
             var path = fileId is { } id
                 ? await StreamService.GetFilePathAsync(movieId.Value, id)
                 : await StreamService.GetMainFilePathAsync(movieId.Value);
             url = path is not null ? MovieStreamService.StreamUrl(movieId.Value, fileId) : null;
+            if (url is not null) loadedVrType = await StreamService.GetVrTypeAsync(movieId.Value, fileId);
             if (ShowVersions)
             {
                 loadedVersions = await StreamService.GetVersionsAsync(movieId.Value) ?? [];
@@ -365,6 +371,7 @@
         loading = false;
         streamUrl = url;
         streamMovieId = movieId;
+        UseVrViewerFor(loadedVrType);
         versions = loadedVersions;
         playingFileId = fileId ?? loadedVersions.FirstOrDefault(v => v.IsPrimary)?.FileId ?? loadedVersions.FirstOrDefault()?.FileId;
         errorMessage = error;
@@ -466,8 +473,20 @@
             return;
         }
 
+        string? vrType = null;
+        try
+        {
+            vrType = await StreamService.GetVrTypeAsync(movieId, fileId);
+        }
+        catch (Exception)
+        {
+            // The viewer is a convenience: without the format the video just plays flat.
+        }
+        if (!Show || streamMovieId != movieId) return;
+
         playingFileId = fileId;
         errorMessage = null;
+        UseVrViewerFor(vrType);
         resumeAtSeconds = at ?? StartSeconds;
         streamUrl = MovieStreamService.StreamUrl(movieId, fileId);
     }
@@ -488,6 +507,14 @@
     }
 
     private void ToggleVrMode() => vrMode = !vrMode;
+
+    // A video the VR 2D viewer can unwarp opens in it, with the matching projection; the toggle still
+    // turns it off. Any other video plays flat.
+    private void UseVrViewerFor(string? vrType)
+    {
+        vrProjection = VrFormat.ViewerProjection(vrType);
+        vrMode = vrProjection is not null;
+    }
 
     // The code links to Movie Detail. A plain click closes the player too, since on
     // Movie Detail itself the link lands on the page the player is already open over; a new-tab

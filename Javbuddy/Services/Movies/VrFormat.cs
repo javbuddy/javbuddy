@@ -29,6 +29,16 @@ public static partial class VrFormat
     public static readonly string[] All =
         [Vr180Sbs, Vr180Tb, Vr180, Vr360Sbs, Vr360Tb, Vr360, FisheyeSbs, FisheyeTb, Fisheye, Vr, ThreeDHsbs, ThreeDFsbs, ThreeDSbs, ThreeDHtab, ThreeDFtab, ThreeDTab, ThreeDMvc, ThreeD];
 
+    /// <summary>The VR 2D viewer's projection ("equirect" or "fisheye") for a format it can unwarp, or null
+    /// when it can't. The viewer takes only side-by-side 180° video, so top-bottom, 360° and the
+    /// layout-less or 3D formats get none.</summary>
+    public static string? ViewerProjection(string? vrType) => vrType switch
+    {
+        Vr180Sbs => "equirect",
+        FisheyeSbs => "fisheye",
+        _ => null,
+    };
+
     // Jellyfin's 3D layout tokens (Emby.Naming NamingOptions.Format3DRules) plus the over/under
     // spellings, each with the format it names on its own (no VR projection token).
     private static readonly Dictionary<string, string> LayoutFormats = new(StringComparer.OrdinalIgnoreCase)
