@@ -306,7 +306,7 @@ public class ActorDetailTests : BunitContext
 
     [Theory]
     [InlineData("Genre", "Play", "GEN-001,GEN-002")]
-    [InlineData("Genre", "Play › Rough", "GEN-001")]
+    [InlineData("Genre", "Rough", "GEN-001")]
     [InlineData("Features", "Has favorite scene", "GEN-002")]
     [InlineData("Features", "Favorites", "GEN-003")]
     public async Task ActorDetail_GenreAndFeatureFilters_MatchTheMoviesPage(string group, string option, string expectedCodes)
