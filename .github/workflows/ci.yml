@@ -66,15 +66,32 @@ jobs:
           path: TestResults/e2e/*.trx
           if-no-files-found: ignore
 
-  # Test results are published by test-results.yml (workflow_run), which works for fork PRs; it
-  # needs this PR event payload to know which PR the results belong to.
-  event-file:
+  # Fork PRs get a read-only token and can't write checks/comments, so they only get the raw logs.
+  publish-test-results:
+    needs: [test, e2e]
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
     steps:
-      - uses: actions/upload-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
-          name: event-file
-          path: ${{ github.event_path }}
+          path: artifacts
+          pattern: test-results-*
+      - name: Unit test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          check_name: Unit test results
+          comment_title: Unit test results
+          files: artifacts/test-results-unit/*.trx
+      - name: E2E test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          check_name: E2E test results
+          comment_title: E2E test results
+          files: artifacts/test-results-e2e/*.trx
 
   # Each platform builds natively on its own runner (compiling ffmpeg under QEMU emulation would be
   # far too slow) and pushes by digest; docker-merge then stitches the digests into one multi-arch tag.
