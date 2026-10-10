@@ -100,10 +100,12 @@ COPY --from=native-libs --chown=$APP_UID:$APP_UID /dirs/objects /app
 WORKDIR /app
 COPY --from=build --chown=$APP_UID:$APP_UID /app/publish .
 
-# SkiaSharp decodes allocate 20-100 MB native bitmaps; with glibc's default dynamic mmap threshold
-# they fragment the heap and are never returned to the OS (idle RSS ~1.5 GB). Setting the trim
-# threshold pins the mmap threshold at 128 KB so each bitmap is unmapped when freed (idle RSS
-# ~280 MB). MALLOC_ARENA_MAX=2 made it worse.
+# Image conversion allocates large native bitmaps (decoding is already scaled via SKCodec, but
+# poster crops and 2560px full variants are still tens of MB); with glibc's default dynamic mmap
+# threshold they fragment the heap and are never returned to the OS. Setting the trim threshold
+# pins the mmap threshold at 128 KB so each bitmap is unmapped when freed. Re-measured on .NET 11 /
+# SkiaSharp 4.153 (30 movies of 8000x6000 + 4000x6000 JPEGs, thumb+full for both, 8 parallel
+# requests): idle RSS ~230 MB with this set vs ~470 MB without. MALLOC_ARENA_MAX=2 made it worse.
 ENV MALLOC_TRIM_THRESHOLD_=131072
 
 ENV ASPNETCORE_HTTP_PORTS=8080
