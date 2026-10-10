@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- Clip tag refreshes and actor discovery imports now retry or skip only on a duplicate-key database error, not on any constraint error (a foreign key or NOT NULL failure now surfaces as the real error).
 - Screen readers now announce an actor's tags (and where an inherited actor comes from) when the actor gets focus on a scene, highlight or apex row or card.
 - Deleting a tag that has subtags on Movies › Tags (the main list or Actor Tags) now shows an error message instead of breaking the page's connection.
 - Removing an actor from a scene, highlight or apex now also removes their actor tags on it, so the Scenes wall's tag filter no longer matches a clip the tagged actor has left, and the movie drops a plain tag only that actor's tag gave it.

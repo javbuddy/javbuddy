@@ -2,7 +2,6 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Tags;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Scenes;
@@ -24,9 +23,9 @@ public static class ClipTagSync
         {
             return await RefreshOnceAsync(db, movieId, ct);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: 19 })
+        catch (DbUpdateException ex) when (SqliteConstraintErrors.IsDuplicateKey(ex))
         {
-            // Still possible from outside this process; start over from what it saved. Only the MovieTag rows are
+            // Still possible from outside this process (a duplicate link; other constraint errors still throw); start over from what it saved. Only the MovieTag rows are
             // dropped from the tracker; any other pending change of the caller's stays and is saved with the retry.
             foreach (var entry in db.ChangeTracker.Entries<MovieTag>().ToList()) entry.State = EntityState.Detached;
             return await RefreshOnceAsync(db, movieId, ct);

@@ -4,7 +4,6 @@ using Javbuddy.Services.Images;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Tasks;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Actors;
@@ -386,7 +385,7 @@ public class ActorDiscoveryService(
                     addedActorIds.Add(newActor.Id);
                     importedNames.Add(newActor.DisplayName);
                 }
-                catch (DbUpdateException ex) when (ex.InnerException is SqliteException { SqliteErrorCode: 19 })
+                catch (DbUpdateException ex) when (SqliteConstraintErrors.IsDuplicateKey(ex))
                 {
                     logger?.LogWarning(ex, "Actor discovery import rejected candidate {ActorName} due to a database constraint", candidate.DisplayName);
                     failures.Add(new ActorImportFailure(candidate.DisplayName, "An actor with the same first and last name already exists."));
