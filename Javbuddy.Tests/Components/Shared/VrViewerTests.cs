@@ -25,10 +25,8 @@ public class VrViewerTests : BunitContext
         var options = cut.FindAll(".vr-viewer select.vr-viewer-projection option");
         // Equirectangular is the common encoding, so it is first and therefore the default.
         Assert.Equal(["equirect", "fisheye"], options.Select(o => o.GetAttribute("value")));
-        var fsBtn = cut.Find(".vr-viewer button.vr-viewer-fullscreen");
-        Assert.Equal("Toggle fullscreen", fsBtn.GetAttribute("aria-label"));
-        Assert.Single(fsBtn.QuerySelectorAll("svg.vr-viewer-fs-icon-enter"));
-        Assert.Single(fsBtn.QuerySelectorAll("svg.vr-viewer-fs-icon-exit"));
+        // The player's own fullscreen button (the scrub bar's, or the browser's) is the only one.
+        Assert.Empty(cut.FindAll(".vr-viewer button"));
         Assert.True(cut.Find(".vr-viewer-error").HasAttribute("hidden"));
     }
 

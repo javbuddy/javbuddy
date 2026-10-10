@@ -13,7 +13,7 @@
             <video class="video-player-media @VideoClass @(ScrubBarShown ? "video-player-scrub" : null) @(VrMode ? "video-player-vr" : null)"
                    src="@Src"
                    controls="@(NativeControls && !OwnControls)"
-                   controlslist="@(VrMode || ScrubBarShown ? "nofullscreen" : null)"
+                   controlslist="@(ScrubBarShown ? "nofullscreen" : null)"
                    @ondurationchange="OnVideoDurationChangedAsync"
                    autoplay>
             </video>

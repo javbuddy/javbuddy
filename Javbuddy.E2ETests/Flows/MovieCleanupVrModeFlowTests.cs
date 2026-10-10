@@ -115,17 +115,19 @@ public class MovieCleanupVrModeFlowTests
         // Native controls fullscreen button is hidden via controlslist
         Assert.Equal("nofullscreen", await page.Locator("video.cleanup-video").GetAttributeAsync("controlslist"));
 
-        var fsButton = page.Locator(".vr-viewer-fullscreen");
+        // The scrub bar's button is the only fullscreen button: the viewer adds none of its own.
+        Assert.Equal(0, await page.Locator(".vr-viewer button").CountAsync());
+        var fsButton = page.Locator(".scrub-bar-fullscreen");
         await Expect(fsButton).ToBeVisibleAsync();
-        await Expect(page.Locator(".vr-viewer-fs-icon-enter")).ToBeVisibleAsync();
-        await Expect(page.Locator(".vr-viewer-fs-icon-exit")).ToBeHiddenAsync();
+        await Expect(page.Locator(".scrub-bar-fs-icon-enter")).ToBeVisibleAsync();
+        await Expect(page.Locator(".scrub-bar-fs-icon-exit")).ToBeHiddenAsync();
 
         // Click the fullscreen button to enter fullscreen on the player column.
         await fsButton.ClickAsync();
 
         await page.WaitForFunctionAsync("() => document.fullscreenElement?.classList.contains('cleanup-player-column')");
-        await Expect(page.Locator(".vr-viewer-fs-icon-exit")).ToBeVisibleAsync();
-        await Expect(page.Locator(".vr-viewer-fs-icon-enter")).ToBeHiddenAsync();
+        await Expect(page.Locator(".scrub-bar-fs-icon-exit")).ToBeVisibleAsync();
+        await Expect(page.Locator(".scrub-bar-fs-icon-enter")).ToBeHiddenAsync();
 
         // Canvas is visible and rendered at fullscreen dimensions
         await Expect(page.Locator(".vr-viewer-canvas")).ToBeVisibleAsync();
@@ -152,8 +154,8 @@ public class MovieCleanupVrModeFlowTests
         // Click again to exit fullscreen
         await fsButton.ClickAsync();
         await page.WaitForFunctionAsync("() => document.fullscreenElement === null");
-        await Expect(page.Locator(".vr-viewer-fs-icon-enter")).ToBeVisibleAsync();
-        await Expect(page.Locator(".vr-viewer-fs-icon-exit")).ToBeHiddenAsync();
+        await Expect(page.Locator(".scrub-bar-fs-icon-enter")).ToBeVisibleAsync();
+        await Expect(page.Locator(".scrub-bar-fs-icon-exit")).ToBeHiddenAsync();
     }
 
     [Fact]

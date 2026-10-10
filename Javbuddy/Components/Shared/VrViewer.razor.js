@@ -69,7 +69,6 @@ export function init(root, videoSelector) {
     const video = document.querySelector(videoSelector);
     const canvas = root?.querySelector('.vr-viewer-canvas');
     const projectionSelect = root?.querySelector('.vr-viewer-projection');
-    const fullscreenBtn = root?.querySelector('.vr-viewer-fullscreen');
     const errorBox = root?.querySelector('.vr-viewer-error');
     if (!video || !canvas || !projectionSelect || !errorBox) return;
 
@@ -262,12 +261,6 @@ export function init(root, videoSelector) {
         }
     };
 
-    const onFullscreenClick = (event) => {
-        event.stopPropagation();
-        toggleFullscreen();
-    };
-    fullscreenBtn?.addEventListener('click', onFullscreenClick);
-
     const onDblClick = (event) => {
         if (event.clientY > video.getBoundingClientRect().bottom - CONTROLS_STRIP_PX) return;
         toggleFullscreen();
@@ -282,16 +275,6 @@ export function init(root, videoSelector) {
         }
     };
     window.addEventListener('keydown', onKeyDown);
-
-    const onFullscreenChange = () => {
-        const fs = isFullscreen();
-        root.classList.toggle('vr-viewer-is-fullscreen', fs);
-        if (fullscreenBtn) {
-            fullscreenBtn.setAttribute('title', fs ? 'Exit fullscreen (Esc, double-click)' : 'Toggle fullscreen (or double-click video)');
-            fullscreenBtn.setAttribute('aria-label', fs ? 'Exit fullscreen' : 'Toggle fullscreen');
-        }
-    };
-    document.addEventListener('fullscreenchange', onFullscreenChange);
 
     const originalRequestFullscreen = video.requestFullscreen;
     video.requestFullscreen = function(options) {
@@ -326,8 +309,6 @@ export function init(root, videoSelector) {
         video.removeEventListener('pointercancel', onPointerEnd);
         video.removeEventListener('dblclick', onDblClick);
         window.removeEventListener('keydown', onKeyDown);
-        document.removeEventListener('fullscreenchange', onFullscreenChange);
-        fullscreenBtn?.removeEventListener('click', onFullscreenClick);
         video.requestFullscreen = originalRequestFullscreen;
         if (originalWebkitRequestFullscreen) {
             video.webkitRequestFullscreen = originalWebkitRequestFullscreen;

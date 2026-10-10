@@ -33,46 +33,6 @@
     color: #000;
 }
 
-.vr-viewer-fullscreen {
-    position: absolute;
-    top: 0.5rem;
-    right: 4.5rem;
-    z-index: 2;
-    pointer-events: auto;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.6rem;
-    height: 1.5rem;
-    padding: 0;
-    color: #fff;
-    background-color: rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.vr-viewer-fullscreen:hover {
-    background-color: rgba(0, 0, 0, 0.8);
-}
-
-.vr-viewer-fullscreen .vr-viewer-fs-icon-exit {
-    display: none;
-}
-
-.vr-viewer-fullscreen .vr-viewer-fs-icon-enter {
-    display: block;
-}
-
-.vr-viewer.vr-viewer-is-fullscreen .vr-viewer-fullscreen .vr-viewer-fs-icon-enter {
-    display: none;
-}
-
-.vr-viewer.vr-viewer-is-fullscreen .vr-viewer-fullscreen .vr-viewer-fs-icon-exit {
-    display: block;
-}
-
 .vr-viewer-error {
     position: absolute;
     inset: 0;
