@@ -79,11 +79,13 @@ public interface ITagService
 
 public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncService nfoSyncService) : ITagService
 {
+    private const string ActorTagsCannotMerge = "Actor tags can't be merged.";
+
     public async Task<IReadOnlyList<TagListItem>> GetTagsAsync(string? search = null, TagSortOrder sort = TagSortOrder.NameAsc, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var query = db.Tags.AsNoTracking().Include(t => t.ParentTag).AsQueryable();
+        var query = db.Tags.AsNoTracking().Where(t => !t.IsActorTag).Include(t => t.ParentTag).AsQueryable();
         if (!string.IsNullOrWhiteSpace(search))
         {
             var upper = search.Trim().ToUpper();
@@ -125,6 +127,7 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
         var allTags = await db.Tags.AsNoTracking()
+            .Where(t => !t.IsActorTag)
             .Select(t => new { t.Id, t.Name, t.ParentTagId, t.NeedsReview, t.CreatedAt, MovieCount = t.MovieTags.Count })
             .ToListAsync(ct);
 
@@ -229,6 +232,10 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
             {
                 return TagOperationResult.Fail("Cannot assign an unapproved tag as a parent category. Approve the tag first.");
             }
+            if (parent.IsActorTag)
+            {
+                return TagOperationResult.Fail("Create it as an actor tag to nest it under one.");
+            }
             if (parent.ParentTagId != null)
             {
                 return TagOperationResult.Fail("Cannot nest under a subtag (maximum 2 levels supported).");
@@ -292,6 +299,11 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
             if (parent.ParentTagId != null)
             {
                 return TagOperationResult.Fail("Cannot nest under a subtag (maximum 2 levels supported).");
+            }
+
+            if (tag.IsActorTag != parent.IsActorTag)
+            {
+                return TagOperationResult.Fail("Actor tags only nest under actor tags, and plain tags under plain tags.");
             }
 
             tag.ParentTagId = parent.Id;
@@ -358,7 +370,9 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         var source = await db.Tags.AsNoTracking().FirstOrDefaultAsync(t => t.Id == sourceTagId, ct);
         if (source is null) return [];
 
-        var query = db.Tags.AsNoTracking().Where(t => t.Id != sourceTagId);
+        if (source.IsActorTag) return [];
+
+        var query = db.Tags.AsNoTracking().Where(t => t.Id != sourceTagId && !t.IsActorTag);
         if (!string.IsNullOrWhiteSpace(search))
         {
             var upper = search.Trim().ToUpper();
@@ -401,6 +415,7 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         var target = await db.Tags.FirstOrDefaultAsync(t => t.Id == targetTagId, ct);
         if (source is null) return TagOperationResult.Fail("Source tag not found.");
         if (target is null) return TagOperationResult.Fail("Target tag not found.");
+        if (source.IsActorTag || target.IsActorTag) return TagOperationResult.Fail(ActorTagsCannotMerge);
 
         if (source.Subtags.Count > 0)
         {
@@ -589,6 +604,7 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         var sources = await db.Tags.Include(t => t.Subtags).Where(t => sourceIds.Contains(t.Id)).ToListAsync(ct);
         if (sources.Count == 0) return TagOperationResult.Fail("Source tags not found.");
+        if (target.IsActorTag || sources.Any(s => s.IsActorTag)) return TagOperationResult.Fail(ActorTagsCannotMerge);
 
         var loadedSourceIds = sources.Select(s => s.Id).ToList();
         var targetLinks = await db.MovieTags.Where(mt => mt.TagId == target.Id).ToDictionaryAsync(mt => mt.MovieId, ct);
@@ -697,6 +713,10 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         if (tag is null)
         {
             return TagOperationResult.Fail("Tag not found.");
+        }
+        if (tag.IsActorTag)
+        {
+            return TagOperationResult.Fail($"\"{tag.Name}\" is an actor tag: add it to an actor in the movie, not to the movie.");
         }
 
         var existing = await db.MovieTags.FirstOrDefaultAsync(mt => mt.MovieId == movieId && mt.TagId == tagId, ct);

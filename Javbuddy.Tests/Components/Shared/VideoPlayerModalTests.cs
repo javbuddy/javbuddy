@@ -4,6 +4,7 @@ using Javbuddy.Models;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Scenes;
+using Javbuddy.Services.Tags;
 using Javbuddy.Services.Trickplay;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.AspNetCore.Components.Web;
@@ -31,6 +32,7 @@ public class VideoPlayerModalTests : BunitContext
         Services.AddSingleton<IMovieService>(new MovieService(factory));
         Services.AddSingleton<IMovieHighlightService>(new MovieHighlightService(factory));
         Services.AddSingleton<IMovieApexService>(new MovieApexService(factory));
+        Services.AddSingleton<IActorTagService>(new ActorTagService(factory));
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Tags.ITagService>());
         Services.AddSingleton(Substitute.For<ISceneChapterImportService>());
         Services.AddSingleton(Substitute.For<ISceneChapterWriteService>());

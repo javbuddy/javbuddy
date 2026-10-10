@@ -70,6 +70,10 @@
     [Parameter]
     public EventCallback OnUpdated { get; set; }
 
+    /// <summary>Lists the tags a parent can be picked from, in place of the tag library's (actor tags).</summary>
+    [Parameter]
+    public Func<Task<IReadOnlyList<TagListItem>>>? LoadTags { get; set; }
+
     private int? selectedParentId;
     private List<TagListItem> eligibleParents = [];
     private string? errorMessage;
@@ -84,7 +88,7 @@
             errorMessage = null;
             isSaving = false;
 
-            var all = await TagService.GetTagsAsync();
+            var all = LoadTags is not null ? await LoadTags() : await TagService.GetTagsAsync();
             eligibleParents = all
                 .Where(t => t.Id != Tag.Id && t.ParentTagId == null && !t.NeedsReview)
                 .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)

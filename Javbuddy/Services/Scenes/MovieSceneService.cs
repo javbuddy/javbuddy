@@ -312,7 +312,7 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
         {
             return SceneOperationResult.Fail("Scene not found.");
         }
-        if (!await db.Tags.AnyAsync(t => t.Id == tagId, ct))
+        if (!await db.Tags.AnyAsync(t => t.Id == tagId && !t.IsActorTag, ct))
         {
             return SceneOperationResult.Fail("Tag not found.");
         }

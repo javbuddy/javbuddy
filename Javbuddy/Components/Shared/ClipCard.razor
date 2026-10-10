@@ -30,7 +30,7 @@
                 <span class="scene-wall-fav" title="Favorite apex"><FavoriteHeartIcon Filled="true" Size="14" /></span>
             }
         </div>
-        @CardBody(null, apex.Code, apex.MovieTitle, apex.Actors, apex.Tags, [])
+        @CardBody(null, apex.Code, apex.MovieTitle, apex.ActorLabels ?? apex.Actors, apex.Tags, [])
     </a>
 }
 else if (Highlight is { } highlight)
@@ -55,7 +55,7 @@ else if (Highlight is { } highlight)
             }
             @ApexCount(highlight.ApexCount)
         </div>
-        @CardBody(highlight.DisplayTitle, highlight.Code, highlight.MovieTitle, highlight.Actors, highlight.Tags, highlight.ImplicitTags)
+        @CardBody(highlight.DisplayTitle, highlight.Code, highlight.MovieTitle, highlight.ActorLabels ?? highlight.Actors, highlight.Tags, highlight.ImplicitTags)
     </a>
 }
 else if (Scene is { } scene)
@@ -83,7 +83,7 @@ else if (Scene is { } scene)
             }
             @ApexCount(scene.ApexCount)
         </div>
-        @CardBody(scene.DisplayTitle, scene.Code, scene.MovieTitle, scene.Actors, scene.Tags, scene.ImplicitTags)
+        @CardBody(scene.DisplayTitle, scene.Code, scene.MovieTitle, scene.ActorLabels ?? scene.Actors, scene.Tags, scene.ImplicitTags)
     </a>
 }
 

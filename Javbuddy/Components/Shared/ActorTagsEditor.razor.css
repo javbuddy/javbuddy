@@ -1,0 +1,88 @@
+/* Reads the same --scene-editor-* custom properties as the clip editors; dark by default. */
+.actor-tags {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.actor-tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 0.5rem;
+}
+
+.actor-tags-name {
+    min-width: 5rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.actor-tags-row ::deep .tag-search {
+    margin-top: 0;
+    max-width: 12rem;
+}
+
+.actor-tags-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.actor-tags-hint,
+.actor-tags-error {
+    font-size: 0.75rem;
+    color: var(--scene-editor-muted, #94a3b8);
+}
+
+.actor-tags-error {
+    color: #f87171;
+}
+
+.actor-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    border: 1px solid #2f8fd6;
+    border-radius: 999px;
+    background-color: rgba(47, 143, 214, 0.18);
+}
+
+/* Inherited: dashed and italic like the clip editors' inherited actors; rolled up: dashed, muted, no remove. */
+.actor-tag-chip-inherited {
+    font-style: italic;
+    color: var(--scene-editor-muted, #94a3b8);
+    background-color: rgba(47, 143, 214, 0.06);
+    border-style: dashed;
+    border-color: rgba(47, 143, 214, 0.6);
+}
+
+.actor-tag-chip-rolled-up {
+    font-style: italic;
+    color: var(--scene-editor-muted, #94a3b8);
+    background: transparent;
+    border-style: dashed;
+    border-color: var(--scene-editor-border, rgba(255, 255, 255, 0.22));
+    cursor: help;
+}
+
+.actor-tag-chip-remove {
+    appearance: none;
+    padding: 0;
+    font-size: 0.85rem;
+    line-height: 1;
+    color: inherit;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+
+.actor-tag-chip-remove:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+

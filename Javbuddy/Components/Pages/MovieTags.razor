@@ -3,6 +3,7 @@
 @using Javbuddy.Services
 @inject ITagService TagService
 @inject ITagRuleService TagRuleService
+@inject IActorTagService ActorTagService
 @inject MovieFilterNavigationState FilterNavigationState
 @inject NavigationManager Nav
 @rendermode InteractiveServer
@@ -27,6 +28,10 @@
             <button type="button" class="tags-rail-item @(activeRail == RailItem.NeedsReview ? "active" : "")" @onclick="() => SwitchRailAsync(RailItem.NeedsReview)">
                 <span>Needs Review</span>
                 <span class="tags-rail-count">@allTags.Count(t => t.NeedsReview)</span>
+            </button>
+            <button type="button" class="tags-rail-item @(activeRail == RailItem.ActorTags ? "active" : "")" @onclick="() => SwitchRailAsync(RailItem.ActorTags)">
+                <span>Actor Tags</span>
+                <span class="tags-rail-count">@actorTags.Count</span>
             </button>
         </div>
 
@@ -208,6 +213,109 @@
                 </div>
             }
         }
+        else if (activeRail == RailItem.ActorTags)
+        {
+            <div class="tags-panel-header">
+                <h2 class="h5 mb-0">Actor Tags</h2>
+                <p class="text-muted small mb-0">
+                    @actorTags.Count actor tag@(actorTags.Count == 1 ? "" : "s") total. Tags for one actor within a movie or clip, like blonde or brunette, with one level of
+                    parent and subtag (hair › long). They're added to actors in Movie Detail (Edit Cast) and the scene editor, never to a movie directly.
+                </p>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                <input type="text" class="form-control" style="max-width: 280px;" placeholder="Search tags…"
+                       value="@actorSearch" @oninput="e => actorSearch = e.Value?.ToString() ?? string.Empty" />
+                <select class="form-select" style="max-width: 220px;" @bind="actorSort">
+                    <option value="@TagSortOrder.NameAsc">Name</option>
+                    <option value="@TagSortOrder.UsageDesc">Usage (most)</option>
+                    <option value="@TagSortOrder.UsageAsc">Usage (least)</option>
+                    <option value="@TagSortOrder.DateAddedDesc">Date added</option>
+                </select>
+                <div class="ms-auto d-flex gap-2">
+                    <button type="button" class="btn btn-primary" @onclick="() => showActorCreateModal = true">Create Tag</button>
+                </div>
+            </div>
+
+            @if (VisibleActorTags.Count == 0)
+            {
+                <p class="text-muted">No tags found.</p>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th class="text-end">Usage</th>
+                                <th>Added</th>
+                                <th style="width: 220px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var tag in VisibleActorTags)
+                            {
+                                <tr>
+                                    <td>
+                                        @if (renamingTagId == tag.Id)
+                                        {
+                                            <div class="d-flex gap-2">
+                                                <input type="text" class="form-control form-control-sm" style="max-width: 220px;" @bind="renameValue" @bind:event="oninput" />
+                                                <button type="button" class="btn btn-sm btn-primary" @onclick="() => ConfirmRenameAsync(tag.Id)">Save</button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelRename">Cancel</button>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @if (tag.ParentTagName != null)
+                                            {
+                                                <span class="badge bg-secondary me-1">@tag.ParentTagName</span>
+                                            }
+                                            <span>@tag.Name</span>
+                                            @if (tag.SubtagCount > 0)
+                                            {
+                                                <span class="badge bg-dark-subtle text-body-secondary ms-1">@tag.SubtagCount subtags</span>
+                                            }
+                                        }
+                                    </td>
+                                    <td class="text-end"><span class="badge rounded-pill text-bg-secondary">@tag.UseCount</span></td>
+                                    <td class="text-muted small">@tag.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                    <td>
+                                        @if (pendingConfirm.tagId == tag.Id)
+                                        {
+                                            <span class="me-2 small">@pendingConfirm.label</span>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="ConfirmPendingAsync">Yes</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="CancelPending">No</button>
+                                        }
+                                        else
+                                        {
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Filter movies by this tag" @onclick="() => FilterByTag(tag.Name)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2zm1 .5v1.308l4.372 4.858A.5.5 0 0 1 7 8.5v5.306l2-.666V8.5a.5.5 0 0 1 .128-.334L13.5 3.308V2h-11z" /></svg>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Set or change parent tag" @onclick="() => OpenActorParentModal(tag)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.656 1.944 1.576.242 1.208 1.34 2.08 2.592 2.08H13.5A1.5 1.5 0 0 1 15 7.156v6.344a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 13.5V3.5z" /></svg>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Rename" @onclick="() => StartRenameActorTag(tag)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z" /></svg>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary" title="Make a plain tag again (only while nothing uses it)" @onclick="() => MakePlainAsync(tag.Id)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M2 2h5.586a1 1 0 0 1 .707.293l6 6a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-6-6A1 1 0 0 1 2 7.586V2zm3 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" /></svg>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" title="Delete" @onclick="() => RequestConfirm(tag.Id, tag.Name, PendingAction.Delete)">
+                                                    <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3.5.5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" /><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3h11V2h-11v1z" /></svg>
+                                                </button>
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
         else if (activeRail == RailItem.Rules)
         {
             <div class="card mb-3">
@@ -355,10 +463,13 @@
 
 <TagMergeModal Show="showMergeModal" SourceTag="mergeSourceTag" SourceTags="mergeSourceTags" OnClose="CloseMergeModal" OnMerged="OnMergedAsync" />
 <TagCreateModal Show="showCreateModal" OnClose="CloseCreateTagModal" OnCreated="OnTagCreatedAsync" />
+<TagCreateModal Show="showActorCreateModal" Title="Create Actor Tag" LoadTags="LoadActorTagItemsAsync" CreateTag="CreateActorTagAsync"
+                OnClose="() => showActorCreateModal = false" OnCreated="OnActorTagCreatedAsync" />
+<TagParentModal Show="showActorParentModal" Tag="actorParentTarget" LoadTags="LoadActorTagItemsAsync" OnClose="CloseActorParentModal" OnUpdated="OnActorParentUpdatedAsync" />
 <TagParentModal Show="showParentModal" Tag="parentTargetTag" OnClose="CloseParentModal" OnUpdated="OnParentUpdatedAsync" />
 
 @code {
-    private enum RailItem { AllTags, NeedsReview, Rules, Ignored }
+    private enum RailItem { AllTags, NeedsReview, ActorTags, Rules, Ignored }
     private enum PendingAction { Delete, Ignore }
 
     private RailItem activeRail = RailItem.AllTags;
@@ -401,6 +512,7 @@
         await RefreshAllTagsAsync();
         await LoadRulesAsync();
         await LoadIgnoredAsync();
+        actorTags = await ActorTagService.GetActorTagsAsync();
         autoIgnoreNonLatin = await TagRuleService.GetAutoIgnoreNonLatinAsync();
     }
 
@@ -413,6 +525,88 @@
         {
             await LoadTagsAsync();
         }
+        else if (item == RailItem.ActorTags)
+        {
+            await LoadActorTagsAsync();
+        }
+    }
+
+    private IReadOnlyList<ActorTagListItem> actorTags = [];
+    private string actorSearch = "";
+    private TagSortOrder actorSort = TagSortOrder.NameAsc;
+    private bool showActorCreateModal;
+    private bool showActorParentModal;
+    private TagListItem? actorParentTarget;
+
+    // The actor tags the search matches (their name or their parent's), in the chosen order.
+    private IReadOnlyList<ActorTagListItem> VisibleActorTags
+    {
+        get
+        {
+            var matches = string.IsNullOrWhiteSpace(actorSearch)
+                ? actorTags
+                : [.. actorTags.Where(t => t.Name.Contains(actorSearch.Trim(), StringComparison.OrdinalIgnoreCase)
+                    || (t.ParentTagName?.Contains(actorSearch.Trim(), StringComparison.OrdinalIgnoreCase) ?? false))];
+            return actorSort switch
+            {
+                TagSortOrder.UsageDesc => [.. matches.OrderByDescending(t => t.UseCount).ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)],
+                TagSortOrder.UsageAsc => [.. matches.OrderBy(t => t.UseCount).ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)],
+                TagSortOrder.DateAddedDesc => [.. matches.OrderByDescending(t => t.CreatedAt)],
+                _ => matches,
+            };
+        }
+    }
+
+    private async Task LoadActorTagsAsync() => actorTags = await ActorTagService.GetActorTagsAsync();
+
+    // The create and parent modals pick parents from the actor tags (roots only, which they filter on ParentTagId).
+    private async Task<IReadOnlyList<TagListItem>> LoadActorTagItemsAsync() =>
+        [.. (await ActorTagService.GetActorTagsAsync()).Select(ToTagListItem)];
+
+    private static TagListItem ToTagListItem(ActorTagListItem t) =>
+        new(t.Id, t.Name, t.UseCount, false, t.CreatedAt, t.ParentTagId, t.ParentTagName, t.SubtagCount);
+
+    private Task<TagOperationResult> CreateActorTagAsync(string name, int? parentTagId) =>
+        ActorTagService.CreateActorTagAsync(name, parentTagId);
+
+    private async Task OnActorTagCreatedAsync(Tag tag)
+    {
+        showActorCreateModal = false;
+        SetStatus($"Actor tag \"{tag.Name}\" created.", false);
+        await LoadActorTagsAsync();
+    }
+
+    private void OpenActorParentModal(ActorTagListItem tag)
+    {
+        actorParentTarget = ToTagListItem(tag);
+        showActorParentModal = true;
+    }
+
+    private void CloseActorParentModal()
+    {
+        showActorParentModal = false;
+        actorParentTarget = null;
+    }
+
+    private async Task OnActorParentUpdatedAsync()
+    {
+        CloseActorParentModal();
+        SetStatus("Tag parent updated.", false);
+        await LoadActorTagsAsync();
+    }
+
+    private async Task MakePlainAsync(int tagId)
+    {
+        var result = await ActorTagService.SetIsActorTagAsync(tagId, false);
+        SetStatus(result.Success ? "The tag is a plain tag again." : result.ErrorMessage ?? "Failed to change the tag.", !result.Success);
+        await RefreshAllTagsAsync();
+        await LoadActorTagsAsync();
+    }
+
+    private void StartRenameActorTag(ActorTagListItem tag)
+    {
+        renamingTagId = tag.Id;
+        renameValue = tag.Name;
     }
 
     private async Task LoadTagsAsync()
@@ -516,6 +710,7 @@
         SetStatus(result.Success ? "Tag renamed." : result.ErrorMessage ?? "Failed to rename tag.", !result.Success);
         await LoadTagsAsync();
         await RefreshAllTagsAsync();
+        await LoadActorTagsAsync();
     }
 
     private async Task ApproveAsync(int tagId)
@@ -562,6 +757,7 @@
 
         await LoadTagsAsync();
         await RefreshAllTagsAsync();
+        await LoadActorTagsAsync();
     }
 
     private void OpenMergeModal(TagListItem tag)

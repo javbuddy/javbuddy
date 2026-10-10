@@ -5,6 +5,7 @@ using Javbuddy.Models;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.SceneMedia;
 using Javbuddy.Services.Scenes;
+using Javbuddy.Services.Tags;
 using Javbuddy.Services.Trickplay;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,11 +21,17 @@ public class MovieScenesSectionTests : BunitContext
     private readonly ISceneMediaService sceneMedia = Substitute.For<ISceneMediaService>();
     private readonly IHighlightMediaService highlightMedia = Substitute.For<IHighlightMediaService>();
     private readonly IMovieApexService apexService = Substitute.For<IMovieApexService>();
+    private readonly IActorTagService actorTagService = Substitute.For<IActorTagService>();
     private readonly IApexMediaService apexMedia = Substitute.For<IApexMediaService>();
     private readonly ISceneMediaService workerMedia = Substitute.For<ISceneMediaService>();
     private readonly ITrickplayService trickplayService = Substitute.For<ITrickplayService>();
     private readonly IHighlightTrickplayService highlightTrickplay = Substitute.For<IHighlightTrickplayService>();
     private readonly SceneMediaQueue mediaQueue;
+
+    private static readonly ClipActorTagsResult NoActorTags = new(
+        new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>());
+
+    private static readonly IReadOnlyList<ActorTagListItem> Library = [new(40, "Blonde", 0)];
 
     private static readonly Movie PlayableMovie = new()
     {
@@ -62,6 +69,9 @@ public class MovieScenesSectionTests : BunitContext
         Services.AddSingleton(sceneService);
         Services.AddSingleton(highlightService);
         Services.AddSingleton(apexService);
+        actorTagService.GetEffectiveAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(NoActorTags);
+        actorTagService.GetActorTagsAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Library);
+        Services.AddSingleton(actorTagService);
         Services.AddSingleton(apexMedia);
         apexMedia.ServesPreview.Returns(true);
         Services.AddSingleton(sceneMedia);
@@ -291,7 +301,7 @@ public class MovieScenesSectionTests : BunitContext
         Assert.DoesNotContain("movie-scenes-actors-inherited", cards[0].QuerySelector(".movie-scenes-actors")!.ClassName);
         var inherited = cards[1].QuerySelector(".movie-scenes-actors")!;
         Assert.Contains("movie-scenes-actors-inherited", inherited.ClassName);
-        Assert.Equal("From the cast", inherited.GetAttribute("title"));
+        Assert.Equal("From the cast", inherited.QuerySelector(".actor-hover-popover")!.TextContent.Trim());
         Assert.Equal("Cleo", inherited.QuerySelector(".movie-scenes-actor")!.LastChild!.TextContent.Trim());
     }
 
@@ -316,7 +326,9 @@ public class MovieScenesSectionTests : BunitContext
         // From its scene's actors, grayed.
         Assert.Equal(["Alice", "Bea"], actors[0].QuerySelectorAll(".movie-scenes-actor").Select(a => a.LastChild!.TextContent.Trim()));
         Assert.Contains("movie-scenes-actors-inherited", actors[0].ClassName);
-        Assert.Equal("From scene 1", actors[0].GetAttribute("title"));
+        // Where they come from is in the hover popover, not a title.
+        Assert.Null(actors[0].GetAttribute("title"));
+        Assert.All(actors[0].QuerySelectorAll(".actor-hover-popover"), popover => Assert.Equal("From scene 1", popover.TextContent.Trim()));
         Assert.Equal("/actor-image/11/thumb", actors[0].QuerySelector("img.movie-scenes-actor-avatar")!.GetAttribute("src"));
         // Its own, not grayed.
         Assert.Equal("Bea", actors[1].QuerySelector(".movie-scenes-actor")!.LastChild!.TextContent.Trim());
@@ -324,7 +336,7 @@ public class MovieScenesSectionTests : BunitContext
         Assert.Null(actors[1].GetAttribute("title"));
         // Its scene has no actors, so the cast, grayed.
         Assert.Equal("Cleo", actors[2].QuerySelector(".movie-scenes-actor")!.LastChild!.TextContent.Trim());
-        Assert.Equal("From the cast", actors[2].GetAttribute("title"));
+        Assert.Equal("From the cast", actors[2].QuerySelector(".actor-hover-popover")!.TextContent.Trim());
     }
 
     [Fact]
@@ -630,5 +642,21 @@ public class MovieScenesSectionTests : BunitContext
 
         Assert.Equal(reloaded, await changedApexes.Task.WaitAsync(TimeSpan.FromSeconds(10)));
         await mediaQueue.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public void HoveringASceneActor_OffersTheirTagsInAPopover_NotATitle()
+    {
+        actorTagService.GetEffectiveAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(new ClipActorTagsResult(
+            new Dictionary<int, IReadOnlyList<EffectiveActorTag>> { [1] = [new EffectiveActorTag(11, 40, false, "the movie")] },
+            new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(),
+            new Dictionary<int, IReadOnlyList<EffectiveActorTag>>()));
+        var cut = RenderSection(LocalMovie);
+
+        var alice = cut.FindAll(".movie-scenes-grid .actor-hover").First(a => a.TextContent.Contains("Alice"));
+        Assert.Contains("Blonde", alice.QuerySelector(".actor-hover-popover")!.TextContent);
+        Assert.Null(alice.GetAttribute("title"));
+        // Bea has none and isn't inherited, so there's nothing to open.
+        Assert.DoesNotContain(cut.FindAll(".movie-scenes-grid .actor-hover"), a => a.TextContent.Contains("Bea"));
     }
 }

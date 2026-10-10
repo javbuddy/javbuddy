@@ -70,6 +70,11 @@ else
                         OnToggleActor="actorId => ApplyFilterAsync(() => filters.ActorIds.Toggle(actorId))"
                         OnSelectAllActors="actorIds => ApplyFilterAsync(() => filters.ActorIds.UnionWith(actorIds))"
                         OnSelectNoneActors="() => ApplyFilterAsync(() => filters.ActorIds.Clear())"
+                        AvailableActorTags="@availableActorTags"
+                        ActorTagFilter="@filters.ActorTagIds"
+                        OnToggleActorTag="tagId => ApplyFilterAsync(() => filters.ActorTagIds.Toggle(tagId))"
+                        OnSelectAllActorTags="tagIds => ApplyFilterAsync(() => filters.ActorTagIds.UnionWith(tagIds))"
+                        OnSelectNoneActorTags="() => ApplyFilterAsync(() => filters.ActorTagIds.Clear())"
                         ShowActorAttributes="true"
                         ActorAttributeOptions="@actorAttributeOptions"
                         ActorAttributeSelection="@filters.ActorAttributes"
@@ -218,6 +223,7 @@ else
     private List<string> availableStudios = new();
     private List<string> availableGenres = new();
     private IReadOnlyList<MovieActorOption> availableActors = [];
+    private IReadOnlyList<MovieActorOption> availableActorTags = [];
     private ActorAttributeOptions actorAttributeOptions = ActorAttributeOptions.None;
 
     private bool showOptionsModal;
@@ -266,6 +272,7 @@ else
             {
                 RestoreFromPersisted(persisted);
                 availableActors = await GridQueries.GetActorOptionsAsync();
+                availableActorTags = await GridQueries.GetActorTagOptionsAsync();
                 restoredFromPersistedState = true;
                 return;
             }
@@ -574,6 +581,14 @@ else
         availableGenres = summary.Genres;
         actorAttributeOptions = summary.ActorAttributes;
         availableActors = summary.Actors;
+        availableActorTags = summary.ActorTags;
+
+        // Likewise a remembered actor tag nothing carries any more.
+        if (filters.ActorTagIds.RemoveWhere(id => !availableActorTags.Any(t => t.Id == id)) > 0)
+        {
+            await LoadCountsAsync();
+            return true;
+        }
 
         // A remembered actor no longer linked to any movie (deleted, merged) would match nothing.
         if (filters.ActorIds.RemoveWhere(id => !availableActors.Any(a => a.Id == id)) > 0)

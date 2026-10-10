@@ -28,5 +28,11 @@ public class Tag
     /// list. Cleared by explicitly approving, renaming, or merging the tag.</summary>
     public bool NeedsReview { get; set; }
 
+    /// <summary>True for a tag that applies to one actor within a movie, scene, highlight or apex
+    /// ("blonde", ActorTagService), not to the whole movie. Such a tag is only added through the actor-tag
+    /// editors, never as a plain movie or clip tag, and has no parent or subtags. Its plain MovieTag rows are
+    /// always FromClips (ClipTagSync), so they reach MetaGenres and the .nfo.</summary>
+    public bool IsActorTag { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

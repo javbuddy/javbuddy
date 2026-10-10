@@ -11,7 +11,8 @@ namespace Javbuddy.Services.Scenes;
 /// matches the scene title, movie code or movie title. Scenes hidden from the overview
 /// are left out unless IncludeHidden. ApexOnly keeps clips whose range contains an apex of their movie;
 /// ApexTagIds keeps those containing an apex with one of the tags (or a subtag), implying ApexOnly
-///.</summary>
+///. ActorTagIds keeps clips where an actor has one of the actor tags (Tag.IsActorTag), own, inherited or rolled
+/// up; with ActorIds, it must be one of those actors who has it ("Mei, brunette").</summary>
 public sealed record SceneWallFilter(
     IReadOnlyCollection<int>? TagIds = null,
     IReadOnlyCollection<int>? ActorIds = null,
@@ -21,7 +22,8 @@ public sealed record SceneWallFilter(
     bool IncludeHidden = false,
     ActorAttributeSelection? ActorAttributes = null,
     bool ApexOnly = false,
-    IReadOnlyCollection<int>? ApexTagIds = null);
+    IReadOnlyCollection<int>? ApexTagIds = null,
+    IReadOnlyCollection<int>? ActorTagIds = null);
 
 public enum SceneWallSort
 {
@@ -45,6 +47,10 @@ public sealed record SceneWallCard(
     long? ThumbVersion,
     long? PreviewVersion)
 {
+    /// <summary>The card's actors with their actor tags ("Mei (Brunette)"), when any have some; the card shows these in place of
+    /// Actors.</summary>
+    public IReadOnlyList<string>? ActorLabels { get; init; }
+
     /// <summary>Whether the movie has a local video file the clip player can stream.</summary>
     public bool HasLocalVideo { get; init; }
 
@@ -80,6 +86,10 @@ public sealed record HighlightWallCard(
     long? ThumbVersion,
     long? PreviewVersion)
 {
+    /// <summary>The card's actors with their actor tags ("Mei (Brunette)"), when any have some; the card shows these in place of
+    /// Actors.</summary>
+    public IReadOnlyList<string>? ActorLabels { get; init; }
+
     /// <summary>Whether the movie has a local video file the clip player can stream.</summary>
     public bool HasLocalVideo { get; init; }
 
@@ -115,6 +125,10 @@ public sealed record ApexWallCard(
     bool IsFavorite,
     long? PreviewVersion)
 {
+    /// <summary>The card's actors with their actor tags ("Mei (Brunette)"), when any have some; the card shows these in place of
+    /// Actors.</summary>
+    public IReadOnlyList<string>? ActorLabels { get; init; }
+
     /// <summary>Whether the movie has a local video file the clip player can stream.</summary>
     public bool HasLocalVideo { get; init; }
 
@@ -143,6 +157,9 @@ public sealed record SceneWallOptions(
 {
     /// <summary>Every tag on an apex, for the Apex tag filter.</summary>
     public IReadOnlyList<SceneWallOption> ApexTags { get; init; } = [];
+
+    /// <summary>Every actor tag (Tag.IsActorTag) some clip of the view has for an actor, for the Actor tag filter.</summary>
+    public IReadOnlyList<SceneWallOption> ActorTags { get; init; } = [];
 }
 
 public interface ISceneWallQueryService
@@ -234,7 +251,9 @@ public sealed class SceneWallQueryService(
                 ImplicitTags = rollups[x.Row.MovieId].Scenes.GetValueOrDefault(x.Item.Id, []),
             })
             .ToList();
-        return new SceneWallPage(cards, total);
+        var sceneTags = await ActorTagLookup.LoadAsync(db, ids => db.SceneEffectiveActorTags.Where(r => !r.IsRolledUp && ids.Contains(r.SceneId)).Select(r => new ActorTagRow(r.SceneId, r.ActorId, r.Tag.ParentTag != null ? r.Tag.ParentTag.Name + " › " + r.Tag.Name : r.Tag.Name)),
+            cards.Select(c => c.SceneId), ct);
+        return new SceneWallPage([.. cards.Select(c => c with { ActorLabels = sceneTags.Labels(c.SceneId, c.Actors) })], total);
     }
 
     public async Task<SceneWallOptions> GetOptionsAsync(bool includeHidden = false, CancellationToken ct = default)
@@ -264,6 +283,7 @@ public sealed class SceneWallQueryService(
             attributes)
         {
             ApexTags = await ApexTagOptionsAsync(db, ct),
+            ActorTags = await ActorTagOptionsAsync(db.SceneEffectiveActorTags.Select(r => r.Tag), ct),
         };
     }
 
@@ -362,7 +382,9 @@ public sealed class SceneWallQueryService(
                 ImplicitTags = rollups[p.MovieId].Highlights.GetValueOrDefault(p.Id, []),
             };
         }).ToList();
-        return new HighlightWallPage(cards, total);
+        var highlightTags = await ActorTagLookup.LoadAsync(db, ids => db.HighlightEffectiveActorTags.Where(r => !r.IsRolledUp && ids.Contains(r.HighlightId)).Select(r => new ActorTagRow(r.HighlightId, r.ActorId, r.Tag.ParentTag != null ? r.Tag.ParentTag.Name + " › " + r.Tag.Name : r.Tag.Name)),
+            cards.Select(c => c.HighlightId), ct);
+        return new HighlightWallPage([.. cards.Select(c => c with { ActorLabels = highlightTags.Labels(c.HighlightId, c.Actors) })], total);
     }
 
     public async Task<ApexWallPage> GetApexPageAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, int skip, int take, CancellationToken ct = default)
@@ -413,7 +435,9 @@ public sealed class SceneWallQueryService(
                 };
             })
             .ToList();
-        return new ApexWallPage(cards, total);
+        var apexTags = await ActorTagLookup.LoadAsync(db, ids => db.ApexEffectiveActorTags.Where(r => ids.Contains(r.ApexId)).Select(r => new ActorTagRow(r.ApexId, r.ActorId, r.Tag.ParentTag != null ? r.Tag.ParentTag.Name + " › " + r.Tag.Name : r.Tag.Name)),
+            cards.Select(c => c.ApexId), ct);
+        return new ApexWallPage([.. cards.Select(c => c with { ActorLabels = apexTags.Labels(c.ApexId, c.Actors) })], total);
     }
 
     public async Task<SceneWallOptions> GetApexOptionsAsync(CancellationToken ct = default)
@@ -436,7 +460,20 @@ public sealed class SceneWallQueryService(
             attributes)
         {
             ApexTags = await ApexTagOptionsAsync(db, ct),
+            ActorTags = await ActorTagOptionsAsync(db.HighlightEffectiveActorTags.Select(r => r.Tag), ct),
         };
+    }
+
+    // The tags some clip has for an actor, "Hair › Long" for a subtag, and the parents of those (a parent matches its subtags).
+    private static async Task<IReadOnlyList<SceneWallOption>> ActorTagOptionsAsync(IQueryable<Tag> usedTags, CancellationToken ct)
+    {
+        var used = await usedTags.Select(t => new { t.Id, t.Name, t.ParentTagId, Parent = t.ParentTag != null ? t.ParentTag.Name : null }).Distinct().ToListAsync(ct);
+        // Grouped by parent, the parent first and its subtags after it: ordering by the full label would slip "Hair colour"
+        // between "Hair" and "Hair › Short".
+        var rows = used.Select(t => (Option: new SceneWallOption(t.Id, t.Parent is null ? t.Name : $"{t.Parent} › {t.Name}"), Group: t.Parent ?? t.Name, IsSubtag: t.Parent is not null, t.Name)).ToList();
+        rows.AddRange(used.Where(t => t.ParentTagId is not null && used.All(u => u.Id != t.ParentTagId))
+            .DistinctBy(t => t.ParentTagId).Select(t => (Option: new SceneWallOption(t.ParentTagId!.Value, t.Parent!), Group: t.Parent!, IsSubtag: false, Name: t.Parent!)));
+        return rows.OrderBy(r => r.Group, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.IsSubtag).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => r.Option).ToList();
     }
 
     private static async Task<IReadOnlyList<SceneWallOption>> ApexTagOptionsAsync(AppDbContext db, CancellationToken ct)
@@ -493,6 +530,7 @@ public sealed class SceneWallQueryService(
             attributes)
         {
             ApexTags = await ApexTagOptionsAsync(db, ct),
+            ActorTags = await ActorTagOptionsAsync(db.ApexEffectiveActorTags.Select(r => r.Tag), ct),
         };
     }
 
@@ -594,6 +632,13 @@ public sealed class SceneWallQueryService(
             var withActor = sceneActors.Where(r => actorIds.Contains(r.ActorId)).Select(r => r.OwnerId);
             query = query.Where(s => withActor.Contains(s.Id));
         }
+        if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
+        {
+            var (anyActor, onlyActors) = ActorTagActors(filter);
+            var matchingActorTags = MatchingTagIds(db, actorTagIds);
+            var withActorTag = db.SceneEffectiveActorTags.Where(r => matchingActorTags.Contains(r.TagId) && (anyActor || onlyActors.Contains(r.ActorId))).Select(r => r.SceneId);
+            query = query.Where(s => withActorTag.Contains(s.Id));
+        }
         if (filter.ActorAttributes is { IsEmpty: false } attributes)
         {
             // The scene's effective actresses count (like the Actor filter), and one of them must meet
@@ -649,6 +694,13 @@ public sealed class SceneWallQueryService(
             var withActor = highlightActors.Where(r => actorIds.Contains(r.ActorId)).Select(r => r.OwnerId);
             query = query.Where(h => withActor.Contains(h.Id));
         }
+        if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
+        {
+            var (anyActor, onlyActors) = ActorTagActors(filter);
+            var matchingActorTags = MatchingTagIds(db, actorTagIds);
+            var withActorTag = db.HighlightEffectiveActorTags.Where(r => matchingActorTags.Contains(r.TagId) && (anyActor || onlyActors.Contains(r.ActorId))).Select(r => r.HighlightId);
+            query = query.Where(h => withActorTag.Contains(h.Id));
+        }
         if (filter.ActorAttributes is { IsEmpty: false } attributes)
         {
             // Like the scene filter, but over the highlight's effective actors.
@@ -684,6 +736,10 @@ public sealed class SceneWallQueryService(
         return query;
     }
 
+    /// <summary>Whether an actor-tag filter matches any actor, else the actors it is limited to (the Actor filter's).</summary>
+    private static (bool AnyActor, IReadOnlyCollection<int> OnlyActors) ActorTagActors(SceneWallFilter filter) =>
+        filter.ActorIds is { Count: > 0 } actorIds ? (false, actorIds) : (true, []);
+
     private static bool WantsApex(SceneWallFilter filter) => filter.ApexOnly || filter.ApexTagIds is { Count: > 0 };
 
     /// <summary>The apexes a scene or highlight must contain one of: all of them, or those with a selected
@@ -707,6 +763,13 @@ public sealed class SceneWallQueryService(
         {
             var withActor = apexActors.Where(r => actorIds.Contains(r.ActorId)).Select(r => r.OwnerId);
             query = query.Where(a => withActor.Contains(a.Id));
+        }
+        if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
+        {
+            var (anyActor, onlyActors) = ActorTagActors(filter);
+            var matchingActorTags = MatchingTagIds(db, actorTagIds);
+            var withActorTag = db.ApexEffectiveActorTags.Where(r => matchingActorTags.Contains(r.TagId) && (anyActor || onlyActors.Contains(r.ActorId))).Select(r => r.ApexId);
+            query = query.Where(a => withActorTag.Contains(a.Id));
         }
         if (filter.ActorAttributes is { IsEmpty: false } attributes)
         {

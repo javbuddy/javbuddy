@@ -10,12 +10,14 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- Two refreshes of the same movie's clip tags running at once no longer fail on a duplicate tag link (they now run one at a time).
 - In the video player's VR 2D mode, the projection picker now fades out with the scrub bar and header when the player is idle, and comes back with them.
 - The VR 2D player no longer has a second fullscreen button over the video; the player's own fullscreen button (and the F key or a double-click) does the job.
 - Movie Detail's Delete dialog no longer offers "Delete files from disk" for a movie with no files on disk, such as a wanted movie.
 
 ### Added
 
+- Actor tags: tag one actor within a movie, scene, highlight or apex (blonde or brunette, say) from Movie Detail's cast section and the scene editor, and filter by them on the Movies grid and the Scenes wall, alone or together with an actor ("Mei, brunette"). They flow down from the movie to scenes, highlights and apexes per actor, and roll up like other clip tags. A movie also gets each actor tag as a plain tag, so they reach its genres and `.nfo`. They nest one level (hair › long), and a parent tag matches its subtags in the filters. Manage them under **Movies > Tags > Actor Tags**, laid out like the main tags (search, sort, create, set parent, rename, delete); they can't be added to a movie or clip as plain tags or merged. On Movie Detail they show as small colored pills under each cast member (the first two, then "+N"), with all of them, and those only the movie's clips carry, in a hover popover (hovering an actor on a scene row or an "All scenes" card shows their tags too); **Edit Cast** adds a "+ tag" pill with the same search box as the movie's tags.
 - The VR 2D player now opens automatically, with the matching projection, for a movie whose VR format is VR180 SBS or Fisheye SBS (in the video player and the Review card). The VR 2D button still turns it off.
 - Getting started: a "Folder permissions" section covering the non-root container user, checking and fixing mount ownership, and common access errors.
 - Add a movie: a spinner and "Searching for metadata…" status show while the metadata lookup runs.

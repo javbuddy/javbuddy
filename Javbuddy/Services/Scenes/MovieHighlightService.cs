@@ -143,7 +143,7 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
     {
         if (tagIds is null) return (null, null);
         var distinct = tagIds.Distinct().ToList();
-        return await db.Tags.CountAsync(t => distinct.Contains(t.Id), ct) == distinct.Count ? (distinct, null) : (null, "Tag not found.");
+        return await db.Tags.CountAsync(t => distinct.Contains(t.Id) && !t.IsActorTag, ct) == distinct.Count ? (distinct, null) : (null, "Tag not found.");
     }
 
     public async Task<HighlightOperationResult> AddHighlightAsync(int movieId, double startSeconds, double endSeconds, string? title, IReadOnlyCollection<int>? tagIds = null, IReadOnlyCollection<int>? actorIds = null, CancellationToken ct = default)

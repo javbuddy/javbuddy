@@ -88,14 +88,21 @@
                                                  OnSelectAll="labels => SelectAllAsync(apexTagFilter, options.ApexTags, labels)"
                                                  OnSelectNone="() => SelectNoneAsync(apexTagFilter, OfferedApexTagIds)" />
                     }
-                    @if (options.Actors.Count > 0 || options.ActorAttributes.HasAny)
+                    @if (options.Actors.Count > 0 || options.ActorAttributes.HasAny || options.ActorTags.Count > 0)
                     {
-                        <FilterSection Label="Actor" ActiveCount="@(AppliedActors.Count + AppliedActorAttributes.Count)">
+                        <FilterSection Label="Actor" ActiveCount="@(AppliedActors.Count + AppliedActorTags.Count + AppliedActorAttributes.Count)">
                             @if (options.Actors.Count > 0)
                             {
                                 <MultiSelectFilterGroup GroupLabel="Name" Options="@ActorOptions" Searchable="true"
                                                          OnSelectAll="labels => SelectAllAsync(actorFilter, options.Actors, labels)"
                                                          OnSelectNone="() => SelectNoneAsync(actorFilter, OfferedActorIds)" />
+                            }
+                            @if (options.ActorTags.Count > 0)
+                            {
+                                @* With Name selected, it is those actors who must have the tag. *@
+                                <MultiSelectFilterGroup GroupLabel="Actor tag" Options="@ActorTagOptions" Searchable="true"
+                                                         OnSelectAll="labels => SelectAllAsync(actorTagFilter, options.ActorTags, labels)"
+                                                         OnSelectNone="() => SelectNoneAsync(actorTagFilter, OfferedActorTagIds)" />
                             }
                             <ActorAttributeFilters Options="options.ActorAttributes" Selection="AppliedActorAttributes" SelectionChanged="SetActorAttributesAsync" />
                         </FilterSection>
@@ -250,6 +257,8 @@
     // Apex tags: the clips containing an apex with one, or in the Apexes view the apexes
     // themselves. apexOnly keeps clips containing any apex; the Apexes view doesn't apply it.
     private readonly HashSet<int> apexTagFilter = [];
+    // Actor tags ("blonde"): clips where an actor has one; with actors selected, one of those actors.
+    private readonly HashSet<int> actorTagFilter = [];
     private bool apexOnly;
     // Actress attributes, kept like the selections above; AppliedActorAttributes is the
     // part the current view's options still offer.
@@ -284,7 +293,8 @@
         bool ShowHidden = false,
         ActorAttributeSelection? ActorAttributes = null,
         bool ApexOnly = false,
-        List<int>? ApexTagIds = null);
+        List<int>? ApexTagIds = null,
+        List<int>? ActorTagIds = null);
 
     private enum WallView
     {
@@ -333,6 +343,10 @@
 
     private IEnumerable<int> OfferedApexTagIds => options?.ApexTags.Select(t => t.Id) ?? [];
 
+    private IEnumerable<int> OfferedActorTagIds => options?.ActorTags.Select(t => t.Id) ?? [];
+
+    private List<int> AppliedActorTags => [.. actorTagFilter.Intersect(OfferedActorTagIds)];
+
     private List<int> AppliedApexTags => [.. apexTagFilter.Intersect(OfferedApexTagIds)];
 
     private bool ShowsHidden => showHidden && CurrentView == WallView.Scenes;
@@ -351,7 +365,7 @@
     private ActorAttributeSelection AppliedActorAttributes =>
         options is null ? ActorAttributeSelection.Empty : MovieFilterOptions.NormalizeActorAttributes(actorAttributes, options.ActorAttributes);
 
-    private int ActiveFilterCount => AppliedTags.Count + AppliedActors.Count + AppliedStudios.Count + AppliedActorAttributes.Count + AppliedApexTags.Count
+    private int ActiveFilterCount => AppliedTags.Count + AppliedActors.Count + AppliedActorTags.Count + AppliedStudios.Count + AppliedActorAttributes.Count + AppliedApexTags.Count
         + (favoritesOnly ? 1 : 0) + (ShowsHidden ? 1 : 0) + (AppliesApexOnly ? 1 : 0);
 
     private string EmptyText => CurrentView switch
@@ -372,11 +386,14 @@
         ShowsHidden,
         AppliedActorAttributes is { IsEmpty: false } attributes ? attributes : null,
         AppliesApexOnly,
-        AppliedApexTags is { Count: > 0 } apexTags ? apexTags : null);
+        AppliedApexTags is { Count: > 0 } apexTags ? apexTags : null,
+        AppliedActorTags is { Count: > 0 } actorTags ? actorTags : null);
 
     private IReadOnlyList<MultiSelectOption> TagOptions => IdOptions(options!.Tags, tagFilter);
 
     private IReadOnlyList<MultiSelectOption> ActorOptions => IdOptions(options!.Actors, actorFilter);
+
+    private IReadOnlyList<MultiSelectOption> ActorTagOptions => IdOptions(options!.ActorTags, actorTagFilter, nestSubtags: true);
 
     private IReadOnlyList<MultiSelectOption> ApexTagOptions => IdOptions(options!.ApexTags, apexTagFilter);
 
@@ -384,8 +401,9 @@
         .Select(studio => new MultiSelectOption(studio, studioFilter.Contains(studio), EventCallback.Factory.Create(this, () => ToggleAsync(studioFilter, studio))))
         .ToList();
 
-    private IReadOnlyList<MultiSelectOption> IdOptions(IReadOnlyList<SceneWallOption> source, HashSet<int> selected) => source
-        .Select(option => new MultiSelectOption(option.Name, selected.Contains(option.Id), EventCallback.Factory.Create(this, () => ToggleAsync(selected, option.Id))))
+    private IReadOnlyList<MultiSelectOption> IdOptions(IReadOnlyList<SceneWallOption> source, HashSet<int> selected, bool nestSubtags = false) => source
+        .Select(option => new MultiSelectOption(option.Name, selected.Contains(option.Id), EventCallback.Factory.Create(this, () => ToggleAsync(selected, option.Id)),
+            nestSubtags && option.Name.Contains(MultiSelectOption.Separator)))
         .ToList();
 
     private static string SortLabel(SceneWallSort value) => value switch
@@ -472,6 +490,8 @@
         studioFilter.UnionWith((state.Studios ?? []).Where(s => allScenes.Studios.Contains(s, StringComparer.OrdinalIgnoreCase)
             || highlights.Studios.Contains(s, StringComparer.OrdinalIgnoreCase) || apexes.Studios.Contains(s, StringComparer.OrdinalIgnoreCase)));
         apexTagFilter.UnionWith((state.ApexTagIds ?? []).Where(id => apexes.ApexTags.Any(t => t.Id == id)));
+        actorTagFilter.UnionWith((state.ActorTagIds ?? []).Where(id => allScenes.ActorTags.Any(t => t.Id == id) || highlights.ActorTags.Any(t => t.Id == id)
+            || apexes.ActorTags.Any(t => t.Id == id)));
         apexOnly = state.ApexOnly;
         // Kept as remembered; AppliedActorAttributes drops what the view doesn't offer.
         actorAttributes = state.ActorAttributes ?? ActorAttributeSelection.Empty;
@@ -486,7 +506,7 @@
 
         var json = System.Text.Json.JsonSerializer.Serialize(new ScenesViewState(
             [.. tagFilter], [.. actorFilter], [.. studioFilter], favoritesOnly, textFilter, sort, showHidden,
-            actorAttributes, apexOnly, [.. apexTagFilter]));
+            actorAttributes, apexOnly, [.. apexTagFilter], [.. actorTagFilter]));
         try
         {
             await jsModule.InvokeVoidAsync("setJsonCookie", ViewStateCookieName, json, 31536000);
@@ -570,6 +590,7 @@
         actorFilter.ExceptWith(OfferedActorIds);
         studioFilter.ExceptWith(OfferedStudios);
         apexTagFilter.ExceptWith(OfferedApexTagIds);
+        actorTagFilter.ExceptWith(OfferedActorTagIds);
         if (!ApexesView) apexOnly = false;
         if (options is not null)
         {

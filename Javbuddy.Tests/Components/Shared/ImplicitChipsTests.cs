@@ -1,6 +1,7 @@
 using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Services.Scenes;
+using Javbuddy.Services.Tags;
 
 namespace Javbuddy.Tests.Components.Shared;
 
@@ -40,10 +41,26 @@ public class ImplicitChipsTests : BunitContext
     {
         var chips = ImplicitChip.ForActors(new EffectiveActors([new SceneActorItem(1, "Aika"), new SceneActorItem(2, "Bea")], source, from));
 
-        Assert.Equal([new ImplicitChip("Aika", tooltip), new ImplicitChip("Bea", tooltip)], chips);
+        Assert.Equal([new ImplicitChip("Aika", tooltip) { ActorId = 1 }, new ImplicitChip("Bea", tooltip) { ActorId = 2 }], chips);
     }
 
     [Fact]
     public void ForActors_GivesNothing_ForExplicitActors() =>
         Assert.Empty(ImplicitChip.ForActors(new EffectiveActors([new SceneActorItem(1, "Aika")], ActorSource.Explicit, null)));
+
+    [Fact]
+    public void InheritedActorChips_WithActorTags_OpenAPopoverInsteadOfShowingATitle()
+    {
+        var chips = ImplicitChip.ForActors(new EffectiveActors([new SceneActorItem(1, "Aika")], ActorSource.Scene, "scene 2"));
+        IReadOnlyList<EffectiveActorTag> tags = [new(1, 9, false, "the movie")];
+
+        var cut = Render<ImplicitChips>(p => p
+            .Add(x => x.Items, chips)
+            .Add(x => x.ActorTags, tags)
+            .Add(x => x.Library, [new ActorTagListItem(9, "Blonde", 0)]));
+
+        Assert.Null(cut.Find(".implicit-chip").GetAttribute("title"));
+        Assert.Contains("From scene 2", cut.Find(".actor-hover-popover").TextContent);
+        Assert.Contains("Blonde", cut.Find(".actor-hover-popover").TextContent);
+    }
 }

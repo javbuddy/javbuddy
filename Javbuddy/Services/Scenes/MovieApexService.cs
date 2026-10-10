@@ -173,7 +173,7 @@ public class MovieApexService(
             return ApexOperationResult.Fail(windowError);
         }
         var distinctTagIds = tagIds.Distinct().ToList();
-        if (await db.Tags.CountAsync(t => distinctTagIds.Contains(t.Id), ct) != distinctTagIds.Count)
+        if (await db.Tags.CountAsync(t => distinctTagIds.Contains(t.Id) && !t.IsActorTag, ct) != distinctTagIds.Count)
         {
             return ApexOperationResult.Fail("Tag not found.");
         }
@@ -225,7 +225,7 @@ public class MovieApexService(
             return ApexOperationResult.Fail(windowError);
         }
         var distinctTagIds = tagIds.Distinct().ToList();
-        if (await db.Tags.CountAsync(t => distinctTagIds.Contains(t.Id), ct) != distinctTagIds.Count)
+        if (await db.Tags.CountAsync(t => distinctTagIds.Contains(t.Id) && !t.IsActorTag, ct) != distinctTagIds.Count)
         {
             return ApexOperationResult.Fail("Tag not found.");
         }

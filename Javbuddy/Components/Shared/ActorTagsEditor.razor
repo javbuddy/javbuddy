@@ -1,0 +1,104 @@
+@* The actor tags ("blonde", "hair › long") of a movie's, scene's, highlight's or apex's actors: one row per actor with their tags as chips.
+   Own tags are solid and removable; inherited ones dashed, from where ClipActorTags says; rolled-up ones (what clips
+   inside carry) grayed and read-only. Removing an inherited chip, or adding one while inheriting, makes the set the
+   actor's own (starting from the inherited ones), since own tags replace inherited ones; removing the last own tag
+   inherits again. Tags are picked from the actor-tag library with the same search box the movie's tags use; new ones
+   are created on the Tags page. Changes apply at once, through IActorTagService. *@
+@inject IActorTagService ActorTagService
+
+<div class="actor-tags" role="group" aria-label="Actor tags">
+    @if (Actors.Count == 0)
+    {
+        <span class="actor-tags-hint">No actors to tag.</span>
+    }
+    @foreach (var actor in Actors)
+    {
+        var tags = Tags.Where(t => t.ActorId == actor.ActorId).ToList();
+        <div class="actor-tags-row" data-actor-id="@actor.ActorId">
+            <span class="actor-tags-name">@actor.Name</span>
+            <span class="actor-tags-chips">
+                @foreach (var tag in tags)
+                {
+                    var name = NameOf(tag.TagId);
+                    @if (tag.IsRolledUp)
+                    {
+                        <span class="actor-tag-chip actor-tag-chip-rolled-up" title="@($"From {tag.From}")" aria-label="@name, from clips inside">@name</span>
+                    }
+                    else
+                    {
+                        <span class="actor-tag-chip @(tag.From is null ? "actor-tag-chip-own" : "actor-tag-chip-inherited")" title="@(tag.From is null ? null : $"Inherited from {tag.From}")">
+                            @name
+                            <button type="button" class="actor-tag-chip-remove" disabled="@Busy" aria-label="Remove @name from @actor.Name" @onclick="() => RemoveAsync(actor.ActorId, tags, tag.TagId)">×</button>
+                        </span>
+                    }
+                }
+            </span>
+            <TagSearchAdd Search="SearchAsync" ExcludedTagIds="@tags.Where(t => !t.IsRolledUp).Select(t => t.TagId).ToHashSet()"
+                          OnAdd="tagId => AddAsync(actor.ActorId, tags, tagId)" />
+        </div>
+    }
+    @if (error is not null)
+    {
+        <span class="actor-tags-error" role="alert">@error</span>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<ActorTagListItem> library = [];
+    private bool busy;
+    private string? error;
+
+    [Parameter, EditorRequired] public ActorTagLevel Level { get; set; }
+
+    /// <summary>The movie's id for <see cref="ActorTagLevel.Movie"/>, else the scene's, highlight's or apex's.</summary>
+    [Parameter, EditorRequired] public int OwnerId { get; set; }
+
+    /// <summary>The actors to tag: the clip's effective actors (or the cast, at movie level). An actor with tags of their own is shown too.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<SceneActorItem> Actors { get; set; } = [];
+
+    /// <summary>The clip's actor tags (ClipActorTags), or the movie's own.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<EffectiveActorTag> Tags { get; set; } = [];
+
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Raised after a change was saved; the host re-reads its tags.</summary>
+    [Parameter] public EventCallback<ActorTagResult> OnChanged { get; set; }
+
+    private bool Busy => busy || Disabled;
+
+    protected override async Task OnInitializedAsync() => library = await ActorTagService.GetActorTagsAsync();
+
+    private string NameOf(int tagId) => library.FirstOrDefault(t => t.Id == tagId)?.Label ?? $"Tag {tagId}";
+
+    private async Task<IReadOnlyList<TagListItem>> SearchAsync(string query) =>
+        (await ActorTagService.GetActorTagsAsync(query))
+            .Select(t => new TagListItem(t.Id, t.Name, t.UseCount, false, DateTime.UtcNow, t.ParentTagId, t.ParentTagName, t.SubtagCount))
+            .ToList();
+
+    private Task AddAsync(int actorId, List<EffectiveActorTag> current, int tagId) =>
+        SetAsync(actorId, OwnTagIds(current).Append(tagId));
+
+    private Task RemoveAsync(int actorId, List<EffectiveActorTag> current, int tagId) =>
+        SetAsync(actorId, OwnTagIds(current).Where(id => id != tagId));
+
+    // The set the actor would have as their own: their own tags, or while inheriting the inherited ones to start from.
+    private static IEnumerable<int> OwnTagIds(List<EffectiveActorTag> current) =>
+        current.Where(t => !t.IsRolledUp).Select(t => t.TagId);
+
+    private async Task SetAsync(int actorId, IEnumerable<int> tagIds)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await ActorTagService.SetAsync(Level, OwnerId, actorId, [.. tagIds.Distinct()]);
+            if (!result.Success) error = result.ErrorMessage;
+            library = await ActorTagService.GetActorTagsAsync();
+            await OnChanged.InvokeAsync(result);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}
