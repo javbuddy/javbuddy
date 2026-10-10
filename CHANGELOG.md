@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- Movie Detail's Delete dialog no longer offers "Delete files from disk" for a movie with no files on disk, such as a wanted movie.
+
 ### Added
 
 - Getting started: a "Folder permissions" section covering the non-root container user, checking and fixing mount ownership, and common access errors.

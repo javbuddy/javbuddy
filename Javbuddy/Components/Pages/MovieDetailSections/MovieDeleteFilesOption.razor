@@ -1,9 +1,12 @@
 @* Movie Detail's Delete dialog "Delete files from disk" toggle. Unchecked by default;
    checking it lists every file under the movie's local folder, with the space it frees, so the user
-   sees exactly what goes before confirming. *@
+   sees exactly what goes before confirming. The folder is looked up when the dialog opens, and the
+   option stays hidden when the movie has no files on disk (e.g. a wanted movie). *@
 @using Javbuddy.Services.Common
 @inject IMovieService MovieService
 
+@if (hasFolder)
+{
 <label class="movie-delete-files-toggle">
     <input type="checkbox" checked="@Checked" disabled="@Disabled" @onchange="OnToggledAsync" />
     <span>Delete files from disk</span>
@@ -18,10 +21,6 @@
     else if (preview.ErrorMessage is not null)
     {
         <p class="movie-delete-files-error" role="alert">@preview.ErrorMessage</p>
-    }
-    else if (preview.FolderPath is null)
-    {
-        <p class="movie-delete-files-note">No local folder found for this movie, so nothing on disk will be deleted.</p>
     }
     else
     {
@@ -44,6 +43,7 @@
         </div>
     }
 }
+}
 
 @code {
     [Parameter, EditorRequired] public int MovieId { get; set; }
@@ -55,6 +55,17 @@
     [Parameter] public bool Disabled { get; set; }
 
     private MovieFolderDeletePreview? preview;
+
+    // Hidden until the first lookup finishes (so the toggle doesn't flash for a wanted movie) and when
+    // there are no files to delete. A folder that can't be listed, or is refused, still shows the option
+    // so the user sees why.
+    private bool hasFolder;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var initial = await MovieService.GetFolderDeletePreviewAsync(MovieId);
+        hasFolder = initial.ErrorMessage is not null || initial.Files.Count > 0;
+    }
 
     private async Task OnToggledAsync(ChangeEventArgs e)
     {
