@@ -77,7 +77,7 @@ public interface ITagService
     Task<OperationResult> RemoveTagFromMovieAsync(int movieId, int tagId, CancellationToken ct = default);
 }
 
-public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncService nfoSyncService) : ITagService
+public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncService nfoSyncService, INfoDriftCheckQueue? driftChecks = null) : ITagService
 {
     private const string ActorTagsCannotMerge = "Actor tags can't be merged.";
 
@@ -319,6 +319,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         await TagNormalization.SyncMetaGenresAsync(db, movieIds, ct);
         await db.SaveChangesAsync(ct);
 
+        driftChecks?.Enqueue(movieIds);
+
         return TagOperationResult.Ok(tag);
     }
 
@@ -359,6 +361,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         var movieIds = await db.MovieTags.Where(mt => allAffectedTagIds.Contains(mt.TagId)).Select(mt => mt.MovieId).Distinct().ToListAsync(ct);
         await TagNormalization.SyncMetaGenresAsync(db, movieIds, ct);
         await db.SaveChangesAsync(ct);
+
+        driftChecks?.Enqueue(movieIds);
 
         return TagOperationResult.Ok(tag);
     }
@@ -480,6 +484,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         await TagNormalization.SyncMetaGenresAsync(db, affectedMovieIds, ct);
         await db.SaveChangesAsync(ct);
 
+        driftChecks?.Enqueue(affectedMovieIds);
+
         return TagOperationResult.Ok(target);
     }
 
@@ -500,6 +506,9 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         await TagNormalization.SyncMetaGenresAsync(db, movieIds, ct);
         await db.SaveChangesAsync(ct);
+
+        // After the save, in the background: a big tag can be on hundreds of movies.
+        driftChecks?.Enqueue(movieIds);
     }
 
     public async Task<TagOperationResult> IgnoreAsync(int tagId, CancellationToken ct = default)
@@ -525,6 +534,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         await TagNormalization.SyncMetaGenresAsync(db, movieIds, ct);
         await db.SaveChangesAsync(ct);
+
+        driftChecks?.Enqueue(movieIds);
 
         return TagOperationResult.Ok(tag);
     }
@@ -585,6 +596,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         await TagNormalization.SyncMetaGenresAsync(db, affectedMovieIds, ct);
         await db.SaveChangesAsync(ct);
+
+        driftChecks?.Enqueue(affectedMovieIds);
 
         return tagsToIgnore.Count;
     }
@@ -695,6 +708,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         await TagNormalization.SyncMetaGenresAsync(db, affectedMovieIds, ct);
         await db.SaveChangesAsync(ct);
+
+        driftChecks?.Enqueue(affectedMovieIds);
 
         return TagOperationResult.Ok(target);
     }

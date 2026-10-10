@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Scenes;
 using Microsoft.EntityFrameworkCore;
 
@@ -58,7 +59,7 @@ public interface IActorTagService
 
 /// <summary>Actor-scoped tags (Tag.IsActorTag): "blonde" for one actor in a movie or clip. They flow down and roll up
 /// per actor (ClipActorTags), and reach the movie as plain MovieTags through ClipTagSync.</summary>
-public class ActorTagService(IDbContextFactory<AppDbContext> dbFactory, IClipTagSyncService? clipTags = null) : IActorTagService
+public class ActorTagService(IDbContextFactory<AppDbContext> dbFactory, IClipTagSyncService? clipTags = null, INfoDriftCheckQueue? driftChecks = null) : IActorTagService
 {
     public async Task<IReadOnlyList<ActorTagListItem>> GetActorTagsAsync(string? search = null, CancellationToken ct = default)
     {
@@ -155,6 +156,9 @@ public class ActorTagService(IDbContextFactory<AppDbContext> dbFactory, IClipTag
         {
             await TagNormalization.SyncMetaGenresAsync(db, movieIds, ct);
             await db.SaveChangesAsync(ct);
+
+            // After the save, in the background: a big tag can be on hundreds of movies.
+            driftChecks?.Enqueue(movieIds);
         }
         return TagOperationResult.Ok(tag);
     }

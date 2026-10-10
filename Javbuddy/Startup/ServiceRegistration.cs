@@ -121,6 +121,9 @@ public static class ServiceRegistration
         services.AddSingleton<ClipActorRefreshSignal>();
         services.AddSingleton<ClipActorStaleInterceptor>();
         services.AddHostedService<ClipActorRefreshWorker>();
+        services.AddSingleton<NfoDriftCheckQueue>();
+        services.AddSingleton<INfoDriftCheckQueue>(sp => sp.GetRequiredService<NfoDriftCheckQueue>());
+        services.AddHostedService(sp => sp.GetRequiredService<NfoDriftCheckQueue>());
         services.AddScoped<INfoHistoryService, NfoHistoryService>();
         services.AddScoped<ISceneChapterImportService, SceneChapterImportService>();
         services.AddScoped<ISceneMediaService, SceneMediaService>();

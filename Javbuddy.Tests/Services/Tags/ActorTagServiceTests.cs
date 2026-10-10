@@ -142,6 +142,19 @@ public sealed class ActorTagServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task MakingAGenreAnActorTag_QueuesTheDriftCheckForItsMovies()
+    {
+        await SeedAsync();
+        await tagService.AddTagToMovieAsync(movieId, plainId);
+
+        var queue = Substitute.For<INfoDriftCheckQueue>();
+        var withQueue = new ActorTagService(factory, null, queue);
+        await withQueue.SetIsActorTagAsync(plainId, true);
+
+        queue.Received(1).Enqueue(Arg.Is<IReadOnlyCollection<int>>(ids => ids.SequenceEqual(new[] { movieId })));
+    }
+
+    [Fact]
     public async Task MakingAGenreAnActorTag_RemovesItFromTheMoviesGenres()
     {
         await SeedAsync();

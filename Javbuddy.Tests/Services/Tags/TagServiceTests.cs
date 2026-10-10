@@ -739,6 +739,63 @@ public class TagServiceTests
     }
 
     [Fact]
+    public async Task DeleteAsync_And_IgnoreAsync_QueueTheDriftCheckForTheTagsMovies()
+    {
+        using var factory = new TestDbContextFactory();
+        int deleteTagId, ignoreTagId, movieId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = new Movie { Code = "DRF-001" };
+            var deleteTag = new Tag { Name = "Gone" };
+            var ignoreTag = new Tag { Name = "Skipped" };
+            db.AddRange(movie, deleteTag, ignoreTag);
+            await db.SaveChangesAsync();
+            db.MovieTags.AddRange(
+                new MovieTag { MovieId = movie.Id, TagId = deleteTag.Id, IsExplicit = true },
+                new MovieTag { MovieId = movie.Id, TagId = ignoreTag.Id, IsExplicit = true });
+            await db.SaveChangesAsync();
+            (movieId, deleteTagId, ignoreTagId) = (movie.Id, deleteTag.Id, ignoreTag.Id);
+        }
+
+        var queue = Substitute.For<INfoDriftCheckQueue>();
+        var service = new TagService(factory, Substitute.For<INfoSyncService>(), queue);
+        await service.DeleteAsync(deleteTagId);
+        await service.IgnoreAsync(ignoreTagId);
+
+        queue.Received(2).Enqueue(Arg.Is<IReadOnlyCollection<int>>(ids => ids.SequenceEqual(new[] { movieId })));
+    }
+
+    [Fact]
+    public async Task RenameMergeAndSetParent_QueueTheDriftCheckForTheirMovies()
+    {
+        using var factory = new TestDbContextFactory();
+        int a, b, c, d, parent, m1, m2;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var (ta, tb, tc, td, tp) = (new Tag { Name = "A" }, new Tag { Name = "B" }, new Tag { Name = "C" }, new Tag { Name = "D" }, new Tag { Name = "Parent" });
+            var (movie1, movie2) = (new Movie { Code = "DRF-101" }, new Movie { Code = "DRF-102" });
+            db.AddRange(ta, tb, tc, td, tp, movie1, movie2);
+            await db.SaveChangesAsync();
+            db.MovieTags.AddRange(
+                new MovieTag { MovieId = movie1.Id, TagId = ta.Id, IsExplicit = true },
+                new MovieTag { MovieId = movie1.Id, TagId = tb.Id, IsExplicit = true },
+                new MovieTag { MovieId = movie2.Id, TagId = tc.Id, IsExplicit = true },
+                new MovieTag { MovieId = movie2.Id, TagId = td.Id, IsExplicit = true });
+            await db.SaveChangesAsync();
+            (a, b, c, d, parent, m1, m2) = (ta.Id, tb.Id, tc.Id, td.Id, tp.Id, movie1.Id, movie2.Id);
+        }
+
+        var queue = Substitute.For<INfoDriftCheckQueue>();
+        var service = new TagService(factory, Substitute.For<INfoSyncService>(), queue);
+        Assert.True((await service.RenameAsync(a, "A2")).Success);
+        Assert.True((await service.SetParentAsync(b, parent)).Success);
+        Assert.True((await service.MergeAsync(c, d)).Success);
+
+        queue.Received(2).Enqueue(Arg.Is<IReadOnlyCollection<int>>(ids => ids.SequenceEqual(new[] { m1 })));
+        queue.Received(1).Enqueue(Arg.Is<IReadOnlyCollection<int>>(ids => ids.SequenceEqual(new[] { m2 })));
+    }
+
+    [Fact]
     public async Task AddTagToMovieAsync_LinksTagAndSyncsMetaGenres()
     {
         using var factory = new TestDbContextFactory();
