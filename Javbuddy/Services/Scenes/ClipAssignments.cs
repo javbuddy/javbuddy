@@ -19,7 +19,11 @@ internal static class ClipAssignments
     }
 
     /// <summary>Every scene's, highlight's and apex's effective actor tags (<see cref="ClipActorTags"/>) for the movie.</summary>
-    public static async Task<ClipActorTagsResult> LoadEffectiveActorTagsAsync(AppDbContext db, int movieId, CancellationToken ct)
+    public static async Task<ClipActorTagsResult> LoadEffectiveActorTagsAsync(AppDbContext db, int movieId, CancellationToken ct) =>
+        (await LoadEffectiveActorsAndTagsAsync(db, movieId, ct)).Tags;
+
+    /// <summary>Both of the above from one load of the movie's clips, for ClipActorSync.</summary>
+    public static async Task<(ClipActorsResult Actors, ClipActorTagsResult Tags)> LoadEffectiveActorsAndTagsAsync(AppDbContext db, int movieId, CancellationToken ct)
     {
         var (cast, scenes, highlights, apexes) = await LoadClipItemsAsync(db, movieId, ct);
         var sets = new ActorTagSets(
@@ -27,7 +31,8 @@ internal static class ClipAssignments
             Group((await db.SceneActorTags.AsNoTracking().Where(t => t.MovieId == movieId).Select(t => new { Owner = t.SceneId, t.ActorId, t.TagId }).ToListAsync(ct)).Select(t => (t.Owner, t.ActorId, t.TagId))),
             Group((await db.HighlightActorTags.AsNoTracking().Where(t => t.MovieId == movieId).Select(t => new { Owner = t.HighlightId, t.ActorId, t.TagId }).ToListAsync(ct)).Select(t => (t.Owner, t.ActorId, t.TagId))),
             Group((await db.ApexActorTags.AsNoTracking().Where(t => t.MovieId == movieId).Select(t => new { Owner = t.ApexId, t.ActorId, t.TagId }).ToListAsync(ct)).Select(t => (t.Owner, t.ActorId, t.TagId))));
-        return ClipActorTags.Compute(ClipActors.Compute(cast, scenes, highlights, apexes), scenes, highlights, apexes, sets);
+        var actors = ClipActors.Compute(cast, scenes, highlights, apexes);
+        return (actors, ClipActorTags.Compute(actors, scenes, highlights, apexes, sets));
     }
 
     private static async Task<(IReadOnlyList<SceneActorItem> Cast, List<SceneItem> Scenes, List<HighlightItem> Highlights, List<ApexItem> Apexes)> LoadClipItemsAsync(

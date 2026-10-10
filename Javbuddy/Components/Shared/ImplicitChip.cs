@@ -9,13 +9,16 @@ public sealed record ImplicitChip(string Label, string Tooltip)
     /// <summary>The actor an inherited-actor chip stands for; null for a tag chip.</summary>
     public int? ActorId { get; init; }
 
+    /// <summary>Where an inherited actor comes from ("scene 2"); null for a tag chip.</summary>
+    public string? From { get; init; }
+
     public static IReadOnlyList<ImplicitChip> ForTags(IEnumerable<ImplicitTag> tags) =>
         tags.Select(t => new ImplicitChip(TagLabel(t.Tag), "From " + string.Join(", ", t.Sources))).ToList();
 
     /// <summary>The inherited actors, each labelled with the parent they come from; nothing for explicit ones.</summary>
     public static IReadOnlyList<ImplicitChip> ForActors(EffectiveActors actors) =>
         actors.IsInherited
-            ? actors.Actors.Select(a => new ImplicitChip(a.Name, "From " + actors.From) { ActorId = a.ActorId }).ToList()
+            ? actors.Actors.Select(a => new ImplicitChip(a.Name, "From " + actors.From) { ActorId = a.ActorId, From = actors.From }).ToList()
             : [];
 
     /// <summary>A redundant explicit tag's tooltip: where it comes from anyway.</summary>

@@ -142,6 +142,33 @@ public sealed class ActorTagServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task MakingAGenreAnActorTag_RemovesItFromTheMoviesGenres()
+    {
+        await SeedAsync();
+        await tagService.AddTagToMovieAsync(movieId, plainId);
+
+        Assert.True((await service.SetIsActorTagAsync(plainId, true)).Success);
+
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.False(await check.MovieTags.AnyAsync(mt => mt.TagId == plainId));
+        Assert.DoesNotContain("Cosplay", (await check.Movies.SingleAsync(m => m.Id == movieId)).MetaGenres ?? "");
+        Assert.True((await check.Tags.SingleAsync(t => t.Id == plainId)).IsActorTag);
+    }
+
+    [Fact]
+    public async Task APlainTagOnAScene_CantBecomeAnActorTag()
+    {
+        await SeedAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SceneTags.Add(new SceneTag { SceneId = sceneId, TagId = plainId });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.False((await service.SetIsActorTagAsync(plainId, true)).Success);
+    }
+
+    [Fact]
     public async Task Create_RefusesADuplicateName()
     {
         await SeedAsync();

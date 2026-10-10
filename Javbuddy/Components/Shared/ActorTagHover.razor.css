@@ -4,7 +4,7 @@
     outline: none;
 }
 
-/* A top-layer popover (App.razor's script shows it on hover or focus and sets its left and top), so no ancestor's overflow or
+/* A top-layer popover (ActorTagHover.razor.js shows it on hover or focus and sets its left and top), so no ancestor's overflow or
    transform clips it. The UA's popover box (centered, bordered, scrolling) is reset first. */
 .actor-hover-popover {
     position: fixed;

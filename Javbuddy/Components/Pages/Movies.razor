@@ -439,8 +439,9 @@ else
         var targetStudio = pendingFilter?.Studio;
         var targetGenre = pendingFilter?.Genre;
         var targetCodePrefix = pendingFilter?.CodePrefix;
+        var targetActorTag = pendingFilter?.ActorTagId;
         var hasTarget = !string.IsNullOrWhiteSpace(targetStudio) || !string.IsNullOrWhiteSpace(targetGenre)
-            || !string.IsNullOrWhiteSpace(targetCodePrefix) || pendingFilter?.IsCatalogTarget == true;
+            || !string.IsNullOrWhiteSpace(targetCodePrefix) || targetActorTag is not null || pendingFilter?.IsCatalogTarget == true;
 
         // A series or label clicked on Movie Detail opens the r18.dev catalog narrowed to just that;
         // a studio, genre or code prefix filters the library, even when the catalog was open last.
@@ -457,8 +458,8 @@ else
 
         // A filter clicked on a movie's detail page (or a tag page) arrives as the only active
         // filter: everything else, including the restored view-state cookie's
-        // filters, is dropped so the grid shows exactly what was clicked.
-        var otherFiltersCleared = hasTarget && filters.ClearBesidesNavigationTargets();
+        // filters, is dropped so the grid shows exactly what was clicked (an actor tag is set here).
+        var otherFiltersCleared = hasTarget && filters.ClearBesidesNavigationTargets(targetActorTag);
 
         // Falls back to the current field (rather than blank) when there's no incoming deep
         // link, so a persisted view-state cookie restored in OnInitializedAsync

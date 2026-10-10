@@ -41,7 +41,7 @@ public class ImplicitChipsTests : BunitContext
     {
         var chips = ImplicitChip.ForActors(new EffectiveActors([new SceneActorItem(1, "Aika"), new SceneActorItem(2, "Bea")], source, from));
 
-        Assert.Equal([new ImplicitChip("Aika", tooltip) { ActorId = 1 }, new ImplicitChip("Bea", tooltip) { ActorId = 2 }], chips);
+        Assert.Equal([new ImplicitChip("Aika", tooltip) { ActorId = 1, From = from }, new ImplicitChip("Bea", tooltip) { ActorId = 2, From = from }], chips);
     }
 
     [Fact]

@@ -97,19 +97,6 @@ public sealed class ActorTagFilterTests : IDisposable
     }
 
     [Fact]
-    public async Task Cards_LabelEachActorWithTheirTags_ButNotRolledUpOnes()
-    {
-        await SeedAsync();
-
-        var apexCard = Assert.Single((await wall.GetApexPageAsync(new SceneWallFilter(), SceneWallSort.ReleaseDate, 1, 0, 50)).Cards);
-        Assert.Equal(["Aika (Brunette)", "Bea (Blonde)"], apexCard.ActorLabels);
-
-        // The apex's Brunette only rolls up into the scene, so it isn't on Aika's label there.
-        var sceneCard = Assert.Single((await wall.GetPageAsync(new SceneWallFilter(), SceneWallSort.ReleaseDate, 1, 0, 50)).Cards);
-        Assert.Equal(["Aika", "Bea (Blonde)"], sceneCard.ActorLabels);
-    }
-
-    [Fact]
     public async Task AParentActorTag_MatchesItsSubtags_AndIsOffered()
     {
         await SeedAsync();

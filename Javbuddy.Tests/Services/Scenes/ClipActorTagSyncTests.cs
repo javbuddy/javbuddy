@@ -113,13 +113,16 @@ public sealed class ClipActorTagSyncTests : IDisposable
             await db.SaveChangesAsync();
         }
 
+        var tagsChanged = new List<int>();
         await using (var db = await factory.CreateDbContextAsync())
         {
-            Assert.Equal(1, await ClipActorSync.RefreshStaleAsync(db));
+            Assert.Equal(1, await ClipActorSync.RefreshStaleAsync(db, onMovieTagsChanged: (id, _) => { tagsChanged.Add(id); return Task.CompletedTask; }));
         }
 
         await using var check = await factory.CreateDbContextAsync();
         Assert.Empty(await check.MovieTags.ToListAsync());
         Assert.Empty(await check.SceneEffectiveActorTags.ToListAsync());
+        // The worker's .nfo drift check runs for it.
+        Assert.Equal([movieId], tagsChanged);
     }
 }

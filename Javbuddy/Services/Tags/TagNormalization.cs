@@ -261,6 +261,9 @@ public static class TagNormalization
                     if (!string.IsNullOrEmpty(parentName) && !string.IsNullOrEmpty(childName))
                     {
                         var parentTag = context.KnownTags.FirstOrDefault(t => string.Equals(t.Name, parentName, StringComparison.OrdinalIgnoreCase));
+                        // An actor tag's subtag ("Hair/Long" from a .nfo this app wrote) is never a genre, and a plain
+                        // tag never nests under an actor tag.
+                        if (parentTag is { IsActorTag: true }) continue;
                         if (parentTag is null)
                         {
                             parentTag = new Tag { Name = parentName, NeedsReview = true };

@@ -2,6 +2,7 @@ using Javbuddy.Components.Shared;
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Tags;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Movies;
@@ -170,21 +171,11 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         };
     }
 
-    // The actor tags in use, "Hair › Long" for a subtag, and the parents of those (a parent matches its subtags).
-    private static async Task<List<MovieActorOption>> LoadActorTagOptionsAsync(AppDbContext db, CancellationToken ct)
-    {
-        var used = await db.Tags.AsNoTracking()
-            .Where(t => t.IsActorTag && (db.MovieActorTags.Any(a => a.TagId == t.Id) || db.SceneActorTags.Any(a => a.TagId == t.Id)
-                || db.HighlightActorTags.Any(a => a.TagId == t.Id) || db.ApexActorTags.Any(a => a.TagId == t.Id)))
-            .Select(t => new { t.Id, t.Name, t.ParentTagId, Parent = t.ParentTag != null ? t.ParentTag.Name : null })
-            .ToListAsync(ct);
-        // Grouped by parent, the parent first and its subtags after it: ordering by the full label would slip "Hair colour"
-        // between "Hair" and "Hair › Short".
-        var rows = used.Select(t => (Option: new MovieActorOption(t.Id, t.Parent is null ? t.Name : $"{t.Parent} › {t.Name}"), Group: t.Parent ?? t.Name, IsSubtag: t.Parent is not null, t.Name)).ToList();
-        rows.AddRange(used.Where(t => t.ParentTagId is not null && used.All(u => u.Id != t.ParentTagId))
-            .DistinctBy(t => t.ParentTagId).Select(t => (Option: new MovieActorOption(t.ParentTagId!.Value, t.Parent!), Group: t.Parent!, IsSubtag: false, Name: t.Parent!)));
-        return rows.OrderBy(r => r.Group, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.IsSubtag).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => r.Option).ToList();
-    }
+    // The actor tags some actor has in a movie or one of its clips (own rows: nothing flows down or rolls up a new tag).
+    private static async Task<List<MovieActorOption>> LoadActorTagOptionsAsync(AppDbContext db, CancellationToken ct) =>
+        [.. (await ActorTagOptions.LoadAsync(db.Tags.Where(t => t.IsActorTag && (db.MovieActorTags.Any(a => a.TagId == t.Id) || db.SceneActorTags.Any(a => a.TagId == t.Id)
+                || db.HighlightActorTags.Any(a => a.TagId == t.Id) || db.ApexActorTags.Any(a => a.TagId == t.Id))), ct))
+            .Select(o => new MovieActorOption(o.Id, o.Label))];
 
     /// <summary>Sourced from the canonical Tags/MovieTags relation, not MetaGenres's comma-joined
     /// cache string — a Tag name containing its own comma can't be told apart from two

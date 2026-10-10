@@ -94,19 +94,21 @@
     private string? castEditError;
     private IReadOnlyList<EffectiveActorTag> actorTags = [];
     private IReadOnlyList<ActorTagListItem> actorTagLibrary = [];
+    // What the tags were last loaded for: the page passes a new Cast after any reload (a cast change drops tags), and
+    // the same one on every other render, which needn't query again.
+    private (int MovieId, IReadOnlyList<MovieCastEntry> Cast)? actorTagsLoadedFor;
 
     protected override async Task OnParametersSetAsync()
     {
+        if (actorTagsLoadedFor is { } loaded && loaded.MovieId == Movie.Id && ReferenceEquals(loaded.Cast, Cast)) return;
+        actorTagsLoadedFor = (Movie.Id, Cast);
         actorTags = await ActorTagService.GetMovieTagsAsync(Movie.Id);
         actorTagLibrary = await ActorTagService.GetActorTagsAsync();
     }
 
-    // Their tags reach the movie's plain tags, so the page re-reads them when that changed.
-    private async Task ActorTagsChangedAsync(ActorTagResult result)
-    {
-        actorTags = await ActorTagService.GetMovieTagsAsync(Movie.Id);
-        if (result.MovieTagsChanged) await OnChanged.InvokeAsync();
-    }
+    // The page reloads: the scenes section shows what its clips inherit, and the movie's plain tags may have changed.
+    // The reload passes a new Cast, so the tags here are read again too.
+    private Task ActorTagsChangedAsync(ActorTagResult result) => OnChanged.InvokeAsync();
 
     private void ToggleCastEdit()
     {

@@ -62,12 +62,14 @@ public sealed class MovieGridFilterState
         || ActiveFilterCount > 0;
 
     /// <summary>Clears every filter a MovieFilterNavigationState target doesn't set itself (text,
-    /// code prefix, studio and genre are set by the page). Returns whether any was active.</summary>
-    public bool ClearBesidesNavigationTargets()
+    /// code prefix, studio and genre are set by the page), and makes the actor-tag filter just
+    /// actorTagTarget when there is one. Returns whether that changed anything.</summary>
+    public bool ClearBesidesNavigationTargets(int? actorTagTarget = null)
     {
+        var actorTagsChanged = actorTagTarget is { } target ? !(ActorTagIds.Count == 1 && ActorTagIds.Contains(target)) : ActorTagIds.Count > 0;
         var anyActive = Status is not null || !string.IsNullOrEmpty(Library) || Resolutions.Count > 0
             || ScanTypes.Count > 0 || NfoDriftKinds.Count > 0 || Codecs.Count > 0 || Features.Count > 0
-            || ActorIds.Count > 0 || ActorTagIds.Count > 0 || ActorAttributes.Count > 0;
+            || ActorIds.Count > 0 || actorTagsChanged || ActorAttributes.Count > 0;
         Status = null;
         Library = null;
         Resolutions.Clear();
@@ -77,6 +79,7 @@ public sealed class MovieGridFilterState
         Features.Clear();
         ActorIds.Clear();
         ActorTagIds.Clear();
+        if (actorTagTarget is { } actorTag) ActorTagIds.Add(actorTag);
         ActorAttributes = ActorAttributeSelection.Empty;
         return anyActive;
     }

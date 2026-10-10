@@ -24,7 +24,7 @@ public sealed record ActorTagListItem(int Id, string Name, int UseCount, int? Pa
     public DateTime CreatedAt { get; init; }
 
     /// <summary>"Hair › Long" for a subtag, else the name.</summary>
-    public string Label => ParentTagName is null ? Name : $"{ParentTagName} › {Name}";
+    public string Label => ParentTagName is null ? Name : $"{ParentTagName}{ActorTagOptions.LabelSeparator}{Name}";
 }
 
 public interface IActorTagService
@@ -36,7 +36,9 @@ public interface IActorTagService
     /// or fails when a tag of that name exists.</summary>
     Task<TagOperationResult> CreateActorTagAsync(string name, int? parentTagId = null, CancellationToken ct = default);
 
-    /// <summary>Makes a tag an actor tag or a plain one again. Only a tag nothing uses and outside any hierarchy can change kind.</summary>
+    /// <summary>Makes a plain tag an actor tag, or an actor tag a plain one again; either way only outside any hierarchy.
+    /// A plain tag becomes one while no scene, highlight or apex carries it, and leaves its movies' genres (metadata
+    /// skips it from then on): a genre doesn't say which actor it describes. An actor tag goes back only while unused.</summary>
     Task<TagOperationResult> SetIsActorTagAsync(int tagId, bool isActorTag, CancellationToken ct = default);
 
     /// <summary>The movie's scenes', highlights' and apexes' actor tags: own, inherited and rolled up (<see cref="ClipActorTags"/>).</summary>
@@ -123,18 +125,34 @@ public class ActorTagService(IDbContextFactory<AppDbContext> dbFactory, IClipTag
         if (tag is null) return TagOperationResult.Fail("Tag not found.");
         if (tag.IsActorTag == isActorTag) return TagOperationResult.Ok(tag);
 
-        if (await IsUsedAsync(db, tagId, ct))
-        {
-            return TagOperationResult.Fail($"\"{tag.Name}\" is in use, so it can't change kind. Remove it from everything first.");
-        }
         if (tag.ParentTagId is not null || tag.Subtags.Count > 0)
         {
             return TagOperationResult.Fail($"\"{tag.Name}\" is part of a tag hierarchy, so it can't change kind. Remove its parent or subtags first.");
         }
+        if (isActorTag && await IsOnClipsAsync(db, tagId, ct))
+        {
+            return TagOperationResult.Fail($"\"{tag.Name}\" is on scenes, highlights or apexes, so it can't become an actor tag. Remove it from them first.");
+        }
+        if (!isActorTag && await IsUsedAsync(db, tagId, ct))
+        {
+            return TagOperationResult.Fail($"\"{tag.Name}\" is in use, so it can't change kind. Remove it from everything first.");
+        }
 
+        List<int> movieIds = [];
+        if (isActorTag)
+        {
+            var links = await db.MovieTags.Where(mt => mt.TagId == tagId).ToListAsync(ct);
+            movieIds = [.. links.Select(mt => mt.MovieId)];
+            db.MovieTags.RemoveRange(links);
+        }
         tag.IsActorTag = isActorTag;
         if (isActorTag) tag.NeedsReview = false;
         await db.SaveChangesAsync(ct);
+        if (movieIds.Count > 0)
+        {
+            await TagNormalization.SyncMetaGenresAsync(db, movieIds, ct);
+            await db.SaveChangesAsync(ct);
+        }
         return TagOperationResult.Ok(tag);
     }
 
@@ -182,19 +200,19 @@ public class ActorTagService(IDbContextFactory<AppDbContext> dbFactory, IClipTag
         {
             case ActorTagLevel.Movie:
                 await Replace(db.MovieActorTags, db.MovieActorTags.Where(t => t.MovieId == ownerId && t.ActorId == actorId), wanted, tagId =>
-                    new MovieActorTag { MovieId = ownerId, ActorId = actorId, TagId = tagId }, t => t.TagId);
+                    new MovieActorTag { MovieId = ownerId, ActorId = actorId, TagId = tagId }, t => t.TagId, ct);
                 break;
             case ActorTagLevel.Scene:
                 await Replace(db.SceneActorTags, db.SceneActorTags.Where(t => t.SceneId == ownerId && t.ActorId == actorId), wanted, tagId =>
-                    new SceneActorTag { SceneId = ownerId, MovieId = movieId.Value, ActorId = actorId, TagId = tagId }, t => t.TagId);
+                    new SceneActorTag { SceneId = ownerId, MovieId = movieId.Value, ActorId = actorId, TagId = tagId }, t => t.TagId, ct);
                 break;
             case ActorTagLevel.Highlight:
                 await Replace(db.HighlightActorTags, db.HighlightActorTags.Where(t => t.HighlightId == ownerId && t.ActorId == actorId), wanted, tagId =>
-                    new HighlightActorTag { HighlightId = ownerId, MovieId = movieId.Value, ActorId = actorId, TagId = tagId }, t => t.TagId);
+                    new HighlightActorTag { HighlightId = ownerId, MovieId = movieId.Value, ActorId = actorId, TagId = tagId }, t => t.TagId, ct);
                 break;
             default:
                 await Replace(db.ApexActorTags, db.ApexActorTags.Where(t => t.ApexId == ownerId && t.ActorId == actorId), wanted, tagId =>
-                    new ApexActorTag { ApexId = ownerId, MovieId = movieId.Value, ActorId = actorId, TagId = tagId }, t => t.TagId);
+                    new ApexActorTag { ApexId = ownerId, MovieId = movieId.Value, ActorId = actorId, TagId = tagId }, t => t.TagId, ct);
                 break;
         }
         await db.SaveChangesAsync(ct);
@@ -205,20 +223,23 @@ public class ActorTagService(IDbContextFactory<AppDbContext> dbFactory, IClipTag
     }
 
     // Adds the missing rows and removes the ones no longer wanted, leaving the rest untouched.
-    private static async Task Replace<TRow>(DbSet<TRow> set, IQueryable<TRow> current, List<int> wanted, Func<int, TRow> create, Func<TRow, int> tagId)
+    private static async Task Replace<TRow>(DbSet<TRow> set, IQueryable<TRow> current, List<int> wanted, Func<int, TRow> create, Func<TRow, int> tagId, CancellationToken ct)
         where TRow : class
     {
-        var stored = await current.ToListAsync();
+        var stored = await current.ToListAsync(ct);
         set.RemoveRange(stored.Where(row => !wanted.Contains(tagId(row))));
         var kept = stored.Select(tagId).ToHashSet();
         set.AddRange(wanted.Where(id => !kept.Contains(id)).Select(create));
     }
 
+    private static async Task<bool> IsOnClipsAsync(AppDbContext db, int tagId, CancellationToken ct) =>
+        await db.SceneTags.AnyAsync(t => t.TagId == tagId, ct)
+        || await db.HighlightTags.AnyAsync(t => t.TagId == tagId, ct)
+        || await db.ApexTags.AnyAsync(t => t.TagId == tagId, ct);
+
     private static async Task<bool> IsUsedAsync(AppDbContext db, int tagId, CancellationToken ct) =>
         await db.MovieTags.AnyAsync(t => t.TagId == tagId, ct)
-        || await db.SceneTags.AnyAsync(t => t.TagId == tagId, ct)
-        || await db.HighlightTags.AnyAsync(t => t.TagId == tagId, ct)
-        || await db.ApexTags.AnyAsync(t => t.TagId == tagId, ct)
+        || await IsOnClipsAsync(db, tagId, ct)
         || await db.MovieActorTags.AnyAsync(t => t.TagId == tagId, ct)
         || await db.SceneActorTags.AnyAsync(t => t.TagId == tagId, ct)
         || await db.HighlightActorTags.AnyAsync(t => t.TagId == tagId, ct)

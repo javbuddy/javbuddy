@@ -14,21 +14,25 @@ public static class ClipActorSync
     /// <summary>Recomputes one movie's rows in one transaction and returns false when there's no such movie.
     /// The flag is cleared first: that write takes SQLite's write lock, so an edit made meanwhile waits and
     /// then marks the movie stale again, and a failure rolls the clear back.</summary>
-    public static async Task<bool> RefreshAsync(AppDbContext db, int movieId, CancellationToken ct)
+    public static Task<bool> RefreshAsync(AppDbContext db, int movieId, CancellationToken ct) =>
+        RefreshAsync(db, movieId, onMovieTagsChanged: null, ct);
+
+    /// <summary>As above; onMovieTagsChanged runs after the movie's plain tags (and MetaGenres) changed through
+    /// its actor tags, for the .nfo drift check the worker can't make from here.</summary>
+    public static async Task<bool> RefreshAsync(AppDbContext db, int movieId, Func<int, CancellationToken, Task>? onMovieTagsChanged, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         var cleared = await db.Movies.Where(m => m.Id == movieId)
             .ExecuteUpdateAsync(s => s.SetProperty(m => m.ClipActorsStale, false), ct);
         if (cleared == 0) return false;
 
-        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movieId, ct);
+        var (effective, tags) = await ClipAssignments.LoadEffectiveActorsAndTagsAsync(db, movieId, ct);
         Apply(db, await db.SceneEffectiveActors.Where(r => r.MovieId == movieId).ToListAsync(ct), Pairs(effective.Scenes),
             r => (r.SceneId, r.ActorId), (owner, actor) => new SceneEffectiveActor { SceneId = owner, MovieId = movieId, ActorId = actor });
         Apply(db, await db.HighlightEffectiveActors.Where(r => r.MovieId == movieId).ToListAsync(ct), Pairs(effective.Highlights),
             r => (r.HighlightId, r.ActorId), (owner, actor) => new HighlightEffectiveActor { HighlightId = owner, MovieId = movieId, ActorId = actor });
         Apply(db, await db.ApexEffectiveActors.Where(r => r.MovieId == movieId).ToListAsync(ct), Pairs(effective.Apexes),
             r => (r.ApexId, r.ActorId), (owner, actor) => new ApexEffectiveActor { ApexId = owner, MovieId = movieId, ActorId = actor });
-        var tags = await ClipAssignments.LoadEffectiveActorTagsAsync(db, movieId, ct);
         Apply(db, await db.SceneEffectiveActorTags.Where(r => r.MovieId == movieId).ToListAsync(ct), Triples(tags.Scenes),
             r => (r.SceneId, r.ActorId, r.TagId), r => r.IsRolledUp, (r, rolledUp) => r.IsRolledUp = rolledUp,
             (owner, actor, tag, rolledUp) => new SceneEffectiveActorTag { SceneId = owner, MovieId = movieId, ActorId = actor, TagId = tag, IsRolledUp = rolledUp });
@@ -52,20 +56,22 @@ public static class ClipActorSync
         {
             await TagNormalization.SyncMetaGenresAsync(db, [movieId], ct);
             await db.SaveChangesAsync(ct);
+            if (onMovieTagsChanged is not null) await onMovieTagsChanged(movieId, ct);
         }
         return true;
     }
 
     /// <summary>Refreshes every stale movie, in id order, until none is left, and returns how many it refreshed.
     /// A movie whose refresh throws stays stale (its transaction rolls back), is logged and is skipped for the
-    /// rest of this call. refresh replaces RefreshAsync in tests.</summary>
+    /// rest of this call. refresh replaces RefreshAsync in tests; onMovieTagsChanged is passed on to it.</summary>
     public static async Task<int> RefreshStaleAsync(
         AppDbContext db,
         ILogger? logger = null,
         Func<AppDbContext, int, CancellationToken, Task<bool>>? refresh = null,
+        Func<int, CancellationToken, Task>? onMovieTagsChanged = null,
         CancellationToken ct = default)
     {
-        refresh ??= RefreshAsync;
+        refresh ??= (d, movieId, c) => RefreshAsync(d, movieId, onMovieTagsChanged, c);
         var failed = new List<int>();
         var refreshed = 0;
         while (true)
