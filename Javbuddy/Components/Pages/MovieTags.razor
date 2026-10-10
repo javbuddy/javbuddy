@@ -760,8 +760,8 @@
 
         if (action == PendingAction.Delete)
         {
-            await TagService.DeleteAsync(tagId);
-            SetStatus("Tag deleted.", false);
+            var result = await TagService.DeleteAsync(tagId);
+            SetStatus(result.Success ? "Tag deleted." : result.ErrorMessage ?? "Failed to delete tag.", !result.Success);
         }
         else if (action == PendingAction.MakeActorTag)
         {

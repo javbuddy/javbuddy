@@ -67,7 +67,7 @@ public interface ITagService
     Task<TagOperationResult> RenameAsync(int tagId, string newName, CancellationToken ct = default);
     Task<IReadOnlyList<TagMergeCandidate>> GetMergeCandidatesAsync(int sourceTagId, string? search = null, CancellationToken ct = default);
     Task<TagOperationResult> MergeAsync(int sourceTagId, int targetTagId, bool createReplacementRule = false, CancellationToken ct = default);
-    Task DeleteAsync(int tagId, CancellationToken ct = default);
+    Task<TagOperationResult> DeleteAsync(int tagId, CancellationToken ct = default);
     Task<TagOperationResult> IgnoreAsync(int tagId, CancellationToken ct = default);
     Task<TagOperationResult> ApproveAsync(int tagId, CancellationToken ct = default);
     Task<int> ApproveManyAsync(IReadOnlyList<int> tagIds, CancellationToken ct = default);
@@ -489,15 +489,15 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         return TagOperationResult.Ok(target);
     }
 
-    public async Task DeleteAsync(int tagId, CancellationToken ct = default)
+    public async Task<TagOperationResult> DeleteAsync(int tagId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var tag = await db.Tags.Include(t => t.Subtags).FirstOrDefaultAsync(t => t.Id == tagId, ct);
-        if (tag is null) return;
+        if (tag is null) return TagOperationResult.Fail("Tag not found.");
 
         if (tag.Subtags.Count > 0)
         {
-            throw new InvalidOperationException("Cannot delete a tag that has subtags. Reparent or delete the subtags first.");
+            return TagOperationResult.Fail("Cannot delete a tag that has subtags. Reparent or delete the subtags first.");
         }
 
         var movieIds = await db.MovieTags.Where(mt => mt.TagId == tagId).Select(mt => mt.MovieId).ToListAsync(ct);
@@ -509,6 +509,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         // After the save, in the background: a big tag can be on hundreds of movies.
         driftChecks?.Enqueue(movieIds);
+
+        return TagOperationResult.Ok(tag);
     }
 
     public async Task<TagOperationResult> IgnoreAsync(int tagId, CancellationToken ct = default)

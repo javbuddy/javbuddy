@@ -1119,8 +1119,11 @@ public class TagServiceTests
         var parent = await service.CreateTagAsync("Cosplay");
         await service.CreateTagAsync("ram", parent.Tag!.Id);
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteAsync(parent.Tag.Id));
-        Assert.Contains("subtags", ex.Message);
+        var result = await service.DeleteAsync(parent.Tag.Id);
+
+        Assert.False(result.Success);
+        Assert.Contains("subtags", result.ErrorMessage);
+        Assert.NotNull(await service.GetByIdAsync(parent.Tag.Id));
     }
 
     [Fact]
