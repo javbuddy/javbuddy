@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-10
+
 ### Changed
 
 - The Movies page's Genre filter now nests subtags under their parent, like the Actor tag filter and the Scenes wall.
