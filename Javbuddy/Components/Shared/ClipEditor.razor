@@ -330,7 +330,7 @@
             {
                 await HighlightMedia.EnsureQueuedAsync(MovieId);
             }
-            if (apexes.Any(a => a.PreviewVersion is null))
+            if (apexes.Any(a => ApexMedia.IsMissingMedia(a.ThumbVersion, a.PreviewVersion)))
             {
                 await ApexMedia.EnsureQueuedAsync(MovieId);
             }

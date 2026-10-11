@@ -275,6 +275,7 @@
     private CancellationTokenSource? textDebounceCts;
     private IJSObjectReference? jsModule;
     private IJSObjectReference? clipCardModule;
+    private IJSObjectReference? hoverPreviews;
     private ElementReference wallRef;
     private PlayerClip? playingClip;
     // Play all / Shuffle's clips, fixed when started; null for a single card.
@@ -441,7 +442,7 @@
             clipCardModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
             await clipCardModule.InvokeVoidAsync("preventPlainCardClicks", wallRef);
             await clipCardModule.InvokeVoidAsync("measureTagOverflow", wallRef);
-            await clipCardModule.InvokeVoidAsync("bindHoverPreviews", wallRef);
+            hoverPreviews = await clipCardModule.InvokeAsync<IJSObjectReference>("bindHoverPreviews", wallRef);
             jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/MovieScenes.razor.js");
             var json = await jsModule.InvokeAsync<string?>("getCookie", ViewStateCookieName);
             await ApplyViewStateAsync(json);
@@ -721,7 +722,7 @@
             windowStart = skip;
             loaded = true;
             if (!queueMissingMedia) return true;
-            foreach (var movieId in page.Cards.Where(c => c.ThumbVersion is null || c.PreviewVersion is null).Select(c => c.MovieId).Distinct())
+            foreach (var movieId in page.Cards.Where(c => ApexMedia.IsMissingMedia(c.ThumbVersion, c.PreviewVersion)).Select(c => c.MovieId).Distinct())
             {
                 await ApexMedia.EnsureQueuedAsync(movieId);
             }
@@ -864,6 +865,11 @@
         SceneMediaQueue.Generated -= OnMediaGenerated;
         try
         {
+            if (hoverPreviews is not null)
+            {
+                await hoverPreviews.InvokeVoidAsync("unbind");
+                await hoverPreviews.DisposeAsync();
+            }
             if (clipCardModule is not null) await clipCardModule.DisposeAsync();
             if (jsModule is not null) await jsModule.DisposeAsync();
         }

@@ -16,7 +16,10 @@ export function preventPlainCardClicks(container) {
 // leaves. Doing it here rather than through Blazor's mouseenter/mouseleave means hovering costs no
 // round trip to the server and no re-render, which added up when a scroll carried a window of cards
 // under a still pointer. The delay, and restarting it while the page scrolls, keep a card that only
-// passes under the pointer from starting a download. Bound like preventPlainCardClicks.
+// passes under the pointer from starting a download. Bound like preventPlainCardClicks, and the returned
+// reference's unbind() unbinds it, since the window's scroll listener would otherwise outlive the host.
+// The container gets data-hover-bound once it listens; data-hover-preview-delay overrides the delay
+// (both are attributes Blazor never renders, so they survive its re-renders), for tests.
 const HOVER_PREVIEW_DELAY_MS = 150;
 
 export function bindHoverPreviews(container) {
@@ -59,33 +62,45 @@ export function bindHoverPreviews(container) {
 
     const schedule = () => {
         clearTimeout(timer);
-        timer = setTimeout(play, HOVER_PREVIEW_DELAY_MS);
+        timer = setTimeout(play, Number(container.dataset.hoverPreviewDelay) || HOVER_PREVIEW_DELAY_MS);
     };
 
-    container.addEventListener('mouseover', e => {
+    const onOver = e => {
         const over = e.target.closest?.('.scene-wall-card');
         if (over === card) return;
         stop();
         card = over && container.contains(over) ? over : null;
         if (card) schedule();
-    });
-    container.addEventListener('mouseout', e => {
+    };
+    const onOut = e => {
         if (!card || card.contains(e.relatedTarget)) return;
         stop();
         card = null;
-    });
-
+    };
     const onScroll = () => {
         if (!container.isConnected) {
-            window.removeEventListener('scroll', onScroll);
-            stop();
+            unbind();
             return;
         }
         if (!card) return;
         stop();
         schedule();
     };
+    const unbind = () => {
+        container.removeEventListener('mouseover', onOver);
+        container.removeEventListener('mouseout', onOut);
+        window.removeEventListener('scroll', onScroll);
+        stop();
+        card = null;
+        delete container.dataset.hoverBound;
+    };
+
+    container.addEventListener('mouseover', onOver);
+    container.addEventListener('mouseout', onOut);
     window.addEventListener('scroll', onScroll, { passive: true });
+    container.dataset.hoverBound = '';
+    // Blazor turns what an IJSObjectReference-returning call gets back into the reference itself.
+    return { unbind };
 }
 
 // A card's tag row stays on one line: the chips that don't fit, with room left for a

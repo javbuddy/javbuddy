@@ -621,6 +621,40 @@ public class MovieScenesTests : BunitContext
     }
 
     [Fact]
+    public async Task LeavingThePage_UnbindsTheHoverPreviews()
+    {
+        wall.GetPageAsync(Arg.Any<SceneWallFilter>(), Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Is(0), Arg.Is(48), Arg.Any<CancellationToken>())
+            .Returns(new SceneWallPage([Card(1, "ABC-123")], 1));
+        var binding = clipCardModule.SetupModule("bindHoverPreviews", _ => true);
+        binding.Mode = JSRuntimeMode.Loose;
+        var cut = Render<MovieScenes>();
+        Assert.Empty(binding.Invocations);
+
+        await cut.Instance.DisposeAsync();
+
+        // Its scroll listener is on window, so it would outlive the wall without this.
+        Assert.Single(binding.Invocations, i => i.Identifier == "unbind");
+    }
+
+    [Theory]
+    [InlineData(true, true, null, null, true)]
+    [InlineData(true, true, 1L, null, true)]
+    [InlineData(true, true, null, 2L, true)]
+    [InlineData(true, true, 1L, 2L, false)]
+    // Thumbnails mode keeps no previews, so a missing one is no reason to ask again.
+    [InlineData(true, false, 1L, null, false)]
+    [InlineData(true, false, null, null, true)]
+    [InlineData(false, false, null, null, false)]
+    public void ApexMedia_IsMissingMedia_OnlyCountsWhatTheCacheModeKeeps(bool servesThumb, bool servesPreview, long? thumb, long? preview, bool missing)
+    {
+        var media = Substitute.For<IApexMediaService>();
+        media.ServesVariant("thumb").Returns(servesThumb);
+        media.ServesPreview.Returns(servesPreview);
+
+        Assert.Equal(missing, media.IsMissingMedia(thumb, preview));
+    }
+
+    [Fact]
     public void CardTagRows_AreMeasuredForOverflow()
     {
         wall.GetPageAsync(Arg.Any<SceneWallFilter>(), Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Is(0), Arg.Is(48), Arg.Any<CancellationToken>())

@@ -30,6 +30,15 @@ public interface IApexMediaService
     Task DeleteForApexAsync(int apexId, CancellationToken ct = default);
 }
 
+public static class ApexMediaExtensions
+{
+    /// <summary>Whether an apex lacks media this image-cache mode keeps — what decides asking
+    /// <see cref="IApexMediaService.EnsureQueuedAsync"/>. In Thumbnails mode there is never a preview, so
+    /// its absence isn't a reason to ask.</summary>
+    public static bool IsMissingMedia(this IApexMediaService media, long? thumbVersion, long? previewVersion) =>
+        (thumbVersion is null && media.ServesVariant(SceneMediaService.VariantThumb)) || (previewVersion is null && media.ServesPreview);
+}
+
 /// <summary>A screenshot and a hover preview for apex markers: a still of the frame the preview starts on
 /// and a WebM of the few seconds around the apex, as CachedImage rows with Role "apex", Index =
 /// MovieApex.Id and Variant "thumb" or "preview". The wall shows the still, as a plain lazy image, and

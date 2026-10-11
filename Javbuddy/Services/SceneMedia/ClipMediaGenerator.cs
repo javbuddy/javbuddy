@@ -38,7 +38,7 @@ public sealed class ClipMediaGenerator(
 
     /// <summary>Writes whichever enabled variants aren't current for <paramref name="window"/>.
     /// endSeconds null means unknown (the probed duration is used for the middle, as for scenes).
-    /// <paramref name="variants"/> limits which of them are made (apexes only have a preview).</summary>
+    /// <paramref name="variants"/> limits which of them are made (null: every enabled one).</summary>
     public async Task<ClipGenerateOutcome> GenerateAsync(string role, int index, int movieId, double startSeconds, double? endSeconds,
         SceneMediaWindow window, IReadOnlyList<CachedImage> rows, CancellationToken ct, IReadOnlyCollection<string>? variants = null)
     {

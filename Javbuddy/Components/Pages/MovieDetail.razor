@@ -595,7 +595,7 @@ else
         {
             await HighlightMedia.EnsureQueuedAsync(movie.Id);
         }
-        if (apexes.Any(a => a.PreviewVersion is null))
+        if (apexes.Any(a => Javbuddy.Services.SceneMedia.ApexMediaExtensions.IsMissingMedia(ApexMedia, a.ThumbVersion, a.PreviewVersion)))
         {
             await ApexMedia.EnsureQueuedAsync(movie.Id);
         }

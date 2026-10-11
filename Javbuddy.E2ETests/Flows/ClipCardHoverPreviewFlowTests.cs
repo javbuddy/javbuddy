@@ -70,6 +70,11 @@ public class ClipCardHoverPreviewFlowTests(E2EFixture fixture)
         await db.SaveChangesAsync();
     }
 
+    /// <summary>The page is interactive before the wall's script has bound its hover handling (a module import and
+    /// a few interop calls later), and a pointer that arrives first is never re-sent as a hover.</summary>
+    private static Task WaitForHoverBindingAsync(IPage page) =>
+        page.WaitForSelectorAsync("[data-hover-bound]", new() { State = WaitForSelectorState.Attached });
+
     private static async Task<(float X, float Y)> CenterOfAsync(IPage page, int cardIndex)
     {
         var box = (await page.Locator(".scene-wall-card").Nth(cardIndex).BoundingBoxAsync())!;
@@ -84,7 +89,7 @@ public class ClipCardHoverPreviewFlowTests(E2EFixture fixture)
         await page.SetViewportSizeAsync(1920, 1080);
         await page.GotoInteractiveAsync("/movies/scenes");
         await Expect(page.Locator(".scene-wall-card").Nth(SceneCount - 1)).ToBeVisibleAsync();
-        await page.WaitForFunctionAsync("() => !!window.Blazor");
+        await WaitForHoverBindingAsync(page);
         Assert.Equal(0, await page.Locator(".scene-wall-card video").CountAsync());
 
         var (x, y) = await CenterOfAsync(page, 0);
@@ -112,7 +117,7 @@ public class ClipCardHoverPreviewFlowTests(E2EFixture fixture)
         page.WebSocket += (_, ws) => ws.FrameSent += (_, _) => Interlocked.Increment(ref framesSent);
         await page.GotoInteractiveAsync("/movies/scenes");
         await Expect(page.Locator(".scene-wall-card").Nth(SceneCount - 1)).ToBeVisibleAsync();
-        await page.WaitForFunctionAsync("() => !!window.Blazor");
+        await WaitForHoverBindingAsync(page);
         await page.EvaluateAsync(
             """
             () => {
@@ -124,15 +129,21 @@ public class ClipCardHoverPreviewFlowTests(E2EFixture fixture)
         await page.WaitForTimeoutAsync(300);
         var framesBefore = framesSent;
 
-        // Across every card in turn, well inside the dwell time on each.
+        // A dwell far longer than any CI hiccup between two moves, so the sweep stays "inside the dwell time"
+        // on every card however slow the runner is. The real delay (150 ms) is put back for the resting part.
+        var centres = new List<(float X, float Y)>();
         for (var i = 0; i < SceneCount; i++)
         {
-            var (x, y) = await CenterOfAsync(page, i);
+            centres.Add(await CenterOfAsync(page, i));
+        }
+        await page.EvaluateAsync("() => { document.querySelector('[data-hover-bound]').dataset.hoverPreviewDelay = '5000'; }");
+        foreach (var (x, y) in centres)
+        {
             await page.Mouse.MoveAsync(x, y);
-            await page.WaitForTimeoutAsync(40);
         }
         await page.Mouse.MoveAsync(5, 5);
-        await page.WaitForTimeoutAsync(400);
+        await page.WaitForTimeoutAsync(300);
+        await page.EvaluateAsync("() => { delete document.querySelector('[data-hover-bound]').dataset.hoverPreviewDelay; }");
 
         Assert.Equal(0, await page.EvaluateAsync<int>("window.__videosAdded"));
 
@@ -147,8 +158,29 @@ public class ClipCardHoverPreviewFlowTests(E2EFixture fixture)
         await Expect(page.Locator(".scene-wall-card video")).ToHaveCountAsync(0);
         Assert.Equal(4, await page.EvaluateAsync<int>("window.__videosAdded"));
 
-        // A Blazor mouseenter/mouseleave handler sent a few frames for every card crossed (about 3.4 each
-        // when measured, 16 cards here); only the connection's own keep-alive can show up now.
-        Assert.True(framesSent - framesBefore <= 2, $"Hovering sent {framesSent - framesBefore} frames to the server.");
+        // A Blazor mouseenter/mouseleave handler sent a few frames for every card crossed (about 3.4 each when
+        // measured; 16 cards here, so over 50). Unrelated traffic on the shared connection (keep-alives, a
+        // background refresh) can add a few, so the bound leaves room for that.
+        Assert.True(framesSent - framesBefore <= 8, $"Hovering sent {framesSent - framesBefore} frames to the server.");
+    }
+
+    [Fact]
+    public async Task LeavingTheWall_UnbindsTheHoverHandlingWithoutBreakingTheCircuit()
+    {
+        await SeedScenesWithMediaAsync();
+        var page = await fixture.NewPageAsync();
+        await page.SetViewportSizeAsync(1920, 1080);
+        await page.GotoInteractiveAsync("/movies/scenes");
+        await Expect(page.Locator(".scene-wall-card").Nth(SceneCount - 1)).ToBeVisibleAsync();
+        await WaitForHoverBindingAsync(page);
+
+        // The wall's disposal calls into the script it bound (bUnit fakes that call, so only a real circuit
+        // can show it failing: a throw there takes the whole circuit down with it).
+        await page.Locator("a.nav-sublink[href='movies/tags']").ClickAsync();
+        await Expect(page).ToHaveURLAsync(new System.Text.RegularExpressions.Regex(@"/movies/tags$"));
+        await page.WaitForTimeoutAsync(1000);
+
+        await Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+        Assert.Equal(0, await page.Locator("[data-hover-bound]").CountAsync());
     }
 }

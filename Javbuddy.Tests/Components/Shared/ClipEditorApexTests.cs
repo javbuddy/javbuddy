@@ -69,6 +69,7 @@ public class ClipEditorApexTests : ClipEditorTestBase
     [Fact]
     public async Task ApexWithoutPreview_QueuesItsMedia_SoTheHostsCardsGetItWithoutARefresh()
     {
+        apexMedia.ServesPreview.Returns(true);
         await apexService.AddApexAsync(movieId, 125, [tagId]);
 
         RenderEditor();

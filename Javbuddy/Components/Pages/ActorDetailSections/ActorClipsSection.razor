@@ -76,6 +76,7 @@
     private PlayerClip? playingClip;
     private ElementReference hostRef;
     private IJSObjectReference? clipCardModule;
+    private IJSObjectReference? hoverPreviews;
 
     private string Title => Kind switch
     {
@@ -117,7 +118,7 @@
             clipCardModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
             await clipCardModule.InvokeVoidAsync("preventPlainCardClicks", hostRef);
             await clipCardModule.InvokeVoidAsync("measureTagOverflow", hostRef);
-            await clipCardModule.InvokeVoidAsync("bindHoverPreviews", hostRef);
+            hoverPreviews = await clipCardModule.InvokeAsync<IJSObjectReference>("bindHoverPreviews", hostRef);
         }
         catch (JSDisconnectedException)
         {
@@ -155,7 +156,7 @@
                 total = page.TotalCount;
                 apexCards = append ? [.. apexCards, .. page.Cards] : [.. page.Cards];
                 if (!queueMissingMedia) break;
-                foreach (var movieId in page.Cards.Where(c => c.PreviewVersion is null).Select(c => c.MovieId).Distinct())
+                foreach (var movieId in page.Cards.Where(c => ApexMedia.IsMissingMedia(c.ThumbVersion, c.PreviewVersion)).Select(c => c.MovieId).Distinct())
                 {
                     await ApexMedia.EnsureQueuedAsync(movieId);
                 }
@@ -226,6 +227,11 @@
         if (clipCardModule is null) return;
         try
         {
+            if (hoverPreviews is not null)
+            {
+                await hoverPreviews.InvokeVoidAsync("unbind");
+                await hoverPreviews.DisposeAsync();
+            }
             await clipCardModule.DisposeAsync();
         }
         catch (JSDisconnectedException)

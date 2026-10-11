@@ -131,4 +131,43 @@ public class ActorClipsSectionTests : BunitContext
 
         Assert.Empty(cut.FindAll(".actor-clips"));
     }
+
+    [Fact]
+    public void ApexWithAPreviewButNoScreenshot_IsQueuedForItsScreenshot()
+    {
+        apexMedia.ServesVariant(Arg.Any<string>()).Returns(true);
+        apexMedia.ServesPreview.Returns(true);
+        var apex = new ApexWallCard(3, 30, "ABC-003", "Title", "Yua — Squirt", 300, ["Yua"], [], false, 5) { HasLocalVideo = true, DurationSeconds = 3600 };
+        wall.GetApexPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(new ApexWallPage([apex], 1));
+
+        RenderSection(PlayerClipKind.Apex);
+
+        apexMedia.Received(1).EnsureQueuedAsync(30, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void ApexWithBothImages_IsNotQueued()
+    {
+        apexMedia.ServesVariant(Arg.Any<string>()).Returns(true);
+        apexMedia.ServesPreview.Returns(true);
+        var apex = new ApexWallCard(3, 30, "ABC-003", "Title", "Yua — Squirt", 300, ["Yua"], [], false, 5) { HasLocalVideo = true, DurationSeconds = 3600, ThumbVersion = 4 };
+        wall.GetApexPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(new ApexWallPage([apex], 1));
+
+        RenderSection(PlayerClipKind.Apex);
+
+        apexMedia.DidNotReceive().EnsureQueuedAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task LeavingThePage_UnbindsTheHoverPreviews()
+    {
+        wall.GetPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(new SceneWallPage([Scene(1)], 1));
+        var binding = clipCardModule.SetupModule("bindHoverPreviews", _ => true);
+        binding.Mode = JSRuntimeMode.Loose;
+        var cut = RenderSection(PlayerClipKind.Scene);
+
+        await cut.Instance.DisposeAsync();
+
+        Assert.Single(binding.Invocations, i => i.Identifier == "unbind");
+    }
 }
