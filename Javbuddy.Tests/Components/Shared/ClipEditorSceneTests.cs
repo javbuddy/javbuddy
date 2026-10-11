@@ -181,9 +181,14 @@ public class ClipEditorSceneTests : ClipEditorTestBase
 
         cut.Find(".delete-confirm-confirm-btn").Click();
 
+        // The confirm handler deletes, reloads the editor and only then closes the dialog, so the
+        // markup lags the stored row; waiting for it keeps a slow runner from reading it mid-reload.
         Assert.Empty(await StoredScenesAsync());
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
-        Assert.NotNull(cut.Find(".scene-editor-empty"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+            Assert.NotNull(cut.Find(".scene-editor-empty"));
+        });
     }
 
     [Fact]
