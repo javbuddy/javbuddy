@@ -207,11 +207,7 @@ public sealed class SceneWallQueryService(
             .ToListAsync(ct);
 
         // Resolved per movie (positions and effective ends depend on the movie's other scenes).
-        var itemsByMovie = new Dictionary<int, IReadOnlyList<SceneItem>>();
-        foreach (var movieId in page.Select(p => p.MovieId).Distinct())
-        {
-            itemsByMovie[movieId] = await sceneService.GetScenesAsync(movieId, ct);
-        }
+        var itemsByMovie = await sceneService.GetScenesForMoviesAsync(page.Select(p => p.MovieId).Distinct().ToList(), ct);
         var apexSeconds = await ApexSecondsByMovieAsync(db, itemsByMovie.Keys, ct);
         var rollups = await RollupsAsync(itemsByMovie, ct);
 
@@ -385,14 +381,9 @@ public sealed class SceneWallQueryService(
             .ToListAsync(ct);
 
         // Resolved per movie, the way Movie Detail lists them.
-        var itemsById = new Dictionary<int, ApexItem>();
-        foreach (var movieId in page.Select(p => p.MovieId).Distinct())
-        {
-            foreach (var item in await apexes.GetApexesAsync(movieId, ct))
-            {
-                itemsById[item.Id] = item;
-            }
-        }
+        var itemsById = (await apexes.GetApexesForMoviesAsync(page.Select(p => p.MovieId).Distinct().ToList(), ct))
+            .Values.SelectMany(items => items)
+            .ToDictionary(item => item.Id);
 
         var cards = page
             .Where(p => itemsById.ContainsKey(p.Id))
@@ -465,12 +456,10 @@ public sealed class SceneWallQueryService(
     /// so the sources ("highlight 2", "apex 3") number them as Movie Detail does.</summary>
     private async Task<Dictionary<int, ClipRollupResult>> RollupsAsync(IReadOnlyDictionary<int, IReadOnlyList<SceneItem>> scenesByMovie, CancellationToken ct)
     {
-        var rollups = new Dictionary<int, ClipRollupResult>();
-        foreach (var (movieId, scenes) in scenesByMovie)
-        {
-            rollups[movieId] = ClipRollup.Compute(scenes, await highlights.GetHighlightsAsync(movieId, ct), await apexes.GetApexesAsync(movieId, ct));
-        }
-        return rollups;
+        var movieIds = scenesByMovie.Keys.ToList();
+        var highlightsByMovie = await highlights.GetHighlightsForMoviesAsync(movieIds, ct);
+        var apexesByMovie = await apexes.GetApexesForMoviesAsync(movieIds, ct);
+        return scenesByMovie.ToDictionary(kv => kv.Key, kv => ClipRollup.Compute(kv.Value, highlightsByMovie[kv.Key], apexesByMovie[kv.Key]));
     }
 
     /// <summary>The times of every apex of the given movies, for the cards' apex counts.</summary>

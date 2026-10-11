@@ -66,6 +66,10 @@ public interface IMovieApexService
     /// <summary>The movie's apexes ordered by time.</summary>
     Task<IReadOnlyList<ApexItem>> GetApexesAsync(int movieId, CancellationToken ct = default);
 
+    /// <summary>Each of the movies' apexes as <see cref="GetApexesAsync"/> returns them, loaded in a fixed
+    /// number of queries however many movies there are. Every id is in the result.</summary>
+    Task<IReadOnlyDictionary<int, IReadOnlyList<ApexItem>>> GetApexesForMoviesAsync(IReadOnlyCollection<int> movieIds, CancellationToken ct = default);
+
     /// <summary>The cast the apex form picks actors from.</summary>
     Task<ApexActorOptions> GetActorOptionsAsync(int movieId, CancellationToken ct = default);
 
@@ -100,13 +104,17 @@ public class MovieApexService(
     IApexPlaybackSettingsService? playbackSettings = null,
     ClipActorRefreshSignal? clipActors = null) : IMovieApexService
 {
-    public async Task<IReadOnlyList<ApexItem>> GetApexesAsync(int movieId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ApexItem>> GetApexesAsync(int movieId, CancellationToken ct = default) =>
+        (await GetApexesForMoviesAsync([movieId], ct))[movieId];
+
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<ApexItem>>> GetApexesForMoviesAsync(IReadOnlyCollection<int> movieIds, CancellationToken ct = default)
     {
+        var movies = movieIds.Distinct().ToList();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var apexes = await db.MovieApexes.AsNoTracking()
             .Include(a => a.ApexTags).ThenInclude(at => at.Tag).ThenInclude(t => t.ParentTag)
             .Include(a => a.ApexActors).ThenInclude(aa => aa.MovieActor).ThenInclude(ma => ma.Actor)
-            .Where(a => a.MovieId == movieId)
+            .Where(a => movies.Contains(a.MovieId))
             .OrderBy(a => a.Seconds).ThenBy(a => a.Id)
             .ToListAsync(ct);
         var ids = apexes.Select(a => a.Id).ToList();
@@ -122,28 +130,34 @@ public class MovieApexService(
                 ? row.UpdatedAt.Ticks
                 : null;
 
-        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movieId, ct);
-        var castCount = await db.MovieActors.CountAsync(ma => ma.MovieId == movieId, ct);
+        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movies, ct);
+        var castCounts = (await db.MovieActors.Where(ma => movies.Contains(ma.MovieId)).GroupBy(ma => ma.MovieId).Select(g => new { MovieId = g.Key, Count = g.Count() }).ToListAsync(ct))
+            .ToDictionary(g => g.MovieId, g => g.Count);
         var defaultWindow = await GetDefaultWindowAsync(ct);
-        return apexes
-            .Select((a, i) => new ApexItem(a.Id, i + 1, a.Seconds, a.ApexTags
-                .Select(at => new SceneTagItem(at.TagId, at.Tag.Name, at.Tag.ParentTag?.Name))
-                .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
-                .ToList())
-            {
-                IsFavorite = a.IsFavorite,
-                Actors = a.ApexActors
-                    .Select(aa => new SceneActorItem(aa.ActorId, aa.MovieActor.Actor.DisplayName))
-                    .OrderBy(actor => actor.Name, StringComparer.OrdinalIgnoreCase)
-                    .ToList(),
-                EffectiveActors = effective.Apexes.GetValueOrDefault(a.Id, EffectiveActors.None),
-                CastCount = castCount,
-                PreviewVersion = PreviewVersion(a),
-                OwnLeadInSeconds = a.LeadInSeconds,
-                OwnTailSeconds = a.TailSeconds,
-                Window = ApexRanges.Resolve(a.LeadInSeconds, a.TailSeconds, defaultWindow),
-            })
-            .ToList();
+        var apexesByMovie = apexes.ToLookup(a => a.MovieId);
+        return movies.ToDictionary(movieId => movieId, movieId =>
+        {
+            var castCount = castCounts.GetValueOrDefault(movieId);
+            return (IReadOnlyList<ApexItem>)apexesByMovie[movieId]
+                .Select((a, i) => new ApexItem(a.Id, i + 1, a.Seconds, a.ApexTags
+                    .Select(at => new SceneTagItem(at.TagId, at.Tag.Name, at.Tag.ParentTag?.Name))
+                    .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList())
+                {
+                    IsFavorite = a.IsFavorite,
+                    Actors = a.ApexActors
+                        .Select(aa => new SceneActorItem(aa.ActorId, aa.MovieActor.Actor.DisplayName))
+                        .OrderBy(actor => actor.Name, StringComparer.OrdinalIgnoreCase)
+                        .ToList(),
+                    EffectiveActors = effective[movieId].Apexes.GetValueOrDefault(a.Id, EffectiveActors.None),
+                    CastCount = castCount,
+                    PreviewVersion = PreviewVersion(a),
+                    OwnLeadInSeconds = a.LeadInSeconds,
+                    OwnTailSeconds = a.TailSeconds,
+                    Window = ApexRanges.Resolve(a.LeadInSeconds, a.TailSeconds, defaultWindow),
+                })
+                .ToList();
+        });
     }
 
     public async Task<ApexWindow> GetDefaultWindowAsync(CancellationToken ct = default) =>

@@ -53,6 +53,10 @@ public interface IMovieHighlightService
     /// <summary>The movie's highlights ordered by start time.</summary>
     Task<IReadOnlyList<HighlightItem>> GetHighlightsAsync(int movieId, CancellationToken ct = default);
 
+    /// <summary>Each of the movies' highlights as <see cref="GetHighlightsAsync"/> returns them, loaded in a
+    /// fixed number of queries however many movies there are. Every id is in the result.</summary>
+    Task<IReadOnlyDictionary<int, IReadOnlyList<HighlightItem>>> GetHighlightsForMoviesAsync(IReadOnlyCollection<int> movieIds, CancellationToken ct = default);
+
     /// <summary>The cast the highlight form picks actors from.</summary>
     Task<ApexActorOptions> GetActorOptionsAsync(int movieId, CancellationToken ct = default);
 
@@ -80,16 +84,20 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
 {
     private const int TitleMaxLength = 200;
 
-    public async Task<IReadOnlyList<HighlightItem>> GetHighlightsAsync(int movieId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<HighlightItem>> GetHighlightsAsync(int movieId, CancellationToken ct = default) =>
+        (await GetHighlightsForMoviesAsync([movieId], ct))[movieId];
+
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<HighlightItem>>> GetHighlightsForMoviesAsync(IReadOnlyCollection<int> movieIds, CancellationToken ct = default)
     {
+        var movies = movieIds.Distinct().ToList();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var ordered = HighlightRanges.Order(await db.MovieHighlights.AsNoTracking()
-            .Include(h => h.HighlightTags).ThenInclude(ht => ht.Tag).ThenInclude(t => t.ParentTag)
-            .Include(h => h.HighlightActors).ThenInclude(ha => ha.MovieActor).ThenInclude(ma => ma.Actor)
-            .Where(h => h.MovieId == movieId)
-            .ToListAsync(ct));
-        var lanes = HighlightRanges.AssignLanes(ordered.Select(h => (h.StartSeconds, h.EndSeconds)).ToList());
-        var ids = ordered.Select(h => h.Id).ToList();
+        var highlightsByMovie = (await db.MovieHighlights.AsNoTracking()
+                .Include(h => h.HighlightTags).ThenInclude(ht => ht.Tag).ThenInclude(t => t.ParentTag)
+                .Include(h => h.HighlightActors).ThenInclude(ha => ha.MovieActor).ThenInclude(ma => ma.Actor)
+                .Where(h => movies.Contains(h.MovieId))
+                .ToListAsync(ct))
+            .ToLookup(h => h.MovieId);
+        var ids = highlightsByMovie.SelectMany(g => g).Select(h => h.Id).ToList();
         var media = await db.CachedImages.AsNoTracking()
             .Where(c => c.Role == HighlightMediaService.Role && ids.Contains(c.Index))
             .ToListAsync(ct);
@@ -104,32 +112,39 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
             return current ? row!.UpdatedAt.Ticks : null;
         }
 
-        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movieId, ct);
-        var castCount = await db.MovieActors.CountAsync(ma => ma.MovieId == movieId, ct);
-        return ordered
-            .Select((h, i) =>
-            {
-                var effectiveActors = effective.Highlights.GetValueOrDefault(h.Id, EffectiveActors.None);
-                var actors = h.HighlightActors
-                    .Select(ha => new SceneActorItem(ha.ActorId, ha.MovieActor.Actor.DisplayName))
-                    .OrderBy(actor => actor.Name, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                var tags = h.HighlightTags
-                    .Select(ht => new SceneTagItem(ht.TagId, ht.Tag.Name, ht.Tag.ParentTag?.Name))
-                    .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
-                    .ToList();
-                return new HighlightItem(h.Id, i + 1,
-                    HighlightRanges.DisplayTitle(h.Title, i + 1, ActorTagLabel.ActorsToName(effectiveActors.Actors.Select(a => a.Name), castCount), tags.Select(t => t.Name)), h.Title,
-                    h.StartSeconds, h.EndSeconds, h.IsFavorite, lanes[i])
+        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movies, ct);
+        var castCounts = (await db.MovieActors.Where(ma => movies.Contains(ma.MovieId)).GroupBy(ma => ma.MovieId).Select(g => new { MovieId = g.Key, Count = g.Count() }).ToListAsync(ct))
+            .ToDictionary(g => g.MovieId, g => g.Count);
+        return movies.ToDictionary(movieId => movieId, movieId =>
+        {
+            var ordered = HighlightRanges.Order(highlightsByMovie[movieId].ToList());
+            var lanes = HighlightRanges.AssignLanes(ordered.Select(h => (h.StartSeconds, h.EndSeconds)).ToList());
+            var castCount = castCounts.GetValueOrDefault(movieId);
+            return (IReadOnlyList<HighlightItem>)ordered
+                .Select((h, i) =>
                 {
-                    Actors = actors,
-                    EffectiveActors = effectiveActors,
-                    Tags = tags,
-                    ThumbVersion = MediaVersion(h, SceneMediaService.VariantThumb),
-                    PreviewVersion = MediaVersion(h, SceneMediaService.VariantPreview)
-                };
-            })
-            .ToList();
+                    var effectiveActors = effective[movieId].Highlights.GetValueOrDefault(h.Id, EffectiveActors.None);
+                    var actors = h.HighlightActors
+                        .Select(ha => new SceneActorItem(ha.ActorId, ha.MovieActor.Actor.DisplayName))
+                        .OrderBy(actor => actor.Name, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                    var tags = h.HighlightTags
+                        .Select(ht => new SceneTagItem(ht.TagId, ht.Tag.Name, ht.Tag.ParentTag?.Name))
+                        .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
+                        .ToList();
+                    return new HighlightItem(h.Id, i + 1,
+                        HighlightRanges.DisplayTitle(h.Title, i + 1, ActorTagLabel.ActorsToName(effectiveActors.Actors.Select(a => a.Name), castCount), tags.Select(t => t.Name)), h.Title,
+                        h.StartSeconds, h.EndSeconds, h.IsFavorite, lanes[i])
+                    {
+                        Actors = actors,
+                        EffectiveActors = effectiveActors,
+                        Tags = tags,
+                        ThumbVersion = MediaVersion(h, SceneMediaService.VariantThumb),
+                        PreviewVersion = MediaVersion(h, SceneMediaService.VariantPreview)
+                    };
+                })
+                .ToList();
+        });
     }
 
     public async Task<ApexActorOptions> GetActorOptionsAsync(int movieId, CancellationToken ct = default)

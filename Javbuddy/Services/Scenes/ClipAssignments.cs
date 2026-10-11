@@ -12,10 +12,15 @@ internal static class ClipAssignments
 
     /// <summary>Every scene's, highlight's and apex's effective actors for the movie: loads
     /// just the times, positions and own actors <see cref="ClipActors"/> needs.</summary>
-    public static async Task<ClipActorsResult> LoadEffectiveActorsAsync(AppDbContext db, int movieId, CancellationToken ct)
+    public static async Task<ClipActorsResult> LoadEffectiveActorsAsync(AppDbContext db, int movieId, CancellationToken ct) =>
+        (await LoadEffectiveActorsAsync(db, [movieId], ct))[movieId];
+
+    /// <summary>The same for many movies at once, in a fixed handful of queries however many movies there
+    /// are (the wall's page covers dozens). Every requested id is in the result, empty for one with no clips.</summary>
+    public static async Task<IReadOnlyDictionary<int, ClipActorsResult>> LoadEffectiveActorsAsync(AppDbContext db, IReadOnlyCollection<int> movieIds, CancellationToken ct)
     {
-        var (cast, sceneItems, highlightItems, apexItems) = await LoadClipItemsAsync(db, movieId, ct);
-        return ClipActors.Compute(cast, sceneItems, highlightItems, apexItems);
+        var items = await LoadClipItemsAsync(db, movieIds, ct);
+        return items.ToDictionary(kv => kv.Key, kv => ClipActors.Compute(kv.Value.Cast, kv.Value.Scenes, kv.Value.Highlights, kv.Value.Apexes));
     }
 
     /// <summary>Every scene's, highlight's and apex's effective actor tags (<see cref="ClipActorTags"/>) for the movie.</summary>
@@ -25,7 +30,7 @@ internal static class ClipAssignments
     /// <summary>Both of the above from one load of the movie's clips, for ClipActorSync.</summary>
     public static async Task<(ClipActorsResult Actors, ClipActorTagsResult Tags)> LoadEffectiveActorsAndTagsAsync(AppDbContext db, int movieId, CancellationToken ct)
     {
-        var (cast, scenes, highlights, apexes) = await LoadClipItemsAsync(db, movieId, ct);
+        var (cast, scenes, highlights, apexes) = (await LoadClipItemsAsync(db, [movieId], ct))[movieId];
         var sets = new ActorTagSets(
             Group((await db.MovieActorTags.AsNoTracking().Where(t => t.MovieId == movieId).Select(t => new { t.ActorId, t.TagId }).ToListAsync(ct)).Select(t => (0, t.ActorId, t.TagId))).GetValueOrDefault(0) ?? new Dictionary<int, IReadOnlySet<int>>(),
             Group((await db.SceneActorTags.AsNoTracking().Where(t => t.MovieId == movieId).Select(t => new { Owner = t.SceneId, t.ActorId, t.TagId }).ToListAsync(ct)).Select(t => (t.Owner, t.ActorId, t.TagId))),
@@ -35,44 +40,54 @@ internal static class ClipAssignments
         return (actors, ClipActorTags.Compute(actors, scenes, highlights, apexes, sets));
     }
 
-    private static async Task<(IReadOnlyList<SceneActorItem> Cast, List<SceneItem> Scenes, List<HighlightItem> Highlights, List<ApexItem> Apexes)> LoadClipItemsAsync(
-        AppDbContext db, int movieId, CancellationToken ct)
+    private static async Task<Dictionary<int, (IReadOnlyList<SceneActorItem> Cast, List<SceneItem> Scenes, List<HighlightItem> Highlights, List<ApexItem> Apexes)>> LoadClipItemsAsync(
+        AppDbContext db, IReadOnlyCollection<int> movieIds, CancellationToken ct)
     {
-        var cast = await LoadCastAsync(db, movieId, ct);
-        var duration = await db.Movies.Where(m => m.Id == movieId).Select(m => m.MediaDurationSeconds).FirstOrDefaultAsync(ct);
-        var scenes = await db.Scenes.AsNoTracking()
-            .Include(s => s.SceneActors).ThenInclude(sa => sa.MovieActor).ThenInclude(ma => ma.Actor)
-            .Where(s => s.MovieId == movieId)
-            .ToListAsync(ct);
-        var highlights = await db.MovieHighlights.AsNoTracking()
-            .Include(h => h.HighlightActors).ThenInclude(ha => ha.MovieActor).ThenInclude(ma => ma.Actor)
-            .Where(h => h.MovieId == movieId)
-            .ToListAsync(ct);
-        var apexes = await db.MovieApexes.AsNoTracking()
-            .Include(a => a.ApexActors).ThenInclude(aa => aa.MovieActor).ThenInclude(ma => ma.Actor)
-            .Where(a => a.MovieId == movieId)
-            .OrderBy(a => a.Seconds).ThenBy(a => a.Id)
-            .ToListAsync(ct);
+        var ids = movieIds.Distinct().ToList();
+        var casts = await LoadCastsAsync(db, ids, ct);
+        var durations = (await db.Movies.Where(m => ids.Contains(m.Id)).Select(m => new { m.Id, m.MediaDurationSeconds }).ToListAsync(ct))
+            .ToDictionary(m => m.Id, m => m.MediaDurationSeconds);
+        var scenes = (await db.Scenes.AsNoTracking()
+                .Include(s => s.SceneActors).ThenInclude(sa => sa.MovieActor).ThenInclude(ma => ma.Actor)
+                .Where(s => ids.Contains(s.MovieId))
+                .ToListAsync(ct))
+            .ToLookup(s => s.MovieId);
+        var highlights = (await db.MovieHighlights.AsNoTracking()
+                .Include(h => h.HighlightActors).ThenInclude(ha => ha.MovieActor).ThenInclude(ma => ma.Actor)
+                .Where(h => ids.Contains(h.MovieId))
+                .ToListAsync(ct))
+            .ToLookup(h => h.MovieId);
+        var apexes = (await db.MovieApexes.AsNoTracking()
+                .Include(a => a.ApexActors).ThenInclude(aa => aa.MovieActor).ThenInclude(ma => ma.Actor)
+                .Where(a => ids.Contains(a.MovieId))
+                .OrderBy(a => a.Seconds).ThenBy(a => a.Id)
+                .ToListAsync(ct))
+            .ToLookup(a => a.MovieId);
 
-        var sceneItems = SceneRanges.ResolveEffectiveRanges(scenes, duration)
-            .Select(r => new SceneItem(r.Scene.Id, r.Position, "", r.Scene.Title, r.Scene.StartSeconds, r.Scene.EndSeconds, r.EffectiveEndSeconds)
-            {
-                Actors = r.Scene.SceneActors.Select(sa => new SceneActorItem(sa.ActorId, sa.MovieActor.Actor.DisplayName)).ToList(),
-            })
-            .ToList();
-        var highlightItems = HighlightRanges.Order(highlights)
-            .Select((h, i) => new HighlightItem(h.Id, i + 1, "", h.Title, h.StartSeconds, h.EndSeconds, h.IsFavorite, 0)
-            {
-                Actors = h.HighlightActors.Select(ha => new SceneActorItem(ha.ActorId, ha.MovieActor.Actor.DisplayName)).ToList(),
-            })
-            .ToList();
-        var apexItems = apexes
-            .Select((a, i) => new ApexItem(a.Id, i + 1, a.Seconds, [])
-            {
-                Actors = a.ApexActors.Select(aa => new SceneActorItem(aa.ActorId, aa.MovieActor.Actor.DisplayName)).ToList(),
-            })
-            .ToList();
-        return (cast, sceneItems, highlightItems, apexItems);
+        var result = new Dictionary<int, (IReadOnlyList<SceneActorItem>, List<SceneItem>, List<HighlightItem>, List<ApexItem>)>();
+        foreach (var movieId in ids)
+        {
+            var sceneItems = SceneRanges.ResolveEffectiveRanges(scenes[movieId].ToList(), durations.GetValueOrDefault(movieId))
+                .Select(r => new SceneItem(r.Scene.Id, r.Position, "", r.Scene.Title, r.Scene.StartSeconds, r.Scene.EndSeconds, r.EffectiveEndSeconds)
+                {
+                    Actors = r.Scene.SceneActors.Select(sa => new SceneActorItem(sa.ActorId, sa.MovieActor.Actor.DisplayName)).ToList(),
+                })
+                .ToList();
+            var highlightItems = HighlightRanges.Order(highlights[movieId].ToList())
+                .Select((h, i) => new HighlightItem(h.Id, i + 1, "", h.Title, h.StartSeconds, h.EndSeconds, h.IsFavorite, 0)
+                {
+                    Actors = h.HighlightActors.Select(ha => new SceneActorItem(ha.ActorId, ha.MovieActor.Actor.DisplayName)).ToList(),
+                })
+                .ToList();
+            var apexItems = apexes[movieId]
+                .Select((a, i) => new ApexItem(a.Id, i + 1, a.Seconds, [])
+                {
+                    Actors = a.ApexActors.Select(aa => new SceneActorItem(aa.ActorId, aa.MovieActor.Actor.DisplayName)).ToList(),
+                })
+                .ToList();
+            result[movieId] = (casts[movieId], sceneItems, highlightItems, apexItems);
+        }
+        return result;
     }
 
     private static Dictionary<int, IReadOnlyDictionary<int, IReadOnlySet<int>>> Group(IEnumerable<(int Owner, int ActorId, int TagId)> rows) =>
@@ -87,12 +102,19 @@ internal static class ClipAssignments
             ? null
             : "Actor is not in the movie's cast.";
 
-    private static async Task<IReadOnlyList<SceneActorItem>> LoadCastAsync(AppDbContext db, int movieId, CancellationToken ct)
+    private static async Task<IReadOnlyList<SceneActorItem>> LoadCastAsync(AppDbContext db, int movieId, CancellationToken ct) =>
+        (await LoadCastsAsync(db, [movieId], ct))[movieId];
+
+    /// <summary>Each movie's cast ordered by name; every requested id has an entry.</summary>
+    private static async Task<Dictionary<int, IReadOnlyList<SceneActorItem>>> LoadCastsAsync(AppDbContext db, IReadOnlyCollection<int> movieIds, CancellationToken ct)
     {
-        var cast = await db.MovieActors.AsNoTracking()
-            .Where(ma => ma.MovieId == movieId)
-            .Select(ma => ma.Actor)
+        var rows = await db.MovieActors.AsNoTracking()
+            .Where(ma => movieIds.Contains(ma.MovieId))
+            .Select(ma => new { ma.MovieId, ma.Actor })
             .ToListAsync(ct);
-        return cast.Select(a => new SceneActorItem(a.Id, a.DisplayName)).OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        var byMovie = rows.ToLookup(r => r.MovieId, r => new SceneActorItem(r.Actor.Id, r.Actor.DisplayName));
+        return movieIds.Distinct().ToDictionary(
+            id => id,
+            id => (IReadOnlyList<SceneActorItem>)byMovie[id].OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList());
     }
 }

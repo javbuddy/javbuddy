@@ -55,6 +55,10 @@ public interface IMovieSceneService
     /// <summary>The movie's scenes ordered by start time, each with its effective end.</summary>
     Task<IReadOnlyList<SceneItem>> GetScenesAsync(int movieId, CancellationToken ct = default);
 
+    /// <summary>Each of the movies' scenes as <see cref="GetScenesAsync"/> returns them, loaded in a fixed
+    /// number of queries however many movies there are. Every id is in the result.</summary>
+    Task<IReadOnlyDictionary<int, IReadOnlyList<SceneItem>>> GetScenesForMoviesAsync(IReadOnlyCollection<int> movieIds, CancellationToken ct = default);
+
     Task<SceneOperationResult> AddSceneAsync(int movieId, double startSeconds, double? endSeconds, string? title, CancellationToken ct = default);
 
     Task<SceneOperationResult> UpdateSceneAsync(int sceneId, double startSeconds, double? endSeconds, string? title, CancellationToken ct = default);
@@ -92,12 +96,17 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
 {
     private const int TitleMaxLength = 200;
 
-    public async Task<IReadOnlyList<SceneItem>> GetScenesAsync(int movieId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SceneItem>> GetScenesAsync(int movieId, CancellationToken ct = default) =>
+        (await GetScenesForMoviesAsync([movieId], ct))[movieId];
+
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<SceneItem>>> GetScenesForMoviesAsync(IReadOnlyCollection<int> movieIds, CancellationToken ct = default)
     {
+        var ids = movieIds.Distinct().ToList();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var duration = await db.Movies.Where(m => m.Id == movieId).Select(m => m.MediaDurationSeconds).FirstOrDefaultAsync(ct);
+        var durations = (await db.Movies.Where(m => ids.Contains(m.Id)).Select(m => new { m.Id, m.MediaDurationSeconds }).ToListAsync(ct))
+            .ToDictionary(m => m.Id, m => m.MediaDurationSeconds);
         var scenes = await db.Scenes.AsNoTracking()
-            .Where(s => s.MovieId == movieId)
+            .Where(s => ids.Contains(s.MovieId))
             .Include(s => s.SceneActors).ThenInclude(sa => sa.MovieActor).ThenInclude(ma => ma.Actor)
             .Include(s => s.SceneTags).ThenInclude(st => st.Tag).ThenInclude(t => t.ParentTag)
             .ToListAsync(ct);
@@ -119,15 +128,16 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
             return current ? row!.UpdatedAt.Ticks : null;
         }
 
-        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movieId, ct);
-        return SceneRanges.ResolveEffectiveRanges(scenes, duration)
+        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, ids, ct);
+        var scenesByMovie = scenes.ToLookup(s => s.MovieId);
+        return ids.ToDictionary(id => id, id => (IReadOnlyList<SceneItem>)SceneRanges.ResolveEffectiveRanges(scenesByMovie[id].ToList(), durations.GetValueOrDefault(id))
             .Select(r => new SceneItem(r.Scene.Id, r.Position, r.DisplayTitle, r.Scene.Title, r.Scene.StartSeconds, r.Scene.EndSeconds, r.EffectiveEndSeconds)
             {
                 Actors = r.Scene.SceneActors
                     .Select(sa => new SceneActorItem(sa.ActorId, sa.MovieActor.Actor.DisplayName))
                     .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
                     .ToList(),
-                EffectiveActors = effective.Scenes.GetValueOrDefault(r.Scene.Id, EffectiveActors.None),
+                EffectiveActors = effective[id].Scenes.GetValueOrDefault(r.Scene.Id, EffectiveActors.None),
                 Tags = r.Scene.SceneTags
                     .Select(st => new SceneTagItem(st.TagId, st.Tag.Name, st.Tag.ParentTag?.Name))
                     .OrderBy(t => t.ParentName ?? t.Name, StringComparer.OrdinalIgnoreCase)
@@ -138,7 +148,7 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
                 ThumbVersion = MediaVersion(r, SceneMediaService.VariantThumb),
                 PreviewVersion = MediaVersion(r, SceneMediaService.VariantPreview)
             })
-            .ToList();
+            .ToList());
     }
 
     public async Task<SceneOperationResult> AddSceneAsync(int movieId, double startSeconds, double? endSeconds, string? title, CancellationToken ct = default)

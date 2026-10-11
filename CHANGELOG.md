@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- The Scenes, Highlights and Apexes wall loads each window of cards much faster, so scrolling it no longer outruns the loading (#33). Opening a window used to run dozens of queries per movie on it. It now loads all of them together.
+
 ### Removed
 
 - The no-op service worker, which Chrome flagged as adding navigation overhead. Installing the app from Chrome's menu still works; browsers that already have the worker drop it on their next update check.
