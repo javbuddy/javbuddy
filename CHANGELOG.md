@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-11
+
 ### Changed
 
 - Apex cards on the Scenes wall show a screenshot, like highlights, and play their preview only while hovered. Before, every card in the window loaded and decoded its own preview video, which stalled scrolling on the Apexes view. Screenshots of existing apexes are generated in the background the next time the wall shows them, and the card shows its generating placeholder until then (#33).
