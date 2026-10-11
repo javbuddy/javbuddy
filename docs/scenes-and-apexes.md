@@ -145,7 +145,7 @@ A scene or highlight card's diamond badge (`ApexCount`) counts the movie's apexe
 | Highlight | seek to its start; drawn on the lane-stacked highlight track (`HighlightSegments`) | plays `[start, end)`, with its own denser trickplay (`HighlightTrickplayService`) |
 | Apex | seek to `ApexRanges.StartFor` — its lead-in before it, not before 0; drawn as a diamond (`ApexMarkers`), red when favorite | plays `ApexRanges.ClipFor`: its lead-in before to its tail after, cut at the movie's end |
 
-- **Apex window**: an apex's lead-in and tail (`ApexWindow`, on `ApexItem.Window` and `ApexWallCard.Window`) are its own `MovieApex.LeadInSeconds` / `TailSeconds` where set (the apex form's **Plays** fields, whose **Now** buttons take the playhead's distance before or after the apex, `ApexRanges.OffsetFromPlayhead`), else the defaults from `ApexPlaybackSettingsService` (Settings > UI, or `ApexPlayback__LeadInSeconds` / `ApexPlayback__TailSeconds`; 5 s each by default). `ApexRanges.ValidateWindow` keeps a lead-in in 0–300 s and a tail in 1–300 s. The overrides are relative to the apex, so moving it keeps them. The apex's ±2 s hover preview (`ApexMediaService.HalfSpanSeconds`) doesn't follow the window.
+- **Apex window**: an apex's lead-in and tail (`ApexWindow`, on `ApexItem.Window` and `ApexWallCard.Window`) are its own `MovieApex.LeadInSeconds` / `TailSeconds` where set (the apex form's **Plays** fields, whose **Now** buttons take the playhead's distance before or after the apex, `ApexRanges.OffsetFromPlayhead`), else the defaults from `ApexPlaybackSettingsService` (Settings > UI, or `ApexPlayback__LeadInSeconds` / `ApexPlayback__TailSeconds`; 5 s each by default). `ApexRanges.ValidateWindow` keeps a lead-in in 0–300 s and a tail in 1–300 s. The overrides are relative to the apex, so moving it keeps them. The apex's ±2 s hover preview (`ApexMediaService.HalfSpanSeconds`) doesn't follow the window. The wall card's picture is a screenshot (the `thumb` variant, a still of the frame the preview starts on) shown as a lazy `<img>`; the preview video is only added while the card is hovered. A card is never rendered with a `<video>` of its own just to show a still: a window holds hundreds of cards, and that many media elements stalled scrolling.
 
 - **Apex countdown**: `ApexRanges.CountdownFor` gives the whole seconds left to the next apex ahead when it's within the configured length (Settings > UI, default 10 s, max 60); `ApexCountdown.razor.js` mirrors it.
 - **Jump keys**: `MarkerJumps` gives the H / Shift+H targets (a highlight's start) and A / Shift+A targets (`StartFor` of an apex). In the clip player only markers inside the clip count, and a jump never leaves the clip. While the editor is open, H and A mark highlights and apexes instead.
@@ -157,7 +157,7 @@ A scene or highlight card's diamond badge (`ApexCount`) counts the movie's apexe
 |---|---|
 | Scene | its `SceneActor` / `SceneTag` rows and media go; highlights and apexes inside it stay, and count as in another scene or in none (the editor moves them); its tags leave the movie unless something else carries them |
 | Highlight | its `HighlightActor` / `HighlightTag` rows and media go; its tags stop rolling up |
-| Apex | its `ApexActor` / `ApexTag` rows and preview go; its tags stop rolling up |
+| Apex | its `ApexActor` / `ApexTag` rows and its screenshot and preview go; its tags stop rolling up |
 | Cast member | their scene, highlight and apex actor links on that movie go (cascade), and they leave every inherited set |
 | Tag | its movie and clip links go with it |
 

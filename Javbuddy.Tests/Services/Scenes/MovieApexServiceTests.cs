@@ -191,7 +191,7 @@ public class MovieApexServiceTests
         Assert.Empty(await db.ApexTags.ToListAsync());
     }
 
-    private static async Task AddPreviewRowAsync(TestDbContextFactory factory, int apexId, double stampedSeconds, DateTime updatedAt)
+    private static async Task AddPreviewRowAsync(TestDbContextFactory factory, int apexId, double stampedSeconds, DateTime updatedAt, string variant = SceneMediaService.VariantPreview)
     {
         await using var db = await factory.CreateDbContextAsync();
         var ms = SceneMediaService.StartMs(stampedSeconds);
@@ -200,7 +200,7 @@ public class MovieApexServiceTests
             Code = "ABC-123",
             Role = ApexMediaService.Role,
             Index = apexId,
-            Variant = SceneMediaService.VariantPreview,
+            Variant = variant,
             StorageId = Guid.NewGuid(),
             SceneStartMs = ms,
             SceneEndMs = ms,
@@ -233,6 +233,54 @@ public class MovieApexServiceTests
     }
 
     [Fact]
+    public async Task ApexList_ReportsAThumbVersion_OnlyForAScreenshotOfTheApexsCurrentTime_AndSeparatelyFromThePreview()
+    {
+        using var factory = new TestDbContextFactory();
+        var movieId = await SeedMovieAsync(factory);
+        var media = Substitute.For<IApexMediaService>();
+        media.ServesPreview.Returns(true);
+        media.ServesVariant(Arg.Any<string>()).Returns(true);
+        media.IsCurrent(Arg.Any<CachedImage>(), Arg.Any<SceneMediaWindow>())
+            .Returns(call => call.ArgAt<CachedImage>(0).SceneStartMs == call.ArgAt<SceneMediaWindow>(1).StartMs);
+        var service = new MovieApexService(factory, media);
+        var both = (await service.AddApexAsync(movieId, 100, [])).ApexId!.Value;
+        var stillOnly = (await service.AddApexAsync(movieId, 200, [])).ApexId!.Value;
+        var stale = (await service.AddApexAsync(movieId, 300, [])).ApexId!.Value;
+        var thumbAt = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        var previewAt = thumbAt.AddMinutes(5);
+        await AddPreviewRowAsync(factory, both, 100, thumbAt, SceneMediaService.VariantThumb);
+        await AddPreviewRowAsync(factory, both, 100, previewAt);
+        await AddPreviewRowAsync(factory, stillOnly, 200, thumbAt, SceneMediaService.VariantThumb);
+        await AddPreviewRowAsync(factory, stale, 250, thumbAt, SceneMediaService.VariantThumb);
+
+        var apexes = await service.GetApexesAsync(movieId);
+
+        Assert.Equal([both, stillOnly, stale], apexes.Select(a => a.Id));
+        Assert.Equal([thumbAt.Ticks, thumbAt.Ticks, null], apexes.Select(a => a.ThumbVersion));
+        Assert.Equal([previewAt.Ticks, null, null], apexes.Select(a => a.PreviewVersion));
+    }
+
+    [Fact]
+    public async Task ApexList_ReportsOnlyTheThumbVersion_WhenTheCacheModeKeepsOnlyThumbnails()
+    {
+        using var factory = new TestDbContextFactory();
+        var movieId = await SeedMovieAsync(factory);
+        var media = Substitute.For<IApexMediaService>();
+        media.ServesPreview.Returns(false);
+        media.ServesVariant(SceneMediaService.VariantThumb).Returns(true);
+        media.IsCurrent(Arg.Any<CachedImage>(), Arg.Any<SceneMediaWindow>()).Returns(true);
+        var service = new MovieApexService(factory, media);
+        var apexId = (await service.AddApexAsync(movieId, 100, [])).ApexId!.Value;
+        await AddPreviewRowAsync(factory, apexId, 100, DateTime.UtcNow, SceneMediaService.VariantThumb);
+        await AddPreviewRowAsync(factory, apexId, 100, DateTime.UtcNow);
+
+        var apex = Assert.Single(await service.GetApexesAsync(movieId));
+
+        Assert.NotNull(apex.ThumbVersion);
+        Assert.Null(apex.PreviewVersion);
+    }
+
+    [Fact]
     public async Task ApexList_ReportsNoPreviewVersion_WhenTheCacheModeServesNone()
     {
         using var factory = new TestDbContextFactory();
@@ -243,7 +291,9 @@ public class MovieApexServiceTests
         var apexId = (await service.AddApexAsync(movieId, 100, [])).ApexId!.Value;
         await AddPreviewRowAsync(factory, apexId, 100, DateTime.UtcNow);
 
-        Assert.Null(Assert.Single(await service.GetApexesAsync(movieId)).PreviewVersion);
+        var apex = Assert.Single(await service.GetApexesAsync(movieId));
+        Assert.Null(apex.PreviewVersion);
+        Assert.Null(apex.ThumbVersion);
     }
 
     [Fact]

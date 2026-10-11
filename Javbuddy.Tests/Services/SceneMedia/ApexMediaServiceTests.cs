@@ -108,16 +108,20 @@ public sealed class ApexMediaServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Generate_WritesOnlyAPreview_CentredOnTheApex()
+    public async Task Generate_WritesAStillAndAPreview_CentredOnTheApex()
     {
         var (movieId, apexId) = await SeedAsync(900);
 
         Assert.Equal(movieId, await CreateService().GenerateAsync(apexId));
 
-        var row = Assert.Single(await RowsAsync());
-        Assert.Equal(("apex", apexId, "preview", 900_000L, (long?)900_000L), (row.Role, row.Index, row.Variant, row.SceneStartMs, row.SceneEndMs));
-        Assert.Equal([("preview", 898d, 4d)], calls);
+        var rows = await RowsAsync();
+        Assert.Equal(
+            [("apex", apexId, "preview", 900_000L, (long?)900_000L), ("apex", apexId, "thumb", 900_000L, (long?)900_000L)],
+            rows.Select(r => (r.Role, r.Index, r.Variant, r.SceneStartMs, r.SceneEndMs)));
+        // The screenshot is the frame the preview starts on.
+        Assert.Equal([("still", 898d, 0d), ("preview", 898d, 4d)], calls);
         Assert.NotNull(await CreateService().GetFilePathAsync(apexId, "preview"));
+        Assert.NotNull(await CreateService().GetFilePathAsync(apexId, "thumb"));
     }
 
     [Theory]
@@ -129,11 +133,11 @@ public sealed class ApexMediaServiceTests : IDisposable
 
         await CreateService().GenerateAsync(apexId);
 
-        Assert.Equal([("preview", at, duration)], calls);
+        Assert.Equal([("still", at, 0d), ("preview", at, duration)], calls);
     }
 
     [Fact]
-    public async Task MovingTheApex_MakesItsPreviewStale()
+    public async Task MovingTheApex_MakesItsMediaStale()
     {
         var (_, apexId) = await SeedAsync(900);
         await CreateService().GenerateAsync(apexId);
@@ -141,24 +145,26 @@ public sealed class ApexMediaServiceTests : IDisposable
         await MoveApexAsync(950);
 
         Assert.Null(await CreateService().GetFilePathAsync(apexId, "preview"));
+        Assert.Null(await CreateService().GetFilePathAsync(apexId, "thumb"));
         calls.Clear();
         await CreateService().GenerateAsync(apexId);
-        Assert.Equal([("preview", 948d, 4d)], calls);
+        Assert.Equal([("still", 948d, 0d), ("preview", 948d, 4d)], calls);
     }
 
     [Fact]
-    public async Task Thumb_IsNeverServed()
+    public async Task UnknownVariant_IsNeverServed()
     {
         var (_, apexId) = await SeedAsync();
         await CreateService().GenerateAsync(apexId);
 
-        Assert.Null(await CreateService().GetFilePathAsync(apexId, "thumb"));
+        Assert.Null(await CreateService().GetFilePathAsync(apexId, "full"));
+        Assert.False(CreateService().ServesVariant("full"));
     }
 
     [Theory]
-    [InlineData(ImageCacheMode.Thumbnails, false)]
-    [InlineData(ImageCacheMode.LocalMovies, true)]
-    public async Task CacheMode_DecidesWhetherPreviewsAreMade(ImageCacheMode mode, bool preview)
+    [InlineData(ImageCacheMode.Thumbnails, false, 1)]
+    [InlineData(ImageCacheMode.LocalMovies, true, 2)]
+    public async Task CacheMode_DecidesWhichMediaIsMade(ImageCacheMode mode, bool preview, int rows)
     {
         imageCache.Settings = new ImageCacheSettings(mode, null, null);
         var (_, apexId) = await SeedAsync();
@@ -166,29 +172,79 @@ public sealed class ApexMediaServiceTests : IDisposable
         await CreateService().GenerateAsync(apexId);
 
         Assert.Equal(preview, CreateService().ServesPreview);
-        Assert.Equal(preview, (await RowsAsync()).Count == 1);
+        Assert.True(CreateService().ServesVariant("thumb"));
+        Assert.Equal(rows, (await RowsAsync()).Count);
     }
 
-    [Fact]
-    public async Task EnsureQueued_GeneratesMissingPreviews_InTheBackground()
+    /// <summary>A service whose queue runs for real, so EnsureQueued's work is generated in the background.</summary>
+    private async Task<(IApexMediaService Service, SceneMediaQueue Queue, TaskCompletionSource<int> Generated)> StartBackgroundAsync(int movieId)
     {
-        var (movieId, apexId) = await SeedAsync();
         SceneMediaQueue backgroundQueue = null!;
         var services = new ServiceCollection()
             .AddSingleton<IApexMediaService>(_ => CreateService(backgroundQueue))
             .BuildServiceProvider();
         backgroundQueue = new SceneMediaQueue(services.GetRequiredService<IServiceScopeFactory>(), NullLogger<SceneMediaQueue>.Instance);
-        using var disposeQueue = backgroundQueue;
         var generated = new TaskCompletionSource<int>();
         backgroundQueue.Generated += id => generated.TrySetResult(id);
         // Apexes are single moments: a scene edit's settle delay doesn't hold them back.
         backgroundQueue.NoteScenesChanged(movieId);
         await backgroundQueue.StartAsync(CancellationToken.None);
+        return (CreateService(backgroundQueue), backgroundQueue, generated);
+    }
 
-        await CreateService(backgroundQueue).EnsureQueuedAsync(movieId);
+    [Fact]
+    public async Task EnsureQueued_GeneratesMissingMedia_InTheBackground()
+    {
+        var (movieId, apexId) = await SeedAsync();
+        var (service, backgroundQueue, generated) = await StartBackgroundAsync(movieId);
+        using var disposeQueue = backgroundQueue;
+
+        await service.EnsureQueuedAsync(movieId);
 
         Assert.Equal(movieId, await generated.Task.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.NotNull(await CreateService().GetFilePathAsync(apexId, "preview"));
+        Assert.NotNull(await CreateService().GetFilePathAsync(apexId, "thumb"));
+        await backgroundQueue.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task EnsureQueued_AnApexWithAPreviewButNoStill_GetsOnlyTheStill()
+    {
+        // What an apex made before screenshots existed looks like: a current preview and nothing else.
+        var (movieId, apexId) = await SeedAsync(900);
+        await CreateService().GenerateAsync(apexId);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var thumb = await db.CachedImages.SingleAsync(c => c.Variant == "thumb");
+            File.Delete(((ILocalImageCache)imageCache).GetStoragePath(thumb));
+            db.CachedImages.Remove(thumb);
+            await db.SaveChangesAsync();
+        }
+        calls.Clear();
+        var (service, backgroundQueue, generated) = await StartBackgroundAsync(movieId);
+        using var disposeQueue = backgroundQueue;
+
+        await service.EnsureQueuedAsync(movieId);
+
+        Assert.Equal(movieId, await generated.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal([("still", 898d, 0d)], calls);
+        Assert.NotNull(await CreateService().GetFilePathAsync(apexId, "thumb"));
+        await backgroundQueue.StopAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task EnsureQueued_WithCurrentMedia_QueuesNothing()
+    {
+        var (movieId, apexId) = await SeedAsync();
+        await CreateService().GenerateAsync(apexId);
+        calls.Clear();
+        var (service, backgroundQueue, _) = await StartBackgroundAsync(movieId);
+        using var disposeQueue = backgroundQueue;
+
+        await service.EnsureQueuedAsync(movieId);
+        await Task.Delay(300);
+
+        Assert.Empty(calls);
         await backgroundQueue.StopAsync(CancellationToken.None);
     }
 
@@ -197,12 +253,14 @@ public sealed class ApexMediaServiceTests : IDisposable
     {
         var (_, apexId) = await SeedAsync();
         await CreateService().GenerateAsync(apexId);
-        var path = ((ILocalImageCache)imageCache).GetStoragePath(Assert.Single(await RowsAsync()));
-        Assert.True(File.Exists(path));
+        var rows = await RowsAsync();
+        Assert.Equal(2, rows.Count);
+        var paths = rows.Select(r => ((ILocalImageCache)imageCache).GetStoragePath(r)).ToList();
+        Assert.All(paths, path => Assert.True(File.Exists(path)));
 
         await CreateService().DeleteForApexAsync(apexId);
 
         Assert.Empty(await RowsAsync());
-        Assert.False(File.Exists(path));
+        Assert.All(paths, path => Assert.False(File.Exists(path)));
     }
 }

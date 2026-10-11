@@ -74,7 +74,7 @@ public static class MediaEndpoints
             return path is null ? Results.NotFound() : ImageFile(http, path, "private, max-age=86400");
         });
 
-        // An apex's generated hover preview; same contract as /highlight-image, preview only.
+        // An apex's generated screenshot or hover preview; same contract as /highlight-image.
         app.MapGet("/apex-image/{apexId:int}/{variant}", async (
             HttpContext http, int apexId, string variant, IApexMediaService apexMedia, CancellationToken ct) =>
         {

@@ -1,7 +1,9 @@
 using Javbuddy.Models;
 using Javbuddy.Services.Movies;
+using Javbuddy.Services.SceneMedia;
 using Javbuddy.Services.Scenes;
 using Javbuddy.Tests.TestSupport;
+using NSubstitute;
 
 namespace Javbuddy.Tests.Services.Scenes;
 
@@ -619,9 +621,48 @@ public sealed class SceneWallQueryServiceTests : IDisposable
         Assert.Equal(new SceneTagItem(roughId, "Rough", "Play"), Assert.Single(card.Tags));
         Assert.True(card.IsFavorite);
         Assert.Equal(3600d, card.DurationSeconds);
-        // Without a media service nothing advertises a preview.
+        // Without a media service nothing advertises a screenshot or preview.
+        Assert.Null(card.ThumbVersion);
         Assert.Null(card.PreviewVersion);
         Assert.Equal(ApexWindow.Default, card.Window);
+    }
+
+    [Fact]
+    public async Task ApexPage_CarriesEachApexsScreenshotAndPreviewVersions()
+    {
+        await SeedAsync();
+        var withMedia = await AddApexAsync(oldMovieId, 100);
+        var without = await AddApexAsync(oldMovieId, 900);
+        var media = Substitute.For<IApexMediaService>();
+        media.ServesPreview.Returns(true);
+        media.ServesVariant(Arg.Any<string>()).Returns(true);
+        media.IsCurrent(Arg.Any<CachedImage>(), Arg.Any<SceneMediaWindow>()).Returns(true);
+        var stamped = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            foreach (var variant in new[] { SceneMediaService.VariantThumb, SceneMediaService.VariantPreview })
+            {
+                db.CachedImages.Add(new CachedImage
+                {
+                    Code = "OLD-001",
+                    Role = ApexMediaService.Role,
+                    Index = withMedia,
+                    Variant = variant,
+                    StorageId = Guid.NewGuid(),
+                    SceneStartMs = 100_000,
+                    SceneEndMs = 100_000,
+                    UpdatedAt = stamped,
+                });
+            }
+            await db.SaveChangesAsync();
+        }
+        var withMediaWall = new RefreshingSceneWall(factory, new SceneWallQueryService(factory, scenes, apexService: new MovieApexService(factory, media)));
+
+        var cards = (await withMediaWall.GetApexPageAsync(new SceneWallFilter(), SceneWallSort.ReleaseDate, 1, 0, 50)).Cards;
+
+        Assert.Equal([withMedia, without], cards.Select(c => c.ApexId));
+        Assert.Equal([stamped.Ticks, null], cards.Select(c => c.ThumbVersion));
+        Assert.Equal([stamped.Ticks, null], cards.Select(c => c.PreviewVersion));
     }
 
     [Fact]

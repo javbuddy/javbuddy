@@ -60,6 +60,7 @@ public class MovieScenesTests : BunitContext
         wall.GetHighlightOptionsAsync(Arg.Any<CancellationToken>()).Returns(Options);
         wall.GetApexOptionsAsync(Arg.Any<CancellationToken>()).Returns(ApexOptions);
         apexMedia.ServesPreview.Returns(true);
+        apexMedia.ServesVariant(Arg.Any<string>()).Returns(true);
         media.ServesVariant(Arg.Any<string>()).Returns(true);
         highlightMedia.ServesVariant(Arg.Any<string>()).Returns(true);
         module = JSInterop.SetupModule("./Components/Pages/MovieScenes.razor.js");
@@ -106,16 +107,16 @@ public class MovieScenesTests : BunitContext
     }
 
     [Fact]
-    public void Hover_PlaysThePreviewOverTheScreenshot()
+    public void Cards_CarryTheirPreviewForTheBrowserToPlayOverTheScreenshot()
     {
         wall.GetPageAsync(Arg.Any<SceneWallFilter>(), Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Is(0), Arg.Is(48), Arg.Any<CancellationToken>())
             .Returns(new SceneWallPage([Card(1, "ABC-123")], 1));
         var cut = Render<MovieScenes>();
 
+        // The browser plays the preview over the screenshot while hovered (ClipCard.razor.js).
         Assert.Empty(cut.FindAll(".scene-wall-media video"));
-        cut.Find(".scene-wall-card").MouseEnter();
         Assert.Equal("/scene-image/1/thumb?v=111", cut.Find(".scene-wall-media img").GetAttribute("src"));
-        Assert.Equal("/scene-image/1/preview?v=222", cut.Find(".scene-wall-media video").GetAttribute("src"));
+        Assert.Equal("/scene-image/1/preview?v=222", cut.Find(".scene-wall-media .scene-preview-live").GetAttribute("data-preview-src"));
     }
 
     [Fact]
@@ -440,15 +441,14 @@ public class MovieScenesTests : BunitContext
     }
 
     [Fact]
-    public void HighlightsView_Hover_PlaysThePreviewOverTheScreenshot()
+    public void HighlightsView_CardsCarryTheirPreviewForTheBrowserToPlay()
     {
         wall.GetHighlightPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(new HighlightWallPage([HCard(1, "ABC-123")], 1));
         OpenHighlightsView();
         var cut = Render<MovieScenes>();
 
-        cut.Find(".scene-wall-card").MouseEnter();
-
-        Assert.Equal("/highlight-image/1/preview?v=444", cut.Find(".scene-wall-card video").GetAttribute("src"));
+        Assert.Empty(cut.FindAll(".scene-wall-card video"));
+        Assert.Equal("/highlight-image/1/preview?v=444", cut.Find(".scene-wall-card .scene-preview-live").GetAttribute("data-preview-src"));
     }
 
     [Fact]
@@ -617,6 +617,7 @@ public class MovieScenesTests : BunitContext
         Render<MovieScenes>();
 
         Assert.Single(clipCardModule.Invocations, i => i.Identifier == "preventPlainCardClicks");
+        Assert.Single(clipCardModule.Invocations, i => i.Identifier == "bindHoverPreviews");
     }
 
     [Fact]
@@ -876,9 +877,10 @@ public class MovieScenesTests : BunitContext
 
     // --- Apexes ---
 
-    private static ApexWallCard ACard(int id, string code, long? preview = 555) =>
+    private static ApexWallCard ACard(int id, string code, long? preview = 555, long? thumb = 333) =>
         new(id, id * 10, code, $"{code} title", $"Apex {id}", 125, ["Aika"], [new SceneTagItem(9, "Squirt", null)], id == 1, preview)
         {
+            ThumbVersion = thumb,
             HasLocalVideo = true,
             JellyfinItemId = $"jf-{id}",
             DurationSeconds = 3600,
@@ -933,7 +935,7 @@ public class MovieScenesTests : BunitContext
     }
 
     [Fact]
-    public void ApexesView_ShowsApexCards_WithTheirPreviewStillUntilHovered()
+    public void ApexesView_ShowsApexCards_WithTheirScreenshotAndNoVideo()
     {
         wall.GetApexPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(new ApexWallPage([ACard(1, "ABC-123")], 1));
         OpenApexesView();
@@ -952,31 +954,51 @@ public class MovieScenesTests : BunitContext
         Assert.Single(cut.FindAll(".scene-wall-fav"));
         Assert.Equal("1 apex", cut.Find(".scene-wall-count").TextContent);
         Assert.Equal("true", cut.Find(".scene-wall-view-btn[data-view=apexes]").GetAttribute("aria-pressed"));
-        var still = Assert.Single(cut.FindAll(".scene-wall-card video"));
-        Assert.Equal("/apex-image/1/preview?v=555", still.GetAttribute("src"));
-        Assert.False(still.HasAttribute("autoplay"));
-
-        cut.Find(".scene-wall-card").MouseEnter();
-
-        // The playing copy goes over the still, which stays as its backdrop.
-        var videos = cut.FindAll(".scene-wall-card video");
-        Assert.Equal(2, videos.Count);
-        Assert.False(videos[0].HasAttribute("autoplay"));
-        Assert.True(videos[1].HasAttribute("autoplay"));
+        var screenshot = Assert.Single(cut.FindAll(".scene-wall-card img"));
+        Assert.Equal("/apex-image/1/thumb?v=333", screenshot.GetAttribute("src"));
+        // The card never holds a video of its own: the browser adds the preview over the screenshot while it's hovered.
+        Assert.Empty(cut.FindAll(".scene-wall-card video"));
+        Assert.Equal("/apex-image/1/preview?v=555", cut.Find(".scene-wall-card .scene-preview-live").GetAttribute("data-preview-src"));
         wall.DidNotReceive().GetPageAsync(Arg.Any<SceneWallFilter>(), Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public void ApexesView_MissingPreview_IsQueued_AndShowsAPlaceholder()
+    public void ApexesView_MissingScreenshot_IsQueued_AndShowsAPlaceholder()
+    {
+        wall.GetApexPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(new ApexWallPage([ACard(2, "NOM-1", thumb: null)], 1));
+        OpenApexesView();
+
+        var cut = Render<MovieScenes>();
+
+        Assert.Empty(cut.FindAll(".scene-wall-card img"));
+        Assert.Empty(cut.FindAll(".scene-wall-card video"));
+        Assert.Single(cut.FindAll(".scene-preview-shimmer"));
+        apexMedia.Received(1).EnsureQueuedAsync(20, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void ApexesView_MissingOnlyThePreview_StillShowsTheScreenshot_AndIsQueued()
     {
         wall.GetApexPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(new ApexWallPage([ACard(2, "NOM-1", preview: null)], 1));
         OpenApexesView();
 
         var cut = Render<MovieScenes>();
 
+        Assert.Single(cut.FindAll(".scene-wall-card img"));
         Assert.Empty(cut.FindAll(".scene-wall-card video"));
-        Assert.Single(cut.FindAll(".scene-preview-shimmer"));
+        Assert.Empty(cut.FindAll(".scene-preview-live"));
         apexMedia.Received(1).EnsureQueuedAsync(20, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void ApexesView_WithAllMedia_QueuesNothing()
+    {
+        wall.GetApexPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(new ApexWallPage([ACard(1, "ABC-123")], 1));
+        OpenApexesView();
+
+        Render<MovieScenes>();
+
+        apexMedia.DidNotReceive().EnsureQueuedAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

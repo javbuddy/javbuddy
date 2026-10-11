@@ -22,7 +22,7 @@ public class ClipCardTests : BunitContext
         new(2, 10, "ABC-123", "Title", "Highlight 1", 90, 120, [], [], false, null, null) { HasLocalVideo = true };
 
     private static readonly ApexWallCard Apex =
-        new(3, 10, "ABC-123", "Title", "Aika — Squirt", 300, ["Aika"], [], false, 333) { DurationSeconds = 3600 };
+        new(3, 10, "ABC-123", "Title", "Aika — Squirt", 300, ["Aika"], [], false, 333) { DurationSeconds = 3600, HasLocalVideo = true, ThumbVersion = 222 };
 
     public ClipCardTests()
     {
@@ -30,6 +30,7 @@ public class ClipCardTests : BunitContext
         Services.AddSingleton(highlightMedia);
         Services.AddSingleton(apexMedia);
         highlightMedia.ServesVariant(Arg.Any<string>()).Returns(true);
+        apexMedia.ServesVariant(Arg.Any<string>()).Returns(true);
     }
 
     [Fact]
@@ -86,17 +87,38 @@ public class ClipCardTests : BunitContext
         Assert.Equal("From apex 1", cut.Find(".scene-wall-tag-implicit").GetAttribute("title"));
     }
 
+    // The preview is played by the browser (ClipCard.razor.js's bindHoverPreviews) from the URL in
+    // data-preview-src, not by a server-side hover handler: that took a round trip and a re-render for
+    // every card the pointer crossed.
     [Fact]
-    public void Hover_PlaysThePreview()
+    public void Scene_LeavesItsPreviewForTheBrowserToPlayOnHover()
     {
         var cut = Render<ClipCard>(p => p.Add(c => c.Scene, Scene));
-        Assert.DoesNotContain("<video", cut.Markup);
 
-        cut.Find("a").MouseEnter();
-        Assert.Contains("/scene-image/1/preview?v=222", cut.Markup);
+        Assert.Equal("/scene-image/1/preview?v=222", cut.Find(".scene-wall-media .scene-preview-live").GetAttribute("data-preview-src"));
+        Assert.Empty(cut.FindAll("video"));
+        Assert.Empty(cut.Find(".scene-preview-live").Children);
+        Assert.DoesNotContain("blazor:onmouseenter", cut.Markup);
+        Assert.DoesNotContain("blazor:onmouseleave", cut.Markup);
+    }
 
-        cut.Find("a").MouseLeave();
-        Assert.DoesNotContain("/scene-image/1/preview", cut.Markup);
+    [Fact]
+    public void Highlight_LeavesItsPreviewForTheBrowserToPlayOnHover()
+    {
+        var cut = Render<ClipCard>(p => p.Add(c => c.Highlight, Highlight with { ThumbVersion = 11, PreviewVersion = 22 }));
+
+        Assert.Equal("/highlight-image/2/preview?v=22", cut.Find(".scene-wall-media .scene-preview-live").GetAttribute("data-preview-src"));
+        Assert.Empty(cut.FindAll("video"));
+        Assert.DoesNotContain("blazor:onmouseenter", cut.Markup);
+    }
+
+    [Fact]
+    public void ACardWithAScreenshotButNoPreview_HasNothingToPlayOnHover()
+    {
+        var cut = Render<ClipCard>(p => p.Add(c => c.Scene, Scene with { PreviewVersion = null }));
+
+        Assert.Single(cut.FindAll(".scene-wall-media img"));
+        Assert.Empty(cut.FindAll(".scene-preview-live"));
     }
 
     [Fact]
@@ -116,6 +138,28 @@ public class ClipCardTests : BunitContext
 
         Assert.StartsWith("/movies/ABC-123?t=", cut.Find("a.scene-wall-card-apex").GetAttribute("href"));
         Assert.Empty(cut.FindAll(".scene-wall-scene-title"));
+    }
+
+    [Fact]
+    public void ApexCard_ShowsItsScreenshotAsAnImage_AndHasNoVideoOfItsOwn()
+    {
+        var cut = Render<ClipCard>(p => p.Add(c => c.Apex, Apex));
+
+        Assert.Equal("/apex-image/3/thumb?v=222", cut.Find(".scene-wall-media img").GetAttribute("src"));
+        Assert.Equal("lazy", cut.Find(".scene-wall-media img").GetAttribute("loading"));
+        Assert.Empty(cut.FindAll("video"));
+        Assert.Equal("/apex-image/3/preview?v=333", cut.Find(".scene-preview-live").GetAttribute("data-preview-src"));
+        Assert.DoesNotContain("blazor:onmouseenter", cut.Markup);
+    }
+
+    [Fact]
+    public void ApexCard_WithoutAScreenshot_ShowsTheGeneratingPlaceholder_NotTheVideo()
+    {
+        var cut = Render<ClipCard>(p => p.Add(c => c.Apex, Apex with { ThumbVersion = null }));
+
+        Assert.Single(cut.FindAll(".scene-preview-shimmer"));
+        Assert.Empty(cut.FindAll("img"));
+        Assert.Empty(cut.FindAll("video"));
     }
 
     [Fact]

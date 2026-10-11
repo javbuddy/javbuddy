@@ -29,7 +29,10 @@ public sealed record ApexItem(int Id, int Position, double Seconds, IReadOnlyLis
     // Items built without inheritance (e.g. clip-relative copies in tests) fall back to their own actors.
     private IReadOnlyList<SceneActorItem> LabelActors => EffectiveActors.Actors.Count > 0 ? EffectiveActors.Actors : Actors;
 
-    /// <summary>Version of the apex's current hover preview, or null while there's none.</summary>
+    /// <summary>Version of the apex's current screenshot (<c>/apex-image/{Id}/thumb</c>), or null while there's none.</summary>
+    public long? ThumbVersion { get; init; }
+
+    /// <summary>Like ThumbVersion, for the animated hover preview (<c>/apex-image/{Id}/preview</c>).</summary>
     public long? PreviewVersion { get; init; }
 
     /// <summary>The apex's own lead-in and tail, null where it uses the default.</summary>
@@ -118,17 +121,21 @@ public class MovieApexService(
             .OrderBy(a => a.Seconds).ThenBy(a => a.Id)
             .ToListAsync(ct);
         var ids = apexes.Select(a => a.Id).ToList();
-        var media = apexMedia is { ServesPreview: true }
+        var media = apexMedia is not null && (apexMedia.ServesPreview || apexMedia.ServesVariant(SceneMediaService.VariantThumb))
             ? await db.CachedImages.AsNoTracking()
-                .Where(c => c.Role == ApexMediaService.Role && c.Variant == SceneMediaService.VariantPreview && ids.Contains(c.Index))
+                .Where(c => c.Role == ApexMediaService.Role && ids.Contains(c.Index))
                 .ToListAsync(ct)
             : [];
 
-        // Only a preview /apex-image would serve counts (as for highlights).
-        long? PreviewVersion(MovieApex apex) =>
-            media.FirstOrDefault(m => m.Index == apex.Id) is { } row && apexMedia!.IsCurrent(row, ApexMediaService.Window(apex.Seconds))
+        // Only media /apex-image would serve counts (as for highlights): a variant the current cache mode
+        // keeps, sampled for the apex's current time.
+        long? MediaVersion(MovieApex apex, string variant, bool served) =>
+            served && media.FirstOrDefault(m => m.Index == apex.Id && m.Variant == variant) is { } row && apexMedia!.IsCurrent(row, ApexMediaService.Window(apex.Seconds))
                 ? row.UpdatedAt.Ticks
                 : null;
+
+        var servesThumb = apexMedia?.ServesVariant(SceneMediaService.VariantThumb) == true;
+        var servesPreview = apexMedia?.ServesPreview == true;
 
         var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movies, ct);
         var castCounts = (await db.MovieActors.Where(ma => movies.Contains(ma.MovieId)).GroupBy(ma => ma.MovieId).Select(g => new { MovieId = g.Key, Count = g.Count() }).ToListAsync(ct))
@@ -151,7 +158,8 @@ public class MovieApexService(
                         .ToList(),
                     EffectiveActors = effective[movieId].Apexes.GetValueOrDefault(a.Id, EffectiveActors.None),
                     CastCount = castCount,
-                    PreviewVersion = PreviewVersion(a),
+                    ThumbVersion = MediaVersion(a, SceneMediaService.VariantThumb, servesThumb),
+                    PreviewVersion = MediaVersion(a, SceneMediaService.VariantPreview, servesPreview),
                     OwnLeadInSeconds = a.LeadInSeconds,
                     OwnTailSeconds = a.TailSeconds,
                     Window = ApexRanges.Resolve(a.LeadInSeconds, a.TailSeconds, defaultWindow),

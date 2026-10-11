@@ -10,6 +10,84 @@ export function preventPlainCardClicks(container) {
     });
 }
 
+// A hovered card plays its hover preview, in the browser: the video goes into the card's empty
+// .scene-preview-live (ScenePreviewMedia renders it with the preview's URL in data-preview-src) once the
+// pointer has rested on the card for HOVER_PREVIEW_DELAY_MS, and is removed again when the pointer
+// leaves. Doing it here rather than through Blazor's mouseenter/mouseleave means hovering costs no
+// round trip to the server and no re-render, which added up when a scroll carried a window of cards
+// under a still pointer. The delay, and restarting it while the page scrolls, keep a card that only
+// passes under the pointer from starting a download. Bound like preventPlainCardClicks.
+const HOVER_PREVIEW_DELAY_MS = 150;
+
+export function bindHoverPreviews(container) {
+    let card = null;
+    let timer = 0;
+    let video = null;
+
+    const stop = () => {
+        clearTimeout(timer);
+        timer = 0;
+        if (!video) return;
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        video.remove();
+        video = null;
+    };
+
+    const play = () => {
+        timer = 0;
+        // Scrolling moves cards under a pointer that hasn't moved, and the browser only catches up
+        // with a mouseout once it settles, so what's under the pointer now is checked.
+        if (!card?.isConnected || !card.matches(':hover')) return;
+        const live = card.querySelector('.scene-preview-live');
+        const src = live?.dataset.previewSrc;
+        if (!src) return;
+        video = document.createElement('video');
+        // Set as properties before the source: a muted video is the only kind Chrome autoplays.
+        video.muted = true;
+        video.loop = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.disablePictureInPicture = true;
+        const poster = card.querySelector('.scene-preview-media img')?.getAttribute('src');
+        if (poster) video.poster = poster;
+        video.src = src;
+        live.appendChild(video);
+        video.play().catch(() => { });
+    };
+
+    const schedule = () => {
+        clearTimeout(timer);
+        timer = setTimeout(play, HOVER_PREVIEW_DELAY_MS);
+    };
+
+    container.addEventListener('mouseover', e => {
+        const over = e.target.closest?.('.scene-wall-card');
+        if (over === card) return;
+        stop();
+        card = over && container.contains(over) ? over : null;
+        if (card) schedule();
+    });
+    container.addEventListener('mouseout', e => {
+        if (!card || card.contains(e.relatedTarget)) return;
+        stop();
+        card = null;
+    });
+
+    const onScroll = () => {
+        if (!container.isConnected) {
+            window.removeEventListener('scroll', onScroll);
+            stop();
+            return;
+        }
+        if (!card) return;
+        stop();
+        schedule();
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+}
+
 // A card's tag row stays on one line: the chips that don't fit, with room left for a
 // "+N" badge, are marked data-cut, and the row data-overflow, which ClipCard.razor.css hides. Hovering
 // the badge marks the row data-open, revealing them, until the pointer leaves the row. Only attributes

@@ -41,4 +41,27 @@ public class ScenePreviewMediaTests : BunitContext
         Assert.Equal("/apex-image/1/preview?v=2", video.GetAttribute("src"));
         Assert.False(video.HasAttribute("poster"));
     }
+
+    [Fact]
+    public void WithAHoverPreview_RendersOnlyAnEmptySlotForTheBrowserToFill()
+    {
+        var cut = Render<ScenePreviewMedia>(p => p
+            .Add(x => x.ThumbUrl, "/scene-image/1/thumb?v=1")
+            .Add(x => x.HoverPreviewUrl, "/scene-image/1/preview?v=2&x=\"y\""));
+
+        Assert.Empty(cut.FindAll("video"));
+        var slot = cut.Find(".scene-preview-live");
+        Assert.Equal("/scene-image/1/preview?v=2&x=\"y\"", slot.GetAttribute("data-preview-src"));
+        // Blazor must never render children into it, or a re-render would clear the video the browser put there.
+        Assert.Empty(slot.Children);
+        Assert.Empty(slot.TextContent);
+    }
+
+    [Fact]
+    public void WithoutAHoverPreview_HasNoSlot()
+    {
+        var cut = Render<ScenePreviewMedia>(p => p.Add(x => x.ThumbUrl, "/scene-image/1/thumb?v=1"));
+
+        Assert.Empty(cut.FindAll(".scene-preview-live"));
+    }
 }

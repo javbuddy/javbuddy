@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- Apex cards on the Scenes wall show a screenshot, like highlights, and play their preview only while hovered. Before, every card in the window loaded and decoded its own preview video, which stalled scrolling on the Apexes view. Screenshots of existing apexes are generated in the background the next time the wall shows them, and the card shows its generating placeholder until then (#33).
+- Hovering a card on the Scenes wall or an actor's clip sections no longer goes through the server: the preview now plays in the browser, after the pointer has rested on the card for a moment. Before, every card the pointer crossed (including cards sliding under a still pointer while you scrolled) cost a round trip and a re-render, and started its preview download (#33).
+
 ## [0.2.3] - 2026-10-11
 
 ### Fixed

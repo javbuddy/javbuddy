@@ -9,16 +9,19 @@ namespace Javbuddy.Services.SceneMedia;
 
 public interface IApexMediaService
 {
-    /// <summary>Path of an apex's current hover preview, or null when there's none yet — in which case
-    /// it's queued for generation. Apexes have no screenshot, so any other variant is null.</summary>
+    /// <summary>Path of an apex's current screenshot ("thumb") or hover preview ("preview"), or null when
+    /// there's none yet — in which case it's queued for generation.</summary>
     Task<string?> GetFilePathAsync(int apexId, string variant, CancellationToken ct = default);
+
+    /// <summary>Whether the image cache's mode keeps this variant at all.</summary>
+    bool ServesVariant(string variant);
 
     /// <summary>Whether the image cache's mode keeps previews at all.</summary>
     bool ServesPreview { get; }
 
     bool IsCurrent(CachedImage row, SceneMediaWindow window);
 
-    /// <summary>Queues every apex of the movie that lacks a current preview.</summary>
+    /// <summary>Queues every apex of the movie that lacks current media.</summary>
     Task EnsureQueuedAsync(int movieId, CancellationToken ct = default);
 
     /// <summary>Returns the movie id when anything was written, null otherwise.</summary>
@@ -27,10 +30,11 @@ public interface IApexMediaService
     Task DeleteForApexAsync(int apexId, CancellationToken ct = default);
 }
 
-/// <summary>Hover previews for apex markers: a WebM of the few seconds around the
-/// apex, as CachedImage rows with Role "apex", Index = MovieApex.Id and Variant "preview" only.
-/// A row is stamped with the apex's time, so only moving the apex makes it stale. Generation shares
-/// ClipMediaGenerator and the single SceneMediaQueue worker.</summary>
+/// <summary>A screenshot and a hover preview for apex markers: a still of the frame the preview starts on
+/// and a WebM of the few seconds around the apex, as CachedImage rows with Role "apex", Index =
+/// MovieApex.Id and Variant "thumb" or "preview". The wall shows the still, as a plain lazy image, and
+/// plays the preview only on hover. A row is stamped with the apex's time, so only moving the apex makes
+/// it stale. Generation shares ClipMediaGenerator and the single SceneMediaQueue worker.</summary>
 public class ApexMediaService(
     IDbContextFactory<AppDbContext> dbFactory,
     ILocalLibraryClient localLibraryClient,
@@ -44,19 +48,21 @@ public class ApexMediaService(
     /// <summary>The clip runs this long either side of the apex, inside the movie.</summary>
     public const double HalfSpanSeconds = 2;
 
-    private static readonly string[] Variants = [SceneMediaService.VariantPreview];
+    private static readonly string[] Variants = [SceneMediaService.VariantThumb, SceneMediaService.VariantPreview];
 
     private readonly ClipMediaGenerator generator = new(dbFactory, localLibraryClient, ffmpegClient, imageCache, cacheMaintenance);
 
     public static SceneMediaWindow Window(double seconds) => new(SceneMediaService.StartMs(seconds), SceneMediaService.StartMs(seconds));
 
-    public bool ServesPreview => generator.EnabledVariants.Contains(SceneMediaService.VariantPreview);
+    public bool ServesVariant(string variant) => Variants.Contains(variant) && generator.EnabledVariants.Contains(variant);
+
+    public bool ServesPreview => ServesVariant(SceneMediaService.VariantPreview);
 
     public bool IsCurrent(CachedImage row, SceneMediaWindow window) => generator.IsCurrent(row, window);
 
     public async Task<string?> GetFilePathAsync(int apexId, string variant, CancellationToken ct = default)
     {
-        if (variant != SceneMediaService.VariantPreview || !ServesPreview) return null;
+        if (!ServesVariant(variant)) return null;
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var apex = await db.MovieApexes.AsNoTracking().FirstOrDefaultAsync(a => a.Id == apexId, ct);
@@ -76,7 +82,8 @@ public class ApexMediaService(
 
     public async Task EnsureQueuedAsync(int movieId, CancellationToken ct = default)
     {
-        if (!ServesPreview) return;
+        var variants = Variants.Where(ServesVariant).ToList();
+        if (variants.Count == 0) return;
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var apexes = await db.MovieApexes.AsNoTracking().Where(a => a.MovieId == movieId).ToListAsync(ct);
@@ -86,7 +93,8 @@ public class ApexMediaService(
         foreach (var apex in apexes)
         {
             var window = Window(apex.Seconds);
-            if (!rows.Any(r => r.Index == apex.Id && r.Variant == SceneMediaService.VariantPreview && generator.IsCurrent(r, window)))
+            var current = rows.Where(r => r.Index == apex.Id && generator.IsCurrent(r, window)).Select(r => r.Variant).ToHashSet();
+            if (!variants.All(current.Contains))
             {
                 queue.EnqueueApex(apex.Id, movieId, window);
             }

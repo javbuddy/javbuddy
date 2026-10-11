@@ -6,24 +6,25 @@
 @* One scene, highlight or apex card, shared by the Scenes wall and Actor
    Detail's clip sections. A plain left-click plays the clip through OnPlay; the card
    still links to Movie Detail's player (the deep link) for a ctrl/middle-click into a new tab —
-   the host binds ClipCard.razor.js's preventPlainCardClicks to an element around its cards so the
+   the host binds ClipCard.razor.js's preventPlainCardClicks (and bindHoverPreviews, which plays a hovered
+   card's preview in the browser) to an element around its cards so the
    plain click doesn't navigate too. Pass exactly one of Scene, Highlight and Apex. *@
 @if (Apex is { } apex)
 {
     var clip = PlayerClip.FromApex(apex);
     <a class="scene-wall-card scene-wall-card-apex" href="@clip.EditUrl"
-       @onclick="e => PlayAsync(e, clip)" @onmouseenter="() => hovered = true" @onmouseleave="() => hovered = false">
+       @onclick="e => PlayAsync(e, clip)">
         <div class="scene-wall-media">
-            @* No screenshot: the preview's first frame stands in for one. No
-               duration either: an apex clip is a few seconds around it. *@
-            @if (apex.PreviewVersion is { } previewVersion)
+            @* The screenshot is the frame the preview starts on; the preview plays over it while hovered.
+               No duration: an apex clip is a few seconds around it. *@
+            @if (apex.ThumbVersion is { } thumbVersion)
             {
-                var previewUrl = $"/apex-image/{apex.ApexId}/preview?v={previewVersion}";
-                <ScenePreviewMedia StillUrl="@previewUrl" PreviewUrl="@(hovered ? previewUrl : null)" />
+                <ScenePreviewMedia ThumbUrl="@($"/apex-image/{apex.ApexId}/thumb?v={thumbVersion}")"
+                                   HoverPreviewUrl="@(apex.PreviewVersion is { } previewVersion ? $"/apex-image/{apex.ApexId}/preview?v={previewVersion}" : null)" />
             }
             else
             {
-                <ScenePreviewPlaceholder Generating="apex.HasLocalVideo && ApexMedia.ServesPreview" />
+                <ScenePreviewPlaceholder Generating="apex.HasLocalVideo && ApexMedia.ServesVariant(SceneMediaService.VariantThumb)" />
             }
             @if (apex.IsFavorite)
             {
@@ -37,12 +38,12 @@ else if (Highlight is { } highlight)
 {
     var clip = PlayerClip.FromHighlight(highlight);
     <a class="scene-wall-card scene-wall-card-highlight" href="@clip.EditUrl"
-       @onclick="e => PlayAsync(e, clip)" @onmouseenter="() => hovered = true" @onmouseleave="() => hovered = false">
+       @onclick="e => PlayAsync(e, clip)">
         <div class="scene-wall-media">
             @if (highlight.ThumbVersion is { } thumbVersion)
             {
                 <ScenePreviewMedia ThumbUrl="@($"/highlight-image/{highlight.HighlightId}/thumb?v={thumbVersion}")"
-                                   PreviewUrl="@(hovered && highlight.PreviewVersion is { } previewVersion ? $"/highlight-image/{highlight.HighlightId}/preview?v={previewVersion}" : null)" />
+                                   HoverPreviewUrl="@(highlight.PreviewVersion is { } previewVersion ? $"/highlight-image/{highlight.HighlightId}/preview?v={previewVersion}" : null)" />
             }
             else
             {
@@ -62,12 +63,12 @@ else if (Scene is { } scene)
 {
     var clip = PlayerClip.FromScene(scene);
     <a class="scene-wall-card" href="@clip.EditUrl"
-       @onclick="e => PlayAsync(e, clip)" @onmouseenter="() => hovered = true" @onmouseleave="() => hovered = false">
+       @onclick="e => PlayAsync(e, clip)">
         <div class="scene-wall-media">
             @if (scene.ThumbVersion is { } thumbVersion)
             {
                 <ScenePreviewMedia ThumbUrl="@($"/scene-image/{scene.SceneId}/thumb?v={thumbVersion}")"
-                                   PreviewUrl="@(hovered && scene.PreviewVersion is { } previewVersion ? $"/scene-image/{scene.SceneId}/preview?v={previewVersion}" : null)" />
+                                   HoverPreviewUrl="@(scene.PreviewVersion is { } previewVersion ? $"/scene-image/{scene.SceneId}/preview?v={previewVersion}" : null)" />
             }
             else
             {
@@ -96,9 +97,6 @@ else if (Scene is { } scene)
 
     /// <summary>A plain left-click on the card; modifier and middle clicks follow its link instead.</summary>
     [Parameter] public EventCallback<PlayerClip> OnPlay { get; set; }
-
-    // Only a hovered card plays its preview.
-    private bool hovered;
 
     private Task PlayAsync(MouseEventArgs e, PlayerClip clip)
     {

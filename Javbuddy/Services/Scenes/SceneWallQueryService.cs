@@ -104,8 +104,8 @@ public sealed record HighlightWallCard(
 public sealed record HighlightWallPage(IReadOnlyList<HighlightWallCard> Cards, int TotalCount);
 
 /// <summary>An apex on the wall: its own actors and tags. DisplayTitle is its label
-/// ("Mei — Creampie"), which only the clip player shows. It has no screenshot, only the hover preview
-/// around it.</summary>
+/// ("Mei — Creampie"), which only the clip player shows. It shows a screenshot of the frame its hover
+/// preview starts on, like a highlight.</summary>
 public sealed record ApexWallCard(
     int ApexId,
     int MovieId,
@@ -128,6 +128,9 @@ public sealed record ApexWallCard(
 
     /// <summary>The movie's media duration.</summary>
     public double? DurationSeconds { get; init; }
+
+    /// <summary>Version of the apex's screenshot (<c>/apex-image/{ApexId}/thumb</c>), or null while there's none.</summary>
+    public long? ThumbVersion { get; init; }
 
     /// <summary>How long the clip player plays before and after it.</summary>
     public ApexWindow Window { get; init; } = ApexWindow.Default;
@@ -407,6 +410,7 @@ public sealed class SceneWallQueryService(
                     JellyfinItemId = p.JellyfinItemId,
                     JellyfinServerId = p.JellyfinServerId,
                     DurationSeconds = p.MediaDurationSeconds,
+                    ThumbVersion = item.ThumbVersion,
                     Window = item.Window,
                 };
             })

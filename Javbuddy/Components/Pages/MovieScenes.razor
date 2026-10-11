@@ -441,6 +441,7 @@
             clipCardModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
             await clipCardModule.InvokeVoidAsync("preventPlainCardClicks", wallRef);
             await clipCardModule.InvokeVoidAsync("measureTagOverflow", wallRef);
+            await clipCardModule.InvokeVoidAsync("bindHoverPreviews", wallRef);
             jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/MovieScenes.razor.js");
             var json = await jsModule.InvokeAsync<string?>("getCookie", ViewStateCookieName);
             await ApplyViewStateAsync(json);
@@ -720,7 +721,7 @@
             windowStart = skip;
             loaded = true;
             if (!queueMissingMedia) return true;
-            foreach (var movieId in page.Cards.Where(c => c.PreviewVersion is null).Select(c => c.MovieId).Distinct())
+            foreach (var movieId in page.Cards.Where(c => c.ThumbVersion is null || c.PreviewVersion is null).Select(c => c.MovieId).Distinct())
             {
                 await ApexMedia.EnsureQueuedAsync(movieId);
             }

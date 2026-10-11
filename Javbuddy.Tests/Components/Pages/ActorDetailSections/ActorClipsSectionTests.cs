@@ -69,6 +69,7 @@ public class ActorClipsSectionTests : BunitContext
         wall.Received().GetPageAsync(Arg.Is<SceneWallFilter>(f => f.ActorIds!.SequenceEqual(new[] { 7 }) && !f.IncludeHidden),
             Arg.Is(SceneWallSort.ReleaseDate), Arg.Any<int>(), Arg.Is(0), Arg.Is(ActorClipsSection.PageSize), Arg.Any<CancellationToken>());
         Assert.Single(clipCardModule.Invocations, i => i.Identifier == "preventPlainCardClicks");
+        Assert.Single(clipCardModule.Invocations, i => i.Identifier == "bindHoverPreviews");
         Assert.Single(clipCardModule.Invocations, i => i.Identifier == "measureTagOverflow");
     }
 

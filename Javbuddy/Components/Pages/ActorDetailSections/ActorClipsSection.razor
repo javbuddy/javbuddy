@@ -117,6 +117,7 @@
             clipCardModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
             await clipCardModule.InvokeVoidAsync("preventPlainCardClicks", hostRef);
             await clipCardModule.InvokeVoidAsync("measureTagOverflow", hostRef);
+            await clipCardModule.InvokeVoidAsync("bindHoverPreviews", hostRef);
         }
         catch (JSDisconnectedException)
         {

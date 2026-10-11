@@ -14,6 +14,13 @@
     object-fit: cover;
 }
 
+/* Holds the hover preview's video, which the browser adds (see ScenePreviewMedia.razor). */
+.scene-preview-live {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
 /* Clicks go to the card (or its play button) underneath. */
 .scene-preview-media ::deep video {
     pointer-events: none;

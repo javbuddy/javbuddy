@@ -4,33 +4,32 @@
     {
         <img src="@ThumbUrl" alt="" loading="lazy" />
     }
-    else if (StillUrl is not null)
-    {
-        @StillMarkup(StillUrl)
-    }
     @if (PreviewUrl is not null)
     {
         @VideoMarkup(PreviewUrl)
     }
+    @if (HoverPreviewUrl is not null)
+    {
+        @* Left empty for ClipCard.razor.js's bindHoverPreviews, which puts the video in while the card is hovered;
+           Blazor never touches the contents of an element it rendered without children. *@
+        <div class="scene-preview-live" data-preview-src="@HoverPreviewUrl"></div>
+    }
 </div>
 
 @code {
-    /// <summary>A scene or highlight card's picture: the screenshot, with the hover
+    /// <summary>A scene, highlight or apex card's picture: the screenshot, with the hover
     /// preview video playing over it (muted, looping) while PreviewUrl is set — the caller sets it
     /// only while the card is hovered. The screenshot stays underneath as the poster and fallback.
-    /// Fills the card's positioned 16:9 frame. Without a screenshot (an apex) the
-    /// video plays alone over the frame's background.</summary>
+    /// Fills the card's positioned 16:9 frame.</summary>
     [Parameter] public string? ThumbUrl { get; set; }
 
+    /// <summary>The preview video, playing now.</summary>
     [Parameter] public string? PreviewUrl { get; set; }
 
-    /// <summary>A video whose first frame stands in for the screenshot when there's none: an apex card's
-    /// own preview. It stays under the playing preview, like the screenshot, so hovering
-    /// doesn't flash the frame's background while the playing copy loads.</summary>
-    [Parameter] public string? StillUrl { get; set; }
-
-    private static MarkupString StillMarkup(string stillUrl) =>
-        new($"""<video src="{WebUtility.HtmlEncode(stillUrl)}" preload="auto" muted playsinline disablepictureinpicture></video>""");
+    /// <summary>The preview video of a card the browser plays itself while it's hovered
+    /// (ClipCard.razor.js's bindHoverPreviews), so hovering costs no server round trip and a card sliding
+    /// under a still pointer during a scroll doesn't start a download. It is only a data attribute here.</summary>
+    [Parameter] public string? HoverPreviewUrl { get; set; }
 
     // Markup rather than a Razor element: Blazor adds attributes to an element it already created,
     // and a muted attribute added that way leaves the video's muted property false, so Chrome refuses
