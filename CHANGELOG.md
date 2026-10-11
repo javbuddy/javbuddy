@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Removed
+
+- The no-op service worker, which Chrome flagged as adding navigation overhead. Installing the app from Chrome's menu still works; browsers that already have the worker drop it on their next update check.
+
 ## [0.2.2] - 2026-10-10
 
 ### Fixed
