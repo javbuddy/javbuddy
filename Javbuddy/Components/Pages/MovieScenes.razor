@@ -1,3 +1,4 @@
+@using Javbuddy.Services.Common
 @page "/movies/scenes"
 @using Javbuddy.Services
 @using Javbuddy.Services.SceneMedia
@@ -272,7 +273,7 @@
     private bool disposed;
     private bool showFilterDropdown;
     private bool showSortDropdown;
-    private CancellationTokenSource? textDebounceCts;
+    private readonly Debouncer textDebouncer = new();
     private IJSObjectReference? jsModule;
     private IJSObjectReference? clipCardModule;
     private IJSObjectReference? hoverPreviews;
@@ -601,7 +602,7 @@
         favoritesOnly = false;
         if (CurrentView == WallView.Scenes) showHidden = false;
         textFilter = "";
-        textDebounceCts?.Cancel();
+        textDebouncer.Cancel();
         showFilterDropdown = false;
         if (hadHidden)
         {
@@ -620,18 +621,11 @@
     private async Task HandleTextInput(ChangeEventArgs e)
     {
         var value = e.Value?.ToString() ?? "";
-        textDebounceCts?.Cancel();
-        var cts = new CancellationTokenSource();
-        textDebounceCts = cts;
-        try
+        await textDebouncer.RunAsync(_ =>
         {
-            await Task.Delay(250, cts.Token);
             textFilter = value;
-            await FiltersChangedAsync();
-        }
-        catch (OperationCanceledException)
-        {
-        }
+            return FiltersChangedAsync();
+        });
     }
 
     private Task SelectSortAsync(SceneWallSort value)
@@ -861,7 +855,7 @@
     public async ValueTask DisposeAsync()
     {
         disposed = true;
-        textDebounceCts?.Cancel();
+        textDebouncer.Dispose();
         SceneMediaQueue.Generated -= OnMediaGenerated;
         try
         {

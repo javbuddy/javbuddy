@@ -1,3 +1,4 @@
+@using Javbuddy.Services.Common
 @using Javbuddy.Models
 @using Javbuddy.Services.Movies
 @implements IDisposable
@@ -222,7 +223,7 @@
     private bool showFilterDropdown;
     private bool showSortDropdown;
     private string localTextFilter = "";
-    private CancellationTokenSource? textFilterDebounceCts;
+    private Debouncer? textFilterDebouncer;
 
     private string? lastSyncedTextFilter;
 
@@ -230,7 +231,7 @@
     {
         if (TextFilter != lastSyncedTextFilter)
         {
-            textFilterDebounceCts?.Cancel();
+            textFilterDebouncer?.Cancel();
             localTextFilter = TextFilter;
             lastSyncedTextFilter = TextFilter;
         }
@@ -267,19 +268,12 @@
         var val = e.Value?.ToString() ?? "";
         localTextFilter = val;
 
-        textFilterDebounceCts?.Cancel();
-        var cts = new CancellationTokenSource();
-        textFilterDebounceCts = cts;
-
-        try
+        textFilterDebouncer ??= new Debouncer(TimeProvider);
+        await textFilterDebouncer.RunAsync(_ =>
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(250), TimeProvider, cts.Token);
             lastSyncedTextFilter = val;
-            await OnTextFilterChanged.InvokeAsync(val);
-        }
-        catch (OperationCanceledException)
-        {
-        }
+            return OnTextFilterChanged.InvokeAsync(val);
+        });
     }
 
     private void ToggleFilterDropdown()
@@ -321,7 +315,7 @@
 
     private async Task HandleResetFilters()
     {
-        textFilterDebounceCts?.Cancel();
+        textFilterDebouncer?.Cancel();
         showFilterDropdown = false;
         await OnResetFilters.InvokeAsync();
     }
@@ -414,7 +408,6 @@
 
     public void Dispose()
     {
-        textFilterDebounceCts?.Cancel();
-        textFilterDebounceCts?.Dispose();
+        textFilterDebouncer?.Dispose();
     }
 }

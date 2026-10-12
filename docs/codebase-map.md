@@ -126,6 +126,7 @@ Domain services (`Services/<Group>/*.cs`):
 | `SystemStatusService.cs` | System > Status: migration state, health messages, which integrations are configured (via `ConnectionStatusService`) and their live connection tests |
 | `MovieDetailQueryService.cs` / `ActorDetailQueryService.cs` | Movie Detail's movie/tag/cast reads and Actor Detail's movie/photo-count reads, so those pages don't open a DbContext |
 | `StringExtensions.cs` | `TrimToNull` (trim, or null when blank), `CompactName` (strip ASCII and full-width spaces — the form used for all actor-name matching) |
+| `Debouncer.cs` | Run-after-quiet-period helper for search boxes and text filters (supersedes the pending call; disposed with the component) |
 | `HtmlTextHelper.cs` / `MediaFileTypes.cs` | `CleanText`/`ResolveUrl` shared by the Warashi and MinnanoAv HTML parsers; shared video/image extension sets (`IsReleaseVideo`, `IsImage`) |
 | `NfoActorMatching.cs` / `NfoFieldSync.cs` / `NfoXmlFormatter.cs` | Pure static .nfo XML logic used by `NfoSyncService`: actor name matching/consolidation, writing canonical fields, indented serialization |
 

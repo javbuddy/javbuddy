@@ -1,3 +1,4 @@
+@using Javbuddy.Services.Common
 @using Javbuddy.Models
 @using Javbuddy.Components.Pages.MoviesSections
 @using Javbuddy.Services
@@ -139,7 +140,7 @@
     private List<ActorSearchResult>? actorResults;
     private List<R18DevReleaseRow>? catalogResults;
     private const int CatalogResultCount = 5;
-    private CancellationTokenSource? debounceCts;
+    private readonly Debouncer debouncer = new();
 
     protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
 
@@ -174,7 +175,7 @@
     // Also cancels a pending debounced search, so it can't bring the results back after the clear.
     private void Clear()
     {
-        debounceCts?.Cancel();
+        debouncer.Cancel();
         query = "";
         results = null;
         actorResults = null;
@@ -189,27 +190,18 @@
         query = e.Value?.ToString() ?? "";
         showDropdown = true;
 
-        debounceCts?.Cancel();
-        var cts = new CancellationTokenSource();
-        debounceCts = cts;
-
         if (string.IsNullOrWhiteSpace(query))
         {
+            debouncer.Cancel();
             results = null;
             actorResults = null;
             catalogResults = null;
             return;
         }
 
-        try
-        {
-            await Task.Delay(250, cts.Token);
-            await SearchAsync(query, cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // A newer keystroke superseded this search.
-        }
+        var term = query;
+        // A newer keystroke supersedes this search.
+        await debouncer.RunAsync(ct => SearchAsync(term, ct));
     }
 
     private async Task SearchAsync(string term, CancellationToken ct)
@@ -249,6 +241,6 @@
     public void Dispose()
     {
         Nav.LocationChanged -= OnLocationChanged;
-        debounceCts?.Cancel();
+        debouncer.Dispose();
     }
 }

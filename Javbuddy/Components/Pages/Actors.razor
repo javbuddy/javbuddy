@@ -1,3 +1,4 @@
+@using Javbuddy.Services.Common
 @page "/actors"
 @using Javbuddy.Components.Pages.ActorsSections
 @using Javbuddy.Components.Shared
@@ -333,7 +334,7 @@ else
     private List<ActorCardModel>? actors;
     private bool jellyfinEnabled;
     private readonly ActorListFilter filter = new();
-    private CancellationTokenSource? textFilterDebounceCts;
+    private readonly Debouncer textFilterDebouncer = new();
     private bool showSortDropdown;
     private bool showFilterDropdown;
     private bool showColumnsDropdown;
@@ -493,6 +494,7 @@ else
 
     public async ValueTask DisposeAsync()
     {
+        textFilterDebouncer.Dispose();
         if (applicationState is not null)
         {
             persistingSubscription.Dispose();
@@ -561,7 +563,7 @@ else
 
     private async Task ResetFilters()
     {
-        textFilterDebounceCts?.Cancel();
+        textFilterDebouncer.Cancel();
         filter.Clear();
         showFilterDropdown = false;
         await ResetWindow();
@@ -584,19 +586,8 @@ else
     {
         var value = e.Value?.ToString() ?? "";
 
-        textFilterDebounceCts?.Cancel();
-        var cts = new CancellationTokenSource();
-        textFilterDebounceCts = cts;
-
-        try
-        {
-            await Task.Delay(250, cts.Token);
-            await ApplyFilterAsync(() => filter.Text = value);
-        }
-        catch (OperationCanceledException)
-        {
-            // A newer keystroke superseded this filter update.
-        }
+        // A newer keystroke supersedes this filter update.
+        await textFilterDebouncer.RunAsync(_ => ApplyFilterAsync(() => filter.Text = value));
     }
 
     private void ToggleSortDropdown()

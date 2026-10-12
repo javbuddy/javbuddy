@@ -1,3 +1,4 @@
+@using Javbuddy.Services.Common
 @page "/add/new"
 @using Javbuddy.Models
 @using Javbuddy.Services
@@ -72,7 +73,7 @@
 
     private Movie newMovie = new();
     private List<R18DevReleaseRow> suggestions = new();
-    private CancellationTokenSource? suggestCts;
+    private readonly Debouncer suggestDebouncer = new();
     private const int SuggestionCount = 8;
     private bool adding;
     private string? addError;
@@ -88,40 +89,34 @@
     private async Task OnCodeInput(ChangeEventArgs e)
     {
         var term = e.Value?.ToString() ?? "";
-        suggestCts?.Cancel();
-        var cts = new CancellationTokenSource();
-        suggestCts = cts;
         if (string.IsNullOrWhiteSpace(term))
         {
+            suggestDebouncer.Cancel();
             suggestions = new();
             return;
         }
 
-        try
+        // A newer keystroke supersedes this lookup.
+        await suggestDebouncer.RunAsync(async ct =>
         {
-            await Task.Delay(250, cts.Token);
             // Off the circuit's sync context, since Microsoft.Data.Sqlite's async calls complete synchronously.
-            var found = await Task.Run(() => ReleaseBrowseService.SuggestAsync(term, SuggestionCount, cts.Token), cts.Token);
-            if (!cts.IsCancellationRequested) suggestions = found.ToList();
-        }
-        catch (OperationCanceledException)
-        {
-            // A newer keystroke superseded this lookup.
-        }
+            var found = await Task.Run(() => ReleaseBrowseService.SuggestAsync(term, SuggestionCount, ct), ct);
+            if (!ct.IsCancellationRequested) suggestions = found.ToList();
+        });
     }
 
     private void PickSuggestion(R18DevReleaseRow release)
     {
-        suggestCts?.Cancel();
+        suggestDebouncer.Cancel();
         newMovie.Code = release.Movie.DvdId;
         suggestions = new();
     }
 
-    public void Dispose() => suggestCts?.Cancel();
+    public void Dispose() => suggestDebouncer.Dispose();
 
     private async Task AddMovie()
     {
-        suggestCts?.Cancel();
+        suggestDebouncer.Cancel();
         suggestions = new();
         adding = true;
         addError = null;
