@@ -62,15 +62,15 @@ public class ActorMergeFlowTests
 
         // Click Merge in toolbar
         await page.Locator(".actor-toolbar").GetByRole(AriaRole.Button, new() { Name = "Merge..." }).ClickAsync();
-        await Expect(page.Locator(".merge-modal-backdrop")).ToBeVisibleAsync();
-        await Expect(page.Locator(".merge-modal-title")).ToContainTextAsync($"Merge Actor — {sourceDisplayName}");
+        await Expect(page.Locator(".modal-shell-backdrop")).ToBeVisibleAsync();
+        await Expect(page.Locator(".modal-shell-title")).ToContainTextAsync($"Merge Actor — {sourceDisplayName}");
 
         // Select target actor from candidate list
         var candidate = page.Locator(".candidate-item", new() { HasText = targetDisplayName });
         await candidate.ClickAsync();
 
         // Click confirm merge button
-        var mergeBtn = page.Locator(".merge-modal-footer").GetByRole(AriaRole.Button, new() { Name = $"Merge into {targetDisplayName}" });
+        var mergeBtn = page.Locator(".modal-shell-footer").GetByRole(AriaRole.Button, new() { Name = $"Merge into {targetDisplayName}" });
         await mergeBtn.ClickAsync();
 
         // Browser navigates to target canonical profile

@@ -21,7 +21,7 @@ public class ActorAliasModalTests : BunitContext
             .Add(x => x.Show, false)
             .Add(x => x.Actor, actor));
 
-        Assert.Empty(cut.FindAll(".alias-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class ActorAliasModalTests : BunitContext
             .Add(x => x.Show, true)
             .Add(x => x.Actor, actor));
 
-        Assert.Contains("Manage Aliases — Mikami Yua", cut.Find(".alias-modal-title").TextContent);
+        Assert.Contains("Manage Aliases — Mikami Yua", cut.Find(".modal-shell-title").TextContent);
 
         var rows = cut.FindAll(".alias-row");
         Assert.Equal(2, rows.Count);
@@ -141,12 +141,12 @@ public class ActorAliasModalTests : BunitContext
             .Add(x => x.OnClose, () => closeCount++));
 
         // Header close button
-        var closeBtn = cut.Find(".alias-modal-close-btn");
+        var closeBtn = cut.Find(".modal-shell-close-btn");
         await cut.InvokeAsync(() => closeBtn.Click());
         Assert.Equal(1, closeCount);
 
         // Escape key
-        var backdrop = cut.Find(".alias-modal-backdrop");
+        var backdrop = cut.Find(".modal-shell-backdrop");
         await cut.InvokeAsync(() => backdrop.KeyDown(new KeyboardEventArgs { Key = "Escape" }));
         Assert.Equal(2, closeCount);
     }

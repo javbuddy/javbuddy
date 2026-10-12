@@ -20,7 +20,7 @@ public class ActorMergeModalTests : BunitContext
             .Add(x => x.Show, false)
             .Add(x => x.SourceActor, source));
 
-        Assert.Empty(cut.FindAll(".merge-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]

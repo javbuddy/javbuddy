@@ -20,7 +20,7 @@ public class TagMergeModalTests : BunitContext
             .Add(x => x.Show, false)
             .Add(x => x.SourceTag, source));
 
-        Assert.Empty(cut.FindAll(".tag-merge-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class TagMergeModalTests : BunitContext
             .Add(x => x.Show, true)
             .Add(x => x.SourceTag, source));
 
-        Assert.Contains("Solowork", cut.Find(".tag-merge-modal-title").TextContent);
+        Assert.Contains("Solowork", cut.Find(".modal-shell-title").TextContent);
 
         // First candidate is suggested, so it auto-selects as the target
         var candidateItems = cut.FindAll(".tag-candidate-item");
@@ -123,7 +123,7 @@ public class TagMergeModalTests : BunitContext
             .Add(x => x.Show, true)
             .Add(x => x.SourceTags, sources));
 
-        Assert.Contains("Merge 2 Tags", cut.Find(".tag-merge-modal-title").TextContent);
+        Assert.Contains("Merge 2 Tags", cut.Find(".modal-shell-title").TextContent);
         Assert.Contains("Solowork, Solo Work", cut.Find(".tag-merge-notice").TextContent);
     }
 

@@ -139,7 +139,7 @@ public class MovieDetailActionsFlowTests
             await Expect(refreshItem).ToBeVisibleAsync();
             await refreshItem.ClickAsync();
 
-            var modalTitle = page.Locator(".metadata-refresh-title");
+            var modalTitle = page.Locator(".modal-shell-title");
             await Expect(modalTitle).ToBeVisibleAsync();
             await Expect(modalTitle).ToContainTextAsync(movie.Code!);
 
@@ -159,7 +159,7 @@ public class MovieDetailActionsFlowTests
             var applyBtn = page.GetByRole(AriaRole.Button, new() { Name = "Apply Selected" });
             await applyBtn.ClickAsync();
 
-            await Expect(page.Locator(".metadata-refresh-backdrop")).ToHaveCountAsync(0);
+            await Expect(page.Locator(".modal-shell-backdrop")).ToHaveCountAsync(0);
             await Expect(page.Locator("#blazor-error-ui")).ToBeHiddenAsync();
 
             await using var db = await fixture.DbFactory.CreateDbContextAsync();

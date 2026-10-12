@@ -962,11 +962,11 @@ public class MovieDetailTests : BunitContext
 
         var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
 
-        Assert.Empty(cut.FindAll(".metadata-refresh-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
 
         await ClickToolbarMenuItemAsync(cut, "Refresh", "Refresh with Javinizer");
 
-        var panel = cut.Find(".metadata-refresh-backdrop");
+        var panel = cut.Find(".modal-shell-backdrop");
         Assert.Contains("ABC-123", panel.TextContent);
     }
 

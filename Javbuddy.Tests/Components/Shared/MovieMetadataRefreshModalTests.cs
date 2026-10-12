@@ -38,7 +38,7 @@ public class MovieMetadataRefreshModalTests : BunitContext
             .Add(x => x.Show, false)
             .Add(x => x.Movie, movie));
 
-        Assert.Empty(cut.FindAll(".metadata-refresh-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class MovieMetadataRefreshModalTests : BunitContext
 
         await movieService.Received(1).FetchJavinizerMetadataAsync(1, Arg.Any<CancellationToken>());
 
-        var title = cut.Find(".metadata-refresh-title");
+        var title = cut.Find(".modal-shell-title");
         Assert.Contains("ABC-100", title.TextContent);
 
         var titleField = cut.Find("#field-title").Closest(".import-field-item");

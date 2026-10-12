@@ -412,13 +412,13 @@ public class ActorDetailTests : BunitContext
 
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
 
-        Assert.Empty(cut.FindAll(".merge-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
 
         var mergeBtn = cut.FindAll("button.actor-toolbar-btn")
             .First(b => b.TextContent.Contains("Merge..."));
         await cut.InvokeAsync(() => mergeBtn.Click());
 
-        Assert.NotEmpty(cut.FindAll(".merge-modal-backdrop"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -442,7 +442,7 @@ public class ActorDetailTests : BunitContext
         var searchBtn = cut.Find("button.actor-toolbar-btn-split-main");
         await cut.InvokeAsync(() => searchBtn.Click());
 
-        var title = cut.Find(".search-modal-title");
+        var title = cut.Find(".modal-shell-title");
         Assert.Contains("Search All Providers", title.TextContent);
     }
 
@@ -479,7 +479,7 @@ public class ActorDetailTests : BunitContext
 
         // Dropdown menu closes, and the WAPdB-only modal (not the combined one) is now shown
         Assert.Empty(cut.FindAll(".actor-toolbar-dropdown-menu"));
-        var title = cut.Find(".search-modal-title");
+        var title = cut.Find(".modal-shell-title");
         Assert.Contains("Mikami Yua", title.TextContent);
         Assert.DoesNotContain("Search All Providers", title.TextContent);
     }
@@ -524,7 +524,7 @@ public class ActorDetailTests : BunitContext
         await cut.InvokeAsync(() => inspectBtn.Click());
 
         // Combined modal is gone, the WAPdB modal is open and already shows this candidate's detail
-        var title = cut.Find(".search-modal-title");
+        var title = cut.Find(".modal-shell-title");
         Assert.Contains("Mikami Yua", title.TextContent);
         Assert.DoesNotContain("Search All Providers", title.TextContent);
         var detailCard = cut.Find(".performer-detail-card");

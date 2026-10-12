@@ -4,111 +4,102 @@
 
 @if (Show && EffectiveSources.Count > 0)
 {
-    <div class="tag-merge-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
-        <div class="tag-merge-modal-panel" @onclick:stopPropagation="true">
-            <div class="tag-merge-modal-header">
-                <h5 class="tag-merge-modal-title">
-                    @(EffectiveSources.Count == 1 ? $"Merge Tag — {EffectiveSources[0].Name}" : $"Merge {EffectiveSources.Count} Tags")
-                </h5>
-                <button type="button" class="tag-merge-modal-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@isMerging">
-                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
-                </button>
+    <ModalShell MaxWidth="560px" OnClose="CloseAsync" Busy="@isMerging">
+        <TitleContent>@(EffectiveSources.Count == 1 ? $"Merge Tag — {EffectiveSources[0].Name}" : $"Merge {EffectiveSources.Count} Tags")</TitleContent>
+        <ChildContent>
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+            }
+
+            <div class="tag-merge-notice mb-3">
+                @if (EffectiveSources.Count == 1)
+                {
+                    <p class="mb-0 small">
+                        Merging re-points all movies tagged <strong>@EffectiveSources[0].Name</strong> onto the target tag.
+                        <strong>@EffectiveSources[0].Name</strong> will be permanently deleted.
+                    </p>
+                }
+                else
+                {
+                    <p class="mb-0 small">
+                        Merging re-points all movies tagged with any of <strong>@string.Join(", ", EffectiveSources.Select(t => t.Name))</strong> onto the target tag.
+                        All @EffectiveSources.Count tags will be permanently deleted.
+                    </p>
+                }
             </div>
 
-            <div class="tag-merge-modal-body">
-                @if (errorMessage is not null)
-                {
-                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
-                }
+            <div class="mb-3">
+                <label class="form-label fw-semibold mb-1">Select Target Tag</label>
+                <input type="text"
+                       class="form-control mb-2"
+                       placeholder="Filter tags…"
+                       value="@searchQuery"
+                       @oninput="OnSearchInput"
+                       disabled="@isMerging" />
 
-                <div class="tag-merge-notice mb-3">
-                    @if (EffectiveSources.Count == 1)
+                <div class="tag-candidate-list">
+                    @if (isSearching)
                     {
-                        <p class="mb-0 small">
-                            Merging re-points all movies tagged <strong>@EffectiveSources[0].Name</strong> onto the target tag.
-                            <strong>@EffectiveSources[0].Name</strong> will be permanently deleted.
-                        </p>
+                        <div class="p-3 text-center"><LoadingIndicator /></div>
+                    }
+                    else if (candidates.Count == 0)
+                    {
+                        <div class="p-3 text-center text-muted">No candidate tags found.</div>
                     }
                     else
                     {
-                        <p class="mb-0 small">
-                            Merging re-points all movies tagged with any of <strong>@string.Join(", ", EffectiveSources.Select(t => t.Name))</strong> onto the target tag.
-                            All @EffectiveSources.Count tags will be permanently deleted.
-                        </p>
+                        @foreach (var candidate in candidates)
+                        {
+                            var isSelected = selectedTarget?.Id == candidate.Id;
+                            <div class="tag-candidate-item @(isSelected ? "selected" : "")" @onclick="() => SelectTarget(candidate)">
+                                <div class="tag-candidate-name">
+                                    @if (candidate.ParentTagName is not null)
+                                    {
+                                        <span class="badge bg-secondary me-1">@candidate.ParentTagName</span>
+                                    }
+                                    @candidate.Name
+                                    @if (candidate.IsSuggested)
+                                    {
+                                        <span class="badge bg-primary ms-2">Suggested</span>
+                                    }
+                                </div>
+                                <div class="text-muted small">@candidate.MovieCount movie@(candidate.MovieCount == 1 ? "" : "s")</div>
+                            </div>
+                        }
                     }
                 </div>
+            </div>
 
-                <div class="mb-3">
-                    <label class="form-label fw-semibold mb-1">Select Target Tag</label>
-                    <input type="text"
-                           class="form-control mb-2"
-                           placeholder="Filter tags…"
-                           value="@searchQuery"
-                           @oninput="OnSearchInput"
-                           disabled="@isMerging" />
-
-                    <div class="tag-candidate-list">
-                        @if (isSearching)
+            @if (selectedTarget is not null)
+            {
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input" type="checkbox" id="createRuleCheckbox" @bind="createReplacementRule" disabled="@isMerging" />
+                    <label class="form-check-label small" for="createRuleCheckbox">
+                        @if (EffectiveSources.Count == 1)
                         {
-                            <div class="p-3 text-center"><LoadingIndicator /></div>
-                        }
-                        else if (candidates.Count == 0)
-                        {
-                            <div class="p-3 text-center text-muted">No candidate tags found.</div>
+                            <text>Also create a replacement rule so future "@EffectiveSources[0].Name" values resolve to "@selectedTarget.Name" automatically</text>
                         }
                         else
                         {
-                            @foreach (var candidate in candidates)
-                            {
-                                var isSelected = selectedTarget?.Id == candidate.Id;
-                                <div class="tag-candidate-item @(isSelected ? "selected" : "")" @onclick="() => SelectTarget(candidate)">
-                                    <div class="tag-candidate-name">
-                                        @if (candidate.ParentTagName is not null)
-                                        {
-                                            <span class="badge bg-secondary me-1">@candidate.ParentTagName</span>
-                                        }
-                                        @candidate.Name
-                                        @if (candidate.IsSuggested)
-                                        {
-                                            <span class="badge bg-primary ms-2">Suggested</span>
-                                        }
-                                    </div>
-                                    <div class="text-muted small">@candidate.MovieCount movie@(candidate.MovieCount == 1 ? "" : "s")</div>
-                                </div>
-                            }
+                            <text>Also create replacement rules so future values matching these @EffectiveSources.Count tags resolve to "@selectedTarget.Name" automatically</text>
                         }
-                    </div>
+                    </label>
                 </div>
-
-                @if (selectedTarget is not null)
-                {
-                    <div class="form-check form-switch mt-2">
-                        <input class="form-check-input" type="checkbox" id="createRuleCheckbox" @bind="createReplacementRule" disabled="@isMerging" />
-                        <label class="form-check-label small" for="createRuleCheckbox">
-                            @if (EffectiveSources.Count == 1)
-                            {
-                                <text>Also create a replacement rule so future "@EffectiveSources[0].Name" values resolve to "@selectedTarget.Name" automatically</text>
-                            }
-                            else
-                            {
-                                <text>Also create replacement rules so future values matching these @EffectiveSources.Count tags resolve to "@selectedTarget.Name" automatically</text>
-                            }
-                        </label>
-                    </div>
-                }
-            </div>
-
-            <div class="tag-merge-modal-footer">
-                <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isMerging">Cancel</button>
-                <button type="button"
-                        class="btn btn-danger"
-                        @onclick="ConfirmMergeAsync"
-                        disabled="@(selectedTarget is null || isMerging)">
-                    @(isMerging ? "Merging…" : $"Merge into {selectedTarget?.Name ?? "Target"}")
-                </button>
-            </div>
-        </div>
-    </div>
+            }
+        
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isMerging">Cancel</button>
+            <button type="button"
+                    class="btn btn-danger"
+                    @onclick="ConfirmMergeAsync"
+                    disabled="@(selectedTarget is null || isMerging)">
+                @(isMerging ? "Merging…" : $"Merge into {selectedTarget?.Name ?? "Target"}")
+            </button>
+        
+        </FooterContent>
+    </ModalShell>
 }
 
 @code {
@@ -217,11 +208,4 @@
         await OnClose.InvokeAsync();
     }
 
-    private async Task HandleKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape")
-        {
-            await CloseAsync();
-        }
-    }
 }

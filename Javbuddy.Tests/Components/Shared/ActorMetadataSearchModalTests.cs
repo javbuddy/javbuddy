@@ -23,7 +23,7 @@ public class ActorMetadataSearchModalTests : BunitContext
             .Add(x => x.Show, false)
             .Add(x => x.Actor, actor));
 
-        Assert.Empty(cut.FindAll(".search-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class ActorMetadataSearchModalTests : BunitContext
         await warashiClient.Received(1).SearchPerformersAsync("三上悠亜", Arg.Any<CancellationToken>());
 
         // Modal title includes actor display name
-        var title = cut.Find(".search-modal-title");
+        var title = cut.Find(".modal-shell-title");
         Assert.Contains("Mikami Yua", title.TextContent);
 
         // Result is rendered
@@ -246,7 +246,7 @@ public class ActorMetadataSearchModalTests : BunitContext
             .Add(x => x.Actor, actor)
             .Add(x => x.OnClose, () => closed = true));
 
-        var closeBtn = cut.Find(".search-modal-close-btn");
+        var closeBtn = cut.Find(".modal-shell-close-btn");
         await cut.InvokeAsync(() => closeBtn.Click());
 
         Assert.True(closed);

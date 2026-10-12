@@ -21,7 +21,7 @@ public class CombinedActorSearchModalTests : BunitContext
             .Add(x => x.Show, false)
             .Add(x => x.Actor, actor));
 
-        Assert.Empty(cut.FindAll(".search-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public class CombinedActorSearchModalTests : BunitContext
             .Add(x => x.Actor, actor)
             .Add(x => x.OnClose, () => closed = true));
 
-        var closeBtn = cut.Find(".search-modal-close-btn");
+        var closeBtn = cut.Find(".modal-shell-close-btn");
         await cut.InvokeAsync(() => closeBtn.Click());
 
         Assert.True(closed);

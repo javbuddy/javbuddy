@@ -1,0 +1,62 @@
+@* The chrome shared by the dark dialog modals: a dimmed backdrop (click outside or Esc closes),
+   a panel with a header (title + close button), a scrolling body and an optional footer.
+   The host renders it only while open and supplies the body (and footer) as child content. *@
+<div class="modal-shell-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+    <div class="modal-shell-panel" style="max-width: @MaxWidth" @onclick:stopPropagation="true">
+        <div class="modal-shell-header">
+            <h5 class="modal-shell-title">@(TitleContent ?? (builder => builder.AddContent(0, Title)))</h5>
+            <button type="button" class="modal-shell-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@Busy">
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+            </button>
+        </div>
+
+        <div class="modal-shell-body">
+            @ChildContent
+        </div>
+
+        @if (FooterContent is not null)
+        {
+            <div class="modal-shell-footer">
+                @FooterContent
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Plain-text title; use <see cref="TitleContent"/> for anything with markup or interpolation.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    [Parameter] public RenderFragment? TitleContent { get; set; }
+
+    /// <summary>The scrolling body.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Buttons in the footer bar (right-aligned); no footer is drawn when omitted.</summary>
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+
+    /// <summary>Raised when the user closes the modal (close button, backdrop click or Esc), unless <see cref="Busy"/>.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>While true the modal can't be closed — an operation is running.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Widest the panel may grow, as a CSS length.</summary>
+    [Parameter] public string MaxWidth { get; set; } = "580px";
+
+    private async Task CloseAsync()
+    {
+        if (!Busy)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+}

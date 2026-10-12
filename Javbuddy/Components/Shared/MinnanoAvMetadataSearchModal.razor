@@ -6,144 +6,137 @@
 
 @if (Show && Actor is not null)
 {
-    <div class="search-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
-        <div class="search-modal-panel" @onclick:stopPropagation="true">
-            <div class="search-modal-header">
-                <h5 class="search-modal-title">Search minnano-av.com — @Actor.DisplayName</h5>
-                <button type="button" class="search-modal-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@isEnriching">
-                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+    <ModalShell MaxWidth="680px" OnClose="CloseAsync" Busy="@isEnriching">
+        <TitleContent>Search minnano-av.com — @Actor.DisplayName</TitleContent>
+        <ChildContent>
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+            }
+
+            <div class="input-group mb-3">
+                <input type="text" class="form-control search-input" placeholder="Search performer name (kanji) or alias…"
+                       @bind="searchQuery" @bind:event="oninput" @onkeydown="HandleInputKeyDown" disabled="@isSearching" />
+                <button class="btn btn-primary" type="button" @onclick="ExecuteSearch" disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
+                    @(isSearching ? "Searching…" : "Search")
                 </button>
             </div>
 
-            <div class="search-modal-body">
-                @if (errorMessage is not null)
-                {
-                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
-                }
-
-                <div class="input-group mb-3">
-                    <input type="text" class="form-control search-input" placeholder="Search performer name (kanji) or alias…"
-                           @bind="searchQuery" @bind:event="oninput" @onkeydown="HandleInputKeyDown" disabled="@isSearching" />
-                    <button class="btn btn-primary" type="button" @onclick="ExecuteSearch" disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
-                        @(isSearching ? "Searching…" : "Search")
-                    </button>
+            @if (isSearching)
+            {
+                <div class="text-center py-4 text-muted">
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span> Searching minnano-av.com...
                 </div>
-
-                @if (isSearching)
+            }
+            else if (searchResults is not null)
+            {
+                @if (searchResults.Count == 0)
                 {
-                    <div class="text-center py-4 text-muted">
-                        <span class="spinner-border spinner-border-sm me-2" role="status"></span> Searching minnano-av.com...
-                    </div>
+                    <p class="text-muted small my-3 text-center">No matching performers found on minnano-av.com.</p>
                 }
-                else if (searchResults is not null)
+                else
                 {
-                    @if (searchResults.Count == 0)
-                    {
-                        <p class="text-muted small my-3 text-center">No matching performers found on minnano-av.com.</p>
-                    }
-                    else
-                    {
-                        <div class="search-results-list">
-                            @foreach (var res in searchResults)
-                            {
-                                var isSelected = selectedPath == res.PathOrUrl;
-                                <div class="search-result-item @(isSelected ? "selected" : "")" @onclick="() => SelectPerformer(res)">
-                                    @if (!string.IsNullOrWhiteSpace(res.ImageUrl))
-                                    {
-                                        <img src="@res.ImageUrl" alt="@res.Name" class="search-result-thumb" />
-                                    }
-                                    <div class="flex-grow-1 min-w-0">
-                                        <div class="fw-semibold text-truncate">
-                                            @res.Name
-                                            @if (!string.IsNullOrWhiteSpace(res.Romaji))
-                                            {
-                                                <span class="text-muted fw-normal ms-1">(@res.Romaji)</span>
-                                            }
-                                            @if (res.IsExactMatch)
-                                            {
-                                                <span class="badge bg-success ms-1">Exact match</span>
-                                            }
-                                        </div>
-                                        @if (res.KnownAliases.Count > 0)
+                    <div class="search-results-list">
+                        @foreach (var res in searchResults)
+                        {
+                            var isSelected = selectedPath == res.PathOrUrl;
+                            <div class="search-result-item @(isSelected ? "selected" : "")" @onclick="() => SelectPerformer(res)">
+                                @if (!string.IsNullOrWhiteSpace(res.ImageUrl))
+                                {
+                                    <img src="@res.ImageUrl" alt="@res.Name" class="search-result-thumb" />
+                                }
+                                <div class="flex-grow-1 min-w-0">
+                                    <div class="fw-semibold text-truncate">
+                                        @res.Name
+                                        @if (!string.IsNullOrWhiteSpace(res.Romaji))
                                         {
-                                            <div class="text-muted small text-truncate">AKA: @string.Join(", ", res.KnownAliases)</div>
+                                            <span class="text-muted fw-normal ms-1">(@res.Romaji)</span>
+                                        }
+                                        @if (res.IsExactMatch)
+                                        {
+                                            <span class="badge bg-success ms-1">Exact match</span>
                                         }
                                     </div>
-                                    <button class="btn btn-sm @(isSelected ? "btn-primary" : "btn-outline-secondary") flex-shrink-0"
-                                            type="button" disabled="@isLoadingDetail">
-                                        @(isLoadingDetail && isSelected ? "Loading…" : (isSelected ? "Selected" : "Inspect"))
-                                    </button>
+                                    @if (res.KnownAliases.Count > 0)
+                                    {
+                                        <div class="text-muted small text-truncate">AKA: @string.Join(", ", res.KnownAliases)</div>
+                                    }
+                                </div>
+                                <button class="btn btn-sm @(isSelected ? "btn-primary" : "btn-outline-secondary") flex-shrink-0"
+                                        type="button" disabled="@isLoadingDetail">
+                                    @(isLoadingDetail && isSelected ? "Loading…" : (isSelected ? "Selected" : "Inspect"))
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            @if (selectedDetail is not null)
+            {
+                <div class="performer-detail-card mt-3">
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">
+                                @selectedDetail.Name
+                                @if (!string.IsNullOrWhiteSpace(selectedDetail.Romaji))
+                                {
+                                    <span class="text-muted ms-1">· @selectedDetail.Romaji</span>
+                                }
+                            </h6>
+
+                            <div class="performer-badges">
+                                @if (selectedDetail.HeightCm.HasValue)
+                                {
+                                    <span class="badge bg-secondary">Height: @selectedDetail.HeightCm cm</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(selectedDetail.CupSize))
+                                {
+                                    <span class="badge bg-info text-dark">Cup: @selectedDetail.CupSize</span>
+                                }
+                                @if (selectedDetail.Bust.HasValue && selectedDetail.Waist.HasValue && selectedDetail.Hips.HasValue)
+                                {
+                                    <span class="badge bg-secondary">B/W/H: @selectedDetail.Bust-@selectedDetail.Waist-@selectedDetail.Hips</span>
+                                }
+                                @if (selectedDetail.BirthDate.HasValue)
+                                {
+                                    <span class="badge bg-secondary">Born: @selectedDetail.BirthDate.Value.ToString("MMM d, yyyy")</span>
+                                }
+                                @if (selectedDetail.IsRetired.HasValue)
+                                {
+                                    <span class="badge @(selectedDetail.IsRetired.Value ? "bg-warning text-dark" : "bg-success")">
+                                        @(selectedDetail.IsRetired.Value ? "Retired" : "Active")
+                                    </span>
+                                }
+                            </div>
+
+                            @if (selectedDetail.Aliases.Count > 0)
+                            {
+                                <div class="text-muted small mt-2">
+                                    <strong>Aliases:</strong> @string.Join(", ", selectedDetail.Aliases)
                                 </div>
                             }
                         </div>
-                    }
-                }
-
-                @if (selectedDetail is not null)
-                {
-                    <div class="performer-detail-card mt-3">
-                        <div class="d-flex align-items-start gap-3">
-                            <div class="flex-grow-1">
-                                <h6 class="mb-1">
-                                    @selectedDetail.Name
-                                    @if (!string.IsNullOrWhiteSpace(selectedDetail.Romaji))
-                                    {
-                                        <span class="text-muted ms-1">· @selectedDetail.Romaji</span>
-                                    }
-                                </h6>
-
-                                <div class="performer-badges">
-                                    @if (selectedDetail.HeightCm.HasValue)
-                                    {
-                                        <span class="badge bg-secondary">Height: @selectedDetail.HeightCm cm</span>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(selectedDetail.CupSize))
-                                    {
-                                        <span class="badge bg-info text-dark">Cup: @selectedDetail.CupSize</span>
-                                    }
-                                    @if (selectedDetail.Bust.HasValue && selectedDetail.Waist.HasValue && selectedDetail.Hips.HasValue)
-                                    {
-                                        <span class="badge bg-secondary">B/W/H: @selectedDetail.Bust-@selectedDetail.Waist-@selectedDetail.Hips</span>
-                                    }
-                                    @if (selectedDetail.BirthDate.HasValue)
-                                    {
-                                        <span class="badge bg-secondary">Born: @selectedDetail.BirthDate.Value.ToString("MMM d, yyyy")</span>
-                                    }
-                                    @if (selectedDetail.IsRetired.HasValue)
-                                    {
-                                        <span class="badge @(selectedDetail.IsRetired.Value ? "bg-warning text-dark" : "bg-success")">
-                                            @(selectedDetail.IsRetired.Value ? "Retired" : "Active")
-                                        </span>
-                                    }
-                                </div>
-
-                                @if (selectedDetail.Aliases.Count > 0)
-                                {
-                                    <div class="text-muted small mt-2">
-                                        <strong>Aliases:</strong> @string.Join(", ", selectedDetail.Aliases)
-                                    </div>
-                                }
-                            </div>
-                        </div>
-
-                        <ActorImportFieldPicker Actor="Actor" Values="selectedDetail.ToImportedData()" Options="importOptions"
-                                                SourceName="minnano-av.com" HasKnownAttributes="selectedDetail.HasKnownAttributes" Disabled="isEnriching" OnOptionsChanged="@StateHasChanged" />
                     </div>
-                }
-            </div>
 
-            <div class="search-modal-footer">
-                <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@isEnriching">Cancel</button>
-                @if (selectedDetail is not null)
-                {
-                    var count = importOptions.SelectedCount(selectedDetail);
-                    <button type="button" class="btn btn-primary" @onclick="EnrichActor" disabled="@(isEnriching || count == 0)">
-                        @(isEnriching ? "Enriching…" : $"Enrich {Actor.DisplayName} ({count})")
-                    </button>
-                }
-            </div>
-        </div>
-    </div>
+                    <ActorImportFieldPicker Actor="Actor" Values="selectedDetail.ToImportedData()" Options="importOptions"
+                                            SourceName="minnano-av.com" HasKnownAttributes="selectedDetail.HasKnownAttributes" Disabled="isEnriching" OnOptionsChanged="@StateHasChanged" />
+                </div>
+            }
+        
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@isEnriching">Cancel</button>
+            @if (selectedDetail is not null)
+            {
+                var count = importOptions.SelectedCount(selectedDetail);
+                <button type="button" class="btn btn-primary" @onclick="EnrichActor" disabled="@(isEnriching || count == 0)">
+                    @(isEnriching ? "Enriching…" : $"Enrich {Actor.DisplayName} ({count})")
+                </button>
+            }
+        
+        </FooterContent>
+    </ModalShell>
 }
 
 @code {
@@ -203,14 +196,6 @@
             await ExecuteSearch();
         }
         else if (e.Key == "Escape")
-        {
-            await CloseAsync();
-        }
-    }
-
-    private async Task HandleKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape" && !isEnriching)
         {
             await CloseAsync();
         }
