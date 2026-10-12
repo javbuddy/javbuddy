@@ -14,11 +14,18 @@ public sealed record ImportedActorData(
     bool? IsRetired,
     string? JapaneseNameKanji,
     string? JapaneseNameKana,
-    IReadOnlyList<string> Aliases);
+    IReadOnlyList<string> Aliases)
+{
+    public bool HasMeasurements => Bust.HasValue || Waist.HasValue || Hips.HasValue;
+}
 
 /// <summary>Which of an import's fields the user ticked.</summary>
 public sealed record ImportSelection(
-    bool JapaneseName, bool Height, bool CupSize, bool Measurements, bool BirthDate, bool RetiredStatus, bool Aliases);
+    bool JapaneseName, bool Height, bool CupSize, bool Measurements, bool BirthDate, bool RetiredStatus, bool Aliases)
+{
+    public static ImportSelection From(IActorImportOptions o) => new(
+        o.ImportJapaneseName, o.ImportHeight, o.ImportCupSize, o.ImportMeasurements, o.ImportBirthDate, o.ImportRetiredStatus, o.ImportAliases);
+}
 
 /// <summary>The source-independent half of importing actor metadata: writing the ticked fields onto an
 /// existing actor or onto a newly created one. Matching, naming a new actor and photos stay with the

@@ -1,0 +1,162 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Actors
+
+@* The "Select fields to import" card of the actor metadata search modals (WAPdB, minnano-av.com):
+   one row per importable field, ticked on or off, showing the source's new value against the
+   actor's current one. Source-specific rows (e.g. WAPdB photos) go in ExtraRows. *@
+<div class="import-fields-card mt-3">
+    @if (!HasKnownAttributes)
+    {
+        <div class="alert alert-warning py-2 mb-3 small">
+            All biographical and physical attributes are unknown for this performer on @SourceName.
+        </div>
+    }
+
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <span class="fw-semibold text-white small">Select fields to import:</span>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none field-toggle-btn" @onclick="SelectAllAsync">Select all</button>
+            <span class="text-muted small">·</span>
+            <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none field-toggle-btn" @onclick="DeselectAllAsync">Deselect all</button>
+        </div>
+    </div>
+
+    <div class="import-fields-table">
+        @{
+            var hasKanji = !string.IsNullOrWhiteSpace(Values.JapaneseNameKanji);
+            var hasHeight = Values.HeightCm.HasValue;
+            var hasCup = !string.IsNullOrWhiteSpace(Values.CupSize);
+            var hasMeasurements = Values.HasMeasurements;
+            var hasBirthDate = Values.BirthDate.HasValue;
+            var hasRetired = Values.IsRetired.HasValue;
+            var hasAliases = Values.Aliases.Count > 0;
+            var aliasList = string.Join(", ", Values.Aliases);
+        }
+
+        @Row("field-kanji", "Japanese Name", hasKanji, Options.ImportJapaneseName, v => Options.ImportJapaneseName = v,
+            hasKanji ? NameWithKana(Values) : "—",
+            string.IsNullOrWhiteSpace(Actor.JapaneseNameKanji) ? "None" : Actor.JapaneseNameKanji)
+
+        @Row("field-height", "Height", hasHeight, Options.ImportHeight, v => Options.ImportHeight = v,
+            hasHeight ? $"{Values.HeightCm} cm" : "—",
+            Actor.HeightCm.HasValue ? $"{Actor.HeightCm} cm" : "None")
+
+        @Row("field-cup", "Cup Size", hasCup, Options.ImportCupSize, v => Options.ImportCupSize = v,
+            hasCup ? Values.CupSize! : "—",
+            string.IsNullOrWhiteSpace(Actor.CupSize) ? "None" : Actor.CupSize)
+
+        @Row("field-measurements", "Measurements", hasMeasurements, Options.ImportMeasurements, v => Options.ImportMeasurements = v,
+            hasMeasurements ? $"{Values.Bust ?? 0}-{Values.Waist ?? 0}-{Values.Hips ?? 0}" : "—",
+            string.IsNullOrWhiteSpace(Actor.FormattedMeasurements) ? "None" : Actor.FormattedMeasurements)
+
+        @Row("field-birthdate", "Birth Date", hasBirthDate, Options.ImportBirthDate, v => Options.ImportBirthDate = v,
+            hasBirthDate ? Values.BirthDate!.Value.ToString("yyyy-MM-dd") : "—",
+            Actor.BirthDate.HasValue ? Actor.BirthDate.Value.ToString("yyyy-MM-dd") : "None")
+
+        @Row("field-retired", "Retirement Status", hasRetired, Options.ImportRetiredStatus, v => Options.ImportRetiredStatus = v,
+            hasRetired ? (Values.IsRetired!.Value ? "Retired" : "Active") : "—",
+            Actor.IsRetired ? "Retired" : "Active")
+
+        @Row("field-aliases", "Aliases", hasAliases, Options.ImportAliases, v => Options.ImportAliases = v,
+            hasAliases ? aliasList : "—",
+            Actor.Aliases.Count > 0 ? $"{Actor.Aliases.Count} alias(es)" : "None",
+            truncateNewValue: true, newValueTitle: aliasList)
+
+        @ExtraRows
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Actor Actor { get; set; } = default!;
+
+    /// <summary>What the source offers for the performer.</summary>
+    [Parameter, EditorRequired] public ImportedActorData Values { get; set; } = default!;
+
+    [Parameter, EditorRequired] public IActorImportOptions Options { get; set; } = default!;
+
+    /// <summary>False when the source knows nothing biographical about the performer, which shows a warning.</summary>
+    [Parameter] public bool HasKnownAttributes { get; set; } = true;
+
+    /// <summary>Display name of the source, used in the "all attributes unknown" warning.</summary>
+    [Parameter, EditorRequired] public string SourceName { get; set; } = default!;
+
+    /// <summary>Disables every checkbox, e.g. while the import runs.</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Extra, source-specific rows (each an <c>import-field-item</c>) after the common ones.</summary>
+    [Parameter] public RenderFragment? ExtraRows { get; set; }
+
+    /// <summary>Raised after any change to <see cref="Options"/>, so a host showing something derived
+    /// from them (e.g. a selected-field count) re-renders — the picker mutates the options itself.</summary>
+    [Parameter] public EventCallback OnOptionsChanged { get; set; }
+
+    /// <summary>Raised after Select all has ticked the available common fields, so the host can tick its extra rows.</summary>
+    [Parameter] public EventCallback OnSelectAll { get; set; }
+
+    /// <summary>Raised after Deselect all has cleared the common fields, so the host can clear its extra rows.</summary>
+    [Parameter] public EventCallback OnDeselectAll { get; set; }
+
+    private static string NameWithKana(ImportedActorData v) =>
+        string.IsNullOrWhiteSpace(v.JapaneseNameKana) ? v.JapaneseNameKanji! : $"{v.JapaneseNameKanji} ({v.JapaneseNameKana})";
+
+    private async Task RowChangedAsync(Action<bool> setChecked, bool value)
+    {
+        setChecked(value);
+        await OnOptionsChanged.InvokeAsync();
+    }
+
+    private async Task SelectAllAsync()
+    {
+        Options.ImportJapaneseName = !string.IsNullOrWhiteSpace(Values.JapaneseNameKanji);
+        Options.ImportHeight = Values.HeightCm.HasValue;
+        Options.ImportCupSize = !string.IsNullOrWhiteSpace(Values.CupSize);
+        Options.ImportMeasurements = Values.HasMeasurements;
+        Options.ImportBirthDate = Values.BirthDate.HasValue;
+        Options.ImportRetiredStatus = Values.IsRetired.HasValue;
+        Options.ImportAliases = Values.Aliases.Count > 0;
+        await OnSelectAll.InvokeAsync();
+        await OnOptionsChanged.InvokeAsync();
+    }
+
+    private async Task DeselectAllAsync()
+    {
+        Options.ImportJapaneseName = false;
+        Options.ImportHeight = false;
+        Options.ImportCupSize = false;
+        Options.ImportMeasurements = false;
+        Options.ImportBirthDate = false;
+        Options.ImportRetiredStatus = false;
+        Options.ImportAliases = false;
+        await OnDeselectAll.InvokeAsync();
+        await OnOptionsChanged.InvokeAsync();
+    }
+
+    private RenderFragment Row(
+        string id,
+        string label,
+        bool available,
+        bool isChecked,
+        Action<bool> setChecked,
+        string newValue,
+        string currentValue,
+        bool truncateNewValue = false,
+        string? newValueTitle = null) =>
+        @<div class="import-field-item @(available ? "" : "field-unavailable")">
+            <div class="form-check m-0">
+                <input class="form-check-input" type="checkbox" id="@id"
+                       checked="@isChecked" @onchange="e => RowChangedAsync(setChecked, (bool)e.Value!)" disabled="@(!available || Disabled)" />
+                <label class="form-check-label fw-medium" for="@id">@label</label>
+            </div>
+            <div class="field-values">
+                @if (truncateNewValue)
+                {
+                    <span class="field-new-value text-truncate" style="max-width: 180px;" title="@newValueTitle">@newValue</span>
+                }
+                else
+                {
+                    <span class="field-new-value">@newValue</span>
+                }
+                <span class="field-current-value">Current: @currentValue</span>
+            </div>
+        </div>;
+}

@@ -30,6 +30,7 @@ One row per product area.
 |---|---|---|
 | `BackButton.razor` | Standard "‹ Back" link | `BackButtonTests.cs` |
 | `CropperViewport.razor` (+ `.razor.js`) | The image-crop viewport (image, crop box, eight handles) and the shared JS cropper core (`ImageCropper`, `createCropperSession`) that `MovieCoverCropModal` and `ActorImageUploadModal` build on | `CropperViewportTests.cs` |
+| `ActorImportFieldPicker.razor` | The "Select fields to import" rows of the Warashi/MinnanoAv actor search modals | `ActorImportFieldPickerTests.cs` |
 | `ConnectionSettingsCard.razor` | Card UI for one integration's connection status/test/save form | `ConnectionSettingsCardTests.cs` |
 | `DropdownMenuButton.razor` | Button that opens a dropdown menu of actions | `DropdownMenuButtonTests.cs` |
 | `LoadingIndicator.razor` | Spinner/placeholder shown while data loads | `LoadingIndicatorTests.cs` |
@@ -123,10 +124,11 @@ Domain services (`Services/<Group>/*.cs`):
 | `TorrentQueueService.cs` | Activity > Queue reads (active downloads, count for the sidebar badge) and removal of selected downloads from qBittorrent |
 | `SystemStatusService.cs` | System > Status: migration state, health messages, which integrations are configured (via `ConnectionStatusService`) and their live connection tests |
 | `MovieDetailQueryService.cs` / `ActorDetailQueryService.cs` | Movie Detail's movie/tag/cast reads and Actor Detail's movie/photo-count reads, so those pages don't open a DbContext |
-| `StringExtensions.cs` | `TrimToNull` (trim, or null when blank) |
+| `StringExtensions.cs` | `TrimToNull` (trim, or null when blank), `CompactName` (strip ASCII and full-width spaces — the form used for all actor-name matching) |
+| `HtmlTextHelper.cs` / `MediaFileTypes.cs` | `CleanText`/`ResolveUrl` shared by the Warashi and MinnanoAv HTML parsers; shared video/image extension sets (`IsReleaseVideo`, `IsImage`) |
 | `NfoActorMatching.cs` / `NfoFieldSync.cs` / `NfoXmlFormatter.cs` | Pure static .nfo XML logic used by `NfoSyncService`: actor name matching/consolidation, writing canonical fields, indented serialization |
 
-`Infrastructure/` — generic, domain-agnostic base classes; see `docs/architecture.md`'s "Service layering" for what each one does and why.
+`Infrastructure/` — generic, domain-agnostic base classes (plus small shared helpers: `BestEffortFile`, `DiskSpaceGuard`, `ScraperDefaults`, `ThrottledScrapeClientBase<T>`, `EnrichmentSourceSettingsService<T>`); see `docs/architecture.md`'s "Service layering" for what each one does and why.
 
 Per-integration subfolders (`Services/<Integration>/`):
 

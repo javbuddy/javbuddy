@@ -1,3 +1,5 @@
+using Javbuddy.Services.Actors;
+
 namespace Javbuddy.Services.Warashi;
 
 public record WarashiSearchResult(
@@ -36,6 +38,9 @@ public class WarashiPerformerDetail
     public string? MainPhotoUrl { get; set; }
     public List<string> AdditionalPhotoUrls { get; set; } = new();
 
+    public ImportedActorData ToImportedData() => new(
+        HeightCm, CupSize, Bust, Waist, Hips, BirthDate, IsRetired, JapaneseName, null, Aliases);
+
     public bool HasKnownAttributes =>
         HeightCm.HasValue ||
         !string.IsNullOrWhiteSpace(CupSize) ||
@@ -49,7 +54,7 @@ public class WarashiPerformerDetail
         !string.IsNullOrWhiteSpace(BirthPlace);
 }
 
-public class WarashiImportOptions
+public class WarashiImportOptions : IActorImportOptions
 {
     public bool ImportJapaneseName { get; set; } = true;
     public bool ImportHeight { get; set; } = true;

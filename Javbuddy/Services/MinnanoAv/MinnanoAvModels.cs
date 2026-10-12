@@ -1,3 +1,5 @@
+using Javbuddy.Services.Actors;
+
 namespace Javbuddy.Services.MinnanoAv;
 
 /// <summary>A candidate performer from a minnano-av.com search. Unlike WAPdB, the site's primary
@@ -33,6 +35,9 @@ public class MinnanoAvPerformerDetail
     public bool? IsRetired { get; set; }
     public List<string> Aliases { get; set; } = new();
 
+    public ImportedActorData ToImportedData() => new(
+        HeightCm, CupSize, Bust, Waist, Hips, BirthDate, IsRetired, Name, Kana, Aliases);
+
     public bool HasKnownAttributes =>
         HeightCm.HasValue ||
         !string.IsNullOrWhiteSpace(CupSize) ||
@@ -42,7 +47,7 @@ public class MinnanoAvPerformerDetail
         Aliases.Count > 0;
 }
 
-public class MinnanoAvImportOptions
+public class MinnanoAvImportOptions : IActorImportOptions
 {
     public bool ImportJapaneseName { get; set; } = true;
     public bool ImportHeight { get; set; } = true;

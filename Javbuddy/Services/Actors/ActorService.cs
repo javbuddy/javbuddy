@@ -1099,8 +1099,8 @@ public class ActorService(
         return ImportOrEnrichAsync(
             targetActorId,
             (detail.Name, detail.JapaneseName, detail.Aliases),
-            ToWarashiData(detail),
-            ToWarashiSelection(options),
+            detail.ToImportedData(),
+            ImportSelection.From(options),
             () => WarashiNewActorNames(detail),
             options.ImportPhotos ? (db, actorId, token) => ImportWarashiPhotosAsync(db, actorId, detail, token) : null,
             ct);
@@ -1116,8 +1116,8 @@ public class ActorService(
         return ImportOrEnrichAsync(
             targetActorId,
             (detail.Romaji ?? detail.Name, detail.Name, detail.Aliases),
-            ToMinnanoAvData(detail),
-            ToMinnanoAvSelection(options),
+            detail.ToImportedData(),
+            ImportSelection.From(options),
             () => MinnanoAvNewActorNames(detail),
             importPhotos: null,
             ct);
@@ -1291,18 +1291,6 @@ public class ActorService(
 
         return null;
     }
-
-    private static ImportedActorData ToWarashiData(WarashiPerformerDetail d) => new(
-        d.HeightCm, d.CupSize, d.Bust, d.Waist, d.Hips, d.BirthDate, d.IsRetired, d.JapaneseName, null, d.Aliases);
-
-    private static ImportSelection ToWarashiSelection(WarashiImportOptions o) => new(
-        o.ImportJapaneseName, o.ImportHeight, o.ImportCupSize, o.ImportMeasurements, o.ImportBirthDate, o.ImportRetiredStatus, o.ImportAliases);
-
-    private static ImportedActorData ToMinnanoAvData(MinnanoAvPerformerDetail d) => new(
-        d.HeightCm, d.CupSize, d.Bust, d.Waist, d.Hips, d.BirthDate, d.IsRetired, d.Name, d.Kana, d.Aliases);
-
-    private static ImportSelection ToMinnanoAvSelection(MinnanoAvImportOptions o) => new(
-        o.ImportJapaneseName, o.ImportHeight, o.ImportCupSize, o.ImportMeasurements, o.ImportBirthDate, o.ImportRetiredStatus, o.ImportAliases);
 
     private static string NormalizeNameCasing(string input)
     {
