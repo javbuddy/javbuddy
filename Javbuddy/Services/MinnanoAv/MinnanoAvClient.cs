@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
 using Javbuddy.Data;
+using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -10,85 +12,22 @@ namespace Javbuddy.Services.MinnanoAv;
 public partial class MinnanoAvClient(
     IHttpClientFactory httpClientFactory,
     IDbContextFactory<AppDbContext> dbFactory,
-    ILogger<MinnanoAvClient>? logger = null) : IMinnanoAvClient
+    ILogger<MinnanoAvClient>? logger = null)
+    : ThrottledScrapeClientBase<MinnanoAvSettings>(
+        httpClientFactory, dbFactory, db => db.MinnanoAvSettings, DefaultBaseUrl, DefaultRequestDelayMs,
+        "minnano-av.com", logger ?? NullLogger<MinnanoAvClient>.Instance), IMinnanoAvClient
 {
     public const string DefaultBaseUrl = "https://www.minnano-av.com";
     private const int DefaultRequestDelayMs = 750;
 
-    private readonly IHttpClientFactory httpClientFactory = httpClientFactory;
-    private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
-    private readonly ILogger<MinnanoAvClient> logger = logger ?? NullLogger<MinnanoAvClient>.Instance;
-    private readonly SemaphoreSlim throttleLock = new(1, 1);
-    private DateTime? lastRequestAtUtc;
+    protected override IReadOnlyList<StringWithQualityHeaderValue> AcceptLanguages { get; } =
+    [
+        new("ja"),
+        new("en-US", 0.9),
+    ];
 
     [GeneratedRegex(@"/actress\d+\.html$", RegexOptions.IgnoreCase)]
     private static partial Regex DetailPagePathRegex();
-
-    private async Task<(string BaseUrl, int RequestDelayMs)> GetEffectiveSettingsAsync(CancellationToken ct)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var settings = await db.MinnanoAvSettings.ReadSingleRowAsync(ct);
-        var baseUrl = !string.IsNullOrWhiteSpace(settings?.BaseUrl)
-            ? settings.BaseUrl.TrimEnd('/')
-            : DefaultBaseUrl;
-        var delayMs = settings?.RequestDelayMs ?? DefaultRequestDelayMs;
-        return (baseUrl, delayMs);
-    }
-
-    /// <summary>Waits out the configured throttling delay since the previous request made through
-    /// this client instance, so consecutive calls (e.g. during batch enrichment) don't hammer minnano-av.com.</summary>
-    private async Task ThrottleAsync(int delayMs, CancellationToken ct)
-    {
-        if (delayMs <= 0) return;
-
-        await throttleLock.WaitAsync(ct);
-        try
-        {
-            if (lastRequestAtUtc.HasValue)
-            {
-                var remaining = TimeSpan.FromMilliseconds(delayMs) - (DateTime.UtcNow - lastRequestAtUtc.Value);
-                if (remaining > TimeSpan.Zero)
-                {
-                    await Task.Delay(remaining, ct);
-                }
-            }
-            lastRequestAtUtc = DateTime.UtcNow;
-        }
-        finally
-        {
-            throttleLock.Release();
-        }
-    }
-
-    private HttpClient CreateConfiguredClient()
-    {
-        var client = httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(15);
-        client.DefaultRequestHeaders.UserAgent.Clear();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(ScraperDefaults.BrowserUserAgent);
-        client.DefaultRequestHeaders.Accept.Clear();
-        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
-        client.DefaultRequestHeaders.AcceptLanguage.Clear();
-        client.DefaultRequestHeaders.AcceptLanguage.Add(new StringWithQualityHeaderValue("ja"));
-        client.DefaultRequestHeaders.AcceptLanguage.Add(new StringWithQualityHeaderValue("en-US", 0.9));
-        return client;
-    }
-
-    public async Task<bool> TestConnectionAsync(CancellationToken ct = default)
-    {
-        try
-        {
-            var (baseUrl, _) = await GetEffectiveSettingsAsync(ct);
-            var client = CreateConfiguredClient();
-            var response = await client.GetAsync(baseUrl, ct);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            logger.LogWarning(ex, "Failed to connect to minnano-av.com");
-            return false;
-        }
-    }
 
     public async Task<IReadOnlyList<MinnanoAvSearchResult>> SearchPerformersAsync(string query, CancellationToken ct = default)
     {
@@ -104,7 +43,7 @@ public partial class MinnanoAvClient(
             var response = await client.GetAsync(searchUrl, ct);
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("minnano-av.com search for '{Query}' returned HTTP status {StatusCode}", query, response.StatusCode);
+                Logger.LogWarning("minnano-av.com search for '{Query}' returned HTTP status {StatusCode}", query, response.StatusCode);
                 return Array.Empty<MinnanoAvSearchResult>();
             }
 
@@ -138,7 +77,7 @@ public partial class MinnanoAvClient(
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "Error occurred during minnano-av.com performer search for '{Query}'", query);
+            Logger.LogWarning(ex, "Error occurred during minnano-av.com performer search for '{Query}'", query);
             return Array.Empty<MinnanoAvSearchResult>();
         }
     }
@@ -150,17 +89,14 @@ public partial class MinnanoAvClient(
         try
         {
             var (baseUrl, delayMs) = await GetEffectiveSettingsAsync(ct);
-            var url = performerPathOrUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                      performerPathOrUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-                ? performerPathOrUrl
-                : $"{baseUrl}/{performerPathOrUrl.TrimStart('/')}";
+            var url = HtmlTextHelper.ResolveUrl(performerPathOrUrl, baseUrl)!;
 
             var client = CreateConfiguredClient();
             await ThrottleAsync(delayMs, ct);
             var response = await client.GetAsync(url, ct);
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("minnano-av.com detail request for '{Url}' returned HTTP status {StatusCode}", url, response.StatusCode);
+                Logger.LogWarning("minnano-av.com detail request for '{Url}' returned HTTP status {StatusCode}", url, response.StatusCode);
                 return null;
             }
 
@@ -169,7 +105,7 @@ public partial class MinnanoAvClient(
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "Error occurred during minnano-av.com performer detail fetch for '{Url}'", performerPathOrUrl);
+            Logger.LogWarning(ex, "Error occurred during minnano-av.com performer detail fetch for '{Url}'", performerPathOrUrl);
             return null;
         }
     }

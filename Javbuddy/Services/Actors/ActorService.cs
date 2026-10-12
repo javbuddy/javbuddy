@@ -1089,93 +1089,53 @@ public class ActorService(
             : await db.Actors.AsNoTracking().Include(a => a.Aliases).FirstOrDefaultAsync(a => a.Id == matched.Id, ct);
     }
 
-    public async Task<ActorOperationResult> ImportOrEnrichFromWarashiAsync(
+    public Task<ActorOperationResult> ImportOrEnrichFromWarashiAsync(
         WarashiPerformerDetail detail,
         int? targetActorId = null,
         WarashiImportOptions? options = null,
         CancellationToken ct = default)
     {
         options ??= new WarashiImportOptions();
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-
-        Actor? actor = null;
-        if (targetActorId.HasValue)
-        {
-            actor = await db.Actors.Include(a => a.Aliases).FirstOrDefaultAsync(a => a.Id == targetActorId.Value, ct);
-            if (actor is null) return ActorOperationResult.Fail("Target actor not found.");
-        }
-        else
-        {
-            var matched = await FindMatchingActorAsync(detail.Name, detail.JapaneseName, detail.Aliases, ct);
-            if (matched is not null)
-            {
-                actor = await db.Actors.Include(a => a.Aliases).FirstOrDefaultAsync(a => a.Id == matched.Id, ct);
-            }
-        }
-
-        if (actor is not null)
-        {
-            ActorImportApplier.ApplyToExisting(db, actor, ToWarashiData(detail), ToWarashiSelection(options));
-
-            await db.SaveChangesAsync(ct);
-
-            string? photoWarning = null;
-            if (options.ImportPhotos)
-            {
-                photoWarning = await ImportWarashiPhotosAsync(db, actor.Id, detail, ct);
-            }
-
-            await MovieActorAssociation.SynchronizeAllAsync(db, ct);
-            await db.SaveChangesAsync(ct);
-            return photoWarning is null ? ActorOperationResult.Ok(actor) : ActorOperationResult.OkWithWarning(actor, photoWarning);
-        }
-
-        string firstName;
-        string? lastName = null;
-
-        if (!string.IsNullOrWhiteSpace(detail.GivenName))
-        {
-            firstName = NormalizeNameCasing(detail.GivenName);
-            lastName = !string.IsNullOrWhiteSpace(detail.FamilyName) ? NormalizeNameCasing(detail.FamilyName) : null;
-        }
-        else
-        {
-            var parts = detail.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 2)
-            {
-                firstName = NormalizeNameCasing(parts[0]);
-                lastName = NormalizeNameCasing(string.Join(" ", parts.Skip(1)));
-            }
-            else
-            {
-                firstName = NormalizeNameCasing(detail.Name);
-            }
-        }
-
-        var newActor = ActorImportApplier.CreateNew(firstName, lastName, ToWarashiData(detail), ToWarashiSelection(options));
-
-        db.Actors.Add(newActor);
-        await db.SaveChangesAsync(ct);
-
-        string? newActorPhotoWarning = null;
-        if (options.ImportPhotos)
-        {
-            newActorPhotoWarning = await ImportWarashiPhotosAsync(db, newActor.Id, detail, ct);
-        }
-
-        await MovieActorAssociation.SynchronizeAllAsync(db, ct);
-        await db.SaveChangesAsync(ct);
-
-        return newActorPhotoWarning is null ? ActorOperationResult.Ok(newActor) : ActorOperationResult.OkWithWarning(newActor, newActorPhotoWarning);
+        return ImportOrEnrichAsync(
+            targetActorId,
+            (detail.Name, detail.JapaneseName, detail.Aliases),
+            ToWarashiData(detail),
+            ToWarashiSelection(options),
+            () => WarashiNewActorNames(detail),
+            options.ImportPhotos ? (db, actorId, token) => ImportWarashiPhotosAsync(db, actorId, detail, token) : null,
+            ct);
     }
 
-    public async Task<ActorOperationResult> ImportOrEnrichFromMinnanoAvAsync(
+    public Task<ActorOperationResult> ImportOrEnrichFromMinnanoAvAsync(
         MinnanoAvPerformerDetail detail,
         int? targetActorId = null,
         MinnanoAvImportOptions? options = null,
         CancellationToken ct = default)
     {
         options ??= new MinnanoAvImportOptions();
+        return ImportOrEnrichAsync(
+            targetActorId,
+            (detail.Romaji ?? detail.Name, detail.Name, detail.Aliases),
+            ToMinnanoAvData(detail),
+            ToMinnanoAvSelection(options),
+            () => MinnanoAvNewActorNames(detail),
+            importPhotos: null,
+            ct);
+    }
+
+    /// <summary>The shared import skeleton for a scraped performer: enrich the target actor (or the
+    /// one matching the performer's names), else create a new actor, then relink movie casts.
+    /// <paramref name="importPhotos"/> runs after the actor is saved and returns a warning message
+    /// (or null); the overall import still counts as successful if it warns.</summary>
+    private async Task<ActorOperationResult> ImportOrEnrichAsync(
+        int? targetActorId,
+        (string Name, string? JapaneseName, IReadOnlyList<string> Aliases) matchNames,
+        ImportedActorData data,
+        ImportSelection selection,
+        Func<(string FirstName, string? LastName)> deriveNewActorNames,
+        Func<AppDbContext, int, CancellationToken, Task<string?>>? importPhotos,
+        CancellationToken ct)
+    {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
         Actor? actor = null;
@@ -1186,7 +1146,7 @@ public class ActorService(
         }
         else
         {
-            var matched = await FindMatchingActorAsync(detail.Romaji ?? detail.Name, detail.Name, detail.Aliases, ct);
+            var matched = await FindMatchingActorAsync(matchNames.Name, matchNames.JapaneseName, matchNames.Aliases, ct);
             if (matched is not null)
             {
                 actor = await db.Actors.Include(a => a.Aliases).FirstOrDefaultAsync(a => a.Id == matched.Id, ct);
@@ -1195,43 +1155,51 @@ public class ActorService(
 
         if (actor is not null)
         {
-            ActorImportApplier.ApplyToExisting(db, actor, ToMinnanoAvData(detail), ToMinnanoAvSelection(options));
-
-            await db.SaveChangesAsync(ct);
-            await MovieActorAssociation.SynchronizeAllAsync(db, ct);
-            await db.SaveChangesAsync(ct);
-            return ActorOperationResult.Ok(actor);
-        }
-
-        // minnano-av.com's romaji reading is family-name-first (e.g. "Tohno Miho" for 通野未帆),
-        // matching Javbuddy's own LastName-FirstName DisplayName convention directly — unlike
-        // WAPdB, where the romanized name is given-name-first.
-        string firstName;
-        string? lastName = null;
-
-        var romajiParts = (detail.Romaji ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (romajiParts.Length >= 2)
-        {
-            lastName = NormalizeNameCasing(romajiParts[0]);
-            firstName = NormalizeNameCasing(string.Join(" ", romajiParts.Skip(1)));
-        }
-        else if (romajiParts.Length == 1)
-        {
-            firstName = NormalizeNameCasing(romajiParts[0]);
+            ActorImportApplier.ApplyToExisting(db, actor, data, selection);
         }
         else
         {
-            firstName = detail.Name;
+            var (firstName, lastName) = deriveNewActorNames();
+            actor = ActorImportApplier.CreateNew(firstName, lastName, data, selection);
+            db.Actors.Add(actor);
         }
 
-        var newActor = ActorImportApplier.CreateNew(firstName, lastName, ToMinnanoAvData(detail), ToMinnanoAvSelection(options));
-
-        db.Actors.Add(newActor);
         await db.SaveChangesAsync(ct);
+
+        var photoWarning = importPhotos is null ? null : await importPhotos(db, actor.Id, ct);
+
         await MovieActorAssociation.SynchronizeAllAsync(db, ct);
         await db.SaveChangesAsync(ct);
+        return photoWarning is null ? ActorOperationResult.Ok(actor) : ActorOperationResult.OkWithWarning(actor, photoWarning);
+    }
 
-        return ActorOperationResult.Ok(newActor);
+    private static (string FirstName, string? LastName) WarashiNewActorNames(WarashiPerformerDetail detail)
+    {
+        if (!string.IsNullOrWhiteSpace(detail.GivenName))
+        {
+            return (
+                NormalizeNameCasing(detail.GivenName),
+                !string.IsNullOrWhiteSpace(detail.FamilyName) ? NormalizeNameCasing(detail.FamilyName) : null);
+        }
+
+        var parts = detail.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            ? (NormalizeNameCasing(parts[0]), NormalizeNameCasing(string.Join(" ", parts.Skip(1))))
+            : (NormalizeNameCasing(detail.Name), null);
+    }
+
+    // minnano-av.com's romaji reading is family-name-first (e.g. "Tohno Miho" for 通野未帆),
+    // matching Javbuddy's own LastName-FirstName DisplayName convention directly — unlike
+    // WAPdB, where the romanized name is given-name-first.
+    private static (string FirstName, string? LastName) MinnanoAvNewActorNames(MinnanoAvPerformerDetail detail)
+    {
+        var romajiParts = (detail.Romaji ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return romajiParts.Length switch
+        {
+            >= 2 => (NormalizeNameCasing(string.Join(" ", romajiParts.Skip(1))), NormalizeNameCasing(romajiParts[0])),
+            1 => (NormalizeNameCasing(romajiParts[0]), null),
+            _ => (detail.Name, null),
+        };
     }
 
     /// <summary>Downloads and saves the performer's WAPdB photos. Returns null on full success (or

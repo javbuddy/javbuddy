@@ -5,7 +5,7 @@ namespace Javbuddy.Models;
 /// <summary>Single-row settings for the minnano-av.com metadata source. Disabled by default —
 /// when enabled, powers actor physical attribute enrichment (measurements, cup size, height,
 /// birthdate, retirement status, and aliases) via minnano-av.com.</summary>
-public class MinnanoAvSettings
+public class MinnanoAvSettings : IEnrichmentSourceSettings
 {
     public int Id { get; set; }
 

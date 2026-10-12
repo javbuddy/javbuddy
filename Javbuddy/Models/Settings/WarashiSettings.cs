@@ -5,7 +5,7 @@ namespace Javbuddy.Models;
 /// <summary>Single-row settings for the Warashi Asian Pornstars Database (WAPdB) metadata source.
 /// Disabled by default — when enabled, powers actor physical attribute enrichment (measurements,
 /// cup size, height, birthdate, retirement status, aliases, and photos) via warashi-asian-pornstars.fr.</summary>
-public class WarashiSettings
+public class WarashiSettings : IEnrichmentSourceSettings
 {
     public int Id { get; set; }
 

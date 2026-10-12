@@ -1,6 +1,5 @@
 using Javbuddy.Data;
 using Javbuddy.Services.Actors;
-using Javbuddy.Services.Common;
 using Javbuddy.Services.LocalLibrary;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,12 +28,12 @@ public class LocalActorMetadataSource(
         {
             var libraryCast = context.RunCache?.LibraryCast ?? await LibraryCastIndex.LoadAsync(dbFactory, ct);
             if (context.RunCache is not null) context.RunCache.LibraryCast = libraryCast;
-            movieCodes.AddRange(libraryCast.CodesCasting(BuildCandidateNameSet(context)));
+            movieCodes.AddRange(libraryCast.CodesCasting(ActorNameMatcher.BuildCandidateNames(context, includeR18DevName: true)));
         }
 
         if (movieCodes.Count == 0) return null;
 
-        var nameMatcher = BuildNameMatcher(context);
+        var nameMatcher = ActorNameMatcher.BuildNameMatcher(context, includeR18DevName: true);
         var namesToCheck = new List<string> { context.DisplayName };
         if (!string.IsNullOrWhiteSpace(context.LastName))
         {
@@ -92,40 +91,6 @@ public class LocalActorMetadataSource(
             JapaneseNameKanji = discoveredKanji,
             JapaneseNameKana = discoveredKana,
             Aliases = discoveredAliases.ToList()
-        };
-    }
-
-    private static HashSet<string> BuildCandidateNameSet(ActorEnrichmentContext context)
-    {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { context.DisplayName };
-        if (!string.IsNullOrWhiteSpace(context.LastName))
-        {
-            set.Add($"{context.FirstName} {context.LastName}".Trim());
-        }
-        if (!string.IsNullOrWhiteSpace(context.JapaneseNameKanji)) set.Add(context.JapaneseNameKanji);
-        if (!string.IsNullOrWhiteSpace(context.JapaneseNameKana)) set.Add(context.JapaneseNameKana);
-        if (!string.IsNullOrWhiteSpace(context.R18DevName)) set.Add(context.R18DevName);
-        foreach (var a in context.ExistingAliases) set.Add(a);
-        return set;
-    }
-
-    private static Func<string, bool> BuildNameMatcher(ActorEnrichmentContext context)
-    {
-        var tokens = BuildCandidateNameSet(context);
-        var compactKanji = context.JapaneseNameKanji?.CompactName();
-        var compactKana = context.JapaneseNameKana?.CompactName();
-
-        return name =>
-        {
-            if (string.IsNullOrWhiteSpace(name)) return false;
-            var trimmed = name.Trim();
-            if (tokens.Contains(trimmed)) return true;
-
-            var compact = trimmed.CompactName();
-            if (compactKanji != null && compact.Equals(compactKanji, StringComparison.OrdinalIgnoreCase)) return true;
-            if (compactKana != null && compact.Equals(compactKana, StringComparison.OrdinalIgnoreCase)) return true;
-
-            return false;
         };
     }
 

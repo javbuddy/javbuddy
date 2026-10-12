@@ -1,5 +1,7 @@
 using System.Net.Http.Headers;
 using Javbuddy.Data;
+using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,82 +11,19 @@ namespace Javbuddy.Services.Warashi;
 public class WarashiClient(
     IHttpClientFactory httpClientFactory,
     IDbContextFactory<AppDbContext> dbFactory,
-    ILogger<WarashiClient>? logger = null) : IWarashiClient
+    ILogger<WarashiClient>? logger = null)
+    : ThrottledScrapeClientBase<WarashiSettings>(
+        httpClientFactory, dbFactory, db => db.WarashiSettings, DefaultBaseUrl, DefaultRequestDelayMs,
+        "Warashi Asian Pornstars Database", logger ?? NullLogger<WarashiClient>.Instance), IWarashiClient
 {
     public const string DefaultBaseUrl = "https://warashi-asian-pornstars.fr";
     private const int DefaultRequestDelayMs = 750;
 
-    private readonly IHttpClientFactory httpClientFactory = httpClientFactory;
-    private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
-    private readonly ILogger<WarashiClient> logger = logger ?? NullLogger<WarashiClient>.Instance;
-    private readonly SemaphoreSlim throttleLock = new(1, 1);
-    private DateTime? lastRequestAtUtc;
-
-    private async Task<(string BaseUrl, int RequestDelayMs)> GetEffectiveSettingsAsync(CancellationToken ct)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var settings = await db.WarashiSettings.ReadSingleRowAsync(ct);
-        var baseUrl = !string.IsNullOrWhiteSpace(settings?.BaseUrl)
-            ? settings.BaseUrl.TrimEnd('/')
-            : DefaultBaseUrl;
-        var delayMs = settings?.RequestDelayMs ?? DefaultRequestDelayMs;
-        return (baseUrl, delayMs);
-    }
-
-    /// <summary>Waits out the configured throttling delay since the previous request made through
-    /// this client instance, so consecutive calls (e.g. during batch enrichment) don't hammer WAPdB.</summary>
-    private async Task ThrottleAsync(int delayMs, CancellationToken ct)
-    {
-        if (delayMs <= 0) return;
-
-        await throttleLock.WaitAsync(ct);
-        try
-        {
-            if (lastRequestAtUtc.HasValue)
-            {
-                var remaining = TimeSpan.FromMilliseconds(delayMs) - (DateTime.UtcNow - lastRequestAtUtc.Value);
-                if (remaining > TimeSpan.Zero)
-                {
-                    await Task.Delay(remaining, ct);
-                }
-            }
-            lastRequestAtUtc = DateTime.UtcNow;
-        }
-        finally
-        {
-            throttleLock.Release();
-        }
-    }
-
-    private HttpClient CreateConfiguredClient()
-    {
-        var client = httpClientFactory.CreateClient();
-        client.Timeout = TimeSpan.FromSeconds(15);
-        client.DefaultRequestHeaders.UserAgent.Clear();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(ScraperDefaults.BrowserUserAgent);
-        client.DefaultRequestHeaders.Accept.Clear();
-        client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
-        client.DefaultRequestHeaders.AcceptLanguage.Clear();
-        client.DefaultRequestHeaders.AcceptLanguage.Add(new StringWithQualityHeaderValue("en-US"));
-        client.DefaultRequestHeaders.AcceptLanguage.Add(new StringWithQualityHeaderValue("en", 0.9));
-        return client;
-    }
-
-    public async Task<bool> TestConnectionAsync(CancellationToken ct = default)
-    {
-        try
-        {
-            var (baseUrl, _) = await GetEffectiveSettingsAsync(ct);
-            var client = CreateConfiguredClient();
-            var response = await client.GetAsync(baseUrl, ct);
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            logger.LogWarning(ex, "Failed to connect to Warashi Asian Pornstars Database");
-            return false;
-        }
-    }
+    protected override IReadOnlyList<StringWithQualityHeaderValue> AcceptLanguages { get; } =
+    [
+        new("en-US"),
+        new("en", 0.9),
+    ];
 
     public async Task<IReadOnlyList<WarashiSearchResult>> SearchPerformersAsync(string query, CancellationToken ct = default)
     {
@@ -106,7 +45,7 @@ public class WarashiClient(
             var response = await client.PostAsync(searchUrl, formContent, ct);
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("Warashi search for '{Query}' returned HTTP status {StatusCode}", query, response.StatusCode);
+                Logger.LogWarning("Warashi search for '{Query}' returned HTTP status {StatusCode}", query, response.StatusCode);
                 return Array.Empty<WarashiSearchResult>();
             }
 
@@ -115,7 +54,7 @@ public class WarashiClient(
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "Error occurred during Warashi performer search for '{Query}'", query);
+            Logger.LogWarning(ex, "Error occurred during Warashi performer search for '{Query}'", query);
             return Array.Empty<WarashiSearchResult>();
         }
     }
@@ -127,17 +66,14 @@ public class WarashiClient(
         try
         {
             var (baseUrl, delayMs) = await GetEffectiveSettingsAsync(ct);
-            var url = performerPathOrUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                      performerPathOrUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-                ? performerPathOrUrl
-                : $"{baseUrl}/{performerPathOrUrl.TrimStart('/')}";
+            var url = HtmlTextHelper.ResolveUrl(performerPathOrUrl, baseUrl)!;
 
             var client = CreateConfiguredClient();
             await ThrottleAsync(delayMs, ct);
             var response = await client.GetAsync(url, ct);
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("Warashi detail request for '{Url}' returned HTTP status {StatusCode}", url, response.StatusCode);
+                Logger.LogWarning("Warashi detail request for '{Url}' returned HTTP status {StatusCode}", url, response.StatusCode);
                 return null;
             }
 
@@ -146,7 +82,7 @@ public class WarashiClient(
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "Error occurred during Warashi performer detail fetch for '{Url}'", performerPathOrUrl);
+            Logger.LogWarning(ex, "Error occurred during Warashi performer detail fetch for '{Url}'", performerPathOrUrl);
             return null;
         }
     }
@@ -158,17 +94,14 @@ public class WarashiClient(
         try
         {
             var (baseUrl, delayMs) = await GetEffectiveSettingsAsync(ct);
-            var fullUrl = url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                          url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-                ? url
-                : $"{baseUrl}/{url.TrimStart('/')}";
+            var fullUrl = HtmlTextHelper.ResolveUrl(url, baseUrl)!;
 
             var client = CreateConfiguredClient();
             await ThrottleAsync(delayMs, ct);
             var response = await client.GetAsync(fullUrl, ct);
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning("Warashi image download for '{Url}' returned HTTP status {StatusCode}", fullUrl, response.StatusCode);
+                Logger.LogWarning("Warashi image download for '{Url}' returned HTTP status {StatusCode}", fullUrl, response.StatusCode);
                 return null;
             }
 
@@ -176,7 +109,7 @@ public class WarashiClient(
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "Error occurred during Warashi image download for '{Url}'", url);
+            Logger.LogWarning(ex, "Error occurred during Warashi image download for '{Url}'", url);
             return null;
         }
     }
