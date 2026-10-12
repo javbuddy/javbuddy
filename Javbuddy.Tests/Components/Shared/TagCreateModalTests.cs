@@ -19,7 +19,7 @@ public class TagCreateModalTests : BunitContext
         var cut = Render<TagCreateModal>(p => p
             .Add(x => x.Show, false));
 
-        Assert.Empty(cut.FindAll(".tag-create-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class TagCreateModalTests : BunitContext
         var cut = Render<TagCreateModal>(p => p
             .Add(x => x.Show, true));
 
-        Assert.Contains("Create Tag", cut.Find(".tag-create-modal-title").TextContent);
+        Assert.Contains("Create Tag", cut.Find(".modal-shell-title").TextContent);
         var input = cut.Find("#new-tag-name");
         Assert.Equal("", input.GetAttribute("value") ?? "");
 
@@ -144,7 +144,7 @@ public class TagCreateModalTests : BunitContext
             .Add(x => x.Show, true)
             .Add(x => x.OnClose, () => closed = true));
 
-        await cut.Find(".tag-create-modal-backdrop").KeyDownAsync(new KeyboardEventArgs { Key = "Escape" });
+        await cut.Find(".modal-shell-backdrop").KeyDownAsync(new KeyboardEventArgs { Key = "Escape" });
 
         Assert.True(closed);
     }

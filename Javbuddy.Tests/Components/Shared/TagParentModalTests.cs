@@ -20,7 +20,7 @@ public class TagParentModalTests : BunitContext
             .Add(x => x.Show, false)
             .Add(x => x.Tag, new TagListItem(1, "Cosplay", 0, false, DateTime.UtcNow, null, null, 0)));
 
-        Assert.Empty(cut.FindAll(".tag-parent-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]

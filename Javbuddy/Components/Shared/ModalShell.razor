@@ -1,7 +1,7 @@
 @* The chrome shared by the dark dialog modals: a dimmed backdrop (click outside or Esc closes),
    a panel with a header (title + close button), a scrolling body and an optional footer.
    The host renders it only while open and supplies the body (and footer) as child content. *@
-<div class="modal-shell-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+<div class="modal-shell-backdrop @(Themed ? "modal-shell-themed" : "")" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
     <div class="modal-shell-panel" style="max-width: @MaxWidth" @onclick:stopPropagation="true">
         <div class="modal-shell-header">
             <h5 class="modal-shell-title">@(TitleContent ?? (builder => builder.AddContent(0, Title)))</h5>
@@ -43,6 +43,9 @@
 
     /// <summary>Widest the panel may grow, as a CSS length.</summary>
     [Parameter] public string MaxWidth { get; set; } = "580px";
+
+    /// <summary>Light/dark-theme-following chrome (white panel in the light theme) instead of the always-dark default.</summary>
+    [Parameter] public bool Themed { get; set; }
 
     private async Task CloseAsync()
     {

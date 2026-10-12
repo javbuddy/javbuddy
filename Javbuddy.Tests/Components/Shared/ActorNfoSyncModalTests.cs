@@ -20,7 +20,7 @@ public class ActorNfoSyncModalTests : BunitContext
             .Add(x => x.Show, false)
             .Add(x => x.Actor, actor));
 
-        Assert.Empty(cut.FindAll(".sync-modal-dialog"));
+        Assert.Empty(cut.FindAll(".modal-shell-panel"));
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class ActorNfoSyncModalTests : BunitContext
             .Add(x => x.Show, true)
             .Add(x => x.Actor, actor));
 
-        Assert.Contains("Sync .nfo Files — Mikami Yua", cut.Find(".sync-modal-title").TextContent);
+        Assert.Contains("Sync .nfo Files — Mikami Yua", cut.Find(".modal-shell-title").TextContent);
         Assert.Contains("1 need update", cut.Find(".sync-stats-bar").TextContent);
         Assert.Contains("1 up to date", cut.Find(".sync-stats-bar").TextContent);
 
@@ -113,7 +113,7 @@ public class ActorNfoSyncModalTests : BunitContext
             .Add(x => x.Actor, actor)
             .Add(x => x.OnClose, () => closed = true));
 
-        var closeBtn = cut.Find(".btn-close");
+        var closeBtn = cut.Find(".modal-shell-close-btn");
         await cut.InvokeAsync(() => closeBtn.Click());
 
         Assert.True(closed);

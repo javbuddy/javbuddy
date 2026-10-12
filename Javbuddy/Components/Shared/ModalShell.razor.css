@@ -78,3 +78,90 @@
     background-color: #2b303c;
     border-top: 1px solid #3d4354;
 }
+
+/* Themed: follows the light/dark theme instead of always being dark. */
+.modal-shell-backdrop.modal-shell-themed {
+    inset: 0;
+    width: auto;
+    height: auto;
+    background-color: rgba(0, 0, 0, 0.55);
+    outline: none;
+    padding: 1.5rem;
+}
+
+.modal-shell-themed .modal-shell-panel {
+    max-height: 85vh;
+    background-color: #ffffff;
+    color: inherit;
+    border: none;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+
+.modal-shell-themed .modal-shell-header {
+    padding: 1rem 1.25rem;
+    background-color: transparent;
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+.modal-shell-themed .modal-shell-title {
+    font-size: 1.1rem;
+    color: inherit;
+}
+
+.modal-shell-themed .modal-shell-close-btn {
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    padding: 0;
+    border-radius: 50%;
+    color: #6c757d;
+}
+
+.modal-shell-themed .modal-shell-close-btn:hover:not(:disabled) {
+    background-color: #eef0f2;
+    color: #212529;
+}
+
+.modal-shell-themed .modal-shell-body {
+    min-height: 0;
+}
+
+.modal-shell-themed .modal-shell-footer {
+    padding: 1rem 1.25rem;
+    background-color: transparent;
+    border-top: 1px solid #dee2e6;
+    flex-shrink: 0;
+}
+
+:root[data-theme="dark"] .modal-shell-themed .modal-shell-panel {
+    background-color: #242833;
+    color: #dfe2e8;
+}
+
+:root[data-theme="dark"] .modal-shell-themed .modal-shell-header,
+:root[data-theme="dark"] .modal-shell-themed .modal-shell-footer {
+    border-color: #363c4a;
+}
+
+:root[data-theme="dark"] .modal-shell-themed .modal-shell-close-btn {
+    color: #b9bfd1;
+}
+
+:root[data-theme="dark"] .modal-shell-themed .modal-shell-close-btn:hover:not(:disabled) {
+    background-color: #3a4150;
+    color: #ffffff;
+}
+
+@media (max-width: 640px) {
+    .modal-shell-backdrop.modal-shell-themed {
+        padding: 0;
+    }
+
+    .modal-shell-themed .modal-shell-panel {
+        max-width: none !important;
+        height: 100%;
+        max-height: none;
+        border-radius: 0;
+    }
+}

@@ -721,13 +721,13 @@ public class ActorDetailTests : BunitContext
 
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
 
-        Assert.Empty(cut.FindAll(".sync-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
 
         var syncBtn = cut.FindAll("button.actor-toolbar-btn")
             .First(b => b.TextContent.Contains("Sync .nfo"));
         await cut.InvokeAsync(() => syncBtn.Click());
 
-        Assert.NotEmpty(cut.FindAll(".sync-modal-backdrop"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
