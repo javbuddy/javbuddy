@@ -2,6 +2,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.LocalLibrary;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -329,17 +330,17 @@ public class ImageCacheTask(
         var filesPruned = 0;
         foreach (var row in imagesToDelete)
         {
-            if (TryDeleteFile(imageCache.GetStoragePath(row))) filesPruned++;
+            if (BestEffortFile.TryDeleteFile(imageCache.GetStoragePath(row))) filesPruned++;
         }
         foreach (var row in actorImagesToDelete)
         {
-            if (TryDeleteFile(imageCache.GetStoragePath(row.StorageId))) filesPruned++;
+            if (BestEffortFile.TryDeleteFile(imageCache.GetStoragePath(row.StorageId))) filesPruned++;
             if (row.SourceStorageId is { } sourceStorageId && dataStore is not null) await dataStore.DeleteAsync(sourceStorageId, row.SourceExtension, ct);
         }
         foreach (var photo in actorPhotosToDelete)
         {
-            if (TryDeleteFile(imageCache.GetStoragePath(photo.ThumbStorageId))) filesPruned++;
-            if (TryDeleteFile(imageCache.GetStoragePath(photo.FullStorageId))) filesPruned++;
+            if (BestEffortFile.TryDeleteFile(imageCache.GetStoragePath(photo.ThumbStorageId))) filesPruned++;
+            if (BestEffortFile.TryDeleteFile(imageCache.GetStoragePath(photo.FullStorageId))) filesPruned++;
             if (photo.SourceStorageId is { } sourceStorageId && dataStore is not null) await dataStore.DeleteAsync(sourceStorageId, photo.SourceExtension, ct);
         }
 
@@ -381,30 +382,10 @@ public class ImageCacheTask(
 
             if (!keptFileNames.Contains(Path.GetFileName(file)))
             {
-                if (TryDeleteFile(file)) deleted++;
+                if (BestEffortFile.TryDeleteFile(file)) deleted++;
             }
         }
 
         return deleted;
-    }
-
-    private static bool TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-                return true;
-            }
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-
-        return false;
     }
 }

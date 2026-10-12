@@ -373,7 +373,7 @@ public class MovieService(
 
         var trimmed = actorName.Trim();
         var nameMatcher = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { trimmed };
-        var compact = trimmed.Replace(" ", "");
+        var compact = trimmed.CompactName();
         if (compact.Length > 0)
         {
             nameMatcher.Add(compact);

@@ -1,4 +1,5 @@
 using System.Text;
+using Javbuddy.Services.Common;
 
 namespace Javbuddy.Services.Images;
 
@@ -10,11 +11,10 @@ namespace Javbuddy.Services.Images;
 /// </summary>
 public static class ActorImageMatching
 {
-    private static readonly string[] AllowedImageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".jfif"];
     private static readonly char[] Separators = [' ', '_', '-', '.'];
 
     public static bool IsSupportedImageExtension(string? extension) =>
-        !string.IsNullOrEmpty(extension) && AllowedImageExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
+        MediaFileTypes.IsImage(extension);
 
     /// <summary>
     /// Normalizes a name string for resilient matching by removing all separators, punctuation,

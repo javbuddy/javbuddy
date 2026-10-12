@@ -1,4 +1,5 @@
 using Javbuddy.Services.Ffmpeg;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Movies;
 
 namespace Javbuddy.Services.VideoRepair;
@@ -26,7 +27,10 @@ public static class VideoFileReplacer
         }
 
         var dir = Path.GetDirectoryName(targetPath) ?? ".";
-        var freeSpaceError = CheckFreeSpace(dir, new FileInfo(targetPath).Length);
+        var freeSpaceError = DiskSpaceGuard.CheckFreeSpace(
+            dir,
+            new FileInfo(targetPath).Length,
+            "Not enough free disk space to rewrite this file (requires file size plus ~5% headroom).");
         if (freeSpaceError is not null)
         {
             return VideoRepairResult.Failed(freeSpaceError);
@@ -43,13 +47,13 @@ public static class VideoFileReplacer
             var produced = await produce(stagingPath);
             if (!produced.Success)
             {
-                TryDelete(stagingPath);
+                BestEffortFile.TryDeleteFile(stagingPath);
                 return VideoRepairResult.Failed(produced.ErrorMessage ?? "FFmpeg process failed.");
             }
 
             if (!File.Exists(stagingPath) || new FileInfo(stagingPath).Length == 0)
             {
-                TryDelete(stagingPath);
+                BestEffortFile.TryDeleteFile(stagingPath);
                 return VideoRepairResult.Failed("FFmpeg reported success but produced an empty output file.");
             }
 
@@ -59,52 +63,32 @@ public static class VideoFileReplacer
                 : verify(verifyProbe);
             if (verifyError is not null)
             {
-                TryDelete(stagingPath);
+                BestEffortFile.TryDeleteFile(stagingPath);
                 return VideoRepairResult.Failed(verifyError);
             }
 
             // Atomic rotation
-            TryDelete(bakPath);
+            BestEffortFile.TryDeleteFile(bakPath);
             File.Move(targetPath, bakPath);
             File.Move(stagingPath, targetPath);
-            TryDelete(bakPath);
+            BestEffortFile.TryDeleteFile(bakPath);
 
             logger?.LogInformation("Replaced {TargetPath} with the new file", targetPath);
             return VideoRepairResult.Ok(targetPath);
         }
         catch (OperationCanceledException)
         {
-            TryDelete(stagingPath);
+            BestEffortFile.TryDeleteFile(stagingPath);
             RestoreBackup(targetPath, bakPath);
             throw;
         }
         catch (Exception ex)
         {
-            TryDelete(stagingPath);
+            BestEffortFile.TryDeleteFile(stagingPath);
             RestoreBackup(targetPath, bakPath);
             logger?.LogError(ex, "Unexpected error while replacing {TargetPath}", targetPath);
             return VideoRepairResult.Failed($"Replacing the video file failed: {ex.Message}");
         }
-    }
-
-    private static string? CheckFreeSpace(string folderPath, long fileBytes)
-    {
-        try
-        {
-            var root = Path.GetPathRoot(folderPath);
-            if (string.IsNullOrEmpty(root)) return null;
-
-            var drive = new DriveInfo(root);
-            if (drive.IsReady && drive.AvailableFreeSpace < fileBytes * 1.05)
-            {
-                return "Not enough free disk space to rewrite this file (requires file size plus ~5% headroom).";
-            }
-        }
-        catch (ArgumentException)
-        {
-        }
-
-        return null;
     }
 
     private static void RestoreBackup(string targetPath, string bakPath)
@@ -112,17 +96,6 @@ public static class VideoFileReplacer
         if (!File.Exists(targetPath) && File.Exists(bakPath))
         {
             File.Move(bakPath, targetPath);
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
-        catch (IOException)
-        {
         }
     }
 }

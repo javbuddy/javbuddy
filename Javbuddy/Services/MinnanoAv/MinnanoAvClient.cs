@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
 using Javbuddy.Data;
+using Javbuddy.Services.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -59,14 +60,12 @@ public partial class MinnanoAvClient(
         }
     }
 
-    private const string BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-
     private HttpClient CreateConfiguredClient()
     {
         var client = httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(15);
         client.DefaultRequestHeaders.UserAgent.Clear();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(BrowserUserAgent);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(ScraperDefaults.BrowserUserAgent);
         client.DefaultRequestHeaders.Accept.Clear();
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
         client.DefaultRequestHeaders.AcceptLanguage.Clear();

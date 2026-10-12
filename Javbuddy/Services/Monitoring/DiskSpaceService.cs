@@ -14,7 +14,7 @@ public interface IDiskSpaceService
     /// truth for each path. The durable object store reports its own local folder, and is left out
     /// when it has none. Locations whose drive can't be resolved (a path that doesn't
     /// exist, an unmounted network share) are silently omitted, same precedent as
-    /// VrMergeService.CheckFreeSpace.</summary>
+    /// DiskSpaceGuard.CheckFreeSpace.</summary>
     Task<List<DiskSpaceInfo>> GetDiskSpaceAsync(string dataDirectory, string imageCachePath, CancellationToken ct = default);
 }
 

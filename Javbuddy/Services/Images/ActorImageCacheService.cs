@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.LocalLibrary;
 using Microsoft.EntityFrameworkCore;
@@ -178,7 +179,7 @@ public class ActorImageCacheService(
         {
             var kanji = actor.JapaneseNameKanji.Trim();
             candidateNames.Add(kanji);
-            var compactKanji = kanji.Replace(" ", "");
+            var compactKanji = kanji.CompactName();
             if (!string.Equals(compactKanji, kanji, StringComparison.OrdinalIgnoreCase))
             {
                 candidateNames.Add(compactKanji);
@@ -188,7 +189,7 @@ public class ActorImageCacheService(
         {
             var kana = actor.JapaneseNameKana.Trim();
             candidateNames.Add(kana);
-            var compactKana = kana.Replace(" ", "");
+            var compactKana = kana.CompactName();
             if (!string.Equals(compactKana, kana, StringComparison.OrdinalIgnoreCase))
             {
                 candidateNames.Add(compactKana);
@@ -210,7 +211,7 @@ public class ActorImageCacheService(
             {
                 var aliasName = alias.Name.Trim();
                 candidateNames.Add(aliasName);
-                var compact = aliasName.Replace(" ", "");
+                var compact = aliasName.CompactName();
                 if (!string.Equals(compact, aliasName, StringComparison.OrdinalIgnoreCase))
                 {
                     candidateNames.Add(compact);

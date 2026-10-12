@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.MediaInfo;
 using Javbuddy.Services.Movies;
@@ -205,12 +206,12 @@ public class LocalLibraryClient(
     ILogger<LocalLibraryClient> logger,
     ITrickplayTrigger? trickplayTrigger = null) : ILocalLibraryClient
 {
-    private static readonly string[] VideoExtensions = { ".mp4", ".mkv", ".avi", ".m4v", ".wmv", ".mov", ".ts", ".webm" };
+    private static readonly string[] VideoExtensions = MovieVersionParser.VideoExtensions;
 
     // Sidecar subtitles are usually .srt (often named after whatever transcription tool produced
     // them, not just "{code}.srt"); the rest is defensive breadth for other common formats.
     private static readonly string[] SubtitleExtensions = { ".srt", ".ass", ".ssa", ".vtt", ".sub" };
-    private static readonly string[] ImageExtensions = { ".jpg", ".jpeg", ".png", ".webp", ".jfif" };
+    private static readonly string[] ImageExtensions = MediaFileTypes.ImageExtensions;
 
     private static readonly HashSet<string> IgnoredDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
     {

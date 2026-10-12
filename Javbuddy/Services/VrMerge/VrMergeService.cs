@@ -1,4 +1,5 @@
 using Javbuddy.Services.Ffmpeg;
+using Javbuddy.Services.Infrastructure;
 
 namespace Javbuddy.Services.VrMerge;
 
@@ -112,7 +113,10 @@ public class VrMergeService(IFfmpegClient ffmpegClient) : IVrMergeService
 
         var mergingPath = Path.Combine(request.FolderPath, folderName + ".merging.mp4");
 
-        var freeSpaceError = CheckFreeSpace(request.FolderPath, request.OrderedParts.Sum(p => p.SizeBytes));
+        var freeSpaceError = DiskSpaceGuard.CheckFreeSpace(
+            request.FolderPath,
+            request.OrderedParts.Sum(p => p.SizeBytes),
+            "Not enough free disk space to merge these parts (need the combined part size plus ~5%).");
         if (freeSpaceError is not null)
         {
             return VrMergeResult.Failed(freeSpaceError);
@@ -128,13 +132,13 @@ public class VrMergeService(IFfmpegClient ffmpegClient) : IVrMergeService
         var runResult = await ffmpegClient.ConcatWithChaptersAsync(new FfmpegConcatRequest(concatParts, mergingPath), progress, ct);
         if (!runResult.Success)
         {
-            TryDeletePartial(mergingPath);
+            BestEffortFile.TryDeleteFile(mergingPath);
             return VrMergeResult.Failed(runResult.ErrorMessage ?? "ffmpeg failed to merge the parts.");
         }
 
         if (!File.Exists(mergingPath) || new FileInfo(mergingPath).Length == 0)
         {
-            TryDeletePartial(mergingPath);
+            BestEffortFile.TryDeleteFile(mergingPath);
             return VrMergeResult.Failed("ffmpeg reported success but produced no output file.");
         }
 
@@ -142,7 +146,7 @@ public class VrMergeService(IFfmpegClient ffmpegClient) : IVrMergeService
         if (verifyInfo is null || verifyInfo.ChapterCount != request.OrderedParts.Count)
         {
             var actual = verifyInfo?.ChapterCount.ToString() ?? "unknown";
-            TryDeletePartial(mergingPath);
+            BestEffortFile.TryDeleteFile(mergingPath);
             return VrMergeResult.Failed($"Merged file failed verification (expected {request.OrderedParts.Count} chapters, found {actual}).");
         }
 
@@ -150,37 +154,4 @@ public class VrMergeService(IFfmpegClient ffmpegClient) : IVrMergeService
         return VrMergeResult.Ok(outputPath);
     }
 
-    /// <summary>Best-effort free-space preflight (5% headroom over the summed part size). Skipped
-    /// silently if the folder's drive can't be resolved (e.g. a UNC path on this platform) rather
-    /// than blocking the merge on an unrelated hard-to-anticipate case.</summary>
-    private static string? CheckFreeSpace(string folderPath, long totalPartBytes)
-    {
-        try
-        {
-            var root = Path.GetPathRoot(folderPath);
-            if (string.IsNullOrEmpty(root)) return null;
-
-            var drive = new DriveInfo(root);
-            if (drive.IsReady && drive.AvailableFreeSpace < totalPartBytes * 1.05)
-            {
-                return "Not enough free disk space to merge these parts (need the combined part size plus ~5%).";
-            }
-        }
-        catch (ArgumentException)
-        {
-        }
-
-        return null;
-    }
-
-    private static void TryDeletePartial(string path)
-    {
-        try
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
-        catch (IOException)
-        {
-        }
-    }
 }

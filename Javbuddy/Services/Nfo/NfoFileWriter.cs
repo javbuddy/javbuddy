@@ -1,6 +1,7 @@
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
+using Javbuddy.Services.Infrastructure;
 
 namespace Javbuddy.Services.Nfo;
 
@@ -115,7 +116,7 @@ public static class NfoFileWriter
         }
         catch
         {
-            TryDelete(tempPath);
+            BestEffortFile.TryDeleteFile(tempPath);
             throw;
         }
 
@@ -142,20 +143,6 @@ public static class NfoFileWriter
             {
                 File.SetUnixFileMode(targetPath, mode);
             }
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
         }
         catch (UnauthorizedAccessException)
         {

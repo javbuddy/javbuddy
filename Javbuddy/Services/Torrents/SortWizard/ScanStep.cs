@@ -1,3 +1,4 @@
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 
 namespace Javbuddy.Services.Torrents.SortWizard;
@@ -6,8 +7,6 @@ namespace Javbuddy.Services.Torrents.SortWizard;
 /// files to send to the batch scrape.</summary>
 public sealed class ScanStep(WizardSession session, ITorrentSortService torrentSortService)
 {
-    private static readonly string[] VideoExtensions = [".mp4", ".mkv", ".avi", ".wmv", ".iso", ".ts", ".m2ts", ".mov", ".flv"];
-
     public string ScanPath { get; set; } = "";
     public bool ScanPathMapped { get; private set; }
     public bool Scanning { get; private set; }
@@ -34,8 +33,7 @@ public sealed class ScanStep(WizardSession session, ITorrentSortService torrentS
         var targetSingleFile = "";
 
         // If user entered a direct file path, scan the parent folder and auto-select that file
-        var ext = Path.GetExtension(pathToScan);
-        if (!string.IsNullOrEmpty(ext) && VideoExtensions.Contains(ext.ToLowerInvariant()))
+        if (MediaFileTypes.IsReleaseVideo(pathToScan))
         {
             targetSingleFile = pathToScan;
             pathToScan = Path.GetDirectoryName(pathToScan)?.Replace('\\', '/') ?? pathToScan;
@@ -136,10 +134,5 @@ public sealed class ScanStep(WizardSession session, ITorrentSortService torrentS
         session.NotifyStateChanged();
     }
 
-    public static bool IsVideoFile(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return false;
-        var ext = Path.GetExtension(name);
-        return !string.IsNullOrEmpty(ext) && VideoExtensions.Contains(ext.ToLowerInvariant());
-    }
+    public static bool IsVideoFile(string? name) => MediaFileTypes.IsReleaseVideo(name);
 }

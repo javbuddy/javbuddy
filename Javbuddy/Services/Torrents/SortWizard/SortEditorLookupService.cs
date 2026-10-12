@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Tags;
 using Microsoft.EntityFrameworkCore;
@@ -89,7 +90,7 @@ public class SortEditorLookupService(IDbContextFactory<AppDbContext> dbFactory, 
     }
 
     private static string? Compact(string? name) =>
-        string.IsNullOrWhiteSpace(name) ? null : name.Replace(" ", "").Replace("　", "");
+        string.IsNullOrWhiteSpace(name) ? null : name.CompactName();
 }
 
 /// <summary>Fallback when no lookup service is wired (older tests and callers): no tracked

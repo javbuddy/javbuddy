@@ -1,4 +1,5 @@
 using Javbuddy.Data;
+using Javbuddy.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Actors;
@@ -47,15 +48,15 @@ public static class ActorMatching
             if (JapaneseNameKanji is not null)
             {
                 if (names.Contains(JapaneseNameKanji)) return true;
-                var compact = JapaneseNameKanji.Replace(" ", "");
-                if (names.Any(n => n.Replace(" ", "").Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
+                var compact = JapaneseNameKanji.CompactName();
+                if (names.Any(n => n.CompactName().Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
             }
 
             if (JapaneseNameKana is not null)
             {
                 if (names.Contains(JapaneseNameKana)) return true;
-                var compact = JapaneseNameKana.Replace(" ", "");
-                if (names.Any(n => n.Replace(" ", "").Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
+                var compact = JapaneseNameKana.CompactName();
+                if (names.Any(n => n.CompactName().Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
             }
 
             if (Aliases is not null)
@@ -63,8 +64,8 @@ public static class ActorMatching
                 foreach (var alias in Aliases)
                 {
                     if (names.Contains(alias)) return true;
-                    var compact = alias.Replace(" ", "");
-                    if (names.Any(n => n.Replace(" ", "").Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
+                    var compact = alias.CompactName();
+                    if (names.Any(n => n.CompactName().Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
                 }
             }
 
@@ -144,7 +145,7 @@ public static class ActorMatching
             }
         }
 
-        private static string? Compact(string? name) => name?.Replace(" ", "");
+        private static string? Compact(string? name) => name?.CompactName();
     }
 
     public static async Task<List<ActorLookup>> LoadActorLookupsAsync(AppDbContext db, CancellationToken ct = default) =>

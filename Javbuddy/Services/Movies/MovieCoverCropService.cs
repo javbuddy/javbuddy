@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using Javbuddy.Data;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.LocalLibrary;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -313,7 +314,7 @@ public class MovieCoverCropService(
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogWarning(ex, "Failed to write cropped poster for {Code} to {Path}", code, targetPath);
-                TryDelete(tmpPath);
+                BestEffortFile.TryDeleteFile(tmpPath);
                 return MovieCoverCropSaveResult.Fail($"Could not write {PosterFileName} to the movie folder: {ex.Message}");
             }
 
@@ -415,16 +416,5 @@ public class MovieCoverCropService(
         return failed.Count == 0
             ? (message + ".", false)
             : (message + $", but could not remove {string.Join(", ", failed)} — it may still show as the poster in other media servers.", true);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
     }
 }

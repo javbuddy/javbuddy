@@ -1,6 +1,6 @@
-using System.Net;
 using System.Text.RegularExpressions;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 
 namespace Javbuddy.Services.MinnanoAv;
 
@@ -56,9 +56,6 @@ public static partial class MinnanoAvHtmlParser
     [GeneratedRegex(@"<meta property=""og:image"" content=""(?<img>[^""]+)""")]
     private static partial Regex OgImageRegex();
 
-    [GeneratedRegex(@"<[^>]+>")]
-    private static partial Regex StripHtmlRegex();
-
     public static IReadOnlyList<MinnanoAvSearchResult> ParseSearchResults(string html, string baseUrl = DefaultBaseUrl)
     {
         var results = new List<MinnanoAvSearchResult>();
@@ -72,7 +69,7 @@ public static partial class MinnanoAvHtmlParser
             var nameMatch = SearchResultNameRegex().Match(content);
             if (!nameMatch.Success) continue;
 
-            var name = CleanText(nameMatch.Groups["name"].Value);
+            var name = HtmlTextHelper.CleanText(nameMatch.Groups["name"].Value);
             if (string.IsNullOrWhiteSpace(name)) continue;
 
             string? kana = null;
@@ -81,7 +78,7 @@ public static partial class MinnanoAvHtmlParser
 
             foreach (Match furiMatch in FuriLineRegex().Matches(content))
             {
-                var line = CleanText(furiMatch.Groups["line"].Value);
+                var line = HtmlTextHelper.CleanText(furiMatch.Groups["line"].Value);
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
                 if ((line.StartsWith('（') || line.StartsWith('(')) && (line.EndsWith('）') || line.EndsWith(')')))
@@ -97,7 +94,7 @@ public static partial class MinnanoAvHtmlParser
                 }
             }
 
-            var imgSrc = ResolveUrl(match.Groups["img"].Value, baseUrl);
+            var imgSrc = HtmlTextHelper.ResolveUrl(match.Groups["img"].Value, baseUrl);
 
             results.Add(new MinnanoAvSearchResult(
                 Name: name,
@@ -123,9 +120,9 @@ public static partial class MinnanoAvHtmlParser
         var detail = new MinnanoAvPerformerDetail
         {
             PathOrUrl = pathOrUrl,
-            Name = CleanText(headerMatch.Groups["kanji"].Value),
-            Kana = CleanText(headerMatch.Groups["kana"].Value),
-            Romaji = CleanText(headerMatch.Groups["romaji"].Value)
+            Name = HtmlTextHelper.CleanText(headerMatch.Groups["kanji"].Value),
+            Kana = HtmlTextHelper.CleanText(headerMatch.Groups["kana"].Value),
+            Romaji = HtmlTextHelper.CleanText(headerMatch.Groups["romaji"].Value)
         };
 
         var sizeMatch = SizeLineRegex().Match(html);
@@ -176,7 +173,7 @@ public static partial class MinnanoAvHtmlParser
 
         foreach (Match aliasMatch in AliasRegex().Matches(html))
         {
-            var alias = CleanText(aliasMatch.Groups["name"].Value);
+            var alias = HtmlTextHelper.CleanText(aliasMatch.Groups["name"].Value);
             if (string.IsNullOrWhiteSpace(alias)) continue;
             if (string.Equals(alias, detail.Name, StringComparison.OrdinalIgnoreCase)) continue;
             if (!detail.Aliases.Contains(alias, StringComparer.OrdinalIgnoreCase))
@@ -193,26 +190,7 @@ public static partial class MinnanoAvHtmlParser
     public static string? ParseOgImage(string html, string baseUrl = DefaultBaseUrl)
     {
         var match = OgImageRegex().Match(html);
-        return match.Success ? ResolveUrl(match.Groups["img"].Value, baseUrl) : null;
+        return match.Success ? HtmlTextHelper.ResolveUrl(match.Groups["img"].Value, baseUrl) : null;
     }
 
-    private static string CleanText(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
-        var stripped = StripHtmlRegex().Replace(raw, " ");
-        var decoded = WebUtility.HtmlDecode(stripped);
-        return Regex.Replace(decoded, @"\s+", " ").Trim();
-    }
-
-    private static string? ResolveUrl(string? relativeOrAbsolute, string baseUrl)
-    {
-        if (string.IsNullOrWhiteSpace(relativeOrAbsolute)) return null;
-        if (relativeOrAbsolute.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            relativeOrAbsolute.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            return relativeOrAbsolute;
-        }
-
-        return $"{baseUrl.TrimEnd('/')}/{relativeOrAbsolute.TrimStart('/')}";
-    }
 }

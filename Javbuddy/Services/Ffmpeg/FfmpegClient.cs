@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Javbuddy.Services.Common;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Scenes;
 
 namespace Javbuddy.Services.Ffmpeg;
@@ -190,8 +191,8 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
         }
         finally
         {
-            TryDelete(concatListPath);
-            TryDelete(metadataPath);
+            BestEffortFile.TryDeleteFile(concatListPath);
+            BestEffortFile.TryDeleteFile(metadataPath);
         }
     }
 
@@ -243,7 +244,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
         }
         finally
         {
-            TryDelete(metadataPath);
+            BestEffortFile.TryDeleteFile(metadataPath);
         }
     }
 
@@ -677,17 +678,6 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
         if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var num)) return null;
         if (!double.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var den) || den == 0) return null;
         return num / den;
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
-        }
     }
 
     private class FfprobeOutput

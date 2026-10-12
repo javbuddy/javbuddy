@@ -153,7 +153,7 @@ public sealed class TrickplayGenerator(
         }
         finally
         {
-            TryDelete(staging);
+            BestEffortFile.TryDeleteDirectory(staging);
         }
     }
 
@@ -177,15 +177,4 @@ public sealed class TrickplayGenerator(
     /// <summary>One thumbnail per started interval: ffmpeg's fps filter emits one for t = 0, 10, 20, …</summary>
     public static int ThumbnailCount(double durationSeconds, int intervalSeconds = IntervalSeconds) =>
         Math.Max(1, (int)Math.Ceiling(durationSeconds / intervalSeconds));
-
-    private static void TryDelete(string directory)
-    {
-        try
-        {
-            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
 }

@@ -23,7 +23,7 @@ public static class TrickplayIdentity
 
         var key = string.Create(CultureInfo.InvariantCulture,
             $"{fileName.ToLowerInvariant()}|{Math.Round(durationSeconds.Value)}|{width}x{height}");
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..Length];
+        return HashKey(key);
     }
 
     /// <summary>A highlight's own set: the clip [startMs, endMs] of the file with
@@ -32,8 +32,11 @@ public static class TrickplayIdentity
     public static string ForClip(string fileIdentity, long startMs, long endMs, int intervalMs)
     {
         var key = string.Create(CultureInfo.InvariantCulture, $"{fileIdentity}|clip|{startMs}-{endMs}|{intervalMs}");
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..Length];
+        return HashKey(key);
     }
+
+    private static string HashKey(string key) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..Length];
 
     public static bool IsValid(string? identity) =>
         identity is { Length: Length } && identity.All(c => char.IsAsciiHexDigitLower(c) || char.IsAsciiDigit(c));

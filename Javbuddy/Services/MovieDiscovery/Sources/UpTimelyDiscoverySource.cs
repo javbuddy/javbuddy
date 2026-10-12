@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using Javbuddy.Services.Infrastructure;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Javbuddy.Services.MovieDiscovery.Sources;
@@ -19,7 +20,6 @@ public class UpTimelyDiscoverySource(
     IHttpClientFactory httpClientFactory,
     ILogger<UpTimelyDiscoverySource>? logger = null) : IStudioDiscoverySource
 {
-    private const string BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
     private const int GalleryFetchConcurrency = 6;
 
     private readonly UpTimelyHtmlParser parser = new(baseUrl, studio);
@@ -94,7 +94,7 @@ public class UpTimelyDiscoverySource(
         var client = httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(15);
         client.DefaultRequestHeaders.UserAgent.Clear();
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(BrowserUserAgent);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(ScraperDefaults.BrowserUserAgent);
         client.DefaultRequestHeaders.Accept.Clear();
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
         client.DefaultRequestHeaders.AcceptLanguage.Clear();

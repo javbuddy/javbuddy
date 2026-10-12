@@ -452,12 +452,12 @@ public class ActorService(
             return ActorOperationResult.Fail($"Alias \"{trimmed}\" matches the actor's current name or variation.");
         }
 
-        var trimmedCompact = trimmed.Replace(" ", "");
-        if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKanji) && actor.JapaneseNameKanji.Replace(" ", "").Equals(trimmedCompact, StringComparison.OrdinalIgnoreCase))
+        var trimmedCompact = trimmed.CompactName();
+        if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKanji) && actor.JapaneseNameKanji.CompactName().Equals(trimmedCompact, StringComparison.OrdinalIgnoreCase))
         {
             return ActorOperationResult.Fail($"Alias \"{trimmed}\" matches the actor's current Japanese kanji.");
         }
-        if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKana) && actor.JapaneseNameKana.Replace(" ", "").Equals(trimmedCompact, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKana) && actor.JapaneseNameKana.CompactName().Equals(trimmedCompact, StringComparison.OrdinalIgnoreCase))
         {
             return ActorOperationResult.Fail($"Alias \"{trimmed}\" matches the actor's current Japanese kana.");
         }
@@ -1032,14 +1032,14 @@ public class ActorService(
         if (!string.IsNullOrWhiteSpace(kanji))
         {
             if (sourceTokens.Contains(kanji)) return true;
-            var compact = kanji.Replace(" ", "");
-            if (sourceTokens.Any(t => t.Replace(" ", "").Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
+            var compact = kanji.CompactName();
+            if (sourceTokens.Any(t => t.CompactName().Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
         }
         if (!string.IsNullOrWhiteSpace(kana))
         {
             if (sourceTokens.Contains(kana)) return true;
-            var compact = kana.Replace(" ", "");
-            if (sourceTokens.Any(t => t.Replace(" ", "").Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
+            var compact = kana.CompactName();
+            if (sourceTokens.Any(t => t.CompactName().Equals(compact, StringComparison.OrdinalIgnoreCase))) return true;
         }
         return false;
     }

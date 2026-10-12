@@ -1,6 +1,7 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Tags;
 using Microsoft.EntityFrameworkCore;
@@ -351,14 +352,14 @@ public class MovieCleanupService(
 
         foreach (var name in castNames)
         {
-            var compactName = name.Replace(" ", "");
+            var compactName = name.CompactName();
             var match = linkedLookups.FirstOrDefault(actor =>
                 string.Equals(actor.DisplayName, name, StringComparison.OrdinalIgnoreCase)
                 || (actor.ReversedName is not null && string.Equals(actor.ReversedName, name, StringComparison.OrdinalIgnoreCase))
-                || (actor.JapaneseNameKanji is not null && (string.Equals(actor.JapaneseNameKanji, name, StringComparison.OrdinalIgnoreCase) || actor.JapaneseNameKanji.Replace(" ", "").Equals(compactName, StringComparison.OrdinalIgnoreCase)))
-                || (actor.JapaneseNameKana is not null && (string.Equals(actor.JapaneseNameKana, name, StringComparison.OrdinalIgnoreCase) || actor.JapaneseNameKana.Replace(" ", "").Equals(compactName, StringComparison.OrdinalIgnoreCase)))
+                || (actor.JapaneseNameKanji is not null && (string.Equals(actor.JapaneseNameKanji, name, StringComparison.OrdinalIgnoreCase) || actor.JapaneseNameKanji.CompactName().Equals(compactName, StringComparison.OrdinalIgnoreCase)))
+                || (actor.JapaneseNameKana is not null && (string.Equals(actor.JapaneseNameKana, name, StringComparison.OrdinalIgnoreCase) || actor.JapaneseNameKana.CompactName().Equals(compactName, StringComparison.OrdinalIgnoreCase)))
                 || (actor.R18DevName is not null && string.Equals(actor.R18DevName, name, StringComparison.OrdinalIgnoreCase))
-                || actor.Aliases.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase) || a.Replace(" ", "").Equals(compactName, StringComparison.OrdinalIgnoreCase)));
+                || actor.Aliases.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase) || a.CompactName().Equals(compactName, StringComparison.OrdinalIgnoreCase)));
 
             if (match is not null)
             {

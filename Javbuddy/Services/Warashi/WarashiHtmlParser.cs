@@ -1,6 +1,6 @@
-using System.Net;
 using System.Text.RegularExpressions;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 
 namespace Javbuddy.Services.Warashi;
 
@@ -68,9 +68,6 @@ public static partial class WarashiHtmlParser
     [GeneratedRegex(@"<div id=""pornostar-profil-photos-1"">.*?(?<links><figure>.*?</figure>)", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
     private static partial Regex AdditionalPhotosBlockRegex();
 
-    [GeneratedRegex(@"<[^>]+>")]
-    private static partial Regex StripHtmlRegex();
-
     public static IReadOnlyList<WarashiSearchResult> ParseSearchResults(string html, string baseUrl = DefaultBaseUrl)
     {
         var results = new List<WarashiSearchResult>();
@@ -89,7 +86,7 @@ public static partial class WarashiHtmlParser
             foreach (Match am in anchorMatches)
             {
                 path ??= am.Groups["path"].Value;
-                var clean = CleanText(am.Groups["text"].Value);
+                var clean = HtmlTextHelper.CleanText(am.Groups["text"].Value);
                 if (!string.IsNullOrWhiteSpace(clean))
                 {
                     var parts = clean.Split('-', 2, StringSplitOptions.TrimEntries);
@@ -105,25 +102,25 @@ public static partial class WarashiHtmlParser
             if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(name)) continue;
 
             var imgMatch = ImageSrcRegex().Match(content);
-            string? imageUrl = imgMatch.Success ? ResolveUrl(imgMatch.Groups["src"].Value, baseUrl) : null;
+            string? imageUrl = imgMatch.Success ? HtmlTextHelper.ResolveUrl(imgMatch.Groups["src"].Value, baseUrl) : null;
 
             var activityMatch = CareerActivityRegex().Match(content);
-            string? activity = activityMatch.Success ? CleanText(activityMatch.Groups["activity"].Value) : null;
+            string? activity = activityMatch.Success ? HtmlTextHelper.CleanText(activityMatch.Groups["activity"].Value) : null;
 
             var aliases = new List<string>();
             var akaMatch = AkaBlockRegex().Match(content);
             if (akaMatch.Success)
             {
-                var rawAka = CleanText(akaMatch.Groups["aka"].Value);
+                var rawAka = HtmlTextHelper.CleanText(akaMatch.Groups["aka"].Value);
                 foreach (var alias in rawAka.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 {
-                    var cleanAlias = CleanText(alias);
+                    var cleanAlias = HtmlTextHelper.CleanText(alias);
                     if (string.IsNullOrWhiteSpace(cleanAlias)) continue;
 
                     var parts = cleanAlias.Split('-', 2, StringSplitOptions.TrimEntries);
                     foreach (var part in parts)
                     {
-                        var cleanPart = CleanText(part);
+                        var cleanPart = HtmlTextHelper.CleanText(part);
                         if (!string.IsNullOrWhiteSpace(cleanPart) && !aliases.Contains(cleanPart))
                         {
                             aliases.Add(cleanPart);
@@ -156,8 +153,8 @@ public static partial class WarashiHtmlParser
         var familyMatch = FamilyNameMetaRegex().Match(html);
         if (givenMatch.Success || familyMatch.Success)
         {
-            detail.GivenName = givenMatch.Success ? CleanText(givenMatch.Groups["given"].Value) : null;
-            detail.FamilyName = familyMatch.Success ? CleanText(familyMatch.Groups["family"].Value) : null;
+            detail.GivenName = givenMatch.Success ? HtmlTextHelper.CleanText(givenMatch.Groups["given"].Value) : null;
+            detail.FamilyName = familyMatch.Success ? HtmlTextHelper.CleanText(familyMatch.Groups["family"].Value) : null;
             detail.Name = $"{detail.GivenName} {detail.FamilyName}".Trim();
         }
 
@@ -166,14 +163,14 @@ public static partial class WarashiHtmlParser
             var nameSpanMatch = PerformerNameSpanRegex().Match(html);
             if (nameSpanMatch.Success)
             {
-                detail.Name = CleanText(nameSpanMatch.Groups["name"].Value);
+                detail.Name = HtmlTextHelper.CleanText(nameSpanMatch.Groups["name"].Value);
             }
         }
 
         var jaSpanMatch = AdditionalNameSpanRegex().Match(html);
         if (jaSpanMatch.Success)
         {
-            detail.JapaneseName = CleanText(jaSpanMatch.Groups["ja"].Value);
+            detail.JapaneseName = HtmlTextHelper.CleanText(jaSpanMatch.Groups["ja"].Value);
         }
 
         // Physical stats
@@ -186,7 +183,7 @@ public static partial class WarashiHtmlParser
         var cupMatch = CupSizeRegex().Match(html);
         if (cupMatch.Success)
         {
-            detail.CupSize = ActorPhysicalAttributesHelper.StandardCupSizeOrNull(CleanText(cupMatch.Groups["cup"].Value));
+            detail.CupSize = ActorPhysicalAttributesHelper.StandardCupSizeOrNull(HtmlTextHelper.CleanText(cupMatch.Groups["cup"].Value));
         }
 
         var jpMeasurementsMatch = JpMeasurementsRegex().Match(html);
@@ -209,7 +206,7 @@ public static partial class WarashiHtmlParser
         var bloodMatch = BloodTypeRegex().Match(html);
         if (bloodMatch.Success)
         {
-            var blood = CleanText(bloodMatch.Groups["blood"].Value);
+            var blood = HtmlTextHelper.CleanText(bloodMatch.Groups["blood"].Value);
             if (!blood.Equals("unknown", StringComparison.OrdinalIgnoreCase))
             {
                 detail.BloodType = blood;
@@ -222,14 +219,14 @@ public static partial class WarashiHtmlParser
             var parts = new List<string>();
             if (placeMatch.Groups["country"].Success)
             {
-                var country = CleanText(placeMatch.Groups["country"].Value);
+                var country = HtmlTextHelper.CleanText(placeMatch.Groups["country"].Value);
                 if (!string.IsNullOrWhiteSpace(country) && !country.Equals("unknown", StringComparison.OrdinalIgnoreCase))
                 {
                     parts.Add(country);
                 }
             }
-            if (placeMatch.Groups["region"].Success) parts.Add(CleanText(placeMatch.Groups["region"].Value));
-            if (placeMatch.Groups["locality"].Success) parts.Add(CleanText(placeMatch.Groups["locality"].Value));
+            if (placeMatch.Groups["region"].Success) parts.Add(HtmlTextHelper.CleanText(placeMatch.Groups["region"].Value));
+            if (placeMatch.Groups["locality"].Success) parts.Add(HtmlTextHelper.CleanText(placeMatch.Groups["locality"].Value));
             if (parts.Count > 0) detail.BirthPlace = string.Join(", ", parts);
         }
 
@@ -264,13 +261,13 @@ public static partial class WarashiHtmlParser
             var items = ListItemRegex().Matches(altBlock.Groups["items"].Value);
             foreach (Match item in items)
             {
-                var raw = CleanText(item.Groups["item"].Value);
+                var raw = HtmlTextHelper.CleanText(item.Groups["item"].Value);
                 if (string.IsNullOrWhiteSpace(raw)) continue;
 
                 var parts = raw.Split('-', 2, StringSplitOptions.TrimEntries);
                 foreach (var part in parts)
                 {
-                    var cleanPart = CleanText(part);
+                    var cleanPart = HtmlTextHelper.CleanText(part);
                     if (!string.IsNullOrWhiteSpace(cleanPart)
                         && !cleanPart.Equals(detail.Name, StringComparison.OrdinalIgnoreCase)
                         && !cleanPart.Equals(detail.JapaneseName, StringComparison.OrdinalIgnoreCase)
@@ -286,7 +283,7 @@ public static partial class WarashiHtmlParser
         var mainPhoto = MainPhotoRegex().Match(html);
         if (mainPhoto.Success)
         {
-            detail.MainPhotoUrl = ResolveUrl(mainPhoto.Groups["src"].Value, baseUrl);
+            detail.MainPhotoUrl = HtmlTextHelper.ResolveUrl(mainPhoto.Groups["src"].Value, baseUrl);
         }
 
         var addPhotosBlock = AdditionalPhotosBlockRegex().Match(html);
@@ -295,7 +292,7 @@ public static partial class WarashiHtmlParser
             var photoMatches = ImageSrcRegex().Matches(addPhotosBlock.Value);
             foreach (Match pm in photoMatches)
             {
-                var src = ResolveUrl(pm.Groups["src"].Value, baseUrl);
+                var src = HtmlTextHelper.ResolveUrl(pm.Groups["src"].Value, baseUrl);
                 if (src != null && !detail.AdditionalPhotoUrls.Contains(src))
                 {
                     detail.AdditionalPhotoUrls.Add(src);
@@ -306,23 +303,4 @@ public static partial class WarashiHtmlParser
         return detail;
     }
 
-    private static string CleanText(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
-        var stripped = StripHtmlRegex().Replace(raw, " ");
-        var decoded = WebUtility.HtmlDecode(stripped);
-        return Regex.Replace(decoded, @"\s+", " ").Trim();
-    }
-
-    private static string? ResolveUrl(string? relativeOrAbsolute, string baseUrl)
-    {
-        if (string.IsNullOrWhiteSpace(relativeOrAbsolute)) return null;
-        if (relativeOrAbsolute.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            relativeOrAbsolute.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            return relativeOrAbsolute;
-        }
-
-        return $"{baseUrl.TrimEnd('/')}/{relativeOrAbsolute.TrimStart('/')}";
-    }
 }

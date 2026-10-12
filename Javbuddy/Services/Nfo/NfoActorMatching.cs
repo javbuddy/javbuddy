@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 
 namespace Javbuddy.Services.Nfo;
 
@@ -19,7 +20,7 @@ public static partial class NfoActorMatching
             if (string.IsNullOrWhiteSpace(n)) return;
             var trimmed = n.Trim();
             matcher.Add(trimmed);
-            var compact = trimmed.Replace(" ", "");
+            var compact = trimmed.CompactName();
             if (compact.Length > 0) matcher.Add(compact);
         }
 
@@ -101,7 +102,7 @@ public static partial class NfoActorMatching
     public static bool Matches(string value, HashSet<string> nameMatcher)
     {
         if (nameMatcher.Contains(value)) return true;
-        var compact = value.Replace(" ", "");
+        var compact = value.CompactName();
         if (compact.Length > 0 && nameMatcher.Contains(compact)) return true;
 
         // Strip trailing scraper disambiguation suffixes, e.g. "Hashimoto Arina2",
@@ -111,7 +112,7 @@ public static partial class NfoActorMatching
         if (stripped.Length > 0 && stripped != value)
         {
             if (nameMatcher.Contains(stripped)) return true;
-            var strippedCompact = stripped.Replace(" ", "");
+            var strippedCompact = stripped.CompactName();
             if (strippedCompact.Length > 0 && nameMatcher.Contains(strippedCompact)) return true;
         }
 

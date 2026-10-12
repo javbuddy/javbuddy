@@ -52,7 +52,7 @@ public sealed class FileSystemObjectStore(string root) : IObjectStore
         }
         catch
         {
-            TryDeleteFile(temp);
+            BestEffortFile.TryDeleteFile(temp);
             throw;
         }
     }
@@ -181,17 +181,6 @@ public sealed class FileSystemObjectStore(string root) : IObjectStore
                 return;
             }
             current = Path.GetDirectoryName(current)!;
-        }
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
         }
     }
 }

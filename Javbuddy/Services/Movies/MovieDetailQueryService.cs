@@ -1,6 +1,7 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Movies;
@@ -105,14 +106,14 @@ public class MovieDetailQueryService(IDbContextFactory<AppDbContext> dbFactory) 
 
         return castNames.Select(name =>
         {
-            var compactName = name.Replace(" ", "");
+            var compactName = name.CompactName();
             var match = linkedActors.FirstOrDefault(actor =>
                 string.Equals(actor.DisplayName, name, StringComparison.OrdinalIgnoreCase)
                 || (actor.ReversedName is not null && string.Equals(actor.ReversedName, name, StringComparison.OrdinalIgnoreCase))
-                || (actor.JapaneseNameKanji is not null && (string.Equals(actor.JapaneseNameKanji, name, StringComparison.OrdinalIgnoreCase) || actor.JapaneseNameKanji.Replace(" ", "").Equals(compactName, StringComparison.OrdinalIgnoreCase)))
-                || (actor.JapaneseNameKana is not null && (string.Equals(actor.JapaneseNameKana, name, StringComparison.OrdinalIgnoreCase) || actor.JapaneseNameKana.Replace(" ", "").Equals(compactName, StringComparison.OrdinalIgnoreCase)))
+                || (actor.JapaneseNameKanji is not null && (string.Equals(actor.JapaneseNameKanji, name, StringComparison.OrdinalIgnoreCase) || actor.JapaneseNameKanji.CompactName().Equals(compactName, StringComparison.OrdinalIgnoreCase)))
+                || (actor.JapaneseNameKana is not null && (string.Equals(actor.JapaneseNameKana, name, StringComparison.OrdinalIgnoreCase) || actor.JapaneseNameKana.CompactName().Equals(compactName, StringComparison.OrdinalIgnoreCase)))
                 || (actor.R18DevName is not null && string.Equals(actor.R18DevName, name, StringComparison.OrdinalIgnoreCase))
-                || actor.Aliases.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase) || a.Replace(" ", "").Equals(compactName, StringComparison.OrdinalIgnoreCase)));
+                || actor.Aliases.Any(a => string.Equals(a, name, StringComparison.OrdinalIgnoreCase) || a.CompactName().Equals(compactName, StringComparison.OrdinalIgnoreCase)));
             var hasImage = match is not null && actorThumbnails.ContainsKey(match.Id);
             var imageVersion = match is not null && actorThumbnails.TryGetValue(match.Id, out var v) ? v : (long?)null;
             var age = ActorPhysicalAttributesHelper.CalculateAgeAtRelease(match?.BirthDate, movie.MetaReleaseDate);

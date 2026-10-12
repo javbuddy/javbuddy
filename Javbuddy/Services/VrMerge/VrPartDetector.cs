@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Javbuddy.Services.Common;
 
 namespace Javbuddy.Services.VrMerge;
 
@@ -12,8 +13,6 @@ public record VrFileEntry(string Path, string Name, long SizeBytes);
 /// filename set without touching disk or ffmpeg.</summary>
 public static partial class VrPartDetector
 {
-    private static readonly string[] VideoExtensions = [".mp4", ".mkv", ".avi", ".wmv", ".iso", ".ts", ".m2ts", ".mov", ".flv"];
-
     /// <summary>Detects which files in a scanned folder are parts of the same multi-part release.
     /// Rejects everything else (spam files, ad shortcuts) by construction:
     /// 1. Only video extensions are considered.
@@ -88,11 +87,7 @@ public static partial class VrPartDetector
         return sb.ToString();
     }
 
-    public static bool IsVideoFile(string name)
-    {
-        var ext = Path.GetExtension(name);
-        return !string.IsNullOrEmpty(ext) && VideoExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase);
-    }
+    public static bool IsVideoFile(string name) => MediaFileTypes.IsReleaseVideo(name);
 
     private static long MedianSize(IReadOnlyList<VrFileEntry> files)
     {

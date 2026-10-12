@@ -1,6 +1,7 @@
 using System.Data;
 using System.IO.Compression;
 using Javbuddy.Data;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Tasks;
 using Microsoft.Data.Sqlite;
@@ -96,7 +97,7 @@ public class R18DevDumpImporter(IHttpClientFactory httpClientFactory, IDbContext
                 SqliteConnection.ClearPool(connection);
 
                 await MoveFileWithRetryAsync(tempPath, dbPath, ct);
-                TryDeleteFile(dbPath + "-journal");
+                BestEffortFile.TryDeleteFile(dbPath + "-journal");
 
                 return new R18DevImportResult(true, null, sourceDate, counts.Videos, counts.Actresses);
             }
@@ -105,8 +106,8 @@ public class R18DevDumpImporter(IHttpClientFactory httpClientFactory, IDbContext
         {
             // Best-effort only: if this delete itself fails (e.g. the file is momentarily held
             // by another process), that must not mask the real ex being reported below.
-            TryDeleteFile(tempPath);
-            TryDeleteFile(tempPath + "-journal");
+            BestEffortFile.TryDeleteFile(tempPath);
+            BestEffortFile.TryDeleteFile(tempPath + "-journal");
             return new R18DevImportResult(false, ex.Message, null, 0, 0);
         }
     }
@@ -154,18 +155,6 @@ public class R18DevDumpImporter(IHttpClientFactory httpClientFactory, IDbContext
         var fileName = Path.GetFileName(location);
         var match = System.Text.RegularExpressions.Regex.Match(fileName, @"\d{4}-\d{2}-\d{2}");
         return match.Success ? match.Value : null;
-    }
-
-    private static void TryDeleteFile(string path)
-    {
-        try
-        {
-            if (File.Exists(path)) File.Delete(path);
-        }
-        catch
-        {
-            // Cleanup only — see the callers' comments. Never let this fail the caller.
-        }
     }
 
     /// <summary>Renames the completed temp file over the live path, retrying on a transient

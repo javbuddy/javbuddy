@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.LocalLibrary;
 using Microsoft.EntityFrameworkCore;
 
@@ -111,8 +112,8 @@ public class LocalActorMetadataSource(
     private static Func<string, bool> BuildNameMatcher(ActorEnrichmentContext context)
     {
         var tokens = BuildCandidateNameSet(context);
-        var compactKanji = context.JapaneseNameKanji?.Replace(" ", "");
-        var compactKana = context.JapaneseNameKana?.Replace(" ", "");
+        var compactKanji = context.JapaneseNameKanji?.CompactName();
+        var compactKana = context.JapaneseNameKana?.CompactName();
 
         return name =>
         {
@@ -120,7 +121,7 @@ public class LocalActorMetadataSource(
             var trimmed = name.Trim();
             if (tokens.Contains(trimmed)) return true;
 
-            var compact = trimmed.Replace(" ", "");
+            var compact = trimmed.CompactName();
             if (compactKanji != null && compact.Equals(compactKanji, StringComparison.OrdinalIgnoreCase)) return true;
             if (compactKana != null && compact.Equals(compactKana, StringComparison.OrdinalIgnoreCase)) return true;
 

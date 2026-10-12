@@ -1,3 +1,4 @@
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 
 namespace Javbuddy.Services.Torrents;
@@ -102,7 +103,7 @@ public static class TorrentSortEditingHelper
     }
 
     private static string? CompactJapanese(string? name) =>
-        string.IsNullOrWhiteSpace(name) ? null : name.Replace(" ", "").Replace("\u3000", "");
+        string.IsNullOrWhiteSpace(name) ? null : name.CompactName();
 }
 
 /// <summary>Chip labels for the sort editor's cast: romaji "First Last" first and

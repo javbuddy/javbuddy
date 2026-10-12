@@ -2,6 +2,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
 using Microsoft.EntityFrameworkCore;
@@ -68,7 +69,7 @@ public sealed class ClipMediaGenerator(
                 : await ffmpegClient.ExtractPreviewVideoAsync(file.Path, previewAt, previewSeconds, leftEyeOnly, temp, ct);
             if (!result.Success || !File.Exists(temp) || new FileInfo(temp).Length == 0)
             {
-                TryDelete(temp);
+                BestEffortFile.TryDeleteFile(temp);
                 failedAny = true;
                 continue;
             }
@@ -94,7 +95,7 @@ public sealed class ClipMediaGenerator(
 
         foreach (var row in rows)
         {
-            TryDelete(imageCache.GetStoragePath(row));
+            BestEffortFile.TryDeleteFile(imageCache.GetStoragePath(row));
         }
         db.CachedImages.RemoveRange(rows);
         await db.SaveChangesAsync(ct);
@@ -114,19 +115,5 @@ public sealed class ClipMediaGenerator(
         row.SceneEndMs = window.EndMs;
         row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            File.Delete(path);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
     }
 }

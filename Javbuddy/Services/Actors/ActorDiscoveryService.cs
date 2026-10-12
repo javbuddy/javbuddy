@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
@@ -553,16 +554,16 @@ public class ActorDiscoveryService(
 
         if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKanji) && !string.IsNullOrWhiteSpace(candidate.JapaneseKanji))
         {
-            var actorKanji = actor.JapaneseNameKanji.Replace(" ", "");
-            var candidateKanji = candidate.JapaneseKanji.Replace(" ", "");
+            var actorKanji = actor.JapaneseNameKanji.CompactName();
+            var candidateKanji = candidate.JapaneseKanji.CompactName();
             if (string.Equals(actorKanji, candidateKanji, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 
         if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKana) && !string.IsNullOrWhiteSpace(candidate.JapaneseKana))
         {
-            var actorKana = actor.JapaneseNameKana.Replace(" ", "");
-            var candidateKana = candidate.JapaneseKana.Replace(" ", "");
+            var actorKana = actor.JapaneseNameKana.CompactName();
+            var candidateKana = candidate.JapaneseKana.CompactName();
             if (string.Equals(actorKana, candidateKana, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
@@ -584,7 +585,7 @@ public class ActorDiscoveryService(
                 return true;
             }
             if (!string.IsNullOrWhiteSpace(candidate.JapaneseKanji)
-                && string.Equals(candidate.JapaneseKanji.Replace(" ", ""), alias.Name.Replace(" ", ""), StringComparison.OrdinalIgnoreCase))
+                && string.Equals(candidate.JapaneseKanji.CompactName(), alias.Name.CompactName(), StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -637,16 +638,16 @@ public class ActorDiscoveryService(
 
         if (!string.IsNullOrWhiteSpace(a.JapaneseKanji) && !string.IsNullOrWhiteSpace(b.JapaneseKanji))
         {
-            var aKanji = a.JapaneseKanji.Replace(" ", "");
-            var bKanji = b.JapaneseKanji.Replace(" ", "");
+            var aKanji = a.JapaneseKanji.CompactName();
+            var bKanji = b.JapaneseKanji.CompactName();
             if (string.Equals(aKanji, bKanji, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
 
         if (!string.IsNullOrWhiteSpace(a.JapaneseKana) && !string.IsNullOrWhiteSpace(b.JapaneseKana))
         {
-            var aKana = a.JapaneseKana.Replace(" ", "");
-            var bKana = b.JapaneseKana.Replace(" ", "");
+            var aKana = a.JapaneseKana.CompactName();
+            var bKana = b.JapaneseKana.CompactName();
             if (string.Equals(aKana, bKana, StringComparison.OrdinalIgnoreCase))
                 return true;
         }

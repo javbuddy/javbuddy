@@ -7,6 +7,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ### Changed
 
 - Hover previews on the Scenes wall start sooner: the pointer only has to rest on a card for 75 ms (was 150 ms), and the preview video begins loading right away.
+- Actor name matching now ignores full-width (ideographic) spaces everywhere, not just in the torrent sorter, so "山田　花子" matches "山田 花子" and "山田花子" when linking cast, merging and importing actors (#34).
 
 ## [0.2.4] - 2026-10-11
 
