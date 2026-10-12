@@ -20,7 +20,7 @@ export function preventPlainCardClicks(container) {
 // reference's unbind() unbinds it, since the window's scroll listener would otherwise outlive the host.
 // The container gets data-hover-bound once it listens; data-hover-preview-delay overrides the delay
 // (both are attributes Blazor never renders, so they survive its re-renders), for tests.
-const HOVER_PREVIEW_DELAY_MS = 150;
+const HOVER_PREVIEW_DELAY_MS = 75;
 
 export function bindHoverPreviews(container) {
     let card = null;
@@ -51,6 +51,7 @@ export function bindHoverPreviews(container) {
         video.muted = true;
         video.loop = true;
         video.autoplay = true;
+        video.preload = 'auto';
         video.playsInline = true;
         video.disablePictureInPicture = true;
         const poster = card.querySelector('.scene-preview-media img')?.getAttribute('src');

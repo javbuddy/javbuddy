@@ -130,7 +130,7 @@ public class ClipCardHoverPreviewFlowTests(E2EFixture fixture)
         var framesBefore = framesSent;
 
         // A dwell far longer than any CI hiccup between two moves, so the sweep stays "inside the dwell time"
-        // on every card however slow the runner is. The real delay (150 ms) is put back for the resting part.
+        // on every card however slow the runner is. The real delay (75 ms) is put back for the resting part.
         var centres = new List<(float X, float Y)>();
         for (var i = 0; i < SceneCount; i++)
         {

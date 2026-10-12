@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- Hover previews on the Scenes wall start sooner: the pointer only has to rest on a card for 75 ms (was 150 ms), and the preview video begins loading right away.
+
 ## [0.2.4] - 2026-10-11
 
 ### Changed
