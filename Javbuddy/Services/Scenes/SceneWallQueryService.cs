@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Movies;
@@ -578,6 +579,45 @@ public sealed class SceneWallQueryService(
     private static IQueryable<int> MatchingTagIds(AppDbContext db, IReadOnlyCollection<int> tagIds) =>
         db.Tags.Where(t => tagIds.Contains(t.Id) || (t.ParentTagId != null && tagIds.Contains(t.ParentTagId.Value))).Select(t => t.Id);
 
+    private sealed class OwnerActorTag
+    {
+        public int OwnerId { get; init; }
+        public int ActorId { get; init; }
+        public int TagId { get; init; }
+    }
+
+    /// <summary>Keeps the clips whose id is in <paramref name="ids"/>. Id is read by name so one helper serves
+    /// scenes, highlights and apexes alike.</summary>
+    private static IQueryable<T> WhereIdIn<T>(IQueryable<T> query, IQueryable<int> ids) where T : class =>
+        query.Where(x => ids.Contains(EF.Property<int>(x, "Id")));
+
+    /// <summary>The actor, actor-tag and actor-attribute filters, shared by the three walls: each is a set of
+    /// matching clip ids over the wall's own effective actors, tags and movie release dates.</summary>
+    private static IQueryable<T> WhereActors<T>(AppDbContext db, IQueryable<T> query, SceneWallFilter filter,
+        IQueryable<OwnerActor> actors, IQueryable<OwnerActorTag> actorTags, IQueryable<OwnerRelease> releases) where T : class
+    {
+        if (filter.ActorIds is { Count: > 0 } actorIds)
+        {
+            query = WhereIdIn(query, actors.Where(r => actorIds.Contains(r.ActorId)).Select(r => r.OwnerId));
+        }
+        if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
+        {
+            var (anyActor, onlyActors) = ActorTagActors(filter);
+            var matchingActorTags = MatchingTagIds(db, actorTagIds);
+            query = WhereIdIn(query, actorTags.Where(r => matchingActorTags.Contains(r.TagId) && (anyActor || onlyActors.Contains(r.ActorId))).Select(r => r.OwnerId));
+        }
+        if (filter.ActorAttributes is { IsEmpty: false } attributes)
+        {
+            // One of the clip's effective actresses must meet every criterion; age is hers on the clip's
+            // movie's release date (today without one).
+            query = WhereIdIn(query, OwnersWithMatchingActress(db, actors, releases, attributes));
+        }
+        return query;
+    }
+
+    /// <summary>LIKE, as on the Movies grid, for SQLite's case-insensitive ASCII matching.</summary>
+    private static string TextPattern(SceneWallFilter filter) => $"%{filter.Text!.Trim()}%";
+
     private static IQueryable<Scene> Filter(AppDbContext db, SceneWallFilter filter)
     {
         var query = db.Scenes.AsNoTracking();
@@ -586,43 +626,23 @@ public sealed class SceneWallQueryService(
             query = query.Where(s => !s.IsHiddenFromOverview);
         }
         // Tags rolled up from highlights and apexes, actors falling back to the cast.
-        var sceneActors = ClipRollupQueries.SceneActors(db);
         if (filter.TagIds is { Count: > 0 } tagIds)
         {
             var matching = MatchingTagIds(db, tagIds);
-            var sceneTags = ClipRollupQueries.SceneTags(db);
             // Non-correlated IN (…) so SQLite evaluates the roll-up once, not once per scene.
-            var withTag = sceneTags.Where(r => matching.Contains(r.TagId)).Select(r => r.OwnerId);
-            query = query.Where(s => withTag.Contains(s.Id));
+            query = WhereIdIn(query, ClipRollupQueries.SceneTags(db).Where(r => matching.Contains(r.TagId)).Select(r => r.OwnerId));
         }
-        if (filter.ActorIds is { Count: > 0 } actorIds)
-        {
-            var withActor = sceneActors.Where(r => actorIds.Contains(r.ActorId)).Select(r => r.OwnerId);
-            query = query.Where(s => withActor.Contains(s.Id));
-        }
-        if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
-        {
-            var (anyActor, onlyActors) = ActorTagActors(filter);
-            var matchingActorTags = MatchingTagIds(db, actorTagIds);
-            var withActorTag = db.SceneEffectiveActorTags.Where(r => matchingActorTags.Contains(r.TagId) && (anyActor || onlyActors.Contains(r.ActorId))).Select(r => r.SceneId);
-            query = query.Where(s => withActorTag.Contains(s.Id));
-        }
-        if (filter.ActorAttributes is { IsEmpty: false } attributes)
-        {
-            // The scene's effective actresses count (like the Actor filter), and one of them must meet
-            // every criterion; age is hers on the scene's movie's release date (today without one).
-            var releases = db.Scenes.Select(x => new OwnerRelease { OwnerId = x.Id, Release = x.Movie.MetaReleaseDate });
-            var matched = OwnersWithMatchingActress(db, sceneActors, releases, attributes);
-            query = query.Where(s => matched.Contains(s.Id));
-        }
+        query = WhereActors(db, query, filter,
+            ClipRollupQueries.SceneActors(db),
+            db.SceneEffectiveActorTags.Select(r => new OwnerActorTag { OwnerId = r.SceneId, ActorId = r.ActorId, TagId = r.TagId }),
+            db.Scenes.Select(x => new OwnerRelease { OwnerId = x.Id, Release = x.Movie.MetaReleaseDate }));
         if (filter.Studios is { Count: > 0 } studios)
         {
             query = query.Where(s => s.Movie.MetaStudio != null && studios.Contains(s.Movie.MetaStudio));
         }
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
-            // LIKE, as on the Movies grid, for SQLite's case-insensitive ASCII matching.
-            var pattern = $"%{filter.Text.Trim()}%";
+            var pattern = TextPattern(filter);
             query = query.Where(s =>
                 (s.Title != null && EF.Functions.Like(s.Title, pattern))
                 || (s.Movie.Code != null && EF.Functions.Like(s.Movie.Code, pattern))
@@ -636,11 +656,7 @@ public sealed class SceneWallQueryService(
         if (WantsApex(filter))
         {
             // In the scene's effective range, by the same rule the roll-up uses (ClipRollupQueries.ApexScenes).
-            var apexes = MatchingApexes(db, filter);
-            var apexScenes = ClipRollupQueries.ApexScenes(db);
-            var apexIds = apexes.Select(a => a.Id);
-            var withApex = apexScenes.Where(p => apexIds.Contains(p.OwnerId)).Select(p => p.OtherId);
-            query = query.Where(s => withApex.Contains(s.Id));
+            query = WhereIdIn(query, WithApex(db, filter, ClipRollupQueries.ApexScenes(db)));
         }
         return query;
     }
@@ -649,40 +665,22 @@ public sealed class SceneWallQueryService(
     {
         var query = db.MovieHighlights.AsNoTracking();
         // Tags rolled up from its apexes, actors inherited when it has none.
-        var highlightActors = ClipRollupQueries.HighlightActors(db);
         if (filter.TagIds is { Count: > 0 } tagIds)
         {
             var matching = MatchingTagIds(db, tagIds);
-            var highlightTags = ClipRollupQueries.HighlightTags(db);
-            var withTag = highlightTags.Where(r => matching.Contains(r.TagId)).Select(r => r.OwnerId);
-            query = query.Where(h => withTag.Contains(h.Id));
+            query = WhereIdIn(query, ClipRollupQueries.HighlightTags(db).Where(r => matching.Contains(r.TagId)).Select(r => r.OwnerId));
         }
-        if (filter.ActorIds is { Count: > 0 } actorIds)
-        {
-            var withActor = highlightActors.Where(r => actorIds.Contains(r.ActorId)).Select(r => r.OwnerId);
-            query = query.Where(h => withActor.Contains(h.Id));
-        }
-        if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
-        {
-            var (anyActor, onlyActors) = ActorTagActors(filter);
-            var matchingActorTags = MatchingTagIds(db, actorTagIds);
-            var withActorTag = db.HighlightEffectiveActorTags.Where(r => matchingActorTags.Contains(r.TagId) && (anyActor || onlyActors.Contains(r.ActorId))).Select(r => r.HighlightId);
-            query = query.Where(h => withActorTag.Contains(h.Id));
-        }
-        if (filter.ActorAttributes is { IsEmpty: false } attributes)
-        {
-            // Like the scene filter, but over the highlight's effective actors.
-            var releases = db.MovieHighlights.Select(x => new OwnerRelease { OwnerId = x.Id, Release = x.Movie.MetaReleaseDate });
-            var matched = OwnersWithMatchingActress(db, highlightActors, releases, attributes);
-            query = query.Where(h => matched.Contains(h.Id));
-        }
+        query = WhereActors(db, query, filter,
+            ClipRollupQueries.HighlightActors(db),
+            db.HighlightEffectiveActorTags.Select(r => new OwnerActorTag { OwnerId = r.HighlightId, ActorId = r.ActorId, TagId = r.TagId }),
+            db.MovieHighlights.Select(x => new OwnerRelease { OwnerId = x.Id, Release = x.Movie.MetaReleaseDate }));
         if (filter.Studios is { Count: > 0 } studios)
         {
             query = query.Where(h => h.Movie.MetaStudio != null && studios.Contains(h.Movie.MetaStudio));
         }
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
-            var pattern = $"%{filter.Text.Trim()}%";
+            var pattern = TextPattern(filter);
             query = query.Where(h =>
                 (h.Title != null && EF.Functions.Like(h.Title, pattern))
                 || (h.Movie.Code != null && EF.Functions.Like(h.Movie.Code, pattern))
@@ -695,13 +693,16 @@ public sealed class SceneWallQueryService(
         }
         if (WantsApex(filter))
         {
-            var apexes = MatchingApexes(db, filter);
-            var apexHighlights = ClipRollupQueries.ApexHighlights(db);
-            var apexIds = apexes.Select(a => a.Id);
-            var withApex = apexHighlights.Where(p => apexIds.Contains(p.OwnerId)).Select(p => p.OtherId);
-            query = query.Where(h => withApex.Contains(h.Id));
+            query = WhereIdIn(query, WithApex(db, filter, ClipRollupQueries.ApexHighlights(db)));
         }
         return query;
+    }
+
+    /// <summary>Ids of the scenes or highlights (the pairs' other side) that contain one of the filter's apexes.</summary>
+    private static IQueryable<int> WithApex(AppDbContext db, SceneWallFilter filter, IQueryable<ClipPair> apexPairs)
+    {
+        var apexIds = MatchingApexes(db, filter).Select(a => a.Id);
+        return apexPairs.Where(p => apexIds.Contains(p.OwnerId)).Select(p => p.OtherId);
     }
 
     /// <summary>Whether an actor-tag filter matches any actor, else the actors it is limited to (the Actor filter's).</summary>
@@ -726,33 +727,17 @@ public sealed class SceneWallQueryService(
     {
         var query = MatchingApexes(db, filter).AsNoTracking();
         // Actors inherited when it has none.
-        var apexActors = ClipRollupQueries.ApexActors(db);
-        if (filter.ActorIds is { Count: > 0 } actorIds)
-        {
-            var withActor = apexActors.Where(r => actorIds.Contains(r.ActorId)).Select(r => r.OwnerId);
-            query = query.Where(a => withActor.Contains(a.Id));
-        }
-        if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
-        {
-            var (anyActor, onlyActors) = ActorTagActors(filter);
-            var matchingActorTags = MatchingTagIds(db, actorTagIds);
-            var withActorTag = db.ApexEffectiveActorTags.Where(r => matchingActorTags.Contains(r.TagId) && (anyActor || onlyActors.Contains(r.ActorId))).Select(r => r.ApexId);
-            query = query.Where(a => withActorTag.Contains(a.Id));
-        }
-        if (filter.ActorAttributes is { IsEmpty: false } attributes)
-        {
-            // Like the scene filter, but over the apex's effective actors.
-            var releases = db.MovieApexes.Select(x => new OwnerRelease { OwnerId = x.Id, Release = x.Movie.MetaReleaseDate });
-            var matched = OwnersWithMatchingActress(db, apexActors, releases, attributes);
-            query = query.Where(a => matched.Contains(a.Id));
-        }
+        query = WhereActors(db, query, filter,
+            ClipRollupQueries.ApexActors(db),
+            db.ApexEffectiveActorTags.Select(r => new OwnerActorTag { OwnerId = r.ApexId, ActorId = r.ActorId, TagId = r.TagId }),
+            db.MovieApexes.Select(x => new OwnerRelease { OwnerId = x.Id, Release = x.Movie.MetaReleaseDate }));
         if (filter.Studios is { Count: > 0 } studios)
         {
             query = query.Where(a => a.Movie.MetaStudio != null && studios.Contains(a.Movie.MetaStudio));
         }
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
-            var pattern = $"%{filter.Text.Trim()}%";
+            var pattern = TextPattern(filter);
             query = query.Where(a =>
                 (a.Movie.Code != null && EF.Functions.Like(a.Movie.Code, pattern))
                 || (a.Movie.MetaTitle != null && EF.Functions.Like(a.Movie.MetaTitle, pattern))
@@ -765,39 +750,26 @@ public sealed class SceneWallQueryService(
         return query;
     }
 
-    // Same orders as the scene wall's, with apexes in playback order within a movie.
-    private static IQueryable<MovieApex> OrderApexes(IQueryable<MovieApex> query, SceneWallSort sort, int randomSeed) => sort switch
-    {
-        SceneWallSort.DateAdded => query
-            .OrderByDescending(a => a.Movie.FileAddedAt ?? a.Movie.CreatedAt)
-            .ThenBy(a => a.MovieId).ThenBy(a => a.Seconds).ThenBy(a => a.Id),
-        SceneWallSort.Random => query.OrderBy(a => (long)a.Id * randomSeed % RandomSortModulus).ThenBy(a => a.Id),
-        _ => query
-            .OrderByDescending(a => a.Movie.MetaReleaseDate)
-            .ThenBy(a => a.MovieId).ThenBy(a => a.Seconds).ThenBy(a => a.Id),
-    };
+    /// <summary>Newest first for the date sorts; within a movie, clips stay in playback order. Shared by the
+    /// scene, highlight and apex walls, each naming its own movie and playback-position columns.</summary>
+    private static IOrderedQueryable<T> OrderClips<T>(IQueryable<T> query, SceneWallSort sort, int randomSeed,
+        Expression<Func<T, DateTime>> dateAdded, Expression<Func<T, DateTime?>> released,
+        Expression<Func<T, int>> movieId, Expression<Func<T, double>> position) where T : class => sort switch
+        {
+            SceneWallSort.DateAdded => query.OrderByDescending(dateAdded)
+                .ThenBy(movieId).ThenBy(position).ThenBy(x => EF.Property<int>(x, "Id")),
+            SceneWallSort.Random => query.OrderBy(x => (long)EF.Property<int>(x, "Id") * randomSeed % RandomSortModulus)
+                .ThenBy(x => EF.Property<int>(x, "Id")),
+            _ => query.OrderByDescending(released)
+                .ThenBy(movieId).ThenBy(position).ThenBy(x => EF.Property<int>(x, "Id")),
+        };
 
-    // Same orders as the scene wall's, with highlights in playback order within a movie.
-    private static IQueryable<MovieHighlight> OrderHighlights(IQueryable<MovieHighlight> query, SceneWallSort sort, int randomSeed) => sort switch
-    {
-        SceneWallSort.DateAdded => query
-            .OrderByDescending(h => h.Movie.FileAddedAt ?? h.Movie.CreatedAt)
-            .ThenBy(h => h.MovieId).ThenBy(h => h.StartSeconds).ThenBy(h => h.Id),
-        SceneWallSort.Random => query.OrderBy(h => (long)h.Id * randomSeed % RandomSortModulus).ThenBy(h => h.Id),
-        _ => query
-            .OrderByDescending(h => h.Movie.MetaReleaseDate)
-            .ThenBy(h => h.MovieId).ThenBy(h => h.StartSeconds).ThenBy(h => h.Id),
-    };
+    private static IOrderedQueryable<MovieApex> OrderApexes(IQueryable<MovieApex> query, SceneWallSort sort, int randomSeed) =>
+        OrderClips(query, sort, randomSeed, a => a.Movie.FileAddedAt ?? a.Movie.CreatedAt, a => a.Movie.MetaReleaseDate, a => a.MovieId, a => a.Seconds);
 
-    // Newest first for the date sorts; within a movie, scenes stay in playback order.
-    private static IQueryable<Scene> Order(IQueryable<Scene> query, SceneWallSort sort, int randomSeed) => sort switch
-    {
-        SceneWallSort.DateAdded => query
-            .OrderByDescending(s => s.Movie.FileAddedAt ?? s.Movie.CreatedAt)
-            .ThenBy(s => s.MovieId).ThenBy(s => s.StartSeconds),
-        SceneWallSort.Random => query.OrderBy(s => (long)s.Id * randomSeed % RandomSortModulus).ThenBy(s => s.Id),
-        _ => query
-            .OrderByDescending(s => s.Movie.MetaReleaseDate)
-            .ThenBy(s => s.MovieId).ThenBy(s => s.StartSeconds),
-    };
+    private static IOrderedQueryable<MovieHighlight> OrderHighlights(IQueryable<MovieHighlight> query, SceneWallSort sort, int randomSeed) =>
+        OrderClips(query, sort, randomSeed, h => h.Movie.FileAddedAt ?? h.Movie.CreatedAt, h => h.Movie.MetaReleaseDate, h => h.MovieId, h => h.StartSeconds);
+
+    private static IOrderedQueryable<Scene> Order(IQueryable<Scene> query, SceneWallSort sort, int randomSeed) =>
+        OrderClips(query, sort, randomSeed, s => s.Movie.FileAddedAt ?? s.Movie.CreatedAt, s => s.Movie.MetaReleaseDate, s => s.MovieId, s => s.StartSeconds);
 }
