@@ -57,7 +57,7 @@ else
         @foreach (var row in rows)
         {
             <div class="activity-row activity-row-queue">
-                <span><input type="checkbox" checked="@selected.Contains(row.Id)" @onchange="e => ToggleSelect(row.Id, (bool)e.Value!)" /></span>
+                <span><input type="checkbox" checked="@selected.Contains(row.Id)" @onchange="e => selected.Set(row.Id, (bool)e.Value!)" /></span>
                 <a class="activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(row.MovieCode)}")">@row.MovieCode</a>
                 <span class="text-break">@row.ReleaseTitle</span>
                 <span>@row.Indexer</span>
@@ -89,13 +89,13 @@ else
 
 @code {
     private List<TorrentDownload>? rows;
-    private readonly HashSet<int> selected = new();
+    private readonly SelectionSet<int> selected = new();
     private bool refreshing;
     private bool removing;
     private CancellationTokenSource? liveCts;
     private string? qbittorrentUrl;
 
-    private bool AllSelected => rows is { Count: > 0 } && rows.All(r => selected.Contains(r.Id));
+    private bool AllSelected => rows is not null && selected.AllSelected([.. rows.Select(r => r.Id)]);
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,7 +116,7 @@ else
     private async Task LoadAsync()
     {
         rows = await QueueService.GetActiveAsync();
-        selected.RemoveWhere(id => rows.All(r => r.Id != id));
+        selected.RetainOnly(rows.Select(r => r.Id));
     }
 
     private void OnChangedElsewhere() => _ = InvokeAsync(LoadAsync);
@@ -181,20 +181,10 @@ else
         refreshing = false;
     }
 
-    private void ToggleSelect(int id, bool isChecked)
-    {
-        if (isChecked) selected.Add(id);
-        else selected.Remove(id);
-    }
-
     private void ToggleSelectAll(ChangeEventArgs e)
     {
-        var isChecked = (bool)e.Value!;
-        selected.Clear();
-        if (isChecked && rows is not null)
-        {
-            foreach (var row in rows) selected.Add(row.Id);
-        }
+        if (rows is null) return;
+        selected.SetAll(rows.Select(r => r.Id), (bool)e.Value!);
     }
 
     private async Task RemoveSelected()

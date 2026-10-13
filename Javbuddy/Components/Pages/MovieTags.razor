@@ -117,7 +117,7 @@
                             <tr>
                                 <th style="width: 2.5rem;">
                                     <input type="checkbox" class="form-check-input" aria-label="Select all"
-                                           checked="@(tags.Count > 0 && tags.All(t => selectedTagIds.Contains(t.Id)))"
+                                           checked="@selectedTagIds.AllSelected([.. tags.Select(t => t.Id)])"
                                            @onchange="e => ToggleSelectAll((bool)(e.Value ?? false))" />
                                 </th>
                                 <th>Name</th>
@@ -133,7 +133,7 @@
                                     <td>
                                         <input type="checkbox" class="form-check-input" aria-label="Select @tag.Name"
                                                checked="@selectedTagIds.Contains(tag.Id)"
-                                               @onchange="e => ToggleSelect(tag.Id, (bool)(e.Value ?? false))" />
+                                               @onchange="e => selectedTagIds.Set(tag.Id, (bool)(e.Value ?? false))" />
                                     </td>
                                     <td>
                                         @if (renamingTagId == tag.Id)
@@ -485,7 +485,7 @@
     private TagSortOrder sort = TagSortOrder.NameAsc;
     private List<TagListItem> allTags = new();
 
-    private readonly HashSet<int> selectedTagIds = new();
+    private readonly SelectionSet<int> selectedTagIds = new();
     private bool bulkIgnoreConfirming;
 
     private int? renamingTagId;
@@ -643,23 +643,10 @@
         statusIsError = isError;
     }
 
-    private void ToggleSelect(int tagId, bool selected)
-    {
-        if (selected) selectedTagIds.Add(tagId);
-        else selectedTagIds.Remove(tagId);
-    }
-
     private void ToggleSelectAll(bool selected)
     {
         if (tags is null) return;
-        if (selected)
-        {
-            foreach (var tag in tags) selectedTagIds.Add(tag.Id);
-        }
-        else
-        {
-            foreach (var tag in tags) selectedTagIds.Remove(tag.Id);
-        }
+        selectedTagIds.SetAll(tags.Select(t => t.Id), selected);
     }
 
     private void ClearSelection()

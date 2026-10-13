@@ -281,14 +281,14 @@
     private string? infoMessage;
     private ActorScanResult? scanResult;
     private List<DiscoveredActorCandidate> candidates = new();
-    private HashSet<string> selectedKeys = new();
+    private readonly SelectionSet<string> selectedKeys = new();
     private ActorImportResult? lastImportResult;
     private List<string> recentlyImportedNames = new();
 
     private TaskProgress? activeProgress;
     private CancellationTokenSource? activeCts;
 
-    private bool AllSelected => candidates.Count > 0 && selectedKeys.Count == candidates.Count;
+    private bool AllSelected => selectedKeys.AllSelected([.. candidates.Select(c => c.Key)]);
 
     private string ProgressLabel
     {
@@ -364,30 +364,10 @@
         activeCts?.Cancel();
     }
 
-    private void ToggleSelectAll(ChangeEventArgs e)
-    {
-        var isChecked = e.Value as bool? ?? false;
-        if (isChecked)
-        {
-            selectedKeys = candidates.Select(c => c.Key).ToHashSet();
-        }
-        else
-        {
-            selectedKeys.Clear();
-        }
-    }
+    private void ToggleSelectAll(ChangeEventArgs e) =>
+        selectedKeys.SetAll(candidates.Select(c => c.Key), e.Value as bool? ?? false);
 
-    private void ToggleSelect(string key)
-    {
-        if (selectedKeys.Contains(key))
-        {
-            selectedKeys.Remove(key);
-        }
-        else
-        {
-            selectedKeys.Add(key);
-        }
-    }
+    private void ToggleSelect(string key) => selectedKeys.Toggle(key);
 
     private async Task ImportSelectedAsync()
     {
@@ -435,7 +415,7 @@
 
             var importedKeys = toImport.Select(c => c.Key).ToHashSet();
             candidates.RemoveAll(c => importedKeys.Contains(c.Key));
-            selectedKeys.RemoveWhere(importedKeys.Contains);
+            selectedKeys.SetAll(importedKeys, false);
 
             foreach (var name in result.ImportedNames)
             {
