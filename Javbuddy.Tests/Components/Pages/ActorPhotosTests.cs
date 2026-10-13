@@ -198,7 +198,7 @@ public class ActorPhotosTests : BunitContext
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
         photoService.DeletePhotoAsync(101, 1, Arg.Any<CancellationToken>())
-            .Returns(ActorPhotoOperationResult.Ok());
+            .Returns(OperationResult.Ok());
 
         var cut = Render<ActorPhotos>();
         cut.Find(".actor-photo-tile").Click();
@@ -474,7 +474,7 @@ public class ActorPhotosTests : BunitContext
     {
         SetUpLargeCollection();
         photoService.DeletePhotoAsync(101, 1, Arg.Any<CancellationToken>())
-            .Returns(ActorPhotoOperationResult.Ok());
+            .Returns(OperationResult.Ok());
         var cut = Render<ActorPhotos>();
         await cut.InvokeAsync(() => cut.Instance.LoadMorePhotos(GetGridGeneration(cut)));
         cut.Find(".actor-photo-tile").Click();

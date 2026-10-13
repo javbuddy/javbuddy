@@ -1,4 +1,5 @@
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Nfo;
@@ -23,15 +24,15 @@ public class LibraryRescanTaskTests
         client.TryGetMetadataAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => metadataLookup?.Invoke(ci.ArgAt<string>(0)) ?? new LocalLookupResult(false, null, null, null));
         client.RefreshMediaInfoOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
         client.RefreshSubtitleFlagOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
         client.RefreshTrailerFlagOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
         client.RefreshLocalMetadataIfNfoChangedAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
         client.SyncImagesSignatureAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
         return client;
     }
 
@@ -255,9 +256,9 @@ public class LibraryRescanTaskTests
 
         var client = CreateLocalLibraryClient(folderCodes: ["AAA-001", "AAA-002"]);
         client.RefreshMediaInfoOnlyAsync(brokenId, Arg.Any<CancellationToken>())
-            .Returns<Task<LocalRefreshResult>>(_ => throw new UnauthorizedAccessException("Access to the path is denied."));
+            .Returns<Task<OperationResult>>(_ => throw new UnauthorizedAccessException("Access to the path is denied."));
         client.RefreshMediaInfoOnlyAsync(healthyId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         var task = new LibraryRescanTask(factory, client, NullLogger<LibraryRescanTask>.Instance);
         var summary = await task.RunAsync(CancellationToken.None, NoopProgress);

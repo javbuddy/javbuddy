@@ -1,9 +1,9 @@
 using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Movies;
-using Javbuddy.Services.Tags;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 

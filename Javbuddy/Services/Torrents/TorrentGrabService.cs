@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Prowlarr;
 using Javbuddy.Services.QBittorrent;
@@ -7,11 +8,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Torrents;
 
-public record TorrentGrabResult(bool Success, string? ErrorMessage);
 
 public interface ITorrentGrabService
 {
-    Task<TorrentGrabResult> GrabAsync(Movie movie, ReleaseResourceDto release, CancellationToken ct = default);
+    Task<OperationResult> GrabAsync(Movie movie, ReleaseResourceDto release, CancellationToken ct = default);
 }
 
 /// <summary>Sends a Prowlarr search result to qBittorrent and records it as a TorrentDownload
@@ -46,17 +46,17 @@ public class TorrentGrabService(
     private readonly TorrentChangeNotifier changeNotifier = changeNotifier;
     private readonly JavbuddyMetrics metrics = metrics;
 
-    public async Task<TorrentGrabResult> GrabAsync(Movie movie, ReleaseResourceDto release, CancellationToken ct = default)
+    public async Task<OperationResult> GrabAsync(Movie movie, ReleaseResourceDto release, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(movie.Code))
         {
-            return RecordOutcome(new TorrentGrabResult(false, "This movie has no code to tag the download with."));
+            return RecordOutcome(new OperationResult(false, "This movie has no code to tag the download with."));
         }
 
         var url = !string.IsNullOrWhiteSpace(release.MagnetUrl) ? release.MagnetUrl : release.DownloadUrl;
         if (string.IsNullOrWhiteSpace(url))
         {
-            return RecordOutcome(new TorrentGrabResult(false, "This release has no magnet or download URL."));
+            return RecordOutcome(new OperationResult(false, "This release has no magnet or download URL."));
         }
 
         QBittorrentAddResult addResult;
@@ -70,7 +70,7 @@ public class TorrentGrabService(
             var resolved = await ResolveDownloadUrlAsync(url, release.Title, ct);
             if (!resolved.Success)
             {
-                return RecordOutcome(new TorrentGrabResult(false, resolved.ErrorMessage));
+                return RecordOutcome(new OperationResult(false, resolved.ErrorMessage));
             }
 
             addResult = resolved.MagnetUrl is not null
@@ -80,7 +80,7 @@ public class TorrentGrabService(
 
         if (!addResult.Success)
         {
-            return RecordOutcome(new TorrentGrabResult(false, addResult.ErrorMessage ?? "qBittorrent rejected the torrent."));
+            return RecordOutcome(new OperationResult(false, addResult.ErrorMessage ?? "qBittorrent rejected the torrent."));
         }
 
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
@@ -99,10 +99,10 @@ public class TorrentGrabService(
         }
 
         changeNotifier.NotifyChanged();
-        return RecordOutcome(new TorrentGrabResult(true, null));
+        return RecordOutcome(new OperationResult(true, null));
     }
 
-    private TorrentGrabResult RecordOutcome(TorrentGrabResult result)
+    private OperationResult RecordOutcome(OperationResult result)
     {
         metrics.TorrentGrabs.Add(1, new KeyValuePair<string, object?>("outcome", result.Success ? "success" : "failure"));
         return result;

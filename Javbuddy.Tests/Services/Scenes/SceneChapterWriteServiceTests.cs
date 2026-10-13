@@ -1,4 +1,5 @@
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.MediaServer;
@@ -30,8 +31,8 @@ public sealed class SceneChapterWriteServiceTests : IDisposable
         videoPath = Path.Combine(folder, "ABC-123.mp4");
         File.WriteAllText(videoPath, "original");
         localLibrary.ResolveMovieFolderPathAsync("ABC-123", Arg.Any<CancellationToken>()).Returns(folder);
-        localLibrary.RefreshMediaInfoOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(new LocalRefreshResult(true, null));
-        mediaServer.RefreshItemAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new MediaServerActionResult(true, null));
+        localLibrary.RefreshMediaInfoOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(new OperationResult(true, null));
+        mediaServer.RefreshItemAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new OperationResult(true, null));
 
         // The original has the VR merge's part chapters; the staging copy reports whatever the
         // remux "wrote" (by default: exactly the chapters in the metadata).

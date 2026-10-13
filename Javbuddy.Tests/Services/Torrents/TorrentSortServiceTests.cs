@@ -1,9 +1,9 @@
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
-using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.QBittorrent;
 using Javbuddy.Services.Torrents;
@@ -52,7 +52,7 @@ public class TorrentSortServiceTests
     {
         var javinizerClient = Substitute.For<IJavinizerClient>();
         javinizerClient.OrganizeAsync(jobId, Arg.Any<OrganizePreviewRequestDto>(), Arg.Any<CancellationToken>())
-            .Returns(new JavinizerOrganizeResult(true, null));
+            .Returns(new OperationResult(true, null));
         javinizerClient.GetBatchJobAsync(jobId, true, Arg.Any<CancellationToken>())
             .Returns(new JavinizerBatchJobResult(true, new BatchJobResponseDto(), null));
         javinizerClient.GetBatchJobAsync(jobId, false, Arg.Any<CancellationToken>())
@@ -60,7 +60,7 @@ public class TorrentSortServiceTests
 
         var localLibraryClient = Substitute.For<ILocalLibraryClient>();
         localLibraryClient.RefreshLocalMetadataAsync(movieId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(localMatchFound, localMatchFound ? null : "No local folder found for this code."));
+            .Returns(new OperationResult(localMatchFound, localMatchFound ? null : "No local folder found for this code."));
 
         return (javinizerClient, localLibraryClient);
     }
@@ -169,7 +169,7 @@ public class TorrentSortServiceTests
         jellyfinClient.GetLibrariesAsync(Arg.Any<CancellationToken>())
             .Returns(new JellyfinLibrariesResult(true, [Library("lib-1", "/media/dest")], null));
         jellyfinClient.RefreshItemAsync("lib-1", Arg.Any<CancellationToken>())
-            .Returns(new MediaServerActionResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         var service = CreateService(factory, javinizerClient, localLibraryClient, jellyfinClient: jellyfinClient);
         var result = await service.OrganizeAsync(torrentId, "/media/dest/movie1");
@@ -225,7 +225,7 @@ public class TorrentSortServiceTests
         jellyfinClient.GetLibrariesAsync(Arg.Any<CancellationToken>())
             .Returns(new JellyfinLibrariesResult(true, [Library("lib-broad", "/media"), Library("lib-specific", "/media/dest")], null));
         jellyfinClient.RefreshItemAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new MediaServerActionResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         var service = CreateService(factory, javinizerClient, localLibraryClient, jellyfinClient: jellyfinClient);
         var result = await service.OrganizeAsync(torrentId, "/media/dest/movie1");
@@ -600,7 +600,7 @@ public class TorrentSortServiceTests
         using var factory = new TestDbContextFactory();
         var (_, torrentId) = await SetUpOrganizedTorrentAsync(factory);
         var javinizerClient = Substitute.For<IJavinizerClient>();
-        javinizerClient.RescrapeAsync(default!, default!, default!, default).ReturnsForAnyArgs(new JavinizerRescrapeResult(true, null));
+        javinizerClient.RescrapeAsync(default!, default!, default!, default).ReturnsForAnyArgs(new OperationResult(true, null));
         var service = CreateService(factory, javinizerClient);
 
         await service.RescrapeWithScrapersAsync(torrentId, "res-1", "ABC-123", ["dmm"]);

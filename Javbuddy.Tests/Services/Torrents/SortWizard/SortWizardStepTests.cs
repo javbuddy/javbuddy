@@ -1,3 +1,4 @@
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Torrents;
 using Javbuddy.Services.Torrents.SortWizard;
@@ -34,7 +35,7 @@ public class SortWizardStepTests
     public async Task OrganizeStep_TickerNotifiesEverySecondUntilOrganizeReturns()
     {
         var time = new FakeTimeProvider();
-        var release = new TaskCompletionSource<TorrentOrganizeResult>();
+        var release = new TaskCompletionSource<OperationResult>();
         var sortService = Substitute.For<ITorrentSortService>();
         sortService.OrganizeAsync(7, "/media", Arg.Any<CancellationToken>()).Returns(release.Task);
         var session = new WizardSession { TorrentDownloadId = 7, Destination = "/media" };
@@ -52,7 +53,7 @@ public class SortWizardStepTests
         Assert.True(notifications > before);
         Assert.Equal(TimeSpan.FromSeconds(1), organize.OrganizeElapsed);
 
-        release.SetResult(new TorrentOrganizeResult(true, null));
+        release.SetResult(new OperationResult(true, null));
         await running;
 
         Assert.False(organize.Organizing);

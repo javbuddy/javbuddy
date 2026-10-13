@@ -1,6 +1,7 @@
 using Javbuddy.Models;
 using Javbuddy.Services.ActorEnrichment;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Warashi;
 using Javbuddy.Tests.TestSupport;
@@ -251,7 +252,7 @@ public class ActorServiceWarashiTests
 
         var actorPhotoService = Substitute.For<IActorPhotoService>();
         actorPhotoService.UploadAsync(actorId, Arg.Any<IReadOnlyList<byte[]>>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
-            .Returns(ActorPhotoOperationResult.Ok());
+            .Returns(OperationResult.Ok());
 
         var service = new ActorService(
             dbFactory,
@@ -326,7 +327,7 @@ public class ActorServiceWarashiTests
         var imageCacheService = Substitute.For<IActorImageCacheService>();
         var actorPhotoService = Substitute.For<IActorPhotoService>();
         actorPhotoService.UploadAsync(actorId, Arg.Any<IReadOnlyList<byte[]>>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
-            .Returns(ActorPhotoOperationResult.Ok());
+            .Returns(OperationResult.Ok());
 
         var service = new ActorService(
             dbFactory,
@@ -387,7 +388,7 @@ public class ActorServiceWarashiTests
         var imageCacheService = Substitute.For<IActorImageCacheService>();
         var actorPhotoService = Substitute.For<IActorPhotoService>();
         actorPhotoService.UploadAsync(actorId, Arg.Any<IReadOnlyList<byte[]>>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
-            .Returns(ActorPhotoOperationResult.Ok());
+            .Returns(OperationResult.Ok());
 
         var service = new ActorService(
             dbFactory,
@@ -443,7 +444,7 @@ public class ActorServiceWarashiTests
 
         var actorPhotoService = Substitute.For<IActorPhotoService>();
         actorPhotoService.UploadAsync(actorId, Arg.Any<IReadOnlyList<byte[]>>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
-            .Returns(ActorPhotoOperationResult.Fail("Each image must be no larger than 10 MB."));
+            .Returns(OperationResult.Fail("Each image must be no larger than 10 MB."));
 
         var service = new ActorService(
             dbFactory,

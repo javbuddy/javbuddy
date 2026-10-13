@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,8 +16,6 @@ public record JavinizerScanResult(bool Success, ScanResponseDto? Data, string? E
 public record JavinizerBatchScrapeResult(bool Success, BatchScrapeResponseDto? Data, string? ErrorMessage);
 public record JavinizerBatchJobResult(bool Success, BatchJobResponseDto? Data, string? ErrorMessage);
 public record JavinizerOrganizePreviewResult(bool Success, OrganizePreviewResponseDto? Data, string? ErrorMessage);
-public record JavinizerOrganizeResult(bool Success, string? ErrorMessage);
-public record JavinizerRescrapeResult(bool Success, string? ErrorMessage);
 public record JavinizerExcludeResult(bool Success, string? ErrorMessage);
 public record JavinizerUpdateResult(bool Success, string? ErrorMessage);
 public record JavinizerPosterFromUrlResult(bool Success, string? ErrorMessage);
@@ -60,8 +59,8 @@ public interface IJavinizerClient
     Task<JavinizerBatchScrapeResult> BatchScrapeAsync(BatchScrapeRequestDto request, CancellationToken ct = default);
     Task<JavinizerBatchJobResult> GetBatchJobAsync(string jobId, bool includeData, CancellationToken ct = default);
     Task<JavinizerOrganizePreviewResult> PreviewOrganizeAsync(string jobId, string resultId, OrganizePreviewRequestDto request, CancellationToken ct = default);
-    Task<JavinizerOrganizeResult> OrganizeAsync(string jobId, OrganizePreviewRequestDto request, CancellationToken ct = default);
-    Task<JavinizerRescrapeResult> RescrapeAsync(string jobId, string resultId, BatchRescrapeRequestDto request, CancellationToken ct = default);
+    Task<OperationResult> OrganizeAsync(string jobId, OrganizePreviewRequestDto request, CancellationToken ct = default);
+    Task<OperationResult> RescrapeAsync(string jobId, string resultId, BatchRescrapeRequestDto request, CancellationToken ct = default);
     Task<JavinizerExcludeResult> ExcludeResultAsync(string jobId, string resultId, CancellationToken ct = default);
     Task<JavinizerUpdateResult> UpdateResultAsync(string jobId, string resultId, MovieViewDto movie, CancellationToken ct = default, ulong? expectedResultRevision = null);
     Task<JavinizerPosterFromUrlResult> SetPosterFromUrlAsync(string jobId, string resultId, string url, CancellationToken ct = default);
@@ -218,18 +217,18 @@ public class JavinizerClient : ApiClientBase<JavinizerSettings>, IJavinizerClien
         return new JavinizerOrganizePreviewResult(success, body, error);
     }
 
-    public async Task<JavinizerOrganizeResult> OrganizeAsync(string jobId, OrganizePreviewRequestDto request, CancellationToken ct = default)
+    public async Task<OperationResult> OrganizeAsync(string jobId, OrganizePreviewRequestDto request, CancellationToken ct = default)
     {
         var path = $"/api/v1/batch/{Uri.EscapeDataString(jobId)}/organize";
         var (success, _, error) = await SendAsync<JsonElement>(HttpMethod.Post, path, request, ct);
-        return new JavinizerOrganizeResult(success, error);
+        return new OperationResult(success, error);
     }
 
-    public async Task<JavinizerRescrapeResult> RescrapeAsync(string jobId, string resultId, BatchRescrapeRequestDto request, CancellationToken ct = default)
+    public async Task<OperationResult> RescrapeAsync(string jobId, string resultId, BatchRescrapeRequestDto request, CancellationToken ct = default)
     {
         var path = $"/api/v1/batch/{Uri.EscapeDataString(jobId)}/results/{Uri.EscapeDataString(resultId)}/rescrape";
         var (success, _, error) = await SendAsync<JsonElement>(HttpMethod.Post, path, request, ct);
-        return new JavinizerRescrapeResult(success, error);
+        return new OperationResult(success, error);
     }
 
     public async Task<JavinizerExcludeResult> ExcludeResultAsync(string jobId, string resultId, CancellationToken ct = default)

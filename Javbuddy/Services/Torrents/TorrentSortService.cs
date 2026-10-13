@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
@@ -13,9 +14,7 @@ namespace Javbuddy.Services.Torrents;
 
 public record TorrentScanResult(bool Success, List<FileInfoDto>? Files, string? ErrorMessage);
 public record TorrentBatchScrapeStartResult(bool Success, string? JobId, string? ErrorMessage);
-public record TorrentOrganizeResult(bool Success, string? ErrorMessage);
 
-public record TorrentCleanupResult(bool Success, string? ErrorMessage);
 
 /// <summary>The poster to crop, with its pixel size (crop bounds are measured on it). Normally
 /// javinizer-go's full-size <c>{id}-full.jpg</c>; <paramref name="IsFullSize"/> is false when only
@@ -43,8 +42,8 @@ public interface ITorrentSortService
 
     /// <summary>Organize preview of unsaved edits: the metadata editor's live rename preview.</summary>
     Task<JavinizerOrganizePreviewResult> PreviewWithEditsAsync(int torrentDownloadId, string resultId, string destination, MovieViewDto movie, CancellationToken ct = default);
-    Task<TorrentOrganizeResult> OrganizeAsync(int torrentDownloadId, string destination, CancellationToken ct = default);
-    Task<JavinizerRescrapeResult> RescrapeAsync(int torrentDownloadId, string resultId, string manualSearchInput, CancellationToken ct = default);
+    Task<OperationResult> OrganizeAsync(int torrentDownloadId, string destination, CancellationToken ct = default);
+    Task<OperationResult> RescrapeAsync(int torrentDownloadId, string resultId, string manualSearchInput, CancellationToken ct = default);
     Task<JavinizerExcludeResult> ExcludeResultAsync(int torrentDownloadId, string resultId, CancellationToken ct = default);
     /// <summary>PATCHes the whole result. <paramref name="expectedResultRevision"/> (the result's
     /// revision) is required by javinizer-go when the cast changes.</summary>
@@ -52,7 +51,7 @@ public interface ITorrentSortService
     Task<JavinizerPosterFromUrlResult> SetPosterFromUrlAsync(int torrentDownloadId, string resultId, string url, CancellationToken ct = default);
 
     /// <summary>Re-scrape limited to <paramref name="scrapers"/> (the editor's "Re-scrape with").</summary>
-    Task<JavinizerRescrapeResult> RescrapeWithScrapersAsync(int torrentDownloadId, string resultId, string manualSearchInput, IReadOnlyList<string> scrapers, CancellationToken ct = default);
+    Task<OperationResult> RescrapeWithScrapersAsync(int torrentDownloadId, string resultId, string manualSearchInput, IReadOnlyList<string> scrapers, CancellationToken ct = default);
 
     /// <summary>Each scraper's raw values for a result, for the editor's source viewer.</summary>
     Task<JavinizerSourcesResult> GetResultSourcesAsync(int torrentDownloadId, string resultId, CancellationToken ct = default);
@@ -80,7 +79,7 @@ public interface ITorrentSortService
     /// as opposed to a directly-deleted filesystem path, which risks removing a folder shared with
     /// other torrents when this one has no dedicated subfolder. Also marks the row removed from
     /// the client, matching ActivityQueue's own Remove flow.</summary>
-    Task<TorrentCleanupResult> CleanupSourceAsync(int torrentDownloadId, CancellationToken ct = default);
+    Task<OperationResult> CleanupSourceAsync(int torrentDownloadId, CancellationToken ct = default);
 }
 
 /// <summary>Orchestrates the torrent sorting wizard (TorrentSort.razor) against javinizer-go's
@@ -180,18 +179,18 @@ public class TorrentSortService(
         return await javinizerClient.PreviewOrganizeAsync(jobId, resultId, request, ct);
     }
 
-    public async Task<TorrentOrganizeResult> OrganizeAsync(int torrentDownloadId, string destination, CancellationToken ct = default)
+    public async Task<OperationResult> OrganizeAsync(int torrentDownloadId, string destination, CancellationToken ct = default)
     {
         var jobId = await GetJobIdAsync(torrentDownloadId, ct);
         if (jobId is null)
         {
-            return new TorrentOrganizeResult(false, "This torrent has no active sorting job.");
+            return new OperationResult(false, "This torrent has no active sorting job.");
         }
 
         var batchJob = await javinizerClient.GetBatchJobAsync(jobId, includeData: true, ct);
         if (!batchJob.Success || batchJob.Data is null)
         {
-            return new TorrentOrganizeResult(false, batchJob.ErrorMessage ?? "Could not load poster settings before organizing.");
+            return new OperationResult(false, batchJob.ErrorMessage ?? "Could not load poster settings before organizing.");
         }
 
         foreach (var result in batchJob.Data.Results?.Values ?? Enumerable.Empty<BatchFileResultDto>())
@@ -220,7 +219,7 @@ public class TorrentSortService(
             var update = await javinizerClient.UpdateResultAsync(jobId, result.ResultId, movie, ct);
             if (!update.Success)
             {
-                return new TorrentOrganizeResult(false, update.ErrorMessage ?? "Could not save poster settings before organizing.");
+                return new OperationResult(false, update.ErrorMessage ?? "Could not save poster settings before organizing.");
             }
         }
 
@@ -228,7 +227,7 @@ public class TorrentSortService(
         var organizeResult = await javinizerClient.OrganizeAsync(jobId, request, ct);
         if (!organizeResult.Success)
         {
-            return new TorrentOrganizeResult(false, organizeResult.ErrorMessage);
+            return new OperationResult(false, organizeResult.ErrorMessage);
         }
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -242,36 +241,36 @@ public class TorrentSortService(
                 var job = await javinizerClient.GetBatchJobAsync(jobId, includeData: false, cts.Token);
                 if (!job.Success || job.Data is null)
                 {
-                    return new TorrentOrganizeResult(false, job.ErrorMessage ?? "Lost contact with javinizer-go while organizing.");
+                    return new OperationResult(false, job.ErrorMessage ?? "Lost contact with javinizer-go while organizing.");
                 }
 
                 if (job.Data.Status == JavinizerJobStatus.Organized)
                 {
                     await MarkSortedAsync(torrentDownloadId, ct);
                     await TrySyncJellyfinLibraryAsync(destination, ct);
-                    return new TorrentOrganizeResult(true, null);
+                    return new OperationResult(true, null);
                 }
 
                 if (job.Data.Status == JavinizerJobStatus.Failed)
                 {
-                    return new TorrentOrganizeResult(false, job.Data.PersistError ?? "javinizer-go reported the organize job failed.");
+                    return new OperationResult(false, job.Data.PersistError ?? "javinizer-go reported the organize job failed.");
                 }
             }
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            return new TorrentOrganizeResult(false, "Timed out waiting for javinizer-go to finish organizing.");
+            return new OperationResult(false, "Timed out waiting for javinizer-go to finish organizing.");
         }
 
-        return new TorrentOrganizeResult(false, "Timed out waiting for javinizer-go to finish organizing.");
+        return new OperationResult(false, "Timed out waiting for javinizer-go to finish organizing.");
     }
 
-    public async Task<JavinizerRescrapeResult> RescrapeAsync(int torrentDownloadId, string resultId, string manualSearchInput, CancellationToken ct = default)
+    public async Task<OperationResult> RescrapeAsync(int torrentDownloadId, string resultId, string manualSearchInput, CancellationToken ct = default)
     {
         var jobId = await GetJobIdAsync(torrentDownloadId, ct);
         if (jobId is null)
         {
-            return new JavinizerRescrapeResult(false, "This torrent has no active sorting job.");
+            return new OperationResult(false, "This torrent has no active sorting job.");
         }
 
         var request = new BatchRescrapeRequestDto { ManualSearchInput = manualSearchInput, Force = true };
@@ -311,12 +310,12 @@ public class TorrentSortService(
         return await javinizerClient.SetPosterFromUrlAsync(jobId, resultId, url, ct);
     }
 
-    public async Task<JavinizerRescrapeResult> RescrapeWithScrapersAsync(int torrentDownloadId, string resultId, string manualSearchInput, IReadOnlyList<string> scrapers, CancellationToken ct = default)
+    public async Task<OperationResult> RescrapeWithScrapersAsync(int torrentDownloadId, string resultId, string manualSearchInput, IReadOnlyList<string> scrapers, CancellationToken ct = default)
     {
         var jobId = await GetJobIdAsync(torrentDownloadId, ct);
         if (jobId is null)
         {
-            return new JavinizerRescrapeResult(false, "This torrent has no active sorting job.");
+            return new OperationResult(false, "This torrent has no active sorting job.");
         }
 
         var request = new BatchRescrapeRequestDto { ManualSearchInput = manualSearchInput, Force = true, SelectedScrapers = scrapers.ToList() };
@@ -434,31 +433,31 @@ public class TorrentSortService(
         return new TorrentCleanupPreviewResult(false, resolvedPath, null, $"Path not found: {resolvedPath}");
     }
 
-    public async Task<TorrentCleanupResult> CleanupSourceAsync(int torrentDownloadId, CancellationToken ct = default)
+    public async Task<OperationResult> CleanupSourceAsync(int torrentDownloadId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var row = await db.TorrentDownloads.FindAsync(new object[] { torrentDownloadId }, ct);
         if (row is null)
         {
-            return new TorrentCleanupResult(false, "Torrent not found.");
+            return new OperationResult(false, "Torrent not found.");
         }
 
         if (string.IsNullOrWhiteSpace(row.Hash))
         {
-            return new TorrentCleanupResult(false, "qBittorrent doesn't know this torrent's hash.");
+            return new OperationResult(false, "qBittorrent doesn't know this torrent's hash.");
         }
 
         var deleted = await qBittorrentClient.DeleteTorrentAsync(row.Hash, deleteFiles: true, ct);
         if (!deleted)
         {
-            return new TorrentCleanupResult(false, "qBittorrent failed to delete the torrent.");
+            return new OperationResult(false, "qBittorrent failed to delete the torrent.");
         }
 
         row.RemovedFromClientAt = DateTime.UtcNow;
         row.Status = TorrentDownloadStatus.Removed;
         await db.SaveChangesAsync(ct);
         changeNotifier.NotifyChanged();
-        return new TorrentCleanupResult(true, null);
+        return new OperationResult(true, null);
     }
 
     /// <summary>Resolves a torrent's source folder/file to Javbuddy's own process view, for

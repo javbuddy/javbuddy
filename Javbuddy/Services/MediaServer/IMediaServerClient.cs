@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Javbuddy.Services.Common;
 
 namespace Javbuddy.Services.MediaServer;
 
@@ -22,7 +23,6 @@ public class MediaServerItemDto
 
 public record MediaServerLookupResult(bool Success, IReadOnlyList<MediaServerItemDto>? Items, string? ErrorMessage);
 public record MediaServerTestResult(bool Success, string Message, string? Version = null, string? ServerId = null);
-public record MediaServerActionResult(bool Success, string? ErrorMessage);
 
 /// <summary>Generic media server abstraction enabling media servers (Jellyfin, and
 /// in the future Plex, Emby) to be used interchangeably for library ownership checks,
@@ -33,7 +33,7 @@ public interface IMediaServerClient
     Task<bool> IsEnabledAsync(CancellationToken ct = default);
     Task<MediaServerLookupResult> LookupInSelectedLibrariesAsync(string query, CancellationToken ct = default);
     Task<string?> GetWebUrlAsync(string itemId, string? serverId = null, CancellationToken ct = default);
-    Task<MediaServerActionResult> RefreshItemAsync(string itemId, CancellationToken ct = default);
+    Task<OperationResult> RefreshItemAsync(string itemId, CancellationToken ct = default);
     Task<MediaServerTestResult> TestConnectionAsync(CancellationToken ct = default);
     Task<string?> GetExternalUrlAsync(CancellationToken ct = default);
 }

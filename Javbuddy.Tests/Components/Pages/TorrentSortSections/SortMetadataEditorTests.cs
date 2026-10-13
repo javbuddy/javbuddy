@@ -1,6 +1,7 @@
 using Bunit;
 using Javbuddy.Components.Pages.TorrentSortSections;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Tags;
 using Javbuddy.Services.Torrents;
@@ -340,7 +341,7 @@ public class SortMetadataEditorTests : BunitContext
     {
         var state = Open(new MovieViewDto { Id = "A" });
         sortService.GetScrapersAsync(default).ReturnsForAnyArgs(new JavinizerScrapersResult(true, [new ScraperInfoDto { Name = "dmm", DisplayTitle = "DMM", Enabled = true }], null));
-        sortService.RescrapeWithScrapersAsync(default, default!, default!, default!, default).ReturnsForAnyArgs(new JavinizerRescrapeResult(true, null));
+        sortService.RescrapeWithScrapersAsync(default, default!, default!, default!, default).ReturnsForAnyArgs(new OperationResult(true, null));
         var cut = Render<SortMetadataEditor>(p => p.Add(x => x.Editor, state));
 
         cut.WaitForAssertion(() => Assert.True(cut.Find(".sme-rescrape-btn").HasAttribute("disabled")));

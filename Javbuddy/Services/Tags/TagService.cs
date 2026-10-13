@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Scenes;
@@ -19,12 +20,6 @@ public record TagOperationResult(bool Success, string? ErrorMessage = null, Tag?
 {
     public static TagOperationResult Ok(Tag tag) => new(true, null, tag);
     public static TagOperationResult Fail(string error) => new(false, error, null);
-}
-
-public record OperationResult(bool Success, string? ErrorMessage = null)
-{
-    public static OperationResult Ok() => new(true);
-    public static OperationResult Fail(string error) => new(false, error);
 }
 
 public record TagListItem(

@@ -110,14 +110,14 @@ public interface ILocalLibraryClient
     /// MovieDetail.razor's local-refresh button uses, keyed by movie id — shared with
     /// TorrentSortService so a successful organize can immediately refresh local metadata without
     /// duplicating the mapper call.</summary>
-    Task<LocalRefreshResult> RefreshLocalMetadataAsync(int movieId, CancellationToken ct = default);
+    Task<OperationResult> RefreshLocalMetadataAsync(int movieId, CancellationToken ct = default);
 
     /// <summary>Runs only the MediaInfo technical probe against the movie's local video file and
     /// saves the result — unlike RefreshLocalMetadataAsync, this never touches descriptive
     /// metadata (title, plot, actresses, ...) or crops the poster. Used by LibraryRescanTask so
     /// rescanning technical info for an existing library can't silently overwrite metadata already
     /// sourced from javinizer-go with whatever a local .nfo file happens to contain.</summary>
-    Task<LocalRefreshResult> RefreshMediaInfoOnlyAsync(int movieId, CancellationToken ct = default);
+    Task<OperationResult> RefreshMediaInfoOnlyAsync(int movieId, CancellationToken ct = default);
 
     /// <summary>Recomputes just the sidecar-subtitle-file flag (see HasSubtitleFile) for a movie's
     /// local folder — nothing else. Deliberately separate from RefreshMediaInfoOnlyAsync: a
@@ -126,14 +126,14 @@ public interface ILocalLibraryClient
     /// still eligible for a MediaInfo retry (MediaScannedAt null / MediaScanError set) — this is a
     /// cheap directory listing, not the MediaInfoLib native call RefreshMediaInfoOnlyAsync makes, so
     /// redoing it unconditionally is fine.</summary>
-    Task<LocalRefreshResult> RefreshSubtitleFlagOnlyAsync(int movieId, CancellationToken ct = default);
+    Task<OperationResult> RefreshSubtitleFlagOnlyAsync(int movieId, CancellationToken ct = default);
 
     /// <summary>Recomputes just the trailer-file flag (see HasTrailerFile) for a movie's local
     /// folder — nothing else. Same reasoning as RefreshSubtitleFlagOnlyAsync: a trailer file can be
     /// added or removed from an already-fully-probed movie's folder at any time, so LibraryRescanTask
     /// needs to recheck it on every run for every Got movie, independent of MediaInfo's retry gate.
     /// Cheap directory listing, not the MediaInfoLib native call.</summary>
-    Task<LocalRefreshResult> RefreshTrailerFlagOnlyAsync(int movieId, CancellationToken ct = default);
+    Task<OperationResult> RefreshTrailerFlagOnlyAsync(int movieId, CancellationToken ct = default);
 
     /// <summary>Re-parses and re-applies just the descriptive .nfo-sourced fields (see
     /// LocalLibraryMetadataMapper.ApplyDescriptiveMetadata) when the .nfo file's last-write time
@@ -142,7 +142,7 @@ public interface ILocalLibraryClient
     /// establishes the baseline and never applies/logs: without that guard, rolling this out to
     /// an existing library would re-apply local .nfo content over every movie's current metadata
     /// in one pass, even where that metadata is better sourced from javinizer-go.</summary>
-    Task<LocalRefreshResult> RefreshLocalMetadataIfNfoChangedAsync(int movieId, CancellationToken ct = default);
+    Task<OperationResult> RefreshLocalMetadataIfNfoChangedAsync(int movieId, CancellationToken ct = default);
 
     /// <summary>Recomputes the movie's poster/fanart/extrafanart signature (see
     /// ComputeImagesSignature) and logs a debug message when it differs from
@@ -150,13 +150,12 @@ public interface ILocalLibraryClient
     /// RefreshLocalMetadataIfNfoChangedAsync. Detection only: actually recaching a changed image is
     /// ImageCacheTask's job, decoupled and already driven by its own per-image
     /// size/last-write-time freshness check.</summary>
-    Task<LocalRefreshResult> SyncImagesSignatureAsync(int movieId, CancellationToken ct = default);
+    Task<OperationResult> SyncImagesSignatureAsync(int movieId, CancellationToken ct = default);
 
     /// <summary>Resolves the on-disk file path to the movie's .nfo file if one exists, or null if not found.</summary>
     Task<string?> ResolveNfoFilePathAsync(string code, CancellationToken ct = default);
 }
 
-public record LocalRefreshResult(bool Success, string? ErrorMessage);
 
 public enum ConditionalNfoSaveResult
 {
@@ -892,13 +891,13 @@ public class LocalLibraryClient(
         return false;
     }
 
-    public async Task<LocalRefreshResult> RefreshLocalMetadataAsync(int movieId, CancellationToken ct = default)
+    public async Task<OperationResult> RefreshLocalMetadataAsync(int movieId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies.FindAsync(new object[] { movieId }, ct);
         if (movie is null || string.IsNullOrWhiteSpace(movie.Code))
         {
-            return new LocalRefreshResult(false, "Movie not found.");
+            return new OperationResult(false, "Movie not found.");
         }
 
         // This method refreshes technical information immediately below. Avoid probing the same
@@ -906,7 +905,7 @@ public class LocalLibraryClient(
         var result = await TryGetMetadataAsync(movie.Code, ct, includeMediaInfo: false);
         if (!result.Found || result.Metadata is null)
         {
-            return new LocalRefreshResult(false, result.ErrorMessage ?? "No local folder found for this code.");
+            return new OperationResult(false, result.ErrorMessage ?? "No local folder found for this code.");
         }
 
         if (result.FolderPath is not null)
@@ -923,10 +922,10 @@ public class LocalLibraryClient(
         await TagNormalization.ApplyToMovieAsync(db, movie, result.Metadata.Genres, ct);
         await db.SaveChangesAsync(ct);
         await RefreshMediaInfoOnlyAsync(movieId, ct);
-        return new LocalRefreshResult(true, null);
+        return new OperationResult(true, null);
     }
 
-    public async Task<LocalRefreshResult> RefreshMediaInfoOnlyAsync(int movieId, CancellationToken ct = default)
+    public async Task<OperationResult> RefreshMediaInfoOnlyAsync(int movieId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies
@@ -934,13 +933,13 @@ public class LocalLibraryClient(
             .FirstOrDefaultAsync(m => m.Id == movieId, ct);
         if (movie is null || string.IsNullOrWhiteSpace(movie.Code))
         {
-            return new LocalRefreshResult(false, "Movie not found.");
+            return new OperationResult(false, "Movie not found.");
         }
 
         var folder = await FindMovieFolderAsync(movie.Code, ct);
         if (folder is null)
         {
-            return new LocalRefreshResult(false, "No local folder found for this code.");
+            return new OperationResult(false, "No local folder found for this code.");
         }
 
         // Independent of whether a video file resolves below — sidecar subtitle/trailer file
@@ -968,7 +967,7 @@ public class LocalLibraryClient(
                 db.MovieFiles.RemoveRange(movie.MovieFiles);
             }
             await db.SaveChangesAsync(ct);
-            return new LocalRefreshResult(false, warning);
+            return new OperationResult(false, warning);
         }
 
         var diskFileInfos = new List<(string Path, string FileName, FileInfo Info)>();
@@ -981,7 +980,7 @@ public class LocalLibraryClient(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return new LocalRefreshResult(false, "Could not read the video file.");
+                return new OperationResult(false, "Could not read the video file.");
             }
         }
 
@@ -1017,7 +1016,7 @@ public class LocalLibraryClient(
             {
                 await db.SaveChangesAsync(ct);
             }
-            return new LocalRefreshResult(true, null);
+            return new OperationResult(true, null);
         }
 
         // Backfill legacy single-file records if MovieFiles has not yet been populated
@@ -1043,7 +1042,7 @@ public class LocalLibraryClient(
                 movie.MediaVideoFileName = single.FileName;
                 LocalLibraryMetadataMapper.ApplyVrFormats(movie);
                 await db.SaveChangesAsync(ct);
-                return new LocalRefreshResult(true, null);
+                return new OperationResult(true, null);
             }
         }
 
@@ -1100,7 +1099,7 @@ public class LocalLibraryClient(
 
         if (primaryFile is null)
         {
-            return new LocalRefreshResult(false, "No valid video file found.");
+            return new OperationResult(false, "No valid video file found.");
         }
 
         foreach (var mf in movie.MovieFiles)
@@ -1133,25 +1132,25 @@ public class LocalLibraryClient(
         {
             await trickplayTrigger.OnVideoFilesChangedAsync(movieId, ct);
         }
-        return new LocalRefreshResult(primaryFile.MediaScanError is null, primaryFile.MediaScanError);
+        return new OperationResult(primaryFile.MediaScanError is null, primaryFile.MediaScanError);
     }
 
     private static string FormatResolution(int? width, int? height) =>
         width is not null && height is not null ? $"{width}x{height}" : "unknown resolution";
 
-    public async Task<LocalRefreshResult> RefreshSubtitleFlagOnlyAsync(int movieId, CancellationToken ct = default)
+    public async Task<OperationResult> RefreshSubtitleFlagOnlyAsync(int movieId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies.FindAsync(new object[] { movieId }, ct);
         if (movie is null || string.IsNullOrWhiteSpace(movie.Code))
         {
-            return new LocalRefreshResult(false, "Movie not found.");
+            return new OperationResult(false, "Movie not found.");
         }
 
         var folder = await FindMovieFolderAsync(movie.Code, ct);
         if (folder is null)
         {
-            return new LocalRefreshResult(false, "No local folder found for this code.");
+            return new OperationResult(false, "No local folder found for this code.");
         }
 
         var newValue = HasSubtitleFile(folder);
@@ -1164,22 +1163,22 @@ public class LocalLibraryClient(
 
         movie.MediaHasSubtitleFile = newValue;
         await db.SaveChangesAsync(ct);
-        return new LocalRefreshResult(true, null);
+        return new OperationResult(true, null);
     }
 
-    public async Task<LocalRefreshResult> RefreshTrailerFlagOnlyAsync(int movieId, CancellationToken ct = default)
+    public async Task<OperationResult> RefreshTrailerFlagOnlyAsync(int movieId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies.FindAsync(new object[] { movieId }, ct);
         if (movie is null || string.IsNullOrWhiteSpace(movie.Code))
         {
-            return new LocalRefreshResult(false, "Movie not found.");
+            return new OperationResult(false, "Movie not found.");
         }
 
         var folder = await FindMovieFolderAsync(movie.Code, ct);
         if (folder is null)
         {
-            return new LocalRefreshResult(false, "No local folder found for this code.");
+            return new OperationResult(false, "No local folder found for this code.");
         }
 
         var newValue = HasTrailerFile(folder);
@@ -1192,22 +1191,22 @@ public class LocalLibraryClient(
 
         movie.MediaHasTrailerFile = newValue;
         await db.SaveChangesAsync(ct);
-        return new LocalRefreshResult(true, null);
+        return new OperationResult(true, null);
     }
 
-    public async Task<LocalRefreshResult> RefreshLocalMetadataIfNfoChangedAsync(int movieId, CancellationToken ct = default)
+    public async Task<OperationResult> RefreshLocalMetadataIfNfoChangedAsync(int movieId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies.FindAsync(new object[] { movieId }, ct);
         if (movie is null || string.IsNullOrWhiteSpace(movie.Code))
         {
-            return new LocalRefreshResult(false, "Movie not found.");
+            return new OperationResult(false, "Movie not found.");
         }
 
         var folder = await FindMovieFolderAsync(movie.Code, ct);
         if (folder is null)
         {
-            return new LocalRefreshResult(false, "No local folder found for this code.");
+            return new OperationResult(false, "No local folder found for this code.");
         }
 
         var nfoPath = FindNfoFile(folder, movie.Code);
@@ -1218,7 +1217,7 @@ public class LocalLibraryClient(
                 movie.MediaNfoLastWriteUtc = null;
                 await db.SaveChangesAsync(ct);
             }
-            return new LocalRefreshResult(true, null);
+            return new OperationResult(true, null);
         }
 
         DateTime currentWriteUtc;
@@ -1228,11 +1227,11 @@ public class LocalLibraryClient(
         }
         catch (IOException)
         {
-            return new LocalRefreshResult(false, "Could not read the .nfo file.");
+            return new OperationResult(false, "Could not read the .nfo file.");
         }
         catch (UnauthorizedAccessException)
         {
-            return new LocalRefreshResult(false, "Could not read the .nfo file.");
+            return new OperationResult(false, "Could not read the .nfo file.");
         }
 
         if (movie.MediaNfoLastWriteUtc is null)
@@ -1242,12 +1241,12 @@ public class LocalLibraryClient(
             // whatever's currently stored, even where that's better-sourced javinizer-go metadata.
             movie.MediaNfoLastWriteUtc = currentWriteUtc;
             await db.SaveChangesAsync(ct);
-            return new LocalRefreshResult(true, null);
+            return new OperationResult(true, null);
         }
 
         if (movie.MediaNfoLastWriteUtc.Value == currentWriteUtc)
         {
-            return new LocalRefreshResult(true, null);
+            return new OperationResult(true, null);
         }
 
         // Info in Javbuddy has absolute authority over metadata sources.
@@ -1277,22 +1276,22 @@ public class LocalLibraryClient(
 
         movie.MediaNfoLastWriteUtc = currentWriteUtc;
         await db.SaveChangesAsync(ct);
-        return new LocalRefreshResult(true, null);
+        return new OperationResult(true, null);
     }
 
-    public async Task<LocalRefreshResult> SyncImagesSignatureAsync(int movieId, CancellationToken ct = default)
+    public async Task<OperationResult> SyncImagesSignatureAsync(int movieId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies.FindAsync(new object[] { movieId }, ct);
         if (movie is null || string.IsNullOrWhiteSpace(movie.Code))
         {
-            return new LocalRefreshResult(false, "Movie not found.");
+            return new OperationResult(false, "Movie not found.");
         }
 
         var folder = await FindMovieFolderAsync(movie.Code, ct);
         if (folder is null)
         {
-            return new LocalRefreshResult(false, "No local folder found for this code.");
+            return new OperationResult(false, "No local folder found for this code.");
         }
 
         var signature = ComputeImagesSignature(folder);
@@ -1304,7 +1303,7 @@ public class LocalLibraryClient(
             // report every movie's images as "changed" in one pass.
             movie.MediaImagesSignature = signature;
             await db.SaveChangesAsync(ct);
-            return new LocalRefreshResult(true, null);
+            return new OperationResult(true, null);
         }
 
         if (movie.MediaImagesSignature != signature)
@@ -1314,7 +1313,7 @@ public class LocalLibraryClient(
             await db.SaveChangesAsync(ct);
         }
 
-        return new LocalRefreshResult(true, null);
+        return new OperationResult(true, null);
     }
 
     /// <summary>Cheap composite signature of a movie folder's image set — not a cryptographic hash,

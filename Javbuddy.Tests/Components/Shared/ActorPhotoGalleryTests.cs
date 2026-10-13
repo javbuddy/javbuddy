@@ -1,6 +1,7 @@
 using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -307,7 +308,7 @@ public class ActorPhotoGalleryTests : BunitContext
         service.GetGalleryAsync(7, Arg.Any<CancellationToken>()).Returns(
             _ => new ActorPhotoGalleryData([], photos.ToList()));
         service.DeletePhotoAsync(7, 101, Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(ActorPhotoOperationResult.Ok()))
+            .Returns(Task.FromResult(OperationResult.Ok()))
             .AndDoes(_ => photos.Clear());
 
         Services.AddSingleton(service);

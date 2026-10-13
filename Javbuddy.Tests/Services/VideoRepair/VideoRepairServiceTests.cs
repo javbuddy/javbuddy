@@ -1,4 +1,5 @@
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
@@ -346,7 +347,7 @@ public class VideoRepairServiceTests : IDisposable
         var (dbFactory, localLibrary, ffmpegClient) = await SetUpTwoVersionMovieAsync();
         using var _ = dbFactory;
         localLibrary.RefreshMediaInfoOnlyAsync(1, Arg.Any<CancellationToken>())
-            .Returns<Task<LocalRefreshResult>>(_ => throw new InvalidOperationException("db down"));
+            .Returns<Task<OperationResult>>(_ => throw new InvalidOperationException("db down"));
         var service = new VideoRepairService(dbFactory, localLibrary, ffmpegClient, Substitute.For<IVideoRepairJobTracker>());
 
         var result = await service.RepairAsync(1);

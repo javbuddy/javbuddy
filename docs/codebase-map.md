@@ -128,6 +128,7 @@ Domain services (`Services/<Group>/*.cs`):
 | `StringExtensions.cs` | `TrimToNull` (trim, or null when blank), `CompactName` (strip ASCII and full-width spaces — the form used for all actor-name matching) |
 | `Debouncer.cs` | Run-after-quiet-period helper for search boxes and text filters (supersedes the pending call; disposed with the component) |
 | `SelectionSet.cs` | Checked rows of a list with row and select-all checkboxes (ActivityQueue, MovieTags, ActorImport) |
+| `OperationResult.cs` | The shared `(Success, ErrorMessage)` outcome with `Ok()`/`Fail(msg)`, for operations that return nothing else |
 | `HtmlTextHelper.cs` / `MediaFileTypes.cs` | `CleanText`/`ResolveUrl` shared by the Warashi and MinnanoAv HTML parsers; shared video/image extension sets (`IsReleaseVideo`, `IsImage`) |
 | `NfoActorMatching.cs` / `NfoFieldSync.cs` / `NfoXmlFormatter.cs` | Pure static .nfo XML logic used by `NfoSyncService`: actor name matching/consolidation, writing canonical fields, indented serialization |
 

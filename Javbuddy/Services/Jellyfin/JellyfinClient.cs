@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Trickplay;
@@ -304,12 +305,12 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
         return trimmed.Split([',', '\n', '\r', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
     }
 
-    public async Task<MediaServerActionResult> RefreshItemAsync(string itemId, CancellationToken ct = default)
+    public async Task<OperationResult> RefreshItemAsync(string itemId, CancellationToken ct = default)
     {
         var settings = await GetSettingsAsync(ct);
         if (settings is null)
         {
-            return new MediaServerActionResult(false, "Jellyfin is not configured. Set a base URL and API key in Settings.");
+            return new OperationResult(false, "Jellyfin is not configured. Set a base URL and API key in Settings.");
         }
 
         return await ExecuteAsync(RequestTimeout, ct,
@@ -321,12 +322,12 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
                 using var response = await client.PostAsync(url, null, token);
                 if (response.IsSuccessStatusCode)
                 {
-                    return new MediaServerActionResult(true, null);
+                    return new OperationResult(true, null);
                 }
 
-                return new MediaServerActionResult(false, $"Jellyfin returned {(int)response.StatusCode}: {response.ReasonPhrase}");
+                return new OperationResult(false, $"Jellyfin returned {(int)response.StatusCode}: {response.ReasonPhrase}");
             },
-            message => new MediaServerActionResult(false, message));
+            message => new OperationResult(false, message));
     }
 
     public async Task<string?> GetServerIdAsync(CancellationToken ct = default)

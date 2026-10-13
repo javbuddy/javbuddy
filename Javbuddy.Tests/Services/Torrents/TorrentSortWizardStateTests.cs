@@ -1,4 +1,5 @@
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.LocalLibrary;
@@ -322,7 +323,7 @@ public class TorrentSortWizardStateTests
         state.Review.SetFixMatchInput("res-1", "ABC-123");
 
         sortService.RescrapeAsync(Arg.Any<int>(), "res-1", "ABC-123", Arg.Any<CancellationToken>())
-            .Returns(new JavinizerRescrapeResult(true, null));
+            .Returns(new OperationResult(true, null));
         sortService.ExcludeResultAsync(Arg.Any<int>(), "res-2", Arg.Any<CancellationToken>())
             .Returns(new JavinizerExcludeResult(true, null));
 
@@ -529,13 +530,13 @@ public class TorrentSortWizardStateTests
         using var factory = new TestDbContextFactory();
         var (state, sortService, _, _) = CreateState(factory);
         sortService.PollJobAsync(default, default, default).ReturnsForAnyArgs(new JavinizerBatchJobResult(true, new BatchJobResponseDto(), null));
-        var gate = new TaskCompletionSource<JavinizerRescrapeResult>();
+        var gate = new TaskCompletionSource<OperationResult>();
         sortService.RescrapeWithScrapersAsync(default, default!, default!, default!, default).ReturnsForAnyArgs(_ => gate.Task);
         state.EditModal.OpenEditModal("res-1", new MovieViewDto { Id = "A" });
 
         var rescraping = state.EditModal.RescrapeWithAsync(["dmm"]);
         state.EditModal.CloseEditModal();
-        gate.SetResult(new JavinizerRescrapeResult(true, null));
+        gate.SetResult(new OperationResult(true, null));
 
         Assert.False(await rescraping);
         Assert.Null(state.EditModal.EditingResultId);
@@ -708,7 +709,7 @@ public class TorrentSortWizardStateTests
         state.EditModal.OpenEditModal("res-1", state.Session.JobData.Results["res-1"].Movie);
         state.EditModal.MarkDirty();
         sortService.RescrapeWithScrapersAsync(Arg.Any<int>(), "res-1", "ABC-123", Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
-            .Returns(new JavinizerRescrapeResult(true, null));
+            .Returns(new OperationResult(true, null));
         sortService.PollJobAsync(Arg.Any<int>(), true, Arg.Any<CancellationToken>())
             .Returns(new JavinizerBatchJobResult(true, new BatchJobResponseDto { Results = new() { ["res-1"] = new() { ResultId = "res-1", Movie = new MovieViewDto { Id = "ABC-123", Maker = "Fresh" } } } }, null));
         sortService.GetResultSourcesAsync(default, default!, default).ReturnsForAnyArgs(new JavinizerSourcesResult(true, [], null));
@@ -866,7 +867,7 @@ public class TorrentSortWizardStateTests
         state.Destination = "/media/jav";
 
         sortService.OrganizeAsync(Arg.Any<int>(), "/media/jav", Arg.Any<CancellationToken>())
-            .Returns(new TorrentOrganizeResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         await state.Organize.OrganizeAsync();
 
@@ -881,7 +882,7 @@ public class TorrentSortWizardStateTests
         var (state, sortService, _, _) = CreateState(factory);
         state.Destination = "/media/jav";
 
-        var tcs = new TaskCompletionSource<TorrentOrganizeResult>();
+        var tcs = new TaskCompletionSource<OperationResult>();
         sortService.OrganizeAsync(Arg.Any<int>(), "/media/jav", Arg.Any<CancellationToken>())
             .Returns(tcs.Task);
 
@@ -891,7 +892,7 @@ public class TorrentSortWizardStateTests
         Assert.NotNull(state.Organize.OrganizeStartedAt);
         Assert.NotNull(state.Organize.OrganizeElapsed);
 
-        tcs.SetResult(new TorrentOrganizeResult(true, null));
+        tcs.SetResult(new OperationResult(true, null));
         await organizeTask;
 
         Assert.False(state.Organize.Organizing);
@@ -906,13 +907,13 @@ public class TorrentSortWizardStateTests
         var tracker = new TaskActivityTracker(new ScheduledTaskChangeNotifier(), TimeProvider.System);
         var (state, sortService, _, _) = CreateState(factory, activities: tracker);
         state.Destination = "/media/jav";
-        var gate = new TaskCompletionSource<TorrentOrganizeResult>();
+        var gate = new TaskCompletionSource<OperationResult>();
         sortService.OrganizeAsync(Arg.Any<int>(), "/media/jav", Arg.Any<CancellationToken>()).Returns(gate.Task);
 
         var organizeTask = state.Organize.OrganizeAsync();
 
         Assert.Equal(new TaskActivity("Sorting · movie sort", "Organizing files…", true), tracker.Current);
-        gate.SetResult(new TorrentOrganizeResult(true, null));
+        gate.SetResult(new OperationResult(true, null));
         await organizeTask;
 
         Assert.Equal(new TaskActivity("Sorting · movie sort", "Files organized.", false), tracker.Current);
@@ -926,7 +927,7 @@ public class TorrentSortWizardStateTests
         state.Destination = "/media/jav";
         state.Step = WizardStep.Preview;
 
-        var tcs = new TaskCompletionSource<TorrentOrganizeResult>();
+        var tcs = new TaskCompletionSource<OperationResult>();
         sortService.OrganizeAsync(Arg.Any<int>(), "/media/jav", Arg.Any<CancellationToken>())
             .Returns(tcs.Task);
 
@@ -935,7 +936,7 @@ public class TorrentSortWizardStateTests
         Assert.Equal("sort-step-done", state.StepClass(WizardStep.Preview));
         Assert.Equal("sort-step-active", state.StepClass(WizardStep.Done));
 
-        tcs.SetResult(new TorrentOrganizeResult(true, null));
+        tcs.SetResult(new OperationResult(true, null));
         await organizeTask;
 
         Assert.Equal("sort-step-active", state.StepClass(WizardStep.Done));
@@ -1001,7 +1002,7 @@ public class TorrentSortWizardStateTests
         await state.Cleanup.StartCleanupPreviewAsync();
 
         sortService.CleanupSourceAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new TorrentCleanupResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         await state.Cleanup.ConfirmCleanupAsync();
 
@@ -1022,7 +1023,7 @@ public class TorrentSortWizardStateTests
         await state.Cleanup.StartCleanupPreviewAsync();
 
         sortService.CleanupSourceAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new TorrentCleanupResult(false, "qBittorrent failed to delete the torrent."));
+            .Returns(new OperationResult(false, "qBittorrent failed to delete the torrent."));
 
         await state.Cleanup.ConfirmCleanupAsync();
 

@@ -1,6 +1,7 @@
 using Bunit;
 using Javbuddy.Components.Pages;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Torrents;
@@ -116,7 +117,7 @@ public class TorrentSortDoneStepTests : BunitContext
         sortService.PreviewCleanupAsync(torrentDownloadId, Arg.Any<CancellationToken>())
             .Returns(new TorrentCleanupPreviewResult(true, "/media/x", ["movie.mp4"], null));
         sortService.CleanupSourceAsync(torrentDownloadId, Arg.Any<CancellationToken>())
-            .Returns(new TorrentCleanupResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         var cut = await RenderAtDoneStepAsync(torrentDownloadId);
         cut.Find("button:contains('Delete via qBittorrent')").Click();

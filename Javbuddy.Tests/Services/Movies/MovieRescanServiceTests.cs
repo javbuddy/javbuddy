@@ -1,4 +1,5 @@
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
@@ -32,9 +33,9 @@ public class MovieRescanServiceTests
             localLibraryClient.TryGetMetadataAsync(Arg.Any<string>(), Arg.Any<CancellationToken>(), false)
                 .Returns(new LocalLookupResult(false, null, null, null));
             localLibraryClient.RefreshMediaInfoOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-                .Returns(new LocalRefreshResult(true, null));
+                .Returns(new OperationResult(true, null));
             localLibraryClient.SyncImagesSignatureAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-                .Returns(new LocalRefreshResult(true, null));
+                .Returns(new OperationResult(true, null));
             localLibraryClient.AnyRootReachableAsync(Arg.Any<CancellationToken>())
                 .Returns(true);
         }
@@ -117,10 +118,10 @@ public class MovieRescanServiceTests
                     m.MediaVideoFileName = "ABC-123.mp4";
                     await db.SaveChangesAsync();
                 }
-                return new LocalRefreshResult(true, null);
+                return new OperationResult(true, null);
             });
         localLibraryClient.SyncImagesSignatureAsync(movieId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         var service = CreateService(factory, localLibraryClient: localLibraryClient);
         var result = await service.RescanAsync(movieId);
@@ -153,9 +154,9 @@ public class MovieRescanServiceTests
         localLibraryClient.TryGetMetadataAsync("ABC-123", Arg.Any<CancellationToken>(), false)
             .Returns(new LocalLookupResult(true, "/media/ABC-123", new LocalMovieMetadata { VideoFileName = "ABC-123.mp4", VideoFileSizeBytes = 1000 }, null));
         localLibraryClient.RefreshMediaInfoOnlyAsync(movieId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
         localLibraryClient.SyncImagesSignatureAsync(movieId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
         var trickplayTrigger = Substitute.For<ITrickplayTrigger>();
         trickplayTrigger.OnRescanAsync(movieId, Arg.Any<CancellationToken>()).Returns(true);
 
@@ -214,9 +215,9 @@ public class MovieRescanServiceTests
         localLibraryClient.TryGetMetadataAsync("ABC-123", Arg.Any<CancellationToken>(), false)
             .Returns(new LocalLookupResult(true, "/media/ABC-123", localMetadata, null));
         localLibraryClient.RefreshMediaInfoOnlyAsync(movieId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
         localLibraryClient.SyncImagesSignatureAsync(movieId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         var service = CreateService(factory, localLibraryClient: localLibraryClient);
         var result = await service.RescanAsync(movieId);
@@ -275,10 +276,10 @@ public class MovieRescanServiceTests
                     m.MediaVideoFileName = "ABC-123.mp4";
                     await db.SaveChangesAsync();
                 }
-                return new LocalRefreshResult(true, null);
+                return new OperationResult(true, null);
             });
         localLibraryClient.SyncImagesSignatureAsync(movieId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         var service = CreateService(factory, localLibraryClient: localLibraryClient);
         var result = await service.RescanAsync(movieId);
@@ -326,9 +327,9 @@ public class MovieRescanServiceTests
         localLibraryClient.TryGetMetadataAsync("ABC-123", Arg.Any<CancellationToken>(), false)
             .Returns(new LocalLookupResult(true, "/media/ABC-123", localMetadata, null));
         localLibraryClient.RefreshMediaInfoOnlyAsync(movieId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
         localLibraryClient.SyncImagesSignatureAsync(movieId, Arg.Any<CancellationToken>())
-            .Returns(new LocalRefreshResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         var actorNfoSync = Substitute.For<INfoSyncService>();
         var service = CreateService(factory, localLibraryClient: localLibraryClient, nfoSyncService: actorNfoSync);

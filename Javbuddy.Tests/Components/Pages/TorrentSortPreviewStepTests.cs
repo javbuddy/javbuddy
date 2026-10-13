@@ -1,6 +1,7 @@
 using Bunit;
 using Javbuddy.Components.Pages;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Torrents;
@@ -76,7 +77,7 @@ public class TorrentSortPreviewStepTests : BunitContext
         using var f = factory;
         var state = Services.GetRequiredService<TorrentSortWizardState>();
 
-        var gate = new TaskCompletionSource<TorrentOrganizeResult>();
+        var gate = new TaskCompletionSource<OperationResult>();
         sortService.OrganizeAsync(torrentDownloadId, "/media/jav", Arg.Any<CancellationToken>()).Returns(gate.Task);
 
         var cut = await RenderAtPreviewStepAsync(torrentDownloadId);
@@ -87,7 +88,7 @@ public class TorrentSortPreviewStepTests : BunitContext
         Assert.Equal("sort-step-done", steps[5].ClassName);
         Assert.Equal("sort-step-active", steps[6].ClassName);
 
-        gate.SetResult(new TorrentOrganizeResult(true, null));
+        gate.SetResult(new OperationResult(true, null));
         cut.WaitForState(() => !state.Organize.Organizing);
     }
 
@@ -98,7 +99,7 @@ public class TorrentSortPreviewStepTests : BunitContext
         using var f = factory;
         var state = Services.GetRequiredService<TorrentSortWizardState>();
 
-        var gate = new TaskCompletionSource<TorrentOrganizeResult>();
+        var gate = new TaskCompletionSource<OperationResult>();
         sortService.OrganizeAsync(torrentDownloadId, "/media/jav", Arg.Any<CancellationToken>()).Returns(gate.Task);
 
         var cut = await RenderAtPreviewStepAsync(torrentDownloadId);
@@ -108,7 +109,7 @@ public class TorrentSortPreviewStepTests : BunitContext
         var backButton = cut.Find("button:contains('Back to Review')");
         Assert.True(backButton.HasAttribute("disabled"));
 
-        gate.SetResult(new TorrentOrganizeResult(true, null));
+        gate.SetResult(new OperationResult(true, null));
         cut.WaitForState(() => !state.Organize.Organizing);
     }
 
@@ -120,7 +121,7 @@ public class TorrentSortPreviewStepTests : BunitContext
         var state = Services.GetRequiredService<TorrentSortWizardState>();
 
         sortService.OrganizeAsync(torrentDownloadId, "/media/jav", Arg.Any<CancellationToken>())
-            .Returns(new TorrentOrganizeResult(true, null));
+            .Returns(new OperationResult(true, null));
 
         var cut = await RenderAtPreviewStepAsync(torrentDownloadId);
         cut.Find("button:contains('Organize')").Click();

@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Nfo;
@@ -292,7 +293,7 @@ public class LibraryRescanTask(
     private async Task<string> RunPerMovieAsync(
         IProgress<TaskProgress> progress,
         CancellationToken ct,
-        Func<int, CancellationToken, Task<LocalRefreshResult>> operation,
+        Func<int, CancellationToken, Task<OperationResult>> operation,
         string stage,
         string verb,
         string? subject = null)

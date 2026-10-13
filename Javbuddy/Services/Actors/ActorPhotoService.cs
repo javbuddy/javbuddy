@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
 using Microsoft.EntityFrameworkCore;
 using SkiaSharp;
@@ -30,11 +31,6 @@ public sealed record ActorWithPhotoCountSummary(
     string DisplayName,
     int PhotoCount);
 
-public sealed record ActorPhotoOperationResult(bool Success, string? ErrorMessage = null)
-{
-    public static ActorPhotoOperationResult Ok() => new(true);
-    public static ActorPhotoOperationResult Fail(string message) => new(false, message);
-}
 
 public sealed record ActorPhotoUploadItem(Func<Stream> OpenStream, long Length)
 {
@@ -55,13 +51,13 @@ public interface IActorPhotoService
         CancellationToken ct = default);
     Task<IReadOnlyList<ActorWithPhotoCountSummary>> GetActorsWithPhotosAsync(CancellationToken ct = default);
     Task<int> GetTotalPhotoCountAsync(CancellationToken ct = default);
-    Task<ActorPhotoOperationResult> UploadAsync(int actorId, IReadOnlyList<byte[]> images, int? albumId, CancellationToken ct = default);
-    Task<ActorPhotoOperationResult> UploadAsync(int actorId, IReadOnlyList<ActorPhotoUploadItem> items, int? albumId, IProgress<int>? progress = null, CancellationToken ct = default);
-    Task<(ActorPhotoOperationResult Result, ActorPhotoAlbumSummary? Album)> CreateAlbumAsync(int actorId, string name, CancellationToken ct = default);
-    Task<ActorPhotoOperationResult> RenameAlbumAsync(int actorId, int albumId, string name, CancellationToken ct = default);
-    Task<ActorPhotoOperationResult> DeleteAlbumAsync(int actorId, int albumId, CancellationToken ct = default);
-    Task<ActorPhotoOperationResult> MovePhotoAsync(int actorId, int photoId, int? albumId, CancellationToken ct = default);
-    Task<ActorPhotoOperationResult> DeletePhotoAsync(int actorId, int photoId, CancellationToken ct = default);
+    Task<OperationResult> UploadAsync(int actorId, IReadOnlyList<byte[]> images, int? albumId, CancellationToken ct = default);
+    Task<OperationResult> UploadAsync(int actorId, IReadOnlyList<ActorPhotoUploadItem> items, int? albumId, IProgress<int>? progress = null, CancellationToken ct = default);
+    Task<(OperationResult Result, ActorPhotoAlbumSummary? Album)> CreateAlbumAsync(int actorId, string name, CancellationToken ct = default);
+    Task<OperationResult> RenameAlbumAsync(int actorId, int albumId, string name, CancellationToken ct = default);
+    Task<OperationResult> DeleteAlbumAsync(int actorId, int albumId, CancellationToken ct = default);
+    Task<OperationResult> MovePhotoAsync(int actorId, int photoId, int? albumId, CancellationToken ct = default);
+    Task<OperationResult> DeletePhotoAsync(int actorId, int photoId, CancellationToken ct = default);
     Task<byte[]?> GetPhotoBytesAsync(int actorId, int photoId, CancellationToken ct = default);
     Task<ImageServingResult> GetImageAsync(int photoId, string variant, CancellationToken ct = default);
     Task<(string? ThumbPath, string? FullPath)> GetOrCreateBothAsync(int photoId, CancellationToken ct = default);
@@ -210,30 +206,30 @@ public sealed class ActorPhotoService(
         return await db.ActorPhotos.CountAsync(ct);
     }
 
-    public Task<ActorPhotoOperationResult> UploadAsync(int actorId, IReadOnlyList<byte[]> images, int? albumId, CancellationToken ct = default)
+    public Task<OperationResult> UploadAsync(int actorId, IReadOnlyList<byte[]> images, int? albumId, CancellationToken ct = default)
     {
         var items = images.Select(image => new ActorPhotoUploadItem(() => new MemoryStream(image), image.LongLength)).ToList();
         return UploadAsync(actorId, items, albumId, null, ct);
     }
 
-    public async Task<ActorPhotoOperationResult> UploadAsync(
+    public async Task<OperationResult> UploadAsync(
         int actorId,
         IReadOnlyList<ActorPhotoUploadItem> items,
         int? albumId,
         IProgress<int>? progress = null,
         CancellationToken ct = default)
     {
-        if (items.Count == 0) return ActorPhotoOperationResult.Fail("Choose at least one image.");
+        if (items.Count == 0) return OperationResult.Fail("Choose at least one image.");
         if (items.Count > uploadSettings.MaxBatchFiles)
-            return ActorPhotoOperationResult.Fail($"You can upload at most {uploadSettings.MaxBatchFiles} photos at a time.");
+            return OperationResult.Fail($"You can upload at most {uploadSettings.MaxBatchFiles} photos at a time.");
         if (items.Any(item => item.Length > uploadSettings.MaxSizeBytes))
-            return ActorPhotoOperationResult.Fail($"Each image must be no larger than {uploadSettings.MaxSizeMb} MB.");
+            return OperationResult.Fail($"Each image must be no larger than {uploadSettings.MaxSizeMb} MB.");
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        if (!await db.Actors.AnyAsync(actor => actor.Id == actorId, ct)) return ActorPhotoOperationResult.Fail("Actor not found.");
+        if (!await db.Actors.AnyAsync(actor => actor.Id == actorId, ct)) return OperationResult.Fail("Actor not found.");
         if (albumId.HasValue && !await db.ActorAlbums.AnyAsync(album => album.Id == albumId && album.ActorId == actorId, ct))
         {
-            return ActorPhotoOperationResult.Fail("Album not found.");
+            return OperationResult.Fail("Album not found.");
         }
 
         var photos = new List<ActorPhoto>(items.Count);
@@ -256,7 +252,7 @@ public sealed class ActorPhotoService(
                         DeleteFile(p.FullStorageId);
                         await DeleteSourceAsync(p.SourceStorageId, p.SourceExtension);
                     }
-                    return ActorPhotoOperationResult.Fail($"Each image must be no larger than {uploadSettings.MaxSizeMb} MB.");
+                    return OperationResult.Fail($"Each image must be no larger than {uploadSettings.MaxSizeMb} MB.");
                 }
 
                 var aspectRatio = TryExtractAspectRatioFromBytes(image, out var ar) ? ar : (double?)null;
@@ -307,7 +303,7 @@ public sealed class ActorPhotoService(
                 }
             }
 
-            return ActorPhotoOperationResult.Ok();
+            return OperationResult.Ok();
         }
         catch (Exception ex)
         {
@@ -323,87 +319,87 @@ public sealed class ActorPhotoService(
                 throw;
             }
 
-            return ActorPhotoOperationResult.Fail("One or more images could not be processed.");
+            return OperationResult.Fail("One or more images could not be processed.");
         }
     }
 
-    public async Task<(ActorPhotoOperationResult Result, ActorPhotoAlbumSummary? Album)> CreateAlbumAsync(int actorId, string name, CancellationToken ct = default)
+    public async Task<(OperationResult Result, ActorPhotoAlbumSummary? Album)> CreateAlbumAsync(int actorId, string name, CancellationToken ct = default)
     {
         var normalized = name.Trim();
-        if (string.IsNullOrWhiteSpace(normalized)) return (ActorPhotoOperationResult.Fail("Album name is required."), null);
-        if (normalized.Length > 100) return (ActorPhotoOperationResult.Fail("Album names can be at most 100 characters."), null);
+        if (string.IsNullOrWhiteSpace(normalized)) return (OperationResult.Fail("Album name is required."), null);
+        if (normalized.Length > 100) return (OperationResult.Fail("Album names can be at most 100 characters."), null);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        if (!await db.Actors.AnyAsync(actor => actor.Id == actorId, ct)) return (ActorPhotoOperationResult.Fail("Actor not found."), null);
+        if (!await db.Actors.AnyAsync(actor => actor.Id == actorId, ct)) return (OperationResult.Fail("Actor not found."), null);
         if (await db.ActorAlbums.AnyAsync(album => album.ActorId == actorId && album.Name == normalized, ct))
         {
-            return (ActorPhotoOperationResult.Fail("An album with this name already exists."), null);
+            return (OperationResult.Fail("An album with this name already exists."), null);
         }
 
         var album = new ActorAlbum { ActorId = actorId, Name = normalized };
         db.ActorAlbums.Add(album);
         await db.SaveChangesAsync(ct);
-        return (ActorPhotoOperationResult.Ok(), new ActorPhotoAlbumSummary(album.Id, album.Name, 0));
+        return (OperationResult.Ok(), new ActorPhotoAlbumSummary(album.Id, album.Name, 0));
     }
 
-    public async Task<ActorPhotoOperationResult> RenameAlbumAsync(int actorId, int albumId, string name, CancellationToken ct = default)
+    public async Task<OperationResult> RenameAlbumAsync(int actorId, int albumId, string name, CancellationToken ct = default)
     {
         var normalized = name.Trim();
-        if (string.IsNullOrWhiteSpace(normalized)) return ActorPhotoOperationResult.Fail("Album name is required.");
-        if (normalized.Length > 100) return ActorPhotoOperationResult.Fail("Album names can be at most 100 characters.");
+        if (string.IsNullOrWhiteSpace(normalized)) return OperationResult.Fail("Album name is required.");
+        if (normalized.Length > 100) return OperationResult.Fail("Album names can be at most 100 characters.");
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var album = await db.ActorAlbums.FirstOrDefaultAsync(candidate => candidate.Id == albumId && candidate.ActorId == actorId, ct);
-        if (album is null) return ActorPhotoOperationResult.Fail("Album not found.");
+        if (album is null) return OperationResult.Fail("Album not found.");
         if (await db.ActorAlbums.AnyAsync(candidate => candidate.ActorId == actorId && candidate.Id != albumId && candidate.Name == normalized, ct))
         {
-            return ActorPhotoOperationResult.Fail("An album with this name already exists.");
+            return OperationResult.Fail("An album with this name already exists.");
         }
 
         album.Name = normalized;
         await db.SaveChangesAsync(ct);
-        return ActorPhotoOperationResult.Ok();
+        return OperationResult.Ok();
     }
 
-    public async Task<ActorPhotoOperationResult> DeleteAlbumAsync(int actorId, int albumId, CancellationToken ct = default)
+    public async Task<OperationResult> DeleteAlbumAsync(int actorId, int albumId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var album = await db.ActorAlbums.FirstOrDefaultAsync(candidate => candidate.Id == albumId && candidate.ActorId == actorId, ct);
-        if (album is null) return ActorPhotoOperationResult.Fail("Album not found.");
+        if (album is null) return OperationResult.Fail("Album not found.");
 
         var photos = await db.ActorPhotos.Where(photo => photo.AlbumId == albumId).ToListAsync(ct);
         db.ActorPhotos.RemoveRange(photos);
         db.ActorAlbums.Remove(album);
         await db.SaveChangesAsync(ct);
         await DeleteFilesAsync(photos);
-        return ActorPhotoOperationResult.Ok();
+        return OperationResult.Ok();
     }
 
-    public async Task<ActorPhotoOperationResult> MovePhotoAsync(int actorId, int photoId, int? albumId, CancellationToken ct = default)
+    public async Task<OperationResult> MovePhotoAsync(int actorId, int photoId, int? albumId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var photo = await db.ActorPhotos.FirstOrDefaultAsync(candidate => candidate.Id == photoId && candidate.ActorId == actorId, ct);
-        if (photo is null) return ActorPhotoOperationResult.Fail("Photo not found.");
+        if (photo is null) return OperationResult.Fail("Photo not found.");
         if (albumId.HasValue && !await db.ActorAlbums.AnyAsync(album => album.Id == albumId && album.ActorId == actorId, ct))
         {
-            return ActorPhotoOperationResult.Fail("Album not found.");
+            return OperationResult.Fail("Album not found.");
         }
 
         photo.AlbumId = albumId;
         await db.SaveChangesAsync(ct);
-        return ActorPhotoOperationResult.Ok();
+        return OperationResult.Ok();
     }
 
-    public async Task<ActorPhotoOperationResult> DeletePhotoAsync(int actorId, int photoId, CancellationToken ct = default)
+    public async Task<OperationResult> DeletePhotoAsync(int actorId, int photoId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var photo = await db.ActorPhotos.FirstOrDefaultAsync(candidate => candidate.Id == photoId && candidate.ActorId == actorId, ct);
-        if (photo is null) return ActorPhotoOperationResult.Fail("Photo not found.");
+        if (photo is null) return OperationResult.Fail("Photo not found.");
 
         db.ActorPhotos.Remove(photo);
         await db.SaveChangesAsync(ct);
         await DeleteFilesAsync([photo]);
-        return ActorPhotoOperationResult.Ok();
+        return OperationResult.Ok();
     }
 
     public async Task<byte[]?> GetPhotoBytesAsync(int actorId, int photoId, CancellationToken ct = default)

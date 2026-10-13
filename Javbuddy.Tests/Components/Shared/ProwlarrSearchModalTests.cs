@@ -1,6 +1,7 @@
 using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Prowlarr;
 using Javbuddy.Services.Torrents;
@@ -49,7 +50,7 @@ public class ProwlarrSearchModalTests : BunitContext
 
         var torrentGrabService = Substitute.For<ITorrentGrabService>();
         torrentGrabService.GrabAsync(addedMovie, release, Arg.Any<CancellationToken>())
-            .Returns(new TorrentGrabResult(true, null));
+            .Returns(new OperationResult(true, null));
         Services.AddSingleton(torrentGrabService);
 
         Movie? notifiedMovie = null;
@@ -88,7 +89,7 @@ public class ProwlarrSearchModalTests : BunitContext
 
         var torrentGrabService = Substitute.For<ITorrentGrabService>();
         torrentGrabService.GrabAsync(addedMovie, releaseA, Arg.Any<CancellationToken>())
-            .Returns(new TorrentGrabResult(true, null));
+            .Returns(new OperationResult(true, null));
         Services.AddSingleton(torrentGrabService);
 
         // ActorMissing.razor keeps one ProwlarrSearchModal instance alive across searches,
