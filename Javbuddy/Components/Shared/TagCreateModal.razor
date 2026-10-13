@@ -79,7 +79,6 @@
                     }
                 }
             </div>
-        
         </ChildContent>
         <FooterContent>
             <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isCreating">Cancel</button>
@@ -89,7 +88,6 @@
                     disabled="@(isCreating || string.IsNullOrWhiteSpace(tagName))">
                 @(isCreating ? "Creating…" : "Create")
             </button>
-        
         </FooterContent>
     </ModalShell>
 }

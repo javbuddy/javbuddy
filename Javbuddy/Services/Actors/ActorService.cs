@@ -992,11 +992,12 @@ public class ActorService(
 
         if (!string.IsNullOrWhiteSpace(japaneseName))
         {
-            var compact = japaneseName.Replace(" ", "");
+            // CompactName() spelled out, since a C# helper can't be translated to SQL.
+            var compact = japaneseName.CompactName();
             var kanjiMatch = await db.Actors
                 .AsNoTracking()
                 .Include(a => a.Aliases)
-                .FirstOrDefaultAsync(a => a.JapaneseNameKanji != null && a.JapaneseNameKanji.Replace(" ", "").ToLower() == compact.ToLower(), ct);
+                .FirstOrDefaultAsync(a => a.JapaneseNameKanji != null && a.JapaneseNameKanji.Replace(" ", "").Replace("　", "").ToLower() == compact.ToLower(), ct);
             if (kanjiMatch is not null) return kanjiMatch;
         }
 

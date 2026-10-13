@@ -24,6 +24,12 @@ public class ActorServiceWarashiTests
                 LastName = "Mikami",
                 JapaneseNameKanji = "三上悠亜"
             });
+            db.Actors.Add(new Actor
+            {
+                FirstName = "Yui",
+                LastName = "Hatano",
+                JapaneseNameKanji = "波多野　結衣"
+            });
             await db.SaveChangesAsync();
         }
 
@@ -33,6 +39,11 @@ public class ActorServiceWarashiTests
         var matchByKanji = await service.FindMatchingActorAsync("Some Other Name", "三上悠亜");
         Assert.NotNull(matchByKanji);
         Assert.Equal("Mikami Yua", matchByKanji.DisplayName);
+
+        // Match by Kanji, ignoring ASCII and full-width spaces
+        Assert.NotNull(await service.FindMatchingActorAsync("Some Other Name", "三上 悠亜"));
+        Assert.NotNull(await service.FindMatchingActorAsync("Some Other Name", "三上　悠亜"));
+        Assert.Equal("Hatano Yui", (await service.FindMatchingActorAsync("Some Other Name", "波多野結衣"))?.DisplayName);
 
         // Match by Name (Western order)
         var matchByName = await service.FindMatchingActorAsync("Yua Mikami");

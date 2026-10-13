@@ -82,11 +82,9 @@
                     </div>
                 }
             </div>
-        
         </ChildContent>
         <FooterContent>
             <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isProcessing">Close</button>
-        
         </FooterContent>
     </ModalShell>
 }
@@ -164,5 +162,4 @@
         newAliasName = "";
         await OnClose.InvokeAsync();
     }
-
 }

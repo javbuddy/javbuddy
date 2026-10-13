@@ -7,7 +7,7 @@
 
 @if (Show)
 {
-    <ModalShell SpreadFooter="true" MaxWidth="880px" OnClose="CloseAsync">
+    <ModalShell MaxWidth="880px" OnClose="CloseAsync">
         <TitleContent>Crop Cover — @(string.IsNullOrWhiteSpace(Title) ? Code : Title)</TitleContent>
         <ChildContent>
             @if (errorMessage is not null)
@@ -121,7 +121,6 @@
                     </div>
                 </div>
             }
-        
         </ChildContent>
         <FooterContent>
             @if (selectedImageBytes is not null)
@@ -141,7 +140,6 @@
                     Cancel
                 </button>
             }
-        
         </FooterContent>
     </ModalShell>
 }
@@ -486,7 +484,6 @@
             saving = false;
         }
     }
-
 
     private async Task CloseAsync()
     {

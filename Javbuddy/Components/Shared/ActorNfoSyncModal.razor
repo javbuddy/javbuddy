@@ -120,7 +120,6 @@
                     </div>
                 }
             }
-        
         </ChildContent>
         <FooterContent>
             <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isSyncing">
@@ -135,7 +134,6 @@
                     @(isSyncing ? "Syncing…" : $"Sync {previewResult.WillUpdateCount} .nfo File{(previewResult.WillUpdateCount == 1 ? "" : "s")}")
                 </button>
             }
-        
         </FooterContent>
     </ModalShell>
 }
@@ -221,5 +219,4 @@
         if (isSyncing) return;
         await OnClose.InvokeAsync();
     }
-
 }

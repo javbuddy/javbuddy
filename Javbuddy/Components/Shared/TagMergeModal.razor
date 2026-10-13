@@ -87,7 +87,6 @@
                     </label>
                 </div>
             }
-        
         </ChildContent>
         <FooterContent>
             <button type="button" class="btn btn-secondary" @onclick="CloseAsync" disabled="@isMerging">Cancel</button>
@@ -97,7 +96,6 @@
                     disabled="@(selectedTarget is null || isMerging)">
                 @(isMerging ? "Merging…" : $"Merge into {selectedTarget?.Name ?? "Target"}")
             </button>
-        
         </FooterContent>
     </ModalShell>
 }
@@ -207,5 +205,4 @@
         if (isMerging) return;
         await OnClose.InvokeAsync();
     }
-
 }

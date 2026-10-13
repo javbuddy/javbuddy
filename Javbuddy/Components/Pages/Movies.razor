@@ -349,7 +349,11 @@ else
         }
     }
 
-    private Task SaveViewStateAsync() => JsonCookieState.SaveAsync(JS, MoviesViewState.CookieName, ViewState);
+    // Not before the first render: ResetAndLoadAsync also runs on the prerendered pass, where JS
+    // interop throws. OnAfterRenderAsync saves a navigation target applied before then.
+    private Task SaveViewStateAsync() => jsModuleTask is null
+        ? Task.CompletedTask
+        : JsonCookieState.SaveAsync(JS, MoviesViewState.CookieName, ViewState);
 
     // Raised by TorrentChangeNotifier whenever a torrent is grabbed, its status changes, or it's
     // removed — refreshes just the downloading-indicator set, not the whole movie list.

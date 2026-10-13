@@ -44,9 +44,6 @@
     min-width: 220px;
 }
 
-/* Dropdown rules copied from MovieFilterToolbar.razor.css: CSS isolation scopes
-   them per component, so the Movies toolbar's copy doesn't reach this page. */
-
 .scene-wall-empty {
     color: #6c757d;
 }

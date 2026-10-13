@@ -33,6 +33,17 @@ public class ModalShellTests : BunitContext
     }
 
     [Fact]
+    public void Panel_IsAModalDialogLabelledByItsTitle()
+    {
+        var cut = RenderShell();
+
+        var panel = cut.Find(".modal-shell-panel");
+        Assert.Equal("dialog", panel.GetAttribute("role"));
+        Assert.Equal("true", panel.GetAttribute("aria-modal"));
+        Assert.Equal(cut.Find(".modal-shell-title").Id, panel.GetAttribute("aria-labelledby"));
+    }
+
+    [Fact]
     public void TitleContent_TakesPrecedenceOverTitle()
     {
         var cut = Render<ModalShell>(p => p

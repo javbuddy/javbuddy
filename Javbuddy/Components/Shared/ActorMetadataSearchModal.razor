@@ -150,7 +150,6 @@
                     </ActorImportFieldPicker>
                 </div>
             }
-        
         </ChildContent>
         <FooterContent>
             <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@isEnriching">Cancel</button>
@@ -161,7 +160,6 @@
                     @(isEnriching ? "Enriching…" : $"Enrich {Actor.DisplayName} ({count})")
                 </button>
             }
-        
         </FooterContent>
     </ModalShell>
 }
