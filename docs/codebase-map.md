@@ -131,7 +131,7 @@ Domain services (`Services/<Group>/*.cs`):
 | `HtmlTextHelper.cs` / `MediaFileTypes.cs` | `CleanText`/`ResolveUrl` shared by the Warashi and MinnanoAv HTML parsers; shared video/image extension sets (`IsReleaseVideo`, `IsImage`) |
 | `NfoActorMatching.cs` / `NfoFieldSync.cs` / `NfoXmlFormatter.cs` | Pure static .nfo XML logic used by `NfoSyncService`: actor name matching/consolidation, writing canonical fields, indented serialization |
 
-`Infrastructure/` — generic, domain-agnostic base classes (plus small shared helpers: `BestEffortFile`, `DiskSpaceGuard`, `ScraperDefaults`, `ThrottledScrapeClientBase<T>`, `EnrichmentSourceSettingsService<T>`); see `docs/architecture.md`'s "Service layering" for what each one does and why.
+`Infrastructure/` — generic, domain-agnostic base classes (plus small shared helpers: `BestEffortFile`, `DiskSpaceGuard`, `ScraperDefaults`, `LinkRepointer`, `ThrottledScrapeClientBase<T>`, `EnrichmentSourceSettingsService<T>`); see `docs/architecture.md`'s "Service layering" for what each one does and why.
 
 Per-integration subfolders (`Services/<Integration>/`):
 

@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Scenes;
 using Microsoft.EntityFrameworkCore;
@@ -854,40 +855,11 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
     /// already has the target just loses the source.</summary>
     private static async Task RepointClipTagsAsync(AppDbContext db, IReadOnlyCollection<int> sourceTagIds, int targetTagId, CancellationToken ct)
     {
-        await RepointSceneTagsAsync(db, sourceTagIds, targetTagId, ct);
-
-        var targetHighlightIds = (await db.HighlightTags.Where(ht => ht.TagId == targetTagId).Select(ht => ht.HighlightId).ToListAsync(ct)).ToHashSet();
-        foreach (var link in await db.HighlightTags.Where(ht => sourceTagIds.Contains(ht.TagId)).ToListAsync(ct))
-        {
-            db.HighlightTags.Remove(link);
-            if (targetHighlightIds.Add(link.HighlightId))
-            {
-                db.HighlightTags.Add(new HighlightTag { HighlightId = link.HighlightId, TagId = targetTagId });
-            }
-        }
-
-        var targetApexIds = (await db.ApexTags.Where(at => at.TagId == targetTagId).Select(at => at.ApexId).ToListAsync(ct)).ToHashSet();
-        foreach (var link in await db.ApexTags.Where(at => sourceTagIds.Contains(at.TagId)).ToListAsync(ct))
-        {
-            db.ApexTags.Remove(link);
-            if (targetApexIds.Add(link.ApexId))
-            {
-                db.ApexTags.Add(new ApexTag { ApexId = link.ApexId, TagId = targetTagId });
-            }
-        }
-    }
-
-    private static async Task RepointSceneTagsAsync(AppDbContext db, IReadOnlyCollection<int> sourceTagIds, int targetTagId, CancellationToken ct)
-    {
-        var targetSceneIds = (await db.SceneTags.Where(st => st.TagId == targetTagId).Select(st => st.SceneId).ToListAsync(ct)).ToHashSet();
-        var sourceLinks = await db.SceneTags.Where(st => sourceTagIds.Contains(st.TagId)).ToListAsync(ct);
-        foreach (var link in sourceLinks)
-        {
-            db.SceneTags.Remove(link);
-            if (targetSceneIds.Add(link.SceneId))
-            {
-                db.SceneTags.Add(new SceneTag { SceneId = link.SceneId, TagId = targetTagId });
-            }
-        }
+        await LinkRepointer.RepointAsync(db.SceneTags, st => sourceTagIds.Contains(st.TagId), st => st.TagId == targetTagId,
+            st => st.SceneId, st => new SceneTag { SceneId = st.SceneId, TagId = targetTagId }, ct);
+        await LinkRepointer.RepointAsync(db.HighlightTags, ht => sourceTagIds.Contains(ht.TagId), ht => ht.TagId == targetTagId,
+            ht => ht.HighlightId, ht => new HighlightTag { HighlightId = ht.HighlightId, TagId = targetTagId }, ct);
+        await LinkRepointer.RepointAsync(db.ApexTags, at => sourceTagIds.Contains(at.TagId), at => at.TagId == targetTagId,
+            at => at.ApexId, at => new ApexTag { ApexId = at.ApexId, TagId = targetTagId }, ct);
     }
 }

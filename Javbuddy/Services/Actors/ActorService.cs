@@ -4,6 +4,7 @@ using Javbuddy.Services.ActorEnrichment;
 using Javbuddy.Services.ActorEnrichment.Sources;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.MinnanoAv;
 using Javbuddy.Services.Movies;
@@ -814,80 +815,21 @@ public class ActorService(
         }
 
         // 3. Re-point MovieActor links
-        var targetMovieIds = (await db.MovieActors
-            .Where(m => m.ActorId == target.Id)
-            .Select(m => m.MovieId)
-            .ToListAsync(ct))
-            .ToHashSet();
-
-        var sourceMovieLinks = await db.MovieActors
-            .Where(m => m.ActorId == source.Id)
-            .ToListAsync(ct);
-
-        foreach (var link in sourceMovieLinks)
-        {
-            db.MovieActors.Remove(link);
-            if (!targetMovieIds.Contains(link.MovieId))
-            {
-                db.MovieActors.Add(new MovieActor { MovieId = link.MovieId, ActorId = target.Id });
-                targetMovieIds.Add(link.MovieId);
-            }
-        }
+        await LinkRepointer.RepointAsync(db.MovieActors, m => m.ActorId == source.Id, m => m.ActorId == target.Id,
+            m => m.MovieId, m => new MovieActor { MovieId = m.MovieId, ActorId = target.Id }, ct);
 
         // Scene actors hang off the source's cast links and would cascade away
         // with them; move them onto the target's link for the same movie.
-        var targetSceneIds = (await db.SceneActors
-            .Where(sa => sa.ActorId == target.Id)
-            .Select(sa => sa.SceneId)
-            .ToListAsync(ct))
-            .ToHashSet();
-        var sourceSceneLinks = await db.SceneActors
-            .Where(sa => sa.ActorId == source.Id)
-            .ToListAsync(ct);
-        foreach (var link in sourceSceneLinks)
-        {
-            db.SceneActors.Remove(link);
-            if (targetSceneIds.Add(link.SceneId))
-            {
-                db.SceneActors.Add(new SceneActor { SceneId = link.SceneId, MovieId = link.MovieId, ActorId = target.Id });
-            }
-        }
+        await LinkRepointer.RepointAsync(db.SceneActors, sa => sa.ActorId == source.Id, sa => sa.ActorId == target.Id,
+            sa => sa.SceneId, sa => new SceneActor { SceneId = sa.SceneId, MovieId = sa.MovieId, ActorId = target.Id }, ct);
 
         // Apex actors hang off the cast links the same way.
-        var targetApexIds = (await db.ApexActors
-            .Where(aa => aa.ActorId == target.Id)
-            .Select(aa => aa.ApexId)
-            .ToListAsync(ct))
-            .ToHashSet();
-        var sourceApexLinks = await db.ApexActors
-            .Where(aa => aa.ActorId == source.Id)
-            .ToListAsync(ct);
-        foreach (var link in sourceApexLinks)
-        {
-            db.ApexActors.Remove(link);
-            if (targetApexIds.Add(link.ApexId))
-            {
-                db.ApexActors.Add(new ApexActor { ApexId = link.ApexId, MovieId = link.MovieId, ActorId = target.Id });
-            }
-        }
+        await LinkRepointer.RepointAsync(db.ApexActors, aa => aa.ActorId == source.Id, aa => aa.ActorId == target.Id,
+            aa => aa.ApexId, aa => new ApexActor { ApexId = aa.ApexId, MovieId = aa.MovieId, ActorId = target.Id }, ct);
 
         // And so do highlight actors.
-        var targetHighlightIds = (await db.HighlightActors
-            .Where(ha => ha.ActorId == target.Id)
-            .Select(ha => ha.HighlightId)
-            .ToListAsync(ct))
-            .ToHashSet();
-        var sourceHighlightLinks = await db.HighlightActors
-            .Where(ha => ha.ActorId == source.Id)
-            .ToListAsync(ct);
-        foreach (var link in sourceHighlightLinks)
-        {
-            db.HighlightActors.Remove(link);
-            if (targetHighlightIds.Add(link.HighlightId))
-            {
-                db.HighlightActors.Add(new HighlightActor { HighlightId = link.HighlightId, MovieId = link.MovieId, ActorId = target.Id });
-            }
-        }
+        await LinkRepointer.RepointAsync(db.HighlightActors, ha => ha.ActorId == source.Id, ha => ha.ActorId == target.Id,
+            ha => ha.HighlightId, ha => new HighlightActor { HighlightId = ha.HighlightId, MovieId = ha.MovieId, ActorId = target.Id }, ct);
 
         // Actor tags hang off the cast links too; the target keeps its own and gains the source's.
         await RepointActorTagsAsync(db, source.Id, target.Id, ct);
@@ -1308,48 +1250,13 @@ public class ActorService(
 
     private static async Task RepointActorTagsAsync(AppDbContext db, int sourceId, int targetId, CancellationToken ct)
     {
-        var targetMovie = (await db.MovieActorTags.Where(t => t.ActorId == targetId).Select(t => new { t.MovieId, t.TagId }).ToListAsync(ct))
-            .Select(t => (t.MovieId, t.TagId)).ToHashSet();
-        foreach (var row in await db.MovieActorTags.Where(t => t.ActorId == sourceId).ToListAsync(ct))
-        {
-            db.MovieActorTags.Remove(row);
-            if (targetMovie.Add((row.MovieId, row.TagId)))
-            {
-                db.MovieActorTags.Add(new MovieActorTag { MovieId = row.MovieId, ActorId = targetId, TagId = row.TagId });
-            }
-        }
-
-        var targetScene = (await db.SceneActorTags.Where(t => t.ActorId == targetId).Select(t => new { t.SceneId, t.TagId }).ToListAsync(ct))
-            .Select(t => (t.SceneId, t.TagId)).ToHashSet();
-        foreach (var row in await db.SceneActorTags.Where(t => t.ActorId == sourceId).ToListAsync(ct))
-        {
-            db.SceneActorTags.Remove(row);
-            if (targetScene.Add((row.SceneId, row.TagId)))
-            {
-                db.SceneActorTags.Add(new SceneActorTag { SceneId = row.SceneId, MovieId = row.MovieId, ActorId = targetId, TagId = row.TagId });
-            }
-        }
-
-        var targetHighlight = (await db.HighlightActorTags.Where(t => t.ActorId == targetId).Select(t => new { t.HighlightId, t.TagId }).ToListAsync(ct))
-            .Select(t => (t.HighlightId, t.TagId)).ToHashSet();
-        foreach (var row in await db.HighlightActorTags.Where(t => t.ActorId == sourceId).ToListAsync(ct))
-        {
-            db.HighlightActorTags.Remove(row);
-            if (targetHighlight.Add((row.HighlightId, row.TagId)))
-            {
-                db.HighlightActorTags.Add(new HighlightActorTag { HighlightId = row.HighlightId, MovieId = row.MovieId, ActorId = targetId, TagId = row.TagId });
-            }
-        }
-
-        var targetApex = (await db.ApexActorTags.Where(t => t.ActorId == targetId).Select(t => new { t.ApexId, t.TagId }).ToListAsync(ct))
-            .Select(t => (t.ApexId, t.TagId)).ToHashSet();
-        foreach (var row in await db.ApexActorTags.Where(t => t.ActorId == sourceId).ToListAsync(ct))
-        {
-            db.ApexActorTags.Remove(row);
-            if (targetApex.Add((row.ApexId, row.TagId)))
-            {
-                db.ApexActorTags.Add(new ApexActorTag { ApexId = row.ApexId, MovieId = row.MovieId, ActorId = targetId, TagId = row.TagId });
-            }
-        }
+        await LinkRepointer.RepointAsync(db.MovieActorTags, t => t.ActorId == sourceId, t => t.ActorId == targetId,
+            t => (t.MovieId, t.TagId), t => new MovieActorTag { MovieId = t.MovieId, ActorId = targetId, TagId = t.TagId }, ct);
+        await LinkRepointer.RepointAsync(db.SceneActorTags, t => t.ActorId == sourceId, t => t.ActorId == targetId,
+            t => (t.SceneId, t.TagId), t => new SceneActorTag { SceneId = t.SceneId, MovieId = t.MovieId, ActorId = targetId, TagId = t.TagId }, ct);
+        await LinkRepointer.RepointAsync(db.HighlightActorTags, t => t.ActorId == sourceId, t => t.ActorId == targetId,
+            t => (t.HighlightId, t.TagId), t => new HighlightActorTag { HighlightId = t.HighlightId, MovieId = t.MovieId, ActorId = targetId, TagId = t.TagId }, ct);
+        await LinkRepointer.RepointAsync(db.ApexActorTags, t => t.ActorId == sourceId, t => t.ActorId == targetId,
+            t => (t.ApexId, t.TagId), t => new ApexActorTag { ApexId = t.ApexId, MovieId = t.MovieId, ActorId = targetId, TagId = t.TagId }, ct);
     }
 }
