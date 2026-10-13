@@ -26,8 +26,7 @@ public static class ProwlarrEnvConfig
     public static string? GetExternalUrl(IConfiguration configuration) => configuration["Prowlarr:ExternalUrl"];
     public static string? GetApiKey(IConfiguration configuration) => configuration["Prowlarr:ApiKey"];
 
-    public static bool IsSet(IConfiguration configuration) =>
-        !string.IsNullOrWhiteSpace(GetBaseUrl(configuration)) && !string.IsNullOrWhiteSpace(GetApiKey(configuration));
+    public static bool IsSet(IConfiguration configuration) => EnvConfig.AllSet(GetBaseUrl(configuration), GetApiKey(configuration));
 }
 
 public class ProwlarrClient : ApiClientBase<ProwlarrSettings>, IProwlarrClient

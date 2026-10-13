@@ -41,41 +41,16 @@ public interface IJellyfinClient : IMediaServerClient
 /// Jellyfin__SelectedLibraryNames__1, JSON arrays, and comma/newline-delimited strings).</summary>
 public static class JellyfinEnvConfig
 {
-    public static bool? GetEnabled(IConfiguration configuration)
-    {
-        var raw = configuration["Jellyfin:Enabled"];
-        return bool.TryParse(raw, out var enabled) ? enabled : null;
-    }
+    public static bool? GetEnabled(IConfiguration configuration) => EnvConfig.GetBool(configuration, "Jellyfin:Enabled");
 
     public static string? GetBaseUrl(IConfiguration configuration) => configuration["Jellyfin:BaseUrl"];
     public static string? GetExternalUrl(IConfiguration configuration) => configuration["Jellyfin:ExternalUrl"];
     public static string? GetApiKey(IConfiguration configuration) => configuration["Jellyfin:ApiKey"];
 
-    public static List<string> GetSelectedLibraryNames(IConfiguration configuration)
-    {
-        var section = configuration.GetSection("Jellyfin:SelectedLibraryNames");
-        var children = section.GetChildren()
-            .Select(c => c.Value)
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Select(v => v!.Trim())
-            .ToList();
+    public static List<string> GetSelectedLibraryNames(IConfiguration configuration) =>
+        EnvConfig.GetList(configuration, "Jellyfin:SelectedLibraryNames", JellyfinClient.ParseLibraryNames);
 
-        if (children.Count > 0)
-        {
-            return children;
-        }
-
-        var scalar = configuration["Jellyfin:SelectedLibraryNames"];
-        if (string.IsNullOrWhiteSpace(scalar))
-        {
-            return [];
-        }
-
-        return JellyfinClient.ParseLibraryNames(scalar);
-    }
-
-    public static bool IsSet(IConfiguration configuration) =>
-        !string.IsNullOrWhiteSpace(GetBaseUrl(configuration)) && !string.IsNullOrWhiteSpace(GetApiKey(configuration));
+    public static bool IsSet(IConfiguration configuration) => EnvConfig.AllSet(GetBaseUrl(configuration), GetApiKey(configuration));
 }
 
 public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient

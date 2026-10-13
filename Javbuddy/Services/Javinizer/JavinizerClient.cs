@@ -46,8 +46,7 @@ public static class JavinizerEnvConfig
             .ToList()
         ?? [];
 
-    public static bool IsSet(IConfiguration configuration) =>
-        !string.IsNullOrWhiteSpace(GetBaseUrl(configuration)) && !string.IsNullOrWhiteSpace(GetApiToken(configuration));
+    public static bool IsSet(IConfiguration configuration) => EnvConfig.AllSet(GetBaseUrl(configuration), GetApiToken(configuration));
 }
 
 public interface IJavinizerClient

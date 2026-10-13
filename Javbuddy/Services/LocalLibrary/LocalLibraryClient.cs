@@ -2,6 +2,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.MediaInfo;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Nfo;
@@ -172,28 +173,8 @@ public enum ConditionalNfoSaveResult
 /// Takes precedence over the Connections page when configured.</summary>
 public static class LocalLibraryEnvConfig
 {
-    public static List<string> GetRootPaths(IConfiguration configuration)
-    {
-        var section = configuration.GetSection("LocalLibrary:RootPaths");
-        var children = section.GetChildren()
-            .Select(c => c.Value)
-            .Where(v => !string.IsNullOrWhiteSpace(v))
-            .Select(v => v!.Trim())
-            .ToList();
-
-        if (children.Count > 0)
-        {
-            return children;
-        }
-
-        var scalar = configuration["LocalLibrary:RootPaths"];
-        if (string.IsNullOrWhiteSpace(scalar))
-        {
-            return [];
-        }
-
-        return LocalLibraryClient.ParseRootPaths(scalar);
-    }
+    public static List<string> GetRootPaths(IConfiguration configuration) =>
+        EnvConfig.GetList(configuration, "LocalLibrary:RootPaths", LocalLibraryClient.ParseRootPaths);
 
     public static bool IsSet(IConfiguration configuration) => GetRootPaths(configuration).Count > 0;
 }

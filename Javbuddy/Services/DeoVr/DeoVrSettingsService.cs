@@ -13,7 +13,7 @@ public static class DeoVrEnvConfig
         configuration[$"DeoVr:{field}"] is { Length: > 0 } value ? value : null;
 
     public static bool? GetBool(IConfiguration configuration, string field) =>
-        bool.TryParse(Get(configuration, field), out var value) ? value : null;
+        EnvConfig.GetBool(configuration, $"DeoVr:{field}");
 }
 
 public interface IDeoVrSettingsService

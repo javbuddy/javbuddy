@@ -46,9 +46,7 @@ public static class QBittorrentEnvConfig
     public static string? GetCategory(IConfiguration configuration) => configuration["QBittorrent:Category"];
 
     public static bool IsSet(IConfiguration configuration) =>
-        !string.IsNullOrWhiteSpace(GetBaseUrl(configuration))
-        && !string.IsNullOrWhiteSpace(GetUsername(configuration))
-        && !string.IsNullOrWhiteSpace(GetPassword(configuration));
+        EnvConfig.AllSet(GetBaseUrl(configuration), GetUsername(configuration), GetPassword(configuration));
 }
 
 /// <summary>Talks to qBittorrent's WebUI API v2. Unlike Prowlarr/Jellyfin this isn't API-key

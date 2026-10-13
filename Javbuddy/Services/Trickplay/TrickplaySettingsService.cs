@@ -11,7 +11,7 @@ namespace Javbuddy.Services.Trickplay;
 public static class TrickplayEnvConfig
 {
     public static bool? GetBool(IConfiguration configuration, string field) =>
-        bool.TryParse(configuration[$"Trickplay:{field}"], out var value) ? value : null;
+        EnvConfig.GetBool(configuration, $"Trickplay:{field}");
 }
 
 public interface ITrickplaySettingsService
