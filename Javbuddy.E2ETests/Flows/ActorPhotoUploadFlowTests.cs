@@ -45,9 +45,9 @@ public class ActorPhotoUploadFlowTests
         await Expect(changePhotoBtn).ToBeVisibleAsync();
         await changePhotoBtn.ClickAsync();
 
-        var modal = page.Locator(".crop-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
         await Expect(modal).ToBeVisibleAsync();
-        await Expect(modal.Locator(".crop-modal-title")).ToContainTextAsync($"Change Portrait — {displayName}");
+        await Expect(modal.Locator(".modal-shell-title")).ToContainTextAsync($"Change Portrait — {displayName}");
 
         // 3. Upload a sample image file via file input
         var tempImagePath = Path.Combine(Path.GetTempPath(), $"test-actor-{Guid.NewGuid():N}.png");
@@ -144,7 +144,7 @@ public class ActorPhotoUploadFlowTests
         // 3. Upload initial photo
         var changePhotoBtn = page.Locator(".actor-toolbar").GetByRole(AriaRole.Button, new() { Name = "Change Photo" });
         await changePhotoBtn.ClickAsync();
-        var modal = page.Locator(".crop-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
         await Expect(modal).ToBeVisibleAsync();
 
         var tempImagePath1 = Path.Combine(Path.GetTempPath(), $"test-actor-1-{Guid.NewGuid():N}.png");
@@ -253,14 +253,14 @@ public class ActorPhotoUploadFlowTests
         var avatarInitials = page.Locator(".actor-hero-avatar:not(.actor-hero-avatar-photo)");
         await Expect(avatarInitials).ToHaveAttributeAsync("title", "Click to upload photo");
         await avatarInitials.ClickAsync();
-        await Expect(page.Locator(".crop-modal-panel")).ToBeVisibleAsync();
-        await page.Locator(".crop-modal-close-btn").ClickAsync();
-        await Expect(page.Locator(".crop-modal-panel")).Not.ToBeVisibleAsync();
+        await Expect(page.Locator(".modal-shell-panel")).ToBeVisibleAsync();
+        await page.Locator(".modal-shell-close-btn").ClickAsync();
+        await Expect(page.Locator(".modal-shell-panel")).Not.ToBeVisibleAsync();
 
         // 3. Upload photo
         var changePhotoBtn = page.Locator(".actor-toolbar").GetByRole(AriaRole.Button, new() { Name = "Change Photo" });
         await changePhotoBtn.ClickAsync();
-        var modal = page.Locator(".crop-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
         await Expect(modal).ToBeVisibleAsync();
 
         var tempImagePath = Path.Combine(Path.GetTempPath(), $"test-actor-lightbox-{Guid.NewGuid():N}.png");

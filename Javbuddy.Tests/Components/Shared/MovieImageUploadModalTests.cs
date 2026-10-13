@@ -29,7 +29,7 @@ public class MovieImageUploadModalTests : BunitContext
     {
         var cut = RenderModal(show: false);
 
-        Assert.Empty(cut.FindAll(".movie-image-upload-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]

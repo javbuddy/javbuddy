@@ -7,55 +7,50 @@
 
 @if (Show)
 {
-    <div class="movie-image-upload-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
-        <div class="movie-image-upload-panel" role="dialog" aria-modal="true" aria-labelledby="movie-image-upload-title" @onclick:stopPropagation="true">
-            <div class="movie-image-upload-header">
-                <h2 id="movie-image-upload-title">Add Images — @Code</h2>
-                <button type="button" class="movie-image-upload-close" @onclick="CloseAsync" aria-label="Close">×</button>
+    <ModalShell MaxWidth="544px" OnClose="CloseAsync" Busy="@Busy">
+        <TitleContent>Add Images — @Code</TitleContent>
+        <ChildContent>
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger py-2">@errorMessage</div>
+            }
+            else if (addedCount > 0)
+            {
+                <div class="alert alert-success py-2">Added @addedCount image@(addedCount == 1 ? string.Empty : "s").</div>
+            }
+            <div class="upload-dropzone">
+                <InputFile OnChange="SelectFiles" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" disabled="@Busy" />
+                <h6 class="mb-1">Choose images or drag &amp; drop here</h6>
+                <p class="upload-dropzone-hint small mb-0">JPEG, PNG, or WebP; up to @UploadSettings.MaxSizeMb MB each, @UploadSettings.MaxBatchFiles per batch.</p>
             </div>
-            <div class="movie-image-upload-body">
-                @if (errorMessage is not null)
-                {
-                    <div class="alert alert-danger py-2">@errorMessage</div>
-                }
-                else if (addedCount > 0)
-                {
-                    <div class="alert alert-success py-2">Added @addedCount image@(addedCount == 1 ? string.Empty : "s").</div>
-                }
-                <div class="upload-dropzone">
-                    <InputFile OnChange="SelectFiles" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" disabled="@Busy" />
-                    <h6 class="mb-1">Choose images or drag &amp; drop here</h6>
-                    <p class="upload-dropzone-hint small mb-0">JPEG, PNG, or WebP; up to @UploadSettings.MaxSizeMb MB each, @UploadSettings.MaxBatchFiles per batch.</p>
+            @if (files.Count > 0)
+            {
+                <p class="small mt-2 mb-0">@files.Count image@(files.Count == 1 ? string.Empty : "s") selected.</p>
+            }
+            @if (uploading)
+            {
+                <div class="movie-image-upload-progress" role="status">
+                    <div class="progress"><div class="progress-bar" style="width: @UploadPercent%"></div></div>
+                    <span>Uploading @uploadIndex of @files.Count…</span>
                 </div>
-                @if (files.Count > 0)
-                {
-                    <p class="small mt-2 mb-0">@files.Count image@(files.Count == 1 ? string.Empty : "s") selected.</p>
-                }
-                @if (uploading)
-                {
-                    <div class="movie-image-upload-progress" role="status">
-                        <div class="progress"><div class="progress-bar" style="width: @UploadPercent%"></div></div>
-                        <span>Uploading @uploadIndex of @files.Count…</span>
-                    </div>
-                }
-                <div class="movie-image-upload-divider"><span>or</span></div>
-                <label class="form-label small mb-1" for="movie-image-url-input">Import from URL</label>
-                <div class="input-group">
-                    <input id="movie-image-url-input" type="url" class="form-control form-control-sm"
-                           placeholder="https://example.com/image.jpg"
-                           @bind="imageUrl" @bind:event="oninput" @onkeydown="HandleUrlKeyDown" disabled="@Busy" />
-                    <button type="button" class="btn btn-primary btn-sm fetch-btn" @onclick="FetchFromUrlAsync"
-                            disabled="@(Busy || string.IsNullOrWhiteSpace(imageUrl))">
-                        @(fetchingUrl ? "Fetching…" : "Fetch")
-                    </button>
-                </div>
+            }
+            <div class="movie-image-upload-divider"><span>or</span></div>
+            <label class="form-label small mb-1" for="movie-image-url-input">Import from URL</label>
+            <div class="input-group">
+                <input id="movie-image-url-input" type="url" class="form-control form-control-sm"
+                       placeholder="https://example.com/image.jpg"
+                       @bind="imageUrl" @bind:event="oninput" @onkeydown="HandleUrlKeyDown" disabled="@Busy" />
+                <button type="button" class="btn btn-primary btn-sm fetch-btn" @onclick="FetchFromUrlAsync"
+                        disabled="@(Busy || string.IsNullOrWhiteSpace(imageUrl))">
+                    @(fetchingUrl ? "Fetching…" : "Fetch")
+                </button>
             </div>
-            <div class="movie-image-upload-footer">
-                <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@Busy">@(addedCount > 0 ? "Done" : "Cancel")</button>
-                <button type="button" class="btn btn-primary upload-btn" @onclick="UploadAsync" disabled="@(Busy || files.Count == 0)">@(uploading ? "Uploading…" : "Upload images")</button>
-            </div>
-        </div>
-    </div>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@Busy">@(addedCount > 0 ? "Done" : "Cancel")</button>
+            <button type="button" class="btn btn-primary upload-btn" @onclick="UploadAsync" disabled="@(Busy || files.Count == 0)">@(uploading ? "Uploading…" : "Upload images")</button>
+        </FooterContent>
+    </ModalShell>
 }
 
 @code {
@@ -85,35 +80,10 @@
 
     private void SelectFiles(InputFileChangeEventArgs e)
     {
-        errorMessage = null;
+        var (picked, error) = ImageUploadPicker.Pick(e, UploadSettings, "images");
+        errorMessage = error;
         files.Clear();
-        IReadOnlyList<IBrowserFile> selected;
-        try
-        {
-            selected = e.GetMultipleFiles(UploadSettings.MaxBatchFiles);
-        }
-        catch (InvalidOperationException)
-        {
-            errorMessage = $"You can select at most {UploadSettings.MaxBatchFiles} images at a time.";
-            return;
-        }
-
-        foreach (var file in selected)
-        {
-            if (Path.GetExtension(file.Name).ToLowerInvariant() is not (".jpg" or ".jpeg" or ".png" or ".webp"))
-            {
-                errorMessage = "Only JPEG, PNG, and WebP images are supported.";
-                files.Clear();
-                return;
-            }
-            if (file.Size > UploadSettings.MaxSizeBytes)
-            {
-                errorMessage = $"Each image must be no larger than {UploadSettings.MaxSizeMb} MB.";
-                files.Clear();
-                return;
-            }
-            files.Add(file);
-        }
+        files.AddRange(picked);
     }
 
     private async Task UploadAsync()
@@ -182,10 +152,5 @@
         uploadIndex = 0;
         addedCount = 0;
         await OnClose.InvokeAsync();
-    }
-
-    private async Task HandleKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") await CloseAsync();
     }
 }

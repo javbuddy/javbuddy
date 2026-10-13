@@ -7,139 +7,132 @@
 
 @if (Show)
 {
-    <div class="crop-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
-        <div class="crop-modal-panel" @onclick:stopPropagation="true">
-            <div class="crop-modal-header">
-                <h5 class="crop-modal-title">Change Portrait — @ActorName</h5>
-                <button type="button" class="crop-modal-close-btn" @onclick="CloseAsync" aria-label="Close">
-                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+    <ModalShell SpreadFooter="true" MaxWidth="780px" OnClose="CloseAsync">
+        <TitleContent>Change Portrait — @ActorName</TitleContent>
+        <ChildContent>
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+            }
+
+            @if (selectedImageBytes is null)
+            {
+                <div class="upload-dropzone">
+                    <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 16 16" width="48" height="48" fill="currentColor" aria-hidden="true">
+                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                            <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                        </svg>
+                    </div>
+                    <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
+                    <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
+                </div>
+
+                <div class="upload-divider">
+                    <span>OR</span>
+                </div>
+
+                <div class="upload-url-section">
+                    <label class="form-label text-light small mb-1" for="actor-image-url-input">Import from URL</label>
+                    <div class="input-group">
+                        <input id="actor-image-url-input"
+                               type="url"
+                               class="form-control form-control-sm url-input"
+                               placeholder="https://example.com/photo.jpg"
+                               @bind="imageUrlInput"
+                               @bind:event="oninput"
+                               @onkeydown="HandleUrlKeyDown"
+                               disabled="@fetchingUrl" />
+                        <button type="button"
+                                class="btn btn-primary btn-sm fetch-btn"
+                                @onclick="FetchFromUrlAsync"
+                                disabled="@(fetchingUrl || string.IsNullOrWhiteSpace(imageUrlInput))">
+                            @(fetchingUrl ? "Fetching…" : "Fetch")
+                        </button>
+                    </div>
+                </div>
+
+                @if (hasCustomImage)
+                {
+                    <div class="mt-4 p-3 bg-dark border border-secondary rounded d-flex align-items-center justify-content-between">
+                        <div>
+                            <strong class="text-light">Custom Portrait Active</strong>
+                            <p class="text-muted small mb-0">This actor currently has a custom uploaded portrait.</p>
+                        </div>
+                        <button type="button" class="btn btn-outline-danger btn-sm" @onclick="RemoveCustomPhotoAsync" disabled="@deleting">
+                            @(deleting ? "Removing…" : "Revert to Library Photo")
+                        </button>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="cropper-toolbar">
+                    <div class="ratio-group">
+                        <button type="button" class="btn-tool @(currentAspectRatio == 1.0 ? "active" : "")" @onclick="() => SetAspectRatio(1.0)">
+                            1:1 Square
+                        </button>
+                        <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)">
+                            Free-form
+                        </button>
+                        <button type="button" class="btn-tool @(Math.Abs((currentAspectRatio ?? 0) - (2.0/3.0)) < 0.01 ? "active" : "")" @onclick="() => SetAspectRatio(2.0/3.0)">
+                            2:3 Portrait
+                        </button>
+                    </div>
+
+                    <div class="zoom-controls">
+                        <button type="button" class="btn-tool" @onclick="() => AdjustZoom(-0.1)" title="Zoom out">-</button>
+                        <input type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom" @oninput="HandleZoomInput" />
+                        <button type="button" class="btn-tool" @onclick="() => AdjustZoom(0.1)" title="Zoom in">+</button>
+                        <button type="button" class="btn-tool ms-2" @onclick="ResetCrop" title="Reset crop box">Reset</button>
+                    </div>
+                </div>
+
+                <div class="cropper-workspace">
+                    <div class="cropper-viewport-wrapper">
+                        <CropperViewport HeightPx="380" @ref="viewport" />
+                        <small class="text-muted d-block mt-1">Drag inside box to pan • Drag handles to resize • Scroll to zoom</small>
+                    </div>
+
+                    <div class="cropper-previews">
+                        <span class="preview-title">Avatar Preview</span>
+                        <div class="preview-circle-wrapper" title="Circular Avatar Preview">
+                            <canvas width="96" height="96" class="preview-canvas" @ref="circleCanvasRef"></canvas>
+                        </div>
+                        <div class="preview-square-wrapper" title="Square Avatar Preview">
+                            <canvas width="80" height="80" class="preview-canvas" @ref="squareCanvasRef"></canvas>
+                        </div>
+                    </div>
+                </div>
+            }
+        
+        </ChildContent>
+        <FooterContent>
+            @if (selectedImageBytes is not null)
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetSelection" disabled="@saving">
+                    Choose Different Image
                 </button>
-            </div>
-
-            <div class="crop-modal-body">
-                @if (errorMessage is not null)
-                {
-                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
-                }
-
-                @if (selectedImageBytes is null)
-                {
-                    <div class="upload-dropzone">
-                        <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
-                        <div class="upload-icon">
-                            <svg viewBox="0 0 16 16" width="48" height="48" fill="currentColor" aria-hidden="true">
-                                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                                <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
-                            </svg>
-                        </div>
-                        <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
-                        <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
-                    </div>
-
-                    <div class="upload-divider">
-                        <span>OR</span>
-                    </div>
-
-                    <div class="upload-url-section">
-                        <label class="form-label text-light small mb-1" for="actor-image-url-input">Import from URL</label>
-                        <div class="input-group">
-                            <input id="actor-image-url-input"
-                                   type="url"
-                                   class="form-control form-control-sm url-input"
-                                   placeholder="https://example.com/photo.jpg"
-                                   @bind="imageUrlInput"
-                                   @bind:event="oninput"
-                                   @onkeydown="HandleUrlKeyDown"
-                                   disabled="@fetchingUrl" />
-                            <button type="button"
-                                    class="btn btn-primary btn-sm fetch-btn"
-                                    @onclick="FetchFromUrlAsync"
-                                    disabled="@(fetchingUrl || string.IsNullOrWhiteSpace(imageUrlInput))">
-                                @(fetchingUrl ? "Fetching…" : "Fetch")
-                            </button>
-                        </div>
-                    </div>
-
-                    @if (hasCustomImage)
-                    {
-                        <div class="mt-4 p-3 bg-dark border border-secondary rounded d-flex align-items-center justify-content-between">
-                            <div>
-                                <strong class="text-light">Custom Portrait Active</strong>
-                                <p class="text-muted small mb-0">This actor currently has a custom uploaded portrait.</p>
-                            </div>
-                            <button type="button" class="btn btn-outline-danger btn-sm" @onclick="RemoveCustomPhotoAsync" disabled="@deleting">
-                                @(deleting ? "Removing…" : "Revert to Library Photo")
-                            </button>
-                        </div>
-                    }
-                }
-                else
-                {
-                    <div class="cropper-toolbar">
-                        <div class="ratio-group">
-                            <button type="button" class="btn-tool @(currentAspectRatio == 1.0 ? "active" : "")" @onclick="() => SetAspectRatio(1.0)">
-                                1:1 Square
-                            </button>
-                            <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)">
-                                Free-form
-                            </button>
-                            <button type="button" class="btn-tool @(Math.Abs((currentAspectRatio ?? 0) - (2.0/3.0)) < 0.01 ? "active" : "")" @onclick="() => SetAspectRatio(2.0/3.0)">
-                                2:3 Portrait
-                            </button>
-                        </div>
-
-                        <div class="zoom-controls">
-                            <button type="button" class="btn-tool" @onclick="() => AdjustZoom(-0.1)" title="Zoom out">-</button>
-                            <input type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom" @oninput="HandleZoomInput" />
-                            <button type="button" class="btn-tool" @onclick="() => AdjustZoom(0.1)" title="Zoom in">+</button>
-                            <button type="button" class="btn-tool ms-2" @onclick="ResetCrop" title="Reset crop box">Reset</button>
-                        </div>
-                    </div>
-
-                    <div class="cropper-workspace">
-                        <div class="cropper-viewport-wrapper">
-                            <CropperViewport HeightPx="380" @ref="viewport" />
-                            <small class="text-muted d-block mt-1">Drag inside box to pan • Drag handles to resize • Scroll to zoom</small>
-                        </div>
-
-                        <div class="cropper-previews">
-                            <span class="preview-title">Avatar Preview</span>
-                            <div class="preview-circle-wrapper" title="Circular Avatar Preview">
-                                <canvas width="96" height="96" class="preview-canvas" @ref="circleCanvasRef"></canvas>
-                            </div>
-                            <div class="preview-square-wrapper" title="Square Avatar Preview">
-                                <canvas width="80" height="80" class="preview-canvas" @ref="squareCanvasRef"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                }
-            </div>
-
-            <div class="crop-modal-footer">
-                @if (selectedImageBytes is not null)
-                {
-                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetSelection" disabled="@saving">
-                        Choose Different Image
+                <div class="footer-actions-right">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="SaveFullAsync" disabled="@saving">
+                        Upload Full (Skip Crop)
                     </button>
-                    <div class="footer-actions-right">
-                        <button type="button" class="btn btn-secondary btn-sm" @onclick="SaveFullAsync" disabled="@saving">
-                            Upload Full (Skip Crop)
-                        </button>
-                        <button type="button" class="btn btn-primary btn-sm" @onclick="SaveCroppedAsync" disabled="@(saving || !cropperReady)">
-                            @(saving ? "Saving…" : "Save Photo")
-                        </button>
-                    </div>
-                }
-                else
-                {
-                    <div></div>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync">
-                        Cancel
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="SaveCroppedAsync" disabled="@(saving || !cropperReady)">
+                        @(saving ? "Saving…" : "Save Photo")
                     </button>
-                }
-            </div>
-        </div>
-    </div>
+                </div>
+            }
+            else
+            {
+                <div></div>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync">
+                    Cancel
+                </button>
+            }
+        
+        </FooterContent>
+    </ModalShell>
 }
 
 @code {
@@ -472,13 +465,6 @@
         }
     }
 
-    private async Task HandleKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape")
-        {
-            await CloseAsync();
-        }
-    }
 
     private async Task CloseAsync()
     {

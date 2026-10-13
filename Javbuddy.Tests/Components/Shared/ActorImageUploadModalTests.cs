@@ -19,7 +19,7 @@ public class ActorImageUploadModalTests : BunitContext
             .Add(m => m.ActorId, 1)
             .Add(m => m.ActorName, "Yua Mikami"));
 
-        Assert.Empty(cut.FindAll(".crop-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -34,7 +34,7 @@ public class ActorImageUploadModalTests : BunitContext
             .Add(m => m.ActorId, 1)
             .Add(m => m.ActorName, "Yua Mikami"));
 
-        Assert.NotNull(cut.Find(".crop-modal-backdrop"));
+        Assert.NotNull(cut.Find(".modal-shell-backdrop"));
         Assert.Contains("Change Portrait — Yua Mikami", cut.Markup);
         Assert.NotNull(cut.Find(".upload-dropzone"));
         Assert.NotNull(cut.Find("input[type='file']"));
@@ -70,7 +70,7 @@ public class ActorImageUploadModalTests : BunitContext
             .Add(m => m.ActorName, "Yua Mikami")
             .Add(m => m.OnClose, () => closed = true));
 
-        var closeBtn = cut.Find("button.crop-modal-close-btn");
+        var closeBtn = cut.Find("button.modal-shell-close-btn");
         await cut.InvokeAsync(() => closeBtn.Click());
 
         Assert.True(closed);

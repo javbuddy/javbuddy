@@ -20,7 +20,7 @@ public class ActorPhotoUploadModalTests : BunitContext
             .Add(m => m.ActorId, 1)
             .Add(m => m.ActorName, "Yua Mikami"));
 
-        Assert.Empty(cut.FindAll(".actor-photo-upload-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]

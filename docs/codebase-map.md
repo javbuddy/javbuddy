@@ -30,6 +30,7 @@ One row per product area.
 |---|---|---|
 | `BackButton.razor` | Standard "‹ Back" link | `BackButtonTests.cs` |
 | `CropperViewport.razor` (+ `.razor.js`) | The image-crop viewport (image, crop box, eight handles) and the shared JS cropper core (`ImageCropper`, `createCropperSession`) that `MovieCoverCropModal` and `ActorImageUploadModal` build on | `CropperViewportTests.cs` |
+| `ImageUploadPicker.cs` | The batch/extension/size checks the multi-image upload modals run on picked files | `ImageUploadPickerTests.cs` |
 | `ModalShell.razor` | Dark dialog chrome (backdrop, header with close, body, footer) shared by the actor/tag/metadata modals | `ModalShellTests.cs` |
 | `ActorImportFieldPicker.razor` | The "Select fields to import" rows of the Warashi/MinnanoAv actor search modals | `ActorImportFieldPickerTests.cs` |
 | `ConnectionSettingsCard.razor` | Card UI for one integration's connection status/test/save form | `ConnectionSettingsCardTests.cs` |

@@ -94,4 +94,16 @@ public class ModalShellTests : BunitContext
 
         Assert.Equal(0, closed);
     }
+
+    [Fact]
+    public void SpreadFooter_AddsTheSpreadClass_OnlyWhenAsked()
+    {
+        Assert.Empty(RenderShell().FindAll(".modal-shell-footer-spread"));
+
+        var cut = Render<ModalShell>(p => p
+            .Add(x => x.SpreadFooter, true)
+            .Add(x => x.FooterContent, (RenderFragment)(b => b.AddMarkupContent(0, "<button>OK</button>"))));
+
+        Assert.Single(cut.FindAll(".modal-shell-footer.modal-shell-footer-spread"));
+    }
 }

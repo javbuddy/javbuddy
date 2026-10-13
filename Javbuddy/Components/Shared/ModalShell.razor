@@ -16,7 +16,7 @@
 
         @if (FooterContent is not null)
         {
-            <div class="modal-shell-footer">
+            <div class="modal-shell-footer @(SpreadFooter ? "modal-shell-footer-spread" : "")">
                 @FooterContent
             </div>
         }
@@ -40,6 +40,10 @@
 
     /// <summary>While true the modal can't be closed — an operation is running.</summary>
     [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Spreads the footer's children apart (a secondary action on the left, the main ones on the right)
+    /// instead of right-aligning them all.</summary>
+    [Parameter] public bool SpreadFooter { get; set; }
 
     /// <summary>Widest the panel may grow, as a CSS length.</summary>
     [Parameter] public string MaxWidth { get; set; } = "580px";

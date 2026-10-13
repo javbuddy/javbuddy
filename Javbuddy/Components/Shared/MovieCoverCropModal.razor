@@ -7,150 +7,143 @@
 
 @if (Show)
 {
-    <div class="crop-modal-backdrop" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
-        <div class="crop-modal-panel" @onclick:stopPropagation="true">
-            <div class="crop-modal-header">
-                <h5 class="crop-modal-title">Crop Cover — @(string.IsNullOrWhiteSpace(Title) ? Code : Title)</h5>
-                <button type="button" class="crop-modal-close-btn" @onclick="CloseAsync" aria-label="Close">
-                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+    <ModalShell SpreadFooter="true" MaxWidth="880px" OnClose="CloseAsync">
+        <TitleContent>Crop Cover — @(string.IsNullOrWhiteSpace(Title) ? Code : Title)</TitleContent>
+        <ChildContent>
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+            }
+
+            @* Source selection bar *@
+            <div class="source-selection-bar">
+                @foreach (var src in availableSources)
+                {
+                    <button type="button"
+                            class="source-tab-btn @(activeTab == src.Key ? "active" : "")"
+                            @onclick="() => SelectSourceTabAsync(src.Key)"
+                            disabled="@(loadingSource || saving)">
+                        @src.Label
+                    </button>
+                }
+                <button type="button"
+                        class="source-tab-btn @(activeTab == "upload" ? "active" : "")"
+                        @onclick='() => SelectSourceTabAsync("upload")'
+                        disabled="@(loadingSource || saving)">
+                    Upload File
+                </button>
+                <button type="button"
+                        class="source-tab-btn @(activeTab == "url" ? "active" : "")"
+                        @onclick='() => SelectSourceTabAsync("url")'
+                        disabled="@(loadingSource || saving)">
+                    Import URL
                 </button>
             </div>
 
-            <div class="crop-modal-body">
-                @if (errorMessage is not null)
-                {
-                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
-                }
-
-                @* Source selection bar *@
-                <div class="source-selection-bar">
-                    @foreach (var src in availableSources)
-                    {
+            @if (loadingSource)
+            {
+                <div class="text-center py-5 text-muted">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Loading image...
+                </div>
+            }
+            else if (activeTab == "upload" && selectedImageBytes is null)
+            {
+                <div class="upload-dropzone">
+                    <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 16 16" width="48" height="48" fill="currentColor" aria-hidden="true">
+                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                            <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                        </svg>
+                    </div>
+                    <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
+                    <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
+                </div>
+            }
+            else if (activeTab == "url" && selectedImageBytes is null)
+            {
+                <div class="upload-url-section">
+                    <label class="form-label text-light small mb-1" for="cover-image-url-input">Import from URL</label>
+                    <div class="input-group">
+                        <input id="cover-image-url-input"
+                               type="url"
+                               class="form-control form-control-sm url-input"
+                               placeholder="https://example.com/cover.jpg"
+                               @bind="imageUrlInput"
+                               @bind:event="oninput"
+                               @onkeydown="HandleUrlKeyDown"
+                               disabled="@fetchingUrl" />
                         <button type="button"
-                                class="source-tab-btn @(activeTab == src.Key ? "active" : "")"
-                                @onclick="() => SelectSourceTabAsync(src.Key)"
-                                disabled="@(loadingSource || saving)">
-                            @src.Label
+                                class="btn btn-primary btn-sm fetch-btn"
+                                @onclick="FetchFromUrlAsync"
+                                disabled="@(fetchingUrl || string.IsNullOrWhiteSpace(imageUrlInput))">
+                            @(fetchingUrl ? "Fetching…" : "Fetch")
                         </button>
-                    }
-                    <button type="button"
-                            class="source-tab-btn @(activeTab == "upload" ? "active" : "")"
-                            @onclick='() => SelectSourceTabAsync("upload")'
-                            disabled="@(loadingSource || saving)">
-                        Upload File
-                    </button>
-                    <button type="button"
-                            class="source-tab-btn @(activeTab == "url" ? "active" : "")"
-                            @onclick='() => SelectSourceTabAsync("url")'
-                            disabled="@(loadingSource || saving)">
-                        Import URL
-                    </button>
+                    </div>
+                </div>
+            }
+            else if (selectedImageBytes is not null)
+            {
+                <div class="cropper-toolbar">
+                    <div class="ratio-group">
+                        <button type="button" class="btn-tool @(IsRatioActive(1.0 / 1.42) ? "active" : "")" @onclick="() => SetAspectRatio(1.0 / 1.42)" title="Standard DVD front cover ratio (~1:1.42)">
+                            DVD Case (1:1.42)
+                        </button>
+                        <button type="button" class="btn-tool @(IsRatioActive(2.0 / 3.0) ? "active" : "")" @onclick="() => SetAspectRatio(2.0 / 3.0)" title="Standard 2:3 media poster ratio">
+                            2:3 Poster
+                        </button>
+                        <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)" title="Free-form unconstrained crop">
+                            Free-form
+                        </button>
+                    </div>
+
+                    <div class="zoom-controls">
+                        <button type="button" class="btn-tool" @onclick="() => AdjustZoom(-0.1)" title="Zoom out">-</button>
+                        <input type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom" @oninput="HandleZoomInput" />
+                        <button type="button" class="btn-tool" @onclick="() => AdjustZoom(0.1)" title="Zoom in">+</button>
+                        <button type="button" class="btn-tool ms-2" @onclick="ResetCrop" title="Reset crop box to proposed front cover">Reset</button>
+                    </div>
                 </div>
 
-                @if (loadingSource)
-                {
-                    <div class="text-center py-5 text-muted">
-                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        Loading image...
-                    </div>
-                }
-                else if (activeTab == "upload" && selectedImageBytes is null)
-                {
-                    <div class="upload-dropzone">
-                        <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
-                        <div class="upload-icon">
-                            <svg viewBox="0 0 16 16" width="48" height="48" fill="currentColor" aria-hidden="true">
-                                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                                <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
-                            </svg>
-                        </div>
-                        <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
-                        <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
-                    </div>
-                }
-                else if (activeTab == "url" && selectedImageBytes is null)
-                {
-                    <div class="upload-url-section">
-                        <label class="form-label text-light small mb-1" for="cover-image-url-input">Import from URL</label>
-                        <div class="input-group">
-                            <input id="cover-image-url-input"
-                                   type="url"
-                                   class="form-control form-control-sm url-input"
-                                   placeholder="https://example.com/cover.jpg"
-                                   @bind="imageUrlInput"
-                                   @bind:event="oninput"
-                                   @onkeydown="HandleUrlKeyDown"
-                                   disabled="@fetchingUrl" />
-                            <button type="button"
-                                    class="btn btn-primary btn-sm fetch-btn"
-                                    @onclick="FetchFromUrlAsync"
-                                    disabled="@(fetchingUrl || string.IsNullOrWhiteSpace(imageUrlInput))">
-                                @(fetchingUrl ? "Fetching…" : "Fetch")
-                            </button>
-                        </div>
-                    </div>
-                }
-                else if (selectedImageBytes is not null)
-                {
-                    <div class="cropper-toolbar">
-                        <div class="ratio-group">
-                            <button type="button" class="btn-tool @(IsRatioActive(1.0 / 1.42) ? "active" : "")" @onclick="() => SetAspectRatio(1.0 / 1.42)" title="Standard DVD front cover ratio (~1:1.42)">
-                                DVD Case (1:1.42)
-                            </button>
-                            <button type="button" class="btn-tool @(IsRatioActive(2.0 / 3.0) ? "active" : "")" @onclick="() => SetAspectRatio(2.0 / 3.0)" title="Standard 2:3 media poster ratio">
-                                2:3 Poster
-                            </button>
-                            <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)" title="Free-form unconstrained crop">
-                                Free-form
-                            </button>
-                        </div>
-
-                        <div class="zoom-controls">
-                            <button type="button" class="btn-tool" @onclick="() => AdjustZoom(-0.1)" title="Zoom out">-</button>
-                            <input type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom" @oninput="HandleZoomInput" />
-                            <button type="button" class="btn-tool" @onclick="() => AdjustZoom(0.1)" title="Zoom in">+</button>
-                            <button type="button" class="btn-tool ms-2" @onclick="ResetCrop" title="Reset crop box to proposed front cover">Reset</button>
-                        </div>
+                <div class="cropper-workspace">
+                    <div class="cropper-viewport-wrapper">
+                        <CropperViewport HeightPx="400" @ref="viewport" />
+                        <small class="text-muted d-block mt-1">Drag inside box to pan • Drag handles to resize • Scroll to zoom</small>
                     </div>
 
-                    <div class="cropper-workspace">
-                        <div class="cropper-viewport-wrapper">
-                            <CropperViewport HeightPx="400" @ref="viewport" />
-                            <small class="text-muted d-block mt-1">Drag inside box to pan • Drag handles to resize • Scroll to zoom</small>
+                    <div class="cropper-previews">
+                        <span class="preview-title">Cover Preview</span>
+                        <div class="preview-poster-wrapper" title="Poster Card Preview">
+                            <canvas width="130" height="185" class="preview-canvas" @ref="previewPosterCanvasRef"></canvas>
                         </div>
-
-                        <div class="cropper-previews">
-                            <span class="preview-title">Cover Preview</span>
-                            <div class="preview-poster-wrapper" title="Poster Card Preview">
-                                <canvas width="130" height="185" class="preview-canvas" @ref="previewPosterCanvasRef"></canvas>
-                            </div>
-                            <span class="preview-hint">Proposed front cover crop</span>
-                        </div>
+                        <span class="preview-hint">Proposed front cover crop</span>
                     </div>
-                }
-            </div>
-
-            <div class="crop-modal-footer">
-                @if (selectedImageBytes is not null)
-                {
-                    <div class="footer-actions-right">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@saving">
-                            Cancel
-                        </button>
-                        <button type="button" class="btn btn-primary btn-sm crop-save-btn" @onclick="SaveCroppedAsync" disabled="@saving" title="@SaveDestinationHint">
-                            @(saving ? "Saving…" : "Save Cropped Cover")
-                        </button>
-                    </div>
-                }
-                else
-                {
-                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync">
+                </div>
+            }
+        
+        </ChildContent>
+        <FooterContent>
+            @if (selectedImageBytes is not null)
+            {
+                <div class="footer-actions-right">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@saving">
                         Cancel
                     </button>
-                }
-            </div>
-        </div>
-    </div>
+                    <button type="button" class="btn btn-primary btn-sm crop-save-btn" @onclick="SaveCroppedAsync" disabled="@saving" title="@SaveDestinationHint">
+                        @(saving ? "Saving…" : "Save Cropped Cover")
+                    </button>
+                </div>
+            }
+            else
+            {
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync">
+                    Cancel
+                </button>
+            }
+        
+        </FooterContent>
+    </ModalShell>
 }
 
 @code {
@@ -494,13 +487,6 @@
         }
     }
 
-    private async Task HandleKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape")
-        {
-            await CloseAsync();
-        }
-    }
 
     private async Task CloseAsync()
     {

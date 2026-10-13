@@ -1045,11 +1045,11 @@ public class MovieDetailTests : BunitContext
 
         var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
 
-        Assert.Empty(cut.FindAll(".crop-modal-panel"));
+        Assert.Empty(cut.FindAll(".modal-shell-panel"));
 
         await ClickToolbarMenuItemAsync(cut, "Tools", "Crop Cover");
 
-        Assert.NotEmpty(cut.FindAll(".crop-modal-panel"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-panel"));
     }
 
     [Fact]
@@ -1709,7 +1709,7 @@ public class MovieDetailTests : BunitContext
 
         cut.Find(".movie-images-empty").Click();
 
-        Assert.NotEmpty(cut.FindAll(".movie-image-upload-backdrop"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]

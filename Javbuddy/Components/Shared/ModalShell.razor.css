@@ -79,6 +79,10 @@
     border-top: 1px solid #3d4354;
 }
 
+.modal-shell-footer-spread {
+    justify-content: space-between;
+}
+
 /* Themed: follows the light/dark theme instead of always being dark. */
 .modal-shell-backdrop.modal-shell-themed {
     inset: 0;

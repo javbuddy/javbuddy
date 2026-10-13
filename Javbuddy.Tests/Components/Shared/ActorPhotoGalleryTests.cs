@@ -348,7 +348,7 @@ public class ActorPhotoGalleryTests : BunitContext
             .Single(b => b.TextContent.Trim() == "Add photos");
         addPhotosBtn.Click();
 
-        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".actor-photo-upload-panel")));
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".modal-shell-panel")));
     }
 
     [Fact]

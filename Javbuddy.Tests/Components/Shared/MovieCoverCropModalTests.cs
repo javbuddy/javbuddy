@@ -19,7 +19,7 @@ public class MovieCoverCropModalTests : BunitContext
             .Add(m => m.Code, "IPX-535")
             .Add(m => m.Title, "Sample Title"));
 
-        Assert.Empty(cut.FindAll(".crop-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class MovieCoverCropModalTests : BunitContext
             .Add(m => m.Code, "IPX-535")
             .Add(m => m.Title, "Sample Title"));
 
-        Assert.NotNull(cut.Find(".crop-modal-backdrop"));
+        Assert.NotNull(cut.Find(".modal-shell-backdrop"));
         Assert.Contains("Crop Cover — Sample Title", cut.Markup);
         Assert.Contains("Backdrop / Jacket", cut.Markup);
         Assert.Contains("Current Poster", cut.Markup);
@@ -65,7 +65,7 @@ public class MovieCoverCropModalTests : BunitContext
             .Add(m => m.Code, "IPX-535")
             .Add(m => m.OnClose, () => closed = true));
 
-        var closeBtn = cut.Find(".crop-modal-close-btn");
+        var closeBtn = cut.Find(".modal-shell-close-btn");
         closeBtn.Click();
 
         Assert.True(closed);

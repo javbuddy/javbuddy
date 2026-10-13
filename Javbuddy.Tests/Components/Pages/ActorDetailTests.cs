@@ -898,11 +898,11 @@ public class ActorDetailTests : BunitContext
         Assert.Equal("Click to upload photo", avatar.GetAttribute("title"));
 
         // Upload modal closed initially
-        Assert.Empty(cut.FindAll(".crop-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
 
         // Clicking avatar opens upload modal
         await cut.InvokeAsync(() => avatar.Click());
-        Assert.NotEmpty(cut.FindAll(".crop-modal-backdrop"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
