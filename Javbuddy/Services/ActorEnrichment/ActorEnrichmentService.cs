@@ -243,7 +243,7 @@ public class ActorEnrichmentService(
 
         // Aliases
         var knownNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { actor.DisplayName };
-        if (!string.IsNullOrWhiteSpace(actor.LastName)) knownNames.Add($"{actor.FirstName} {actor.LastName}".Trim());
+        if (!string.IsNullOrWhiteSpace(actor.LastName)) knownNames.Add(actor.WesternOrderName);
         if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKanji)) knownNames.Add(actor.JapaneseNameKanji);
         if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKana)) knownNames.Add(actor.JapaneseNameKana);
         foreach (var a in actor.Aliases) knownNames.Add(a.Name);

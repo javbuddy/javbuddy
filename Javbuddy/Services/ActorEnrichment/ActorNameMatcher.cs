@@ -1,3 +1,4 @@
+using Javbuddy.Services.Actors;
 using Javbuddy.Services.Common;
 
 namespace Javbuddy.Services.ActorEnrichment;
@@ -21,7 +22,7 @@ public static class ActorNameMatcher
         // 2. Full reversed name (First Last) if last name exists
         if (!string.IsNullOrWhiteSpace(context.LastName) && !string.IsNullOrWhiteSpace(context.FirstName))
         {
-            queries.Add($"{context.FirstName} {context.LastName}".Trim());
+            queries.Add(ActorDisplayName.WesternOrder(context.FirstName, context.LastName));
         }
 
         // 3. DisplayName (Last First)
@@ -123,7 +124,7 @@ public static class ActorNameMatcher
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { context.DisplayName };
         if (!string.IsNullOrWhiteSpace(context.LastName))
         {
-            set.Add($"{context.FirstName} {context.LastName}".Trim());
+            set.Add(ActorDisplayName.WesternOrder(context.FirstName, context.LastName));
         }
         if (!string.IsNullOrWhiteSpace(context.JapaneseNameKanji)) set.Add(context.JapaneseNameKanji);
         if (!string.IsNullOrWhiteSpace(context.JapaneseNameKana)) set.Add(context.JapaneseNameKana);

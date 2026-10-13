@@ -433,7 +433,7 @@ public class ActorService(
         var selfNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { actor.DisplayName };
         if (!string.IsNullOrWhiteSpace(actor.LastName))
         {
-            selfNames.Add($"{actor.FirstName} {actor.LastName}".Trim());
+            selfNames.Add(actor.WesternOrderName);
         }
         if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKanji))
         {
@@ -787,7 +787,7 @@ public class ActorService(
         if (!string.IsNullOrWhiteSpace(source.DisplayName)) sourceCandidateNames.Add(source.DisplayName);
         if (!string.IsNullOrWhiteSpace(source.LastName))
         {
-            sourceCandidateNames.Add($"{source.FirstName} {source.LastName}".Trim());
+            sourceCandidateNames.Add(source.WesternOrderName);
         }
         if (!string.IsNullOrWhiteSpace(source.JapaneseNameKanji)) sourceCandidateNames.Add(source.JapaneseNameKanji);
         if (!string.IsNullOrWhiteSpace(source.JapaneseNameKana)) sourceCandidateNames.Add(source.JapaneseNameKana);
@@ -1015,7 +1015,7 @@ public class ActorService(
 
             if (!string.IsNullOrWhiteSpace(actor.LastName))
             {
-                var reversed = $"{actor.FirstName} {actor.LastName}".Trim();
+                var reversed = ActorDisplayName.WesternOrder(actor.FirstName, actor.LastName);
                 if (string.Equals(reversed, cleanName, StringComparison.OrdinalIgnoreCase)) return true;
             }
 

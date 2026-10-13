@@ -119,7 +119,7 @@ public class JellyfinLinkSyncTask(
             }
             if (!string.IsNullOrWhiteSpace(actor.FirstName) && !string.IsNullOrWhiteSpace(actor.LastName))
             {
-                var western = $"{actor.FirstName} {actor.LastName}".Trim();
+                var western = actor.WesternOrderName;
                 if (!candidateNames.Contains(western, StringComparer.OrdinalIgnoreCase))
                 {
                     candidateNames.Add(western);

@@ -68,6 +68,10 @@ public class Actor
     /// <summary>LastName FirstName, matching the established cast-linking and route convention.</summary>
     public string DisplayName => Services.Actors.ActorDisplayName.Format(FirstName ?? string.Empty, LastName);
 
+    /// <summary>FirstName LastName, the Western order (trimmed; empty when neither is set) — the name the same
+    /// actor is credited under by sources that list her that way.</summary>
+    public string WesternOrderName => Services.Actors.ActorDisplayName.WesternOrder(FirstName, LastName);
+
     public string? FormattedHeight => Services.Actors.ActorPhysicalAttributesHelper.FormatHeight(HeightCm);
     public string? FormattedMeasurements => Services.Actors.ActorPhysicalAttributesHelper.FormatMeasurements(Bust, Waist, Hips);
     public string? FormattedBirthDate => Services.Actors.ActorPhysicalAttributesHelper.FormatBirthDate(BirthDate);

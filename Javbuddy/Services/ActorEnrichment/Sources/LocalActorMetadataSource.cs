@@ -37,7 +37,7 @@ public class LocalActorMetadataSource(
         var namesToCheck = new List<string> { context.DisplayName };
         if (!string.IsNullOrWhiteSpace(context.LastName))
         {
-            namesToCheck.Add($"{context.FirstName} {context.LastName}".Trim());
+            namesToCheck.Add(ActorDisplayName.WesternOrder(context.FirstName, context.LastName));
         }
         if (!string.IsNullOrWhiteSpace(context.JapaneseNameKanji)) namesToCheck.Add(context.JapaneseNameKanji);
         if (!string.IsNullOrWhiteSpace(context.JapaneseNameKana)) namesToCheck.Add(context.JapaneseNameKana);
@@ -80,7 +80,7 @@ public class LocalActorMetadataSource(
         discoveredAliases.Remove(context.DisplayName);
         if (!string.IsNullOrWhiteSpace(context.LastName))
         {
-            discoveredAliases.Remove($"{context.FirstName} {context.LastName}".Trim());
+            discoveredAliases.Remove(ActorDisplayName.WesternOrder(context.FirstName, context.LastName));
         }
         if (!string.IsNullOrWhiteSpace(discoveredKanji)) discoveredAliases.Remove(discoveredKanji);
         if (!string.IsNullOrWhiteSpace(discoveredKana)) discoveredAliases.Remove(discoveredKana);

@@ -1,3 +1,4 @@
+using Javbuddy.Services.Actors;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 
@@ -83,7 +84,7 @@ public static class TorrentSortEditingHelper
 
     public static string FormatActressName(ActressViewDto a)
     {
-        var fullName = $"{a.FirstName} {a.LastName}".Trim();
+        var fullName = ActorDisplayName.WesternOrder(a.FirstName, a.LastName);
         if (!string.IsNullOrWhiteSpace(fullName) && !string.IsNullOrWhiteSpace(a.JapaneseName) && fullName != a.JapaneseName)
         {
             return $"{fullName} ({a.JapaneseName})";
@@ -98,8 +99,8 @@ public static class TorrentSortEditingHelper
     {
         if (a.Id is > 0 && b.Id is > 0) return a.Id == b.Id;
         if (CompactJapanese(a.JapaneseName) is { } ja && CompactJapanese(b.JapaneseName) is { } jb) return ja == jb;
-        var nameA = $"{a.FirstName} {a.LastName}".Trim();
-        return nameA.Length > 0 && string.Equals(nameA, $"{b.FirstName} {b.LastName}".Trim(), StringComparison.OrdinalIgnoreCase);
+        var nameA = ActorDisplayName.WesternOrder(a.FirstName, a.LastName);
+        return nameA.Length > 0 && string.Equals(nameA, ActorDisplayName.WesternOrder(b.FirstName, b.LastName), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? CompactJapanese(string? name) =>
@@ -112,7 +113,7 @@ public static class SortEditorFormat
 {
     public static string ActressPrimaryName(ActressViewDto a)
     {
-        var full = $"{a.FirstName} {a.LastName}".Trim();
+        var full = ActorDisplayName.WesternOrder(a.FirstName, a.LastName);
         return full.Length > 0 ? full : a.JapaneseName ?? "";
     }
 

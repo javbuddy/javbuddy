@@ -22,4 +22,23 @@ public class ActorDisplayNameTests
         Assert.Equal(expectedFirstName, result.FirstName);
         Assert.Equal(expectedLastName, result.LastName);
     }
+
+    [Theory]
+    [InlineData("Yua", "Mikami", "Yua Mikami")]
+    [InlineData("Madonna", null, "Madonna")]
+    [InlineData(null, "Mikami", "Mikami")]
+    [InlineData(null, null, "")]
+    public void WesternOrder_IsFirstThenLast_Trimmed(string? first, string? last, string expected)
+    {
+        Assert.Equal(expected, ActorDisplayName.WesternOrder(first, last));
+    }
+
+    [Fact]
+    public void Actor_WesternOrderName_UsesTheSameOrder()
+    {
+        var actor = new Javbuddy.Models.Actor { FirstName = "Yua", LastName = "Mikami" };
+
+        Assert.Equal("Yua Mikami", actor.WesternOrderName);
+        Assert.Equal("Mikami Yua", actor.DisplayName);
+    }
 }

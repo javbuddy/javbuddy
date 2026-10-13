@@ -164,7 +164,7 @@ public class ActorImageCacheService(
         var candidateNames = new List<string> { actor.DisplayName };
         if (!string.IsNullOrWhiteSpace(actor.LastName))
         {
-            candidateNames.Add($"{actor.FirstName} {actor.LastName}".Trim());
+            candidateNames.Add(actor.WesternOrderName);
         }
         else if (!string.IsNullOrWhiteSpace(actor.FirstName))
         {
