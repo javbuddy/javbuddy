@@ -24,6 +24,24 @@ public class ActorsPageTests(E2EFixture fixture)
         await Expect(page.Locator("nav.nav a.nav-link", new() { HasText = "Actors" })).ToHaveClassAsync(new Regex("active"));
     }
 
+    /// <summary>The sort/filter dropdown chrome (`.sort-dropdown-item` and friends) is global CSS in app.css,
+    /// shared by every page that has a dropdown, not a scoped copy per component.</summary>
+    [Fact]
+    public async Task SortDropdown_ItemsGetTheSharedGlobalStyles()
+    {
+        await DbSeeding.SeedActorAsync(fixture.DbFactory, "E2E Dropdown Actress");
+        var page = await fixture.NewPageAsync();
+
+        await page.GotoInteractiveAsync("/actors");
+        await page.Locator(".sort-dropdown-wrapper button", new() { HasText = "Sort:" }).ClickAsync();
+
+        var item = page.Locator(".sort-dropdown-item").First;
+        await Expect(item).ToBeVisibleAsync();
+        await Expect(item).ToHaveCSSAsync("padding-left", "16px");
+        await Expect(item).ToHaveCSSAsync("font-size", "14.4px");
+        await Expect(item).ToHaveCSSAsync("justify-content", "space-between");
+    }
+
     /// <summary>Regression test: changing the sort, then navigating to an actor's
     /// detail page and back (a real browser/SignalR circuit needed to catch this — bUnit's
     /// in-process JSInterop mock resolves everything synchronously, so it can't reproduce it), used

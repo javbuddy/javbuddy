@@ -68,6 +68,8 @@ A legend spelling these out in words (`.movies-stats-legend` in `Movies.razor`/`
 
 Real example from this codebase: `TorrentSort.razor.css` copies rules it needs from `ActivityQueue.razor`/`MovieDetail.razor`'s own `.razor.css` files rather than referencing them — each page/component keeps its own copy.
 
+The exception is chrome that many components render identically: the sort/filter dropdown classes (`.sort-dropdown-wrapper`, `.sort-dropdown-item`, `.sort-dropdown-arrow`, `.sort-dropdown-divider`, `.dropdown-backdrop`) are plain global rules in `wwwroot/app.css` instead of a scoped copy per page. Reach for that only when the same rules were already duplicated verbatim in several `.razor.css` files; a component that needs a variation keeps its own scoped override (scoped rules win on specificity).
+
 ## Page vs. component vs. service boundary
 
 Razor pages/components should not inject `IDbContextFactory<AppDbContext>` or an integration client (`IJavinizerClient`, `IJellyfinClient`, etc.) directly for anything beyond a single read-only display query. Data mutation and any non-trivial or cross-cutting query belongs in a service, called from the component (`AGENTS.md`).

@@ -197,3 +197,55 @@ h1:focus {
     background-color: #1b6ec2;
     border-color: #1861ac;
 }
+
+/* Shared dropdown-menu chrome (sort/filter dropdowns on Movies, Actors, Scenes, Photos, Missing and the
+   filter toolbar). Plain global rules: the markup lives in many components, and identical scoped copies of
+   them were kept in each one's .razor.css. */
+.sort-dropdown-wrapper {
+    position: relative;
+    z-index: 40;
+}
+
+.sort-dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 0.5rem 1rem;
+    color: #e7e9ee;
+    font-size: 0.9rem;
+}
+
+.sort-dropdown-item:hover {
+    background-color: #3d4256;
+    color: #ffffff;
+}
+
+.sort-dropdown-item.active {
+    color: #4fc3e0;
+    font-weight: 600;
+}
+
+.sort-dropdown-arrow {
+    font-size: 0.65rem;
+    margin-left: 0.35rem;
+}
+
+.sort-dropdown-divider {
+    height: 1px;
+    background: #3d4256;
+    margin: 0.35rem 0;
+}
+
+.dropdown-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 35;
+    background: transparent;
+}
