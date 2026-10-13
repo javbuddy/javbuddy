@@ -353,7 +353,6 @@ else
     private bool scrollToTopPending;
 
     private VirtualizedGrid? grid;
-    private Task<IJSObjectReference>? jsModuleTask;
 
     private List<ActorCardModel> filteredActors = [];
     private List<ActorCardModel> visibleActors = [];
@@ -441,20 +440,7 @@ else
     private ActorsViewState CurrentViewState() =>
         filter.ToViewState() with { ViewMode = viewMode, SizeStep = sizeStep, TableColumns = extraColumns.ToList() };
 
-    private async Task SaveViewStateAsync()
-    {
-        if (jsModuleTask is null) return;
-
-        var json = JsonSerializer.Serialize(CurrentViewState());
-        try
-        {
-            var module = await jsModuleTask;
-            await module.InvokeVoidAsync("setJsonCookie", ActorsViewState.CookieName, json, 31536000);
-        }
-        catch (JSDisconnectedException)
-        {
-        }
-    }
+    private Task SaveViewStateAsync() => JsonCookieState.SaveAsync(JS, ActorsViewState.CookieName, CurrentViewState());
 
     // Written by VirtualizedGrid.razor.js on every scroll, so the first render after a back-navigation
     // already shows the window the user left rather than starting at 0 and swapping it a round trip later.
@@ -471,11 +457,6 @@ else
     {
         try
         {
-            if (firstRender)
-            {
-                jsModuleTask = JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/Actors.razor.js").AsTask();
-            }
-
             // VirtualizedGrid starts its own JS, and holds a scroll-to-top asked for before then until it has.
             if (scrollToTopPending && grid is not null)
             {
@@ -492,27 +473,14 @@ else
         }
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         textFilterDebouncer.Dispose();
         if (applicationState is not null)
         {
             persistingSubscription.Dispose();
         }
-        if (jsModuleTask is not null)
-        {
-            try
-            {
-                var module = await jsModuleTask;
-                await module.DisposeAsync();
-            }
-            catch (JSDisconnectedException)
-            {
-            }
-            catch (Exception)
-            {
-            }
-        }
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>VirtualizedGrid's LoadRange: moves the window to the range the viewport needs. The whole

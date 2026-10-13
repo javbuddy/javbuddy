@@ -176,7 +176,7 @@ public class MovieScenesTests : BunitContext
             SceneWallSort.ReleaseDate, Arg.Any<int>(), Arg.Is(0), Arg.Is(48), Arg.Any<CancellationToken>());
         Assert.Equal("No scenes match these filters.", cut.Find(".scene-wall-empty").TextContent.Trim());
         Assert.Contains("Filter (3)", cut.Markup);
-        var saved = module.Invocations.Last(i => i.Identifier == "setJsonCookie");
+        var saved = JSInterop.Invocations.Last(i => i.Identifier == "lsJsonCookie.set");
         Assert.Equal("javbuddy-scenes-view", saved.Arguments[0]);
         Assert.Contains("\"TagIds\":[5]", (string)saved.Arguments[1]!);
 
@@ -359,7 +359,7 @@ public class MovieScenesTests : BunitContext
 
         wall.Received().GetPageAsync(Arg.Is<SceneWallFilter>(f => f.IncludeHidden), SceneWallSort.ReleaseDate, Arg.Any<int>(), Arg.Is(0), Arg.Is(48), Arg.Any<CancellationToken>());
         Assert.Contains("Filter (1)", cut.Markup);
-        Assert.Contains("\"ShowHidden\":true", (string)module.Invocations.Last(i => i.Identifier == "setJsonCookie").Arguments[1]!);
+        Assert.Contains("\"ShowHidden\":true", (string)JSInterop.Invocations.Last(i => i.Identifier == "lsJsonCookie.set").Arguments[1]!);
 
         // A tag offered only by hidden scenes stops applying when they're hidden again, and applies
         // again when they're shown.
@@ -369,7 +369,7 @@ public class MovieScenesTests : BunitContext
         wall.Received().GetPageAsync(Arg.Is<SceneWallFilter>(f => !f.IncludeHidden && f.TagIds == null), SceneWallSort.ReleaseDate, Arg.Any<int>(), Arg.Is(0), Arg.Is(48), Arg.Any<CancellationToken>());
         Assert.DoesNotContain("Intro tag", cut.Markup);
         Assert.DoesNotContain("Filter (", cut.Markup);
-        Assert.Contains("\"TagIds\":[6]", (string)module.Invocations.Last(i => i.Identifier == "setJsonCookie").Arguments[1]!);
+        Assert.Contains("\"TagIds\":[6]", (string)JSInterop.Invocations.Last(i => i.Identifier == "lsJsonCookie.set").Arguments[1]!);
 
         ClickButton(cut, "Show hidden scenes");
         wall.Received().GetPageAsync(Arg.Is<SceneWallFilter>(f => f.IncludeHidden && f.TagIds!.Single() == 6), SceneWallSort.ReleaseDate, Arg.Any<int>(), Arg.Is(0), Arg.Is(48), Arg.Any<CancellationToken>());
@@ -498,7 +498,7 @@ public class MovieScenesTests : BunitContext
 
         // A filter change in this view still remembers the tag.
         ClickButton(cut, "Favorites only");
-        Assert.Contains("\"TagIds\":[5]", (string)module.Invocations.Last(i => i.Identifier == "setJsonCookie").Arguments[1]!);
+        Assert.Contains("\"TagIds\":[5]", (string)JSInterop.Invocations.Last(i => i.Identifier == "lsJsonCookie.set").Arguments[1]!);
 
         wall.ClearReceivedCalls();
         cut.Find(".scene-wall-view-btn[data-view=scenes]").Click();
@@ -524,7 +524,7 @@ public class MovieScenesTests : BunitContext
 
         wall.Received().GetHighlightPageAsync(Arg.Is<SceneWallFilter>(f => f.TagIds == null && f.ActorIds == null),
             Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Is(0), Arg.Is(48), Arg.Any<CancellationToken>());
-        var saved = (string)module.Invocations.Last(i => i.Identifier == "setJsonCookie").Arguments[1]!;
+        var saved = (string)JSInterop.Invocations.Last(i => i.Identifier == "lsJsonCookie.set").Arguments[1]!;
         Assert.Contains("\"TagIds\":[5]", saved);
         Assert.Contains("\"ActorIds\":[]", saved);
         Assert.Contains("\"ShowHidden\":true", saved);
@@ -786,7 +786,7 @@ public class MovieScenesTests : BunitContext
         new([], [new SceneWallOption(7, "Aika")], ["S1"], attributes);
 
     private static string LastCookie(MovieScenesTests t) =>
-        (string)t.module.Invocations.Last(i => i.Identifier == "setJsonCookie").Arguments[1]!;
+        (string)t.JSInterop.Invocations.Last(i => i.Identifier == "lsJsonCookie.set").Arguments[1]!;
 
     [Fact]
     public void ActorAttributes_CupSizeChip_FiltersTheWall_PersistsAndResets()
@@ -958,7 +958,7 @@ public class MovieScenesTests : BunitContext
             Arg.Is<SceneWallFilter>(f => f.ApexOnly && f.ApexTagIds!.Single() == 9),
             Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Is(0), Arg.Is(48), Arg.Any<CancellationToken>());
         Assert.Contains("Filter (2)", cut.Markup);
-        var saved = (string)module.Invocations.Last(i => i.Identifier == "setJsonCookie").Arguments[1]!;
+        var saved = (string)JSInterop.Invocations.Last(i => i.Identifier == "lsJsonCookie.set").Arguments[1]!;
         Assert.Contains("\"ApexOnly\":true", saved);
         Assert.Contains("\"ApexTagIds\":[9]", saved);
 

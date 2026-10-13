@@ -349,20 +349,7 @@ else
         }
     }
 
-    private async Task SaveViewStateAsync()
-    {
-        if (jsModuleTask is null) return;
-
-        var json = JsonSerializer.Serialize(ViewState);
-        try
-        {
-            var module = await jsModuleTask;
-            await module.InvokeVoidAsync("setJsonCookie", MoviesViewState.CookieName, json, 31536000);
-        }
-        catch (JSDisconnectedException)
-        {
-        }
-    }
+    private Task SaveViewStateAsync() => JsonCookieState.SaveAsync(JS, MoviesViewState.CookieName, ViewState);
 
     // Raised by TorrentChangeNotifier whenever a torrent is grabbed, its status changes, or it's
     // removed — refreshes just the downloading-indicator set, not the whole movie list.

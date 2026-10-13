@@ -1,4 +1,5 @@
 @using Javbuddy.Services.Common
+@using Javbuddy.Services.Infrastructure
 @page "/movies/scenes"
 @using Javbuddy.Services
 @using Javbuddy.Services.SceneMedia
@@ -503,21 +504,9 @@
         sort = Enum.IsDefined(state.Sort) ? state.Sort : SceneWallSort.ReleaseDate;
     }
 
-    private async Task SaveViewStateAsync()
-    {
-        if (jsModule is null) return;
-
-        var json = System.Text.Json.JsonSerializer.Serialize(new ScenesViewState(
-            [.. tagFilter], [.. actorFilter], [.. studioFilter], favoritesOnly, textFilter, sort, showHidden,
-            actorAttributes, apexOnly, [.. apexTagFilter], [.. actorTagFilter]));
-        try
-        {
-            await jsModule.InvokeVoidAsync("setJsonCookie", ViewStateCookieName, json, 31536000);
-        }
-        catch (JSDisconnectedException)
-        {
-        }
-    }
+    private Task SaveViewStateAsync() => JsonCookieState.SaveAsync(JS, ViewStateCookieName, new ScenesViewState(
+        [.. tagFilter], [.. actorFilter], [.. studioFilter], favoritesOnly, textFilter, sort, showHidden,
+        actorAttributes, apexOnly, [.. apexTagFilter], [.. actorTagFilter]));
 
     private async Task FiltersChangedAsync()
     {

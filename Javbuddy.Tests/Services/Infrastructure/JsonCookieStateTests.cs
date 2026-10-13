@@ -1,5 +1,6 @@
 using Javbuddy.Services.Infrastructure;
 using Microsoft.AspNetCore.Http;
+using Microsoft.JSInterop;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Services.Infrastructure;
@@ -67,5 +68,33 @@ public class JsonCookieStateTests
         var result = JsonCookieState.TryLoad<TestState>(accessor, "test-cookie");
 
         Assert.Equal(new TestState("restored", 0), result);
+    }
+
+    [Fact]
+    public async Task SaveAsync_WritesTheSerializedStateForOneYear()
+    {
+        var js = Substitute.For<IJSRuntime>();
+
+        await JsonCookieState.SaveAsync(js, "test-cookie", new TestState("saved", 3));
+
+        var call = Assert.Single(js.ReceivedCalls());
+        var args = call.GetArguments();
+        Assert.Equal("lsJsonCookie.set", args[0]);
+        Assert.Equal(["test-cookie", """{"Name":"saved","Count":3}""", 31536000], (object?[])args[1]!);
+    }
+
+    [Fact]
+    public async Task SaveAsync_IgnoresADisconnectedCircuit()
+    {
+        await JsonCookieState.SaveAsync(new DisconnectedJs(), "test-cookie", new TestState());
+    }
+
+    private sealed class DisconnectedJs : IJSRuntime
+    {
+        public ValueTask<T> InvokeAsync<T>(string identifier, object?[]? args) =>
+            ValueTask.FromException<T>(new JSDisconnectedException("gone"));
+
+        public ValueTask<T> InvokeAsync<T>(string identifier, CancellationToken cancellationToken, object?[]? args) =>
+            ValueTask.FromException<T>(new JSDisconnectedException("gone"));
     }
 }

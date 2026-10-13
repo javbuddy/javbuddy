@@ -175,77 +175,26 @@ public class MissingTests : BunitContext
         cut.Find(".missing-sortable").Click();
 
         cut.WaitForAssertion(
-            () => Assert.Contains(JSInterop.Invocations, inv => inv.Identifier == "setJsonCookie" && inv.Arguments.Any(a => a?.ToString() == "javbuddy-missing-view")),
+            () => Assert.Contains(JSInterop.Invocations, inv => inv.Identifier == "lsJsonCookie.set" && inv.Arguments.Any(a => a?.ToString() == "javbuddy-missing-view")),
             TimeSpan.FromSeconds(2));
     }
 
-    // VirtualizedGrid imports its own module through the same IJSRuntime, so it gets a module of its
-    // own; only the page's is under test.
-    private static bool PageModule(object?[] args) => args is [string path, ..] && path.EndsWith("/Missing.razor.js", StringComparison.Ordinal);
-
-    // bUnit's JSInterop.SetupModule() always resolves an IJSObjectReference import synchronously
-    // with no way to defer or fail it, so these tests replace IJSRuntime outright with an
-    // NSubstitute mock to control exactly when/how the "import" call completes.
-
     [Fact]
-    public async Task DisposeAsync_BeforeModuleImportResolves_DisposesModuleOnceItResolves()
+    public void TogglingSort_WhenCircuitDisconnected_DoesNotThrow()
     {
         using var factory = SetUpServices();
-        var importTcs = new TaskCompletionSource<IJSObjectReference>();
-        var jsRuntime = Substitute.For<IJSRuntime>();
-        var module = Substitute.For<IJSObjectReference>();
-#pragma warning disable BL0016 // NSubstitute mock setup, not a real unguarded JS interop call
-        jsRuntime.InvokeAsync<IJSObjectReference>("import", Arg.Any<object?[]>())
-            .Returns(new ValueTask<IJSObjectReference>(Substitute.For<IJSObjectReference>()));
-        jsRuntime.InvokeAsync<IJSObjectReference>("import", Arg.Is<object?[]>(a => PageModule(a)))
-            .Returns(new ValueTask<IJSObjectReference>(importTcs.Task));
-#pragma warning restore BL0016
-        Services.AddSingleton(jsRuntime);
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "AAA-001", Status = MovieStatus.Missing });
+            db.SaveChanges();
+        }
+        JSInterop.SetupVoid("lsJsonCookie.set", _ => true).SetException(new JSDisconnectedException("Circuit disconnected."));
 
-        Render<Missing>();
+        var cut = Render<Missing>();
+        cut.Find(".missing-sortable").Click();
 
-        var disposeTask = DisposeComponentsAsync();
-        Assert.False(disposeTask.IsCompleted);
-
-        importTcs.SetResult(module);
-
-        await disposeTask.WaitAsync(TimeSpan.FromSeconds(2));
-        _ = module.Received(1).DisposeAsync();
-    }
-
-    [Fact]
-    public async Task DisposeAsync_AfterModuleImportResolves_DisposesModule()
-    {
-        using var factory = SetUpServices();
-        var module = Substitute.For<IJSObjectReference>();
-        var jsRuntime = Substitute.For<IJSRuntime>();
-#pragma warning disable BL0016 // NSubstitute mock setup, not a real unguarded JS interop call
-        jsRuntime.InvokeAsync<IJSObjectReference>("import", Arg.Any<object?[]>())
-            .Returns(new ValueTask<IJSObjectReference>(Substitute.For<IJSObjectReference>()));
-        jsRuntime.InvokeAsync<IJSObjectReference>("import", Arg.Is<object?[]>(a => PageModule(a)))
-            .Returns(new ValueTask<IJSObjectReference>(Task.FromResult(module)));
-#pragma warning restore BL0016
-        Services.AddSingleton(jsRuntime);
-
-        Render<Missing>();
-
-        await DisposeComponentsAsync().WaitAsync(TimeSpan.FromSeconds(2));
-        _ = module.Received(1).DisposeAsync();
-    }
-
-    [Fact]
-    public async Task DisposeAsync_WhenModuleImportFailsBecauseCircuitDisconnected_DoesNotThrow()
-    {
-        using var factory = SetUpServices();
-        var jsRuntime = Substitute.For<IJSRuntime>();
-#pragma warning disable BL0016 // NSubstitute mock setup, not a real unguarded JS interop call
-        jsRuntime.InvokeAsync<IJSObjectReference>("import", Arg.Any<object?[]>())
-            .Returns(new ValueTask<IJSObjectReference>(Task.FromException<IJSObjectReference>(new JSDisconnectedException("Circuit disconnected."))));
-#pragma warning restore BL0016
-        Services.AddSingleton(jsRuntime);
-
-        Render<Missing>();
-
-        await DisposeComponentsAsync().WaitAsync(TimeSpan.FromSeconds(2));
+        cut.WaitForAssertion(
+            () => Assert.Contains(JSInterop.Invocations, inv => inv.Identifier == "lsJsonCookie.set"),
+            TimeSpan.FromSeconds(2));
     }
 }

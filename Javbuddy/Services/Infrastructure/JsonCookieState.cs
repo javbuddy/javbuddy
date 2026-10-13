@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.JSInterop;
 
 namespace Javbuddy.Services.Infrastructure;
 
@@ -24,6 +25,22 @@ public static class JsonCookieState
         catch (JsonException)
         {
             return null;
+        }
+    }
+
+    private const int OneYearSeconds = 31536000;
+
+    /// <summary>Writes <paramref name="state"/> to the cookie through the global
+    /// <c>lsJsonCookie.set</c> (App.razor), so a page needs no JS module of its own for it. A circuit
+    /// already gone is ignored: the preference is best-effort.</summary>
+    public static async Task SaveAsync<T>(IJSRuntime js, string cookieName, T state)
+    {
+        try
+        {
+            await js.InvokeVoidAsync("lsJsonCookie.set", cookieName, JsonSerializer.Serialize(state), OneYearSeconds);
+        }
+        catch (JSDisconnectedException)
+        {
         }
     }
 }

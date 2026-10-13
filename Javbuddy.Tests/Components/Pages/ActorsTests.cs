@@ -833,11 +833,7 @@ public class ActorsTests : BunitContext
     [Fact]
     public void ChangingFilter_WritesViewStateCookie()
     {
-        // Loose mode: the default Strict JSInterop throws on any unconfigured call, including the
-        // "import" that loads the JS module — which OnAfterRenderAsync's catch-all silently
-        // swallows, same graceful-degradation path real disconnected-circuit errors take. That's
-        // fine for tests asserting server-side filtering only, but this test needs the resulting
-        // module reference to actually invoke setJsonCookie on.
+        // Loose mode: the default Strict JSInterop throws on the unconfigured lsJsonCookie.set call.
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         var items = new List<ActorCardModel>
@@ -852,7 +848,7 @@ public class ActorsTests : BunitContext
         ToggleFilter(cut, "Favorites only");
 
         cut.WaitForAssertion(
-            () => Assert.Contains(JSInterop.Invocations, inv => inv.Identifier == "setJsonCookie" && inv.Arguments.Any(a => a?.ToString() == "javbuddy-actors-view")),
+            () => Assert.Contains(JSInterop.Invocations, inv => inv.Identifier == "lsJsonCookie.set" && inv.Arguments.Any(a => a?.ToString() == "javbuddy-actors-view")),
             TimeSpan.FromSeconds(2));
     }
 

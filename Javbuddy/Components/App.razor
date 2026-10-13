@@ -101,6 +101,12 @@
                     document.cookie = 'ls-actor-detail-sections=' + encodeURIComponent(order) + ';path=/;max-age=31536000;samesite=lax';
                 }
             };
+            // Persists a page's remembered view state (name + JSON) — see JsonCookieState.SaveAsync.
+            window.lsJsonCookie = {
+                set: function (name, json, maxAgeSeconds) {
+                    document.cookie = name + '=' + encodeURIComponent(json) + ';path=/;max-age=' + maxAgeSeconds + ';samesite=lax';
+                }
+            };
             // The Movies page's poster options (MoviePosterOptions), also used by Actor Detail's grid.
             window.lsPosterOptions = {
                 get: function () {

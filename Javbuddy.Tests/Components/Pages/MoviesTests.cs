@@ -768,7 +768,7 @@ public class MoviesTests : BunitContext
 
         Assert.Equal(new[] { "AAA-001" }, RenderedCodes(cut));
         Assert.Contains("Filter (1)", cut.Markup);
-        var saved = JSInterop.Invocations.Last(inv => inv.Identifier == "setJsonCookie").Arguments.Select(a => a?.ToString() ?? "").ToList();
+        var saved = JSInterop.Invocations.Last(inv => inv.Identifier == "lsJsonCookie.set").Arguments.Select(a => a?.ToString() ?? "").ToList();
         Assert.Contains(saved, a => a.Contains("\"ActorFilter\":[", StringComparison.Ordinal));
     }
 
@@ -1677,7 +1677,7 @@ public class MoviesTests : BunitContext
         var expected = target == "genre" ? new[] { "AAA-001" } : new[] { "AAA-001", "AAA-002" };
         Assert.Equal(expected, RenderedCodes(cut).OrderBy(c => c));
 
-        var saved = JSInterop.Invocations.Last(inv => inv.Identifier == "setJsonCookie"
+        var saved = JSInterop.Invocations.Last(inv => inv.Identifier == "lsJsonCookie.set"
             && inv.Arguments.Any(a => a?.ToString() == "javbuddy-movies-view"));
         using var json = System.Text.Json.JsonDocument.Parse(saved.Arguments[1]!.ToString()!);
         var root = json.RootElement;
@@ -1701,7 +1701,7 @@ public class MoviesTests : BunitContext
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.Contains("Missing (")).Click();
 
-        Assert.Contains(JSInterop.Invocations, inv => inv.Identifier == "setJsonCookie" && inv.Arguments.Any(a => a?.ToString() == "javbuddy-movies-view"));
+        Assert.Contains(JSInterop.Invocations, inv => inv.Identifier == "lsJsonCookie.set" && inv.Arguments.Any(a => a?.ToString() == "javbuddy-movies-view"));
     }
 
     [Fact]
@@ -2049,7 +2049,7 @@ public class MoviesTests : BunitContext
     }
 
     private List<string> LastSavedViewState() =>
-        JSInterop.Invocations.Last(inv => inv.Identifier == "setJsonCookie").Arguments.Select(a => a?.ToString() ?? "").ToList();
+        JSInterop.Invocations.Last(inv => inv.Identifier == "lsJsonCookie.set").Arguments.Select(a => a?.ToString() ?? "").ToList();
 
     [Fact]
     public void ViewStateCookie_WithAllReleases_ReopensTheCatalogWithItsFilters()

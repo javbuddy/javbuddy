@@ -6,7 +6,7 @@
 @inject IMovieGridQueryService MovieQuery
 @inject IJSRuntime JS
 @inject IServiceProvider ServiceProvider
-@implements IAsyncDisposable
+@implements IDisposable
 @rendermode InteractiveServer
 
 <PageTitle>Missing · Javbuddy</PageTitle>
@@ -89,7 +89,6 @@ else if (total == 0)
     private bool sortDescending = true;
     private Movie? selectedMovie;
     private bool showSearchModal;
-    private Task<IJSObjectReference>? jsModuleTask;
 
     private const string ViewStateCookieName = "javbuddy-missing-view";
 
@@ -174,21 +173,6 @@ else if (total == 0)
         if (state is not null) sortDescending = state.SortDescending;
     }
 
-    protected override Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            try
-            {
-                jsModuleTask = JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/Missing.razor.js").AsTask();
-            }
-            catch (JSDisconnectedException)
-            {
-            }
-        }
-        return Task.CompletedTask;
-    }
-
     private async Task ToggleSort()
     {
         sortDescending = !sortDescending;
@@ -199,34 +183,13 @@ else if (total == 0)
         if (grid is not null) await grid.ScrollToTopAsync();
     }
 
-    private async Task SaveViewStateAsync()
-    {
-        if (jsModuleTask is null) return;
-        var json = JsonSerializer.Serialize(new MissingViewState(sortDescending));
-        try
-        {
-            var module = await jsModuleTask;
-            await module.InvokeVoidAsync("setJsonCookie", ViewStateCookieName, json, 31536000);
-        }
-        catch (JSDisconnectedException)
-        {
-        }
-    }
+    private Task SaveViewStateAsync() => JsonCookieState.SaveAsync(JS, ViewStateCookieName, new MissingViewState(sortDescending));
 
-    public async ValueTask DisposeAsync()
+    public void Dispose()
     {
         if (applicationState is not null)
         {
             persistingSubscription.Dispose();
-        }
-        if (jsModuleTask is null) return;
-        try
-        {
-            var module = await jsModuleTask;
-            await module.DisposeAsync();
-        }
-        catch (JSDisconnectedException)
-        {
         }
     }
 }
