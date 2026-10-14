@@ -256,7 +256,7 @@ else
     </div>
     <div class="about-row">
         <span class="about-label">Uptime</span>
-        <span>@FormatUptime(DateTime.Now - processStartTime)</span>
+        <UptimeClock Since="processStartTime" />
     </div>
 </div>
 
@@ -267,7 +267,6 @@ else
     private string migrationVersion = "";
     private string dataDirectory = "";
     private DateTime processStartTime;
-    private Timer? uptimeTimer;
 
     // One row per integration this app talks to — LocalLibrary is deliberately excluded since
     // it's just filesystem paths with nothing to "connect" to.
@@ -289,7 +288,6 @@ else
         processStartTime = Process.GetCurrentProcess().StartTime;
         databaseProvider = Configuration.GetValue("Database:Provider", "Sqlite") ?? "Sqlite";
         dataDirectory = ResolveDataDirectory();
-        uptimeTimer = new Timer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
         var report = await SystemStatusService.GetHealthReportAsync();
         migrationVersion = report.MigrationVersion;
@@ -395,17 +393,8 @@ else
         return directory;
     }
 
-    private static string FormatUptime(TimeSpan span)
-    {
-        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
-        return span.Days > 0
-            ? $"{span.Days}d {span:hh\\:mm\\:ss}"
-            : span.ToString(@"hh\:mm\:ss");
-    }
-
     public void Dispose()
     {
-        uptimeTimer?.Dispose();
         slowSectionsCts?.Cancel();
     }
 }

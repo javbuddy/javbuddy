@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Javbuddy.E2ETests.Fixtures;
 using Javbuddy.E2ETests.Fixtures.FakeServices;
 using Javbuddy.E2ETests.Support;
@@ -56,5 +57,19 @@ public class SystemStatusHealthFlowTests
         // The other three stay healthy — confirms the page reflects per-service state, not a
         // single global "something is down" flag.
         await Expect(SubServiceRow(page, "javinizer-go").Locator(".health-icon-ok")).ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task Uptime_KeepsTickingOnItsOwn()
+    {
+        var page = await fixture.NewPageAsync();
+        await page.GotoInteractiveAsync("/system/status");
+
+        var uptime = page.Locator(".about-row", new() { Has = page.GetByText("Uptime", new() { Exact = true }) }).Locator("span").Last;
+        await Expect(uptime).ToHaveTextAsync(new Regex(@"^(\d+d )?\d{2}:\d{2}:\d{2}$"));
+        var first = await uptime.TextContentAsync();
+
+        await Expect(uptime).Not.ToHaveTextAsync(first!);
+        await Expect(page.Locator("#blazor-error-ui")).ToBeHiddenAsync();
     }
 }

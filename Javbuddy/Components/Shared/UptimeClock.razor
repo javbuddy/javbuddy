@@ -1,0 +1,28 @@
+@implements IDisposable
+
+@* A ticking elapsed-time readout. It lives in its own component so the once-a-second re-render only repaints
+   this text and not the page that shows it. *@
+<span>@Format(DateTime.Now - Since)</span>
+
+@code {
+    /// <summary>When the clock started counting (local time).</summary>
+    [Parameter, EditorRequired] public DateTime Since { get; set; }
+
+    /// <summary>How often the readout refreshes.</summary>
+    [Parameter] public TimeSpan Interval { get; set; } = TimeSpan.FromSeconds(1);
+
+    private Timer? timer;
+
+    protected override void OnInitialized() =>
+        timer = new Timer(_ => InvokeAsync(StateHasChanged), null, Interval, Interval);
+
+    public static string Format(TimeSpan span)
+    {
+        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
+        return span.Days > 0
+            ? $"{span.Days}d {span:hh\\:mm\\:ss}"
+            : span.ToString(@"hh\:mm\:ss");
+    }
+
+    public void Dispose() => timer?.Dispose();
+}
