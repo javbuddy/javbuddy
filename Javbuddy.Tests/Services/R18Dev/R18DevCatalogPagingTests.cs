@@ -69,7 +69,7 @@ public class R18DevCatalogPagingTests : IDisposable
             db.Movies.Add(new Movie { Code = "ABC-100", Status = MovieStatus.Got });
             db.SaveChanges();
         }
-        return new R18DevReleaseBrowseService(dbFactory, new R18DevDumpStore(configuration), TimeProvider.System);
+        return new R18DevReleaseBrowseService(dbFactory, new R18DevDumpStore(configuration), new R18DevLibrarySnapshotCache(dbFactory, TimeProvider.System), TimeProvider.System);
     }
 
     private static async Task<List<R18DevReleaseRow>> BrowseEveryPageAsync(R18DevReleaseBrowseService service, R18DevCatalogFilter filter)
