@@ -18,6 +18,8 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
     private readonly ScheduledTaskCancellationRegistry cancellationRegistry = cancellationRegistry;
     private readonly ILogger<ScheduledTaskRunner> logger = logger;
 
+    private static readonly TimeSpan RunRetention = TimeSpan.FromDays(90);
+
     public async Task RunAsync(IScheduledTask task, CancellationToken ct)
     {
         if (!task.RecordRunHistory)
@@ -175,6 +177,33 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
         }
 
         return updatedCount;
+    }
+
+    /// <summary>Deletes finished runs older than <paramref name="retention"/> so the table doesn't grow forever. Each task's
+    /// newest run and newest finished run are always kept: the Tasks page derives "last execution" and the next due time from them.</summary>
+    public async Task<int> PruneOldRunsAsync(TimeSpan? retention = null, CancellationToken ct = default)
+    {
+        var cutoff = DateTime.UtcNow - (retention ?? RunRetention);
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        var newestIds = await db.ScheduledTaskRuns
+            .GroupBy(r => r.TaskName)
+            .Select(g => g.Max(r => r.Id))
+            .ToListAsync(ct);
+        var newestFinishedIds = await db.ScheduledTaskRuns
+            .Where(r => r.EndedAt != null)
+            .GroupBy(r => r.TaskName)
+            .Select(g => g.Max(r => r.Id))
+            .ToListAsync(ct);
+
+        var deleted = await db.ScheduledTaskRuns
+            .Where(r => r.EndedAt != null && r.QueuedAt < cutoff
+                && !newestIds.Contains(r.Id) && !newestFinishedIds.Contains(r.Id))
+            .ExecuteDeleteAsync(ct);
+
+        if (deleted > 0)
+            logger.LogInformation("Pruned {Count} scheduled task run(s) older than {Cutoff:u}.", deleted, cutoff);
+        return deleted;
     }
 
     /// <summary>Stops a running task from the UI: signals the run's token so the task's own work

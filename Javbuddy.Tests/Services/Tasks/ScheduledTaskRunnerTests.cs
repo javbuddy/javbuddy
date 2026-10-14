@@ -216,6 +216,45 @@ public class ScheduledTaskRunnerTests
     }
 
     [Fact]
+    public async Task PruneOldRunsAsync_DeletesOldFinishedRuns_ButKeepsEachTasksNewestAndRecentOnes()
+    {
+        using var factory = new TestDbContextFactory();
+        var now = DateTime.UtcNow;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.ScheduledTaskRuns.AddRange(
+                // "Busy": two old finished runs, only the older one may go.
+                Run("Busy", now.AddDays(-200), finished: true),
+                Run("Busy", now.AddDays(-150), finished: true),
+                // "Rare": a single old finished run is its "last execution", so it stays.
+                Run("Rare", now.AddDays(-300), finished: true),
+                // "Fresh": a recent finished run behind an old one.
+                Run("Fresh", now.AddDays(-120), finished: true),
+                Run("Fresh", now.AddDays(-1), finished: true),
+                // "Stuck": an old run that never ended is not pruned.
+                Run("Stuck", now.AddDays(-400), finished: false),
+                Run("Stuck", now.AddDays(-399), finished: false));
+            await db.SaveChangesAsync();
+        }
+
+        var deleted = await CreateRunner(factory).PruneOldRunsAsync(TimeSpan.FromDays(90));
+
+        Assert.Equal(2, deleted);
+        await using var verify = await factory.CreateDbContextAsync();
+        var remaining = await verify.ScheduledTaskRuns.OrderBy(r => r.Id).Select(r => r.QueuedAt).ToListAsync();
+        Assert.Equal(5, remaining.Count);
+        Assert.DoesNotContain(remaining, q => q == now.AddDays(-200) || q == now.AddDays(-120));
+
+        static ScheduledTaskRun Run(string name, DateTime queuedAt, bool finished) => new()
+        {
+            TaskName = name,
+            QueuedAt = queuedAt,
+            EndedAt = finished ? queuedAt.AddMinutes(1) : null,
+            Success = finished,
+        };
+    }
+
+    [Fact]
     public async Task CleanUpOrphanedRunsAsync_NoOrphanedRuns_ReturnsZeroAndDoesNotNotify()
     {
         using var factory = new TestDbContextFactory();
