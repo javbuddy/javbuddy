@@ -562,86 +562,110 @@ else
             .ToList();
     }
 
-    private IEnumerable<Movie> FilteredMoviesWithoutStatus
+    // The filtered, counted and sorted movies are worked out once per change to the filters, sort or loaded
+    // movies, not once per use: the markup reads the counts and the list several times a render, and every
+    // read used to filter and sort the whole filmography again. The key compares the loaded list by
+    // reference (it is only ever replaced) and everything else by value.
+    private sealed record ViewKey(
+        List<Movie> AllMovies, MovieStatus? Status, string? Library, string Text,
+        string SortField, bool SortDescending, int RandomSortSeed, string Filters);
+
+    private ViewKey? viewKey;
+    private List<Movie> displayedMovies = new();
+    private (int Total, int Missing, int Got) statusCounts;
+
+    private void EnsureView()
     {
-        get
+        var key = new ViewKey(allMovies, filter, libraryFilter, textFilter, sortField, sortDescending, randomSortSeed, FilterFingerprint());
+        if (key == viewKey) return;
+
+        var withoutStatus = FilteredMoviesWithoutStatus().ToList();
+        statusCounts = (withoutStatus.Count, withoutStatus.Count(m => m.Status == MovieStatus.Missing), withoutStatus.Count(m => m.Status == MovieStatus.Got));
+        displayedMovies = SortMovies(filter is null ? withoutStatus : withoutStatus.Where(m => m.Status == filter)).ToList();
+        viewKey = key;
+    }
+
+    private string FilterFingerprint() => string.Join('|',
+        Fingerprint(resolutionFilter), Fingerprint(scanTypeFilter), Fingerprint(nfoDriftFilter), Fingerprint(codecFilter),
+        Fingerprint(studioFilter), Fingerprint(genreFilter), Fingerprint(featureFilter));
+
+    private static string Fingerprint<T>(HashSet<T> set) =>
+        string.Join(',', set.Select(item => item?.ToString() ?? "").Order(StringComparer.Ordinal));
+
+    private IEnumerable<Movie> FilteredMoviesWithoutStatus()
+    {
+        var query = (IEnumerable<Movie>)allMovies;
+
+        if (!string.IsNullOrEmpty(libraryFilter))
         {
-            var query = (IEnumerable<Movie>)allMovies;
-
-            if (!string.IsNullOrEmpty(libraryFilter))
-            {
-                query = query.Where(m => m.JellyfinLibraryName == libraryFilter);
-            }
-
-            query = MovieFilterPredicates.WhereResolutions(query.AsQueryable(), resolutionFilter);
-            query = MovieFilterPredicates.WhereScanTypes(query.AsQueryable(), scanTypeFilter);
-            query = MovieFilterPredicates.WhereCodecs(query.AsQueryable(), codecFilter);
-            query = MovieFilterPredicates.WhereStudios(query.AsQueryable(), studioFilter);
-
-            // Same predicates as the Movies page, evaluated in memory over the
-            // loaded movies (MovieTags → Tag → ParentTag and Scenes are included above).
-            query = MovieFilterPredicates.WhereGenres(query.AsQueryable(), genreFilter);
-            query = MovieFilterPredicates.WhereFeatures(query.AsQueryable(), featureFilter);
-
-            query = MovieFilterPredicates.WhereNfoDriftKinds(query.AsQueryable(), nfoDriftFilter);
-
-            if (!string.IsNullOrWhiteSpace(textFilter))
-            {
-                var term = textFilter.Trim();
-                query = query.Where(m =>
-                    (m.Code != null && m.Code.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
-                    (m.MetaTitle != null && m.MetaTitle.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
-                    (m.Title != null && m.Title.Contains(term, StringComparison.OrdinalIgnoreCase)));
-            }
-
-            return query;
+            query = query.Where(m => m.JellyfinLibraryName == libraryFilter);
         }
+
+        query = MovieFilterPredicates.WhereResolutions(query.AsQueryable(), resolutionFilter);
+        query = MovieFilterPredicates.WhereScanTypes(query.AsQueryable(), scanTypeFilter);
+        query = MovieFilterPredicates.WhereCodecs(query.AsQueryable(), codecFilter);
+        query = MovieFilterPredicates.WhereStudios(query.AsQueryable(), studioFilter);
+
+        // Same predicates as the Movies page, evaluated in memory over the
+        // loaded movies (MovieTags → Tag → ParentTag and Scenes are included above).
+        query = MovieFilterPredicates.WhereGenres(query.AsQueryable(), genreFilter);
+        query = MovieFilterPredicates.WhereFeatures(query.AsQueryable(), featureFilter);
+
+        query = MovieFilterPredicates.WhereNfoDriftKinds(query.AsQueryable(), nfoDriftFilter);
+
+        if (!string.IsNullOrWhiteSpace(textFilter))
+        {
+            var term = textFilter.Trim();
+            query = query.Where(m =>
+                (m.Code != null && m.Code.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (m.MetaTitle != null && m.MetaTitle.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (m.Title != null && m.Title.Contains(term, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        return query;
     }
 
     private (int Total, int Missing, int Got) StatusCounts
     {
         get
         {
-            var list = FilteredMoviesWithoutStatus.ToList();
-            return (list.Count, list.Count(m => m.Status == MovieStatus.Missing), list.Count(m => m.Status == MovieStatus.Got));
+            EnsureView();
+            return statusCounts;
         }
     }
 
-    private IEnumerable<Movie> DisplayedMovies
+    private IReadOnlyList<Movie> DisplayedMovies
     {
         get
         {
-            var query = FilteredMoviesWithoutStatus;
-
-            if (filter is not null)
-            {
-                query = query.Where(m => m.Status == filter);
-            }
-
-            return sortField switch
-            {
-                "title" => sortDescending
-                    ? query.OrderByDescending(m => m.Code)
-                    : query.OrderBy(m => m.Code),
-                "size" => sortDescending
-                    ? query.OrderBy(m => m.LocalFileSizeBytes == null).ThenByDescending(m => m.LocalFileSizeBytes)
-                    : query.OrderBy(m => m.LocalFileSizeBytes == null).ThenBy(m => m.LocalFileSizeBytes),
-                "status" => sortDescending
-                    ? query.OrderBy(m => m.Status == MovieStatus.Missing)
-                    : query.OrderByDescending(m => m.Status == MovieStatus.Missing),
-                "release" => sortDescending
-                    ? query.OrderBy(m => m.MetaReleaseDate == null).ThenByDescending(m => m.MetaReleaseDate)
-                    : query.OrderBy(m => m.MetaReleaseDate == null).ThenBy(m => m.MetaReleaseDate),
-                "runtime" => sortDescending
-                    ? query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenByDescending(m => m.MetaRuntimeMinutes)
-                    : query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenBy(m => m.MetaRuntimeMinutes),
-                "random" => query.OrderBy(m => (long)m.Id * randomSortSeed % RandomSortModulus),
-                _ => sortDescending
-                    ? query.OrderByDescending(m => EF.Property<DateTime>(m, Movie.DateAddedColumn))
-                    : query.OrderBy(m => EF.Property<DateTime>(m, Movie.DateAddedColumn)),
-            };
+            EnsureView();
+            return displayedMovies;
         }
     }
+
+    private IEnumerable<Movie> SortMovies(IEnumerable<Movie> query) =>
+        sortField switch
+        {
+            "title" => sortDescending
+                ? query.OrderByDescending(m => m.Code)
+                : query.OrderBy(m => m.Code),
+            "size" => sortDescending
+                ? query.OrderBy(m => m.LocalFileSizeBytes == null).ThenByDescending(m => m.LocalFileSizeBytes)
+                : query.OrderBy(m => m.LocalFileSizeBytes == null).ThenBy(m => m.LocalFileSizeBytes),
+            "status" => sortDescending
+                ? query.OrderBy(m => m.Status == MovieStatus.Missing)
+                : query.OrderByDescending(m => m.Status == MovieStatus.Missing),
+            "release" => sortDescending
+                ? query.OrderBy(m => m.MetaReleaseDate == null).ThenByDescending(m => m.MetaReleaseDate)
+                : query.OrderBy(m => m.MetaReleaseDate == null).ThenBy(m => m.MetaReleaseDate),
+            "runtime" => sortDescending
+                ? query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenByDescending(m => m.MetaRuntimeMinutes)
+                : query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenBy(m => m.MetaRuntimeMinutes),
+            "random" => query.OrderBy(m => (long)m.Id * randomSortSeed % RandomSortModulus),
+            _ => sortDescending
+                ? query.OrderByDescending(m => m.FileAddedAt ?? m.CreatedAt)
+                : query.OrderBy(m => m.FileAddedAt ?? m.CreatedAt),
+        };
 
     private int ActiveFilterCount => resolutionFilter.Count + scanTypeFilter.Count + nfoDriftFilter.Count + codecFilter.Count + studioFilter.Count + genreFilter.Count + featureFilter.Count;
 
