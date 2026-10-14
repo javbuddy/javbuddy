@@ -1,4 +1,6 @@
 @using Javbuddy.Services
+@using Javbuddy.Services.Common
+@implements IDisposable
 @inject IActorService ActorService
 
 <div class="cast-search">
@@ -34,21 +36,33 @@
     private string query = "";
     private IReadOnlyList<ActorSearchItem> results = [];
 
+    private readonly Debouncer debouncer = new();
+
     private async Task OnInputAsync(ChangeEventArgs e)
     {
         query = e.Value?.ToString() ?? "";
         if (string.IsNullOrWhiteSpace(query))
         {
+            debouncer.Cancel();
             results = [];
             return;
         }
 
-        var matches = await ActorService.SearchActorsAsync(query);
-        results = matches.Where(a => !ExcludedActorIds.Contains(a.Id)).ToList();
+        // Debounced, so a lookup doesn't run per keystroke.
+        var term = query;
+        await debouncer.RunAsync(async ct =>
+        {
+            var matches = await ActorService.SearchActorsAsync(term, ct);
+            if (ct.IsCancellationRequested) return;
+            results = matches.Where(a => !ExcludedActorIds.Contains(a.Id)).ToList();
+        });
     }
+
+    public void Dispose() => debouncer.Dispose();
 
     private async Task AddAsync(int actorId)
     {
+        debouncer.Cancel();
         query = "";
         results = [];
         await OnAdd.InvokeAsync(actorId);

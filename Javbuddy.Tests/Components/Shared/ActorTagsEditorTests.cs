@@ -57,10 +57,14 @@ public class ActorTagsEditorTests : BunitContext
         var cut = RenderEditor(new EffectiveActorTag(Mei, Blonde, false, null));
 
         await cut.InvokeAsync(() => cut.Find("input.tag-search-input").Input("tat"));
+        cut.WaitForElements(".tag-search-candidate");
         await cut.InvokeAsync(() => cut.FindAll(".tag-search-candidate").Single(c => c.TextContent.Trim() == "Tattoo").Click());
 
-        Assert.Equal([Blonde, Tattoo], SavedIds().Order());
-        Assert.True(Assert.Single(changes).MovieTagsChanged);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal([Blonde, Tattoo], SavedIds().Order());
+            Assert.True(Assert.Single(changes).MovieTagsChanged);
+        });
     }
 
     [Fact]
@@ -72,7 +76,7 @@ public class ActorTagsEditorTests : BunitContext
 
         await cut.InvokeAsync(() => cut.Find("input.tag-search-input").Input("l"));
 
-        Assert.Equal(["Hair › Long"], cut.FindAll(".tag-search-candidate").Select(c => c.TextContent.Trim()));
+        cut.WaitForAssertion(() => Assert.Equal(["Hair › Long"], cut.FindAll(".tag-search-candidate").Select(c => c.TextContent.Trim())));
     }
 
     [Fact]

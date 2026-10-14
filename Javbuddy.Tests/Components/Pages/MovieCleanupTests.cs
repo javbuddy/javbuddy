@@ -1168,14 +1168,18 @@ public class MovieCleanupTests : BunitContext
         var cut = Render<MovieCleanup>();
         cut.Find("button.cleanup-edit-cast-btn").Click();
         cut.Find("input.cast-search-input").Input("Hatano");
+        cut.WaitForElements(".cast-search-candidate");
 
         // Mikami Yua (already on the movie) is filtered out of the results.
         var candidate = Assert.Single(cut.FindAll(".cast-search-candidate"));
         candidate.Click();
 
-        movieService.Received(1).AddActorToMovieAsync(1, 7, Arg.Any<CancellationToken>());
-        cleanupService.Received(1).RecordActorEditAsync(1, 7, true, Arg.Any<CancellationToken>());
-        Assert.Contains(cut.FindAll(".cleanup-actor-name"), n => n.TextContent.Trim() == "Hatano Yui");
+        cut.WaitForAssertion(() =>
+        {
+            movieService.Received(1).AddActorToMovieAsync(1, 7, Arg.Any<CancellationToken>());
+            cleanupService.Received(1).RecordActorEditAsync(1, 7, true, Arg.Any<CancellationToken>());
+            Assert.Contains(cut.FindAll(".cleanup-actor-name"), n => n.TextContent.Trim() == "Hatano Yui");
+        });
     }
 
     [Fact]
@@ -1345,14 +1349,18 @@ public class MovieCleanupTests : BunitContext
         var cut = Render<MovieCleanup>();
         cut.Find("button.cleanup-edit-tags-btn").Click();
         cut.Find("input.tag-search-input").Input("o");
+        cut.WaitForElements(".tag-search-candidate");
 
         // Drama (already on the movie) is filtered out of the results.
         var candidate = Assert.Single(cut.FindAll(".tag-search-candidate"));
         candidate.Click();
 
-        tagService.Received(1).AddTagToMovieAsync(1, 2, Arg.Any<CancellationToken>());
-        cleanupService.Received(1).RecordTagEditAsync(1, 2, true, Arg.Any<CancellationToken>());
-        Assert.Equal(["Drama", "Solo"], cut.FindAll(".cleanup-tag").Select(c => c.TextContent.Trim()));
+        cut.WaitForAssertion(() =>
+        {
+            tagService.Received(1).AddTagToMovieAsync(1, 2, Arg.Any<CancellationToken>());
+            cleanupService.Received(1).RecordTagEditAsync(1, 2, true, Arg.Any<CancellationToken>());
+            Assert.Equal(["Drama", "Solo"], cut.FindAll(".cleanup-tag").Select(c => c.TextContent.Trim()));
+        });
     }
 
     [Fact]

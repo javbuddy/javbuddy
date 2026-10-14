@@ -1,11 +1,13 @@
 @page "/movies/tags"
 @using Javbuddy.Models
 @using Javbuddy.Services
+@using Javbuddy.Services.Common
 @inject ITagService TagService
 @inject ITagRuleService TagRuleService
 @inject IActorTagService ActorTagService
 @inject MovieFilterNavigationState FilterNavigationState
 @inject NavigationManager Nav
+@implements IDisposable
 @rendermode InteractiveServer
 
 <PageTitle>Tags · Javbuddy</PageTitle>
@@ -627,11 +629,16 @@
         allTags = (await TagService.GetTagsAsync(sort: sort)).ToList();
     }
 
+    private readonly Debouncer searchDebouncer = new();
+
+    // Debounced: the tag table is reloaded from the database, which shouldn't happen per keystroke.
     private async Task OnSearchInput(ChangeEventArgs e)
     {
         search = e.Value?.ToString() ?? "";
-        await LoadTagsAsync();
+        await searchDebouncer.RunAsync(_ => LoadTagsAsync());
     }
+
+    public void Dispose() => searchDebouncer.Dispose();
 
     private async Task LoadRulesAsync() => rules = await TagRuleService.GetReplacementRulesAsync();
 

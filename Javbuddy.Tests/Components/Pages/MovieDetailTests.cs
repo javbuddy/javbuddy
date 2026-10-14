@@ -628,11 +628,11 @@ public class MovieDetailTests : BunitContext
         var searchInput = cut.Find("input.tag-search-input");
         searchInput.Input("Solo");
 
-        var candidate = cut.Find(".tag-search-candidate");
+        var candidate = cut.WaitForElement(".tag-search-candidate");
         Assert.Equal("Solo", candidate.TextContent.Trim());
         candidate.Click();
 
-        Assert.Contains(cut.FindAll("button.movie-detail-badge"), b => b.TextContent.Trim() == "Solo");
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button.movie-detail-badge"), b => b.TextContent.Trim() == "Solo"));
 
         using var verifyDb = factory.CreateDbContext();
         Assert.Equal(2, verifyDb.MovieTags.Count(mt => mt.MovieId == movieId));
@@ -712,12 +712,12 @@ public class MovieDetailTests : BunitContext
         var searchInput = cut.Find("input.cast-search-input");
         searchInput.Input("Hatano");
 
-        var candidate = cut.Find(".cast-search-candidate");
+        var candidate = cut.WaitForElement(".cast-search-candidate");
         Assert.Single(candidate.QuerySelectorAll(".cast-search-avatar"));
         Assert.Equal("Hatano Yui", candidate.QuerySelector("span:not(.cast-search-avatar)")!.TextContent.Trim());
         candidate.Click();
 
-        Assert.Contains(cut.FindAll(".movie-detail-cast-name"), n => n.TextContent.Trim() == "Hatano Yui");
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll(".movie-detail-cast-name"), n => n.TextContent.Trim() == "Hatano Yui"));
 
         using var verifyDb = factory.CreateDbContext();
         Assert.Equal(2, verifyDb.MovieActors.Count(ma => ma.MovieId == movieId));

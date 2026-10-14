@@ -3,6 +3,7 @@
 @using Javbuddy.Data
 @using Javbuddy.Models
 @using Javbuddy.Services
+@using Javbuddy.Services.Common
 @using Javbuddy.Services.R18Dev
 @inject IActorService ActorService
 @inject IR18DevSettingsService R18DevSettingsService
@@ -537,10 +538,17 @@ else
         ApplyFiltersAndSort();
     }
 
-    private void OnTextFilterInput(ChangeEventArgs e)
+    private readonly Debouncer textFilterDebouncer = new();
+
+    // Debounced: filtering and re-sorting the whole filmography re-renders every card.
+    private async Task OnTextFilterInput(ChangeEventArgs e)
     {
         textFilter = e.Value?.ToString() ?? "";
-        ApplyFiltersAndSort();
+        await textFilterDebouncer.RunAsync(_ =>
+        {
+            ApplyFiltersAndSort();
+            return Task.CompletedTask;
+        });
     }
 
     private void ToggleHideDuplicates()
@@ -635,6 +643,7 @@ else
 
     public void Dispose()
     {
+        textFilterDebouncer.Dispose();
         loadCts?.Cancel();
         loadCts?.Dispose();
     }
