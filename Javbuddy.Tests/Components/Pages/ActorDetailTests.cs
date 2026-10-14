@@ -1233,6 +1233,45 @@ public class ActorDetailTests : BunitContext
     }
 
     [Fact]
+    public async Task ActorDetail_ChangingTheSortWithAStatusFilterOn_KeepsTheFilter_AndTheStatusCounts()
+    {
+        using var factory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+
+        var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
+        Movie[] movies =
+        [
+            new() { Id = 10, Code = "BBB-002", Status = MovieStatus.Got },
+            new() { Id = 11, Code = "AAA-001", Status = MovieStatus.Got },
+            new() { Id = 12, Code = "CCC-003", Status = MovieStatus.Missing },
+        ];
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Actors.Add(new Actor { Id = actor.Id, FirstName = actor.FirstName, LastName = actor.LastName });
+            db.Movies.AddRange(movies);
+            db.MovieActors.AddRange(movies.Select(m => new MovieActor { ActorId = actor.Id, MovieId = m.Id }));
+            await db.SaveChangesAsync();
+        }
+
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(actor);
+        Services.AddSingleton(actorService);
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>());
+        Services.AddSingleton(Substitute.For<INfoSyncService>());
+
+        var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
+        cut.FindAll("button").First(b => b.TextContent.Contains("Got (2)")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Sort:")).Click();
+        cut.FindAll("button").First(b => b.TextContent.Contains("Title")).Click();
+
+        Assert.Equal(new[] { "AAA-001", "BBB-002" }, cut.FindAll(".poster-title").Select(e => e.TextContent));
+        // The counts ignore the status filter, so the Missing chip still shows its movie.
+        Assert.Contains(cut.FindAll("button"), b => b.TextContent.Contains("Missing (1)"));
+    }
+
+    [Fact]
     public async Task ActorDetail_DefaultMovieSort_OrdersByReleaseDateDescending()
     {
         using var factory = new TestDbContextFactory();
