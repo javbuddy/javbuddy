@@ -8,10 +8,14 @@ namespace Javbuddy.Services.Metrics;
 /// <summary>Refreshes JavbuddyMetrics' DB-/filesystem-backed gauges (image cache size, library
 /// counts) on a timer rather than on every /metrics scrape — GetStatsAsync walks the whole cache
 /// directory, too expensive to redo per-request. Separate from ScheduledTaskHostedService's task
-/// loop: this is internal housekeeping with no user-visible run history, not a domain task.</summary>
+/// loop: this is internal housekeeping with no user-visible run history, not a domain task.
+/// The first pass runs at startup; after that the refresh is skipped while nothing has scraped the gauges
+/// recently, so an app nobody monitors never pays for the directory walk. The first scrape after an idle
+/// stretch sees the last values and the next tick brings them up to date.</summary>
 public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, JavbuddyMetrics metrics, ILogger<MetricsGaugeRefreshService> logger) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan IdleAfter = TimeSpan.FromMinutes(5);
 
     private readonly IServiceScopeFactory scopeFactory = scopeFactory;
     private readonly JavbuddyMetrics metrics = metrics;
@@ -19,11 +23,14 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var first = true;
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await RefreshAsync(stoppingToken);
+                if (first || metrics.WasObservedWithin(IdleAfter))
+                    await RefreshAsync(stoppingToken);
+                first = false;
             }
             catch (Exception ex)
             {

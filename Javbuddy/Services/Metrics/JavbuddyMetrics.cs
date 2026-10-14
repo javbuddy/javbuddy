@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
 namespace Javbuddy.Services.Metrics;
@@ -25,6 +26,7 @@ public class JavbuddyMetrics : IDisposable
     private int moviesGot;
     private int moviesMissing;
     private int actorsTotal;
+    private long lastObservedTimestamp;
 
     public JavbuddyMetrics()
     {
@@ -44,12 +46,12 @@ public class JavbuddyMetrics : IDisposable
         meter.CreateObservableGauge("javbuddy_vr_merge_active_jobs",
             () => Volatile.Read(ref vrMergeActiveJobs), description: "VR part-merge jobs currently running.");
         meter.CreateObservableGauge("javbuddy_image_cache_files",
-            () => Volatile.Read(ref imageCacheFiles), description: "Files in the local image cache.");
+            () => { MarkObserved(); return Volatile.Read(ref imageCacheFiles); }, description: "Files in the local image cache.");
         meter.CreateObservableGauge("javbuddy_image_cache_bytes",
-            () => Volatile.Read(ref imageCacheBytes), unit: "By", description: "Total size of the local image cache.");
+            () => { MarkObserved(); return Volatile.Read(ref imageCacheBytes); }, unit: "By", description: "Total size of the local image cache.");
         meter.CreateObservableGauge("javbuddy_movies_total", ObserveMoviesTotal, description: "Tracked movies, by status.");
         meter.CreateObservableGauge("javbuddy_actors_total",
-            () => Volatile.Read(ref actorsTotal), description: "Tracked actors.");
+            () => { MarkObserved(); return Volatile.Read(ref actorsTotal); }, description: "Tracked actors.");
     }
 
     /// <summary>Exposed so tests can scope a MeterListener to exactly this instance's instruments
@@ -80,8 +82,19 @@ public class JavbuddyMetrics : IDisposable
         Volatile.Write(ref actorsTotal, actorCount);
     }
 
+    /// <summary>True when something scraped a DB-/filesystem-backed gauge within <paramref name="window"/>. Lets
+    /// MetricsGaugeRefreshService skip its expensive refresh while nothing is reading /metrics.</summary>
+    public bool WasObservedWithin(TimeSpan window)
+    {
+        var last = Interlocked.Read(ref lastObservedTimestamp);
+        return last != 0 && Stopwatch.GetElapsedTime(last) <= window;
+    }
+
+    private void MarkObserved() => Interlocked.Exchange(ref lastObservedTimestamp, Stopwatch.GetTimestamp());
+
     private IEnumerable<Measurement<int>> ObserveMoviesTotal()
     {
+        MarkObserved();
         yield return new Measurement<int>(Volatile.Read(ref moviesGot), new KeyValuePair<string, object?>("status", "Got"));
         yield return new Measurement<int>(Volatile.Read(ref moviesMissing), new KeyValuePair<string, object?>("status", "Missing"));
     }

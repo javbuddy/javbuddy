@@ -62,10 +62,11 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
             var snapshot = sizeTracker.TrackedBytes;
             if (Directory.Exists(imageCache.RootPath))
             {
-                foreach (var file in ILocalImageCache.EnumerateFiles(imageCache.RootPath))
+                foreach (var fileInfo in ILocalImageCache.EnumerateFileInfos(imageCache.RootPath))
                 {
                     ct.ThrowIfCancellationRequested();
-                    var length = new FileInfo(file).Length;
+                    var file = fileInfo.Name;
+                    var length = fileInfo.Length;
                     if (file.EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
                     {
                         previewFileCount++;
@@ -118,8 +119,7 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
     {
         var snapshot = sizeTracker.TrackedBytes;
         var files = Directory.Exists(imageCache.RootPath)
-            ? ILocalImageCache.EnumerateFiles(imageCache.RootPath)
-                .Select(path => new FileInfo(path))
+            ? ILocalImageCache.EnumerateFileInfos(imageCache.RootPath)
                 .OrderBy(file => file.LastWriteTimeUtc)
                 .ToList()
             : [];
