@@ -49,8 +49,10 @@ public interface IFfmpegClient
     Task<FfmpegRunResult> GenerateTrickplayAsync(string inputPath, FfmpegTrickplayRequest request, string outputDirectory, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct = default);
 }
 
-public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpegClient
+public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGate? gate = null) : IFfmpegClient
 {
+    private readonly FfmpegGate gate = gate ?? FfmpegGate.Shared;
+
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     [GeneratedRegex(@"time=(\d+):(\d+):(\d+(?:\.\d+)?)")]
@@ -78,8 +80,21 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
 
         using var process = new Process { StartInfo = startInfo };
         StartAtLowPriority(process);
-        var stdout = await process.StandardOutput.ReadToEndAsync(ct);
-        await process.WaitForExitAsync(ct);
+        // stderr is redirected, so it has to be read too: ffprobe blocks once the pipe buffer fills.
+        var stderrTask = process.StandardError.ReadToEndAsync(ct);
+        string stdout;
+        try
+        {
+            stdout = await process.StandardOutput.ReadToEndAsync(ct);
+            await process.WaitForExitAsync(ct);
+            await stderrTask;
+        }
+        catch (OperationCanceledException)
+        {
+            KillQuietly(process);
+            throw;
+        }
+
         if (process.ExitCode != 0) return null;
 
         return ParseProbeOutput(stdout);
@@ -140,6 +155,8 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
         {
             return FfmpegRunResult.Failed("ffmpeg is not available (see Settings → Connections → Path Mappings for how the merge step locates it).");
         }
+
+        using var slot = await gate.EnterAsync(ct);
 
         var concatListPath = Path.Combine(Path.GetTempPath(), $"javbuddy-vr-merge-{Guid.NewGuid():N}.concat.txt");
         var metadataPath = Path.Combine(Path.GetTempPath(), $"javbuddy-vr-merge-{Guid.NewGuid():N}.metadata.txt");
@@ -209,6 +226,8 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
+        using var slot = await gate.EnterAsync(ct);
+
         var metadataPath = Path.Combine(Path.GetTempPath(), $"javbuddy-chapters-{Guid.NewGuid():N}.metadata.txt");
         try
         {
@@ -252,6 +271,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
     {
         if (binaryResolver.FfmpegPath is null) return null;
 
+        using var slot = await gate.EnterAsync(ct);
         var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
         {
             RedirectStandardError = true,
@@ -424,6 +444,8 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
+        using var slot = await gate.EnterAsync(ct);
+
         var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
         {
             RedirectStandardError = true,
@@ -522,12 +544,18 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
+        using var slot = await gate.EnterAsync(ct);
+
         var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
         {
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
+        // Nothing reads progress here, only the final error line: keep stderr to errors so it stays small.
+        startInfo.ArgumentList.Add("-loglevel");
+        startInfo.ArgumentList.Add("error");
+        startInfo.ArgumentList.Add("-nostats");
         foreach (var argument in arguments)
         {
             startInfo.ArgumentList.Add(argument);
@@ -570,6 +598,18 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
         }
     }
 
+    private static void KillQuietly(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // Already exited.
+        }
+    }
+
     private static string LastLine(string text) =>
         text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).LastOrDefault() ?? string.Empty;
 
@@ -604,6 +644,8 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver) : IFfmpe
         {
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
+
+        using var slot = await gate.EnterAsync(ct);
 
         var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
         {
