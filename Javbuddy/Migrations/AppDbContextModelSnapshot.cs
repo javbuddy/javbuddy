@@ -15,12 +15,12 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261010082056_ActorTags";
+    public override string LastMigrationId => "20261014173755_SqliteIndexes";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
 #pragma warning disable 612, 618
-        modelBuilder.HasAnnotation("ProductVersion", "11.0.0-rc.1.26425.128");
+        modelBuilder.HasAnnotation("ProductVersion", "11.0.0-rc.2.26504.105");
 
         modelBuilder.Entity("Javbuddy.Models.Actor", b =>
             {
@@ -1233,10 +1233,24 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.HasKey("Id");
 
+                b.HasIndex("ClipActorsStale");
+
                 b.HasIndex("Code")
                     .IsUnique();
 
+                b.HasIndex("CreatedAt");
+
+                b.HasIndex("FileAddedAt");
+
                 b.HasIndex("IsFavorite");
+
+                b.HasIndex("JellyfinLibraryName");
+
+                b.HasIndex("MetaReleaseDate");
+
+                b.HasIndex("NfoDriftKind");
+
+                b.HasIndex("Status");
 
                 b.ToTable("Movies");
             });
@@ -1928,6 +1942,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("TEXT");
 
                 b.HasKey("Id");
+
+                b.HasIndex("TaskName", "QueuedAt");
 
                 b.ToTable("ScheduledTaskRuns");
             });

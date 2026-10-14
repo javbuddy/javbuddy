@@ -93,6 +93,7 @@ builder.Services.AddDbContextFactory<AppDbContext>((sp, options) =>
         case "Sqlite":
             options.UseSqlite(connectionString, sqliteOptions =>
                 sqliteOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+            options.AddInterceptors(new SqlitePragmaInterceptor());
             break;
         // To enable Postgres later: add the Npgsql.EntityFrameworkCore.PostgreSQL
         // package and uncomment the line below.
@@ -126,6 +127,7 @@ using (var scope = app.Services.CreateScope())
 
     var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
     await runner.CleanUpOrphanedRunsAsync();
+    await runner.PruneOldRunsAsync();
 }
 
 // Configure the HTTP request pipeline.

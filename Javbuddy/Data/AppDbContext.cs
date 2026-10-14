@@ -80,9 +80,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(m => m.Code).UseCollation("NOCASE");
             entity.HasIndex(m => m.Code).IsUnique();
             entity.HasIndex(m => m.IsFavorite);
+            entity.HasIndex(m => m.Status);
+            entity.HasIndex(m => m.MetaReleaseDate);
+            entity.HasIndex(m => m.CreatedAt);
+            entity.HasIndex(m => m.FileAddedAt);
+            entity.HasIndex(m => m.JellyfinLibraryName);
+            entity.HasIndex(m => m.NfoDriftKind);
+            entity.HasIndex(m => m.ClipActorsStale);
             entity.Property(m => m.Status).HasConversion<string>().HasMaxLength(20);
             entity.Property(m => m.NfoDriftKind).HasConversion<string>().HasMaxLength(20);
         });
+
+        modelBuilder.Entity<ScheduledTaskRun>(entity => entity.HasIndex(r => new { r.TaskName, r.QueuedAt }));
 
         modelBuilder.Entity<DiscoverySourceSetting>(entity => entity.HasIndex(x => x.SourceName).IsUnique());
 
