@@ -32,4 +32,26 @@ public class MovieTagsTests : BunitContext
         Assert.Contains("subtags", cut.Find(".alert-danger").TextContent);
         Assert.NotNull(await tagService.GetByIdAsync(parent.Tag.Id));
     }
+
+    [Fact]
+    public void TypingInTheSearchBox_ReloadsTheTagsOnceForTheFinalText()
+    {
+        var tagService = Substitute.For<ITagService>();
+        tagService.GetTagsAsync(Arg.Any<string?>(), Arg.Any<TagSortOrder>(), Arg.Any<CancellationToken>()).Returns([]);
+        Services.AddSingleton(tagService);
+        Services.AddSingleton(Substitute.For<ITagRuleService>());
+        Services.AddSingleton(Substitute.For<IActorTagService>());
+        Services.AddSingleton(new MovieFilterNavigationState());
+        var cut = Render<MovieTags>();
+        var input = cut.WaitForElement("input[placeholder='Search tags…']");
+        tagService.ClearReceivedCalls();
+
+        input.Input("c");
+        input.Input("co");
+        input.Input("cos");
+
+        cut.WaitForAssertion(() => tagService.Received(1).GetTagsAsync("cos", Arg.Any<TagSortOrder>(), Arg.Any<CancellationToken>()));
+        tagService.DidNotReceive().GetTagsAsync("c", Arg.Any<TagSortOrder>(), Arg.Any<CancellationToken>());
+        tagService.DidNotReceive().GetTagsAsync("co", Arg.Any<TagSortOrder>(), Arg.Any<CancellationToken>());
+    }
 }

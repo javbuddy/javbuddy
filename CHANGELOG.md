@@ -11,6 +11,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
+- The Tags page search, the Missing page text filter and the add-tag and add-actor search boxes wait for a short pause in typing (250 ms) before searching, instead of querying and re-rendering on every keystroke (#60).
 - An actor's page filters and sorts their movies once per change instead of several times on every render, so typing in the filter box or toggling a filter is quicker on large filmographies (#62).
 - The database now runs in SQLite WAL mode, so pages keep loading while a background task writes instead of waiting for its commit. WAL adds `-wal` and `-shm` files next to the database; on a filesystem that can't support WAL, the app logs a warning and keeps the previous journal mode (#55).
 - The Movies page's status counts and "Added" sort, the Jellyfin library filter, the NFO-drift counts and filter, the stale clip-actor refresh and the scheduler's last-run lookup use new indexes instead of scanning the whole table (#55).

@@ -45,6 +45,7 @@ public class CastSearchAddTests : BunitContext
         var cut = RenderComponent();
 
         cut.Find("input.cast-search-input").Input("yu");
+        cut.WaitForElements(".cast-search-candidate");
 
         var candidates = cut.FindAll(".cast-search-candidate");
         Assert.Equal(2, candidates.Count);
@@ -61,6 +62,7 @@ public class CastSearchAddTests : BunitContext
         var cut = RenderComponent(excluded: [1]);
 
         cut.Find("input.cast-search-input").Input("yu");
+        cut.WaitForElements(".cast-search-candidate");
 
         var candidate = Assert.Single(cut.FindAll(".cast-search-candidate"));
         Assert.Contains("Mikami Yua", candidate.TextContent);
@@ -72,12 +74,12 @@ public class CastSearchAddTests : BunitContext
         var actorService = SetUpActorService(new ActorSearchItem(1, "Hatano Yui", false));
         var cut = RenderComponent();
         cut.Find("input.cast-search-input").Input("yu");
-        Assert.Single(cut.FindAll(".cast-search-candidate"));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".cast-search-candidate")));
         actorService.ClearReceivedCalls();
 
         cut.Find("input.cast-search-input").Input("  ");
 
-        Assert.Empty(cut.FindAll(".cast-search-candidate"));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".cast-search-candidate")));
         actorService.DidNotReceiveWithAnyArgs().SearchActorsAsync(default!, default);
     }
 
@@ -88,11 +90,31 @@ public class CastSearchAddTests : BunitContext
         int? added = null;
         var cut = RenderComponent(onAdd: id => added = id);
         cut.Find("input.cast-search-input").Input("hat");
+        cut.WaitForElements(".cast-search-candidate");
 
         cut.Find(".cast-search-candidate").Click();
 
-        Assert.Equal(7, added);
-        Assert.Empty(cut.FindAll(".cast-search-candidate"));
-        Assert.Equal("", cut.Find("input.cast-search-input").GetAttribute("value") ?? "");
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(7, added);
+            Assert.Empty(cut.FindAll(".cast-search-candidate"));
+            Assert.Equal("", cut.Find("input.cast-search-input").GetAttribute("value") ?? "");
+        });
+    }
+
+    [Fact]
+    public void TypingQuickly_SearchesOnceForTheFinalText()
+    {
+        var actorService = SetUpActorService(new ActorSearchItem(7, "Hatano Yui", false));
+        var cut = RenderComponent();
+        var input = cut.Find("input.cast-search-input");
+
+        input.Input("h");
+        input.Input("ha");
+        input.Input("hat");
+        cut.WaitForElements(".cast-search-candidate");
+
+        actorService.Received(1).SearchActorsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        actorService.Received(1).SearchActorsAsync("hat", Arg.Any<CancellationToken>());
     }
 }

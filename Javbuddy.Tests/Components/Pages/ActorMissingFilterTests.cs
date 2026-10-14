@@ -137,10 +137,9 @@ public class ActorMissingFilterTests : BunitContext
         cut.FindAll(".sort-dropdown-item").First(b => b.TextContent.StartsWith(year)).Click();
     }
 
-    private static void SetTextFilter(IRenderedComponent<ActorMissing> cut, string text)
-    {
-        cut.Find("input[type=search]").Input(text);
-    }
+    // Awaited so the filter's debounce has run before the test looks at the cards.
+    private static Task SetTextFilterAsync(IRenderedComponent<ActorMissing> cut, string text) =>
+        cut.Find("input[type=search]").InputAsync(text);
 
     // ---- Empty / no-match states ----
 
@@ -561,7 +560,7 @@ public class ActorMissingFilterTests : BunitContext
     // ---- Free-text filter ----
 
     [Fact]
-    public void TextFilter_MatchesDvdIdSubstring_CaseInsensitively()
+    public async Task TextFilter_MatchesDvdIdSubstring_CaseInsensitively()
     {
         using var factory = SetUpServices([
             new R18DevFilmographyEntry("SIVR-505", "Some Title", null, new DateOnly(2026, 1, 1), null, "Studio A", ActressCount: 1),
@@ -569,13 +568,13 @@ public class ActorMissingFilterTests : BunitContext
         ]);
 
         var cut = RenderPage();
-        SetTextFilter(cut, "sivr");
+        await SetTextFilterAsync(cut, "sivr");
 
         Assert.Equal(["SIVR-505"], DisplayedCodes(cut));
     }
 
     [Fact]
-    public void TextFilter_MatchesDisplayTitleSubstring()
+    public async Task TextFilter_MatchesDisplayTitleSubstring()
     {
         using var factory = SetUpServices([
             new R18DevFilmographyEntry("ABCD-100", "A Very Special Movie", null, new DateOnly(2026, 1, 1), null, "Studio A", ActressCount: 1),
@@ -583,20 +582,20 @@ public class ActorMissingFilterTests : BunitContext
         ]);
 
         var cut = RenderPage();
-        SetTextFilter(cut, "Special");
+        await SetTextFilterAsync(cut, "Special");
 
         Assert.Equal(["ABCD-100"], DisplayedCodes(cut));
     }
 
     [Fact]
-    public void TextFilter_NoMatches_ShowsEmptyState()
+    public async Task TextFilter_NoMatches_ShowsEmptyState()
     {
         using var factory = SetUpServices([
             new R18DevFilmographyEntry("ABCD-100", "A", null, new DateOnly(2026, 1, 1), null, "Studio A", ActressCount: 1),
         ]);
 
         var cut = RenderPage();
-        SetTextFilter(cut, "nothing-matches-this");
+        await SetTextFilterAsync(cut, "nothing-matches-this");
 
         Assert.Contains("No movies match the selected filters", cut.Markup);
     }

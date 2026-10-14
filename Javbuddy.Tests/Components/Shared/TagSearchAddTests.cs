@@ -47,6 +47,7 @@ public class TagSearchAddTests : BunitContext
         var cut = RenderComponent();
 
         cut.Find("input.tag-search-input").Input("s");
+        cut.WaitForElements(".tag-search-candidate");
 
         var candidates = cut.FindAll(".tag-search-candidate");
         Assert.Equal("Solo", candidates[0].TextContent.Trim());
@@ -60,6 +61,7 @@ public class TagSearchAddTests : BunitContext
         var cut = RenderComponent(excluded: [1]);
 
         cut.Find("input.tag-search-input").Input("o");
+        cut.WaitForElements(".tag-search-candidate");
 
         var candidate = Assert.Single(cut.FindAll(".tag-search-candidate"));
         Assert.Equal("Solo", candidate.TextContent.Trim());
@@ -73,7 +75,7 @@ public class TagSearchAddTests : BunitContext
 
         cut.Find("input.tag-search-input").Input("tag");
 
-        Assert.Equal(10, cut.FindAll(".tag-search-candidate").Count);
+        cut.WaitForAssertion(() => Assert.Equal(10, cut.FindAll(".tag-search-candidate").Count));
     }
 
     [Fact]
@@ -82,12 +84,12 @@ public class TagSearchAddTests : BunitContext
         var tagService = SetUpTagService(Tag(1, "Solo"));
         var cut = RenderComponent();
         cut.Find("input.tag-search-input").Input("so");
-        Assert.Single(cut.FindAll(".tag-search-candidate"));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".tag-search-candidate")));
         tagService.ClearReceivedCalls();
 
         cut.Find("input.tag-search-input").Input("  ");
 
-        Assert.Empty(cut.FindAll(".tag-search-candidate"));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".tag-search-candidate")));
         tagService.DidNotReceiveWithAnyArgs().GetTagsAsync(default, default, default);
     }
 
@@ -98,12 +100,16 @@ public class TagSearchAddTests : BunitContext
         int? added = null;
         var cut = RenderComponent(onAdd: id => added = id);
         cut.Find("input.tag-search-input").Input("so");
+        cut.WaitForElements(".tag-search-candidate");
 
         cut.Find(".tag-search-candidate").Click();
 
-        Assert.Equal(7, added);
-        Assert.Empty(cut.FindAll(".tag-search-candidate"));
-        Assert.Equal("", cut.Find("input.tag-search-input").GetAttribute("value") ?? "");
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(7, added);
+            Assert.Empty(cut.FindAll(".tag-search-candidate"));
+            Assert.Equal("", cut.Find("input.tag-search-input").GetAttribute("value") ?? "");
+        });
     }
 
     [Fact]
@@ -114,9 +120,9 @@ public class TagSearchAddTests : BunitContext
         var cut = Render<TagSearchAdd>(p => p.Add(x => x.OnAddItem, (TagListItem t) => item = t));
 
         cut.Find("input").Input("cow");
-        cut.Find(".tag-search-candidate").Click();
+        cut.WaitForElement(".tag-search-candidate").Click();
 
-        Assert.Equal(("Cowgirl", "Position"), (item!.Name, item.ParentTagName));
+        cut.WaitForAssertion(() => Assert.Equal(("Cowgirl", "Position"), (item!.Name, item.ParentTagName)));
     }
 
     [Fact]
@@ -145,5 +151,21 @@ public class TagSearchAddTests : BunitContext
 
         Assert.Equal(0, added);
         Assert.Equal("Brand New", cut.Find("input").GetAttribute("value"));
+    }
+
+    [Fact]
+    public void TypingQuickly_SearchesOnceForTheFinalText()
+    {
+        var tagService = SetUpTagService(Tag(7, "Solo"));
+        var cut = RenderComponent();
+        var input = cut.Find("input.tag-search-input");
+
+        input.Input("s");
+        input.Input("so");
+        input.Input("sol");
+        cut.WaitForElements(".tag-search-candidate");
+
+        tagService.Received(1).GetTagsAsync(Arg.Any<string?>(), Arg.Any<TagSortOrder>(), Arg.Any<CancellationToken>());
+        tagService.Received(1).GetTagsAsync("sol", Arg.Any<TagSortOrder>(), Arg.Any<CancellationToken>());
     }
 }

@@ -79,10 +79,14 @@ public class ActorTagPillsTests : BunitContext
 
         cut.Find(".actor-pill-add").Click();
         cut.Find("input.tag-search-input").Input("tat");
+        cut.WaitForElements(".tag-search-candidate");
         cut.FindAll(".tag-search-candidate").Single(c => c.TextContent.Trim() == "Tattoo").Click();
 
-        Assert.Equal([Blonde, Tattoo], SavedIds().Order());
-        Assert.True(Assert.Single(changes).MovieTagsChanged);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal([Blonde, Tattoo], SavedIds().Order());
+            Assert.True(Assert.Single(changes).MovieTagsChanged);
+        });
     }
 
     [Fact]
