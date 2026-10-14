@@ -299,7 +299,7 @@ public class JavinizerClient : ApiClientBase<JavinizerSettings>, IJavinizerClien
                     return new JavinizerBytesResult(false, null, null, $"javinizer-go returned {(int)response.StatusCode}: {errorMessage}", response.StatusCode == HttpStatusCode.NotFound);
                 }
 
-                var bytes = await response.Content.ReadAsByteArrayAsync(token);
+                var bytes = await BoundedHttpContent.ReadBytesAsync(response.Content, BoundedHttpContent.MaxImageBytes, token);
                 return new JavinizerBytesResult(true, bytes, response.Content.Headers.ContentType?.MediaType ?? "image/jpeg", null);
             },
             message => new JavinizerBytesResult(false, null, null, message));

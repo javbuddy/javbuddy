@@ -105,7 +105,7 @@ public class WarashiClient(
                 return null;
             }
 
-            return await response.Content.ReadAsByteArrayAsync(ct);
+            return await BoundedHttpContent.ReadBytesAsync(response.Content, BoundedHttpContent.MaxImageBytes, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

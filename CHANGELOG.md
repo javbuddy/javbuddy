@@ -11,6 +11,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
+- Images fetched from a metadata provider's URL (movie covers and backdrops, actor portraits) are now downloaded with a 30 s timeout, a 20 MB cap and an image content-type check, like the "from URL" imports. Javinizer posters, Warashi images and `.torrent` files (10 MB) are size-capped too, so a wrong or hostile URL can no longer fill the server's memory (#58).
 - Only one or two ffmpeg jobs run at a time (two on machines with four or more cores), however many of the scene-media, trickplay, repair, VR-merge and scene-detection queues have work. Before, they all decoded video together and could saturate the CPU and memory. ffmpeg now logs errors only, and cancelling a probe stops its ffprobe process (#59).
 - The Tags page search, the Missing page text filter and the add-tag and add-actor search boxes wait for a short pause in typing (250 ms) before searching, instead of querying and re-rendering on every keystroke (#60).
 - An actor's page filters and sorts their movies once per change instead of several times on every render, so typing in the filter box or toggling a filter is quicker on large filmographies (#62).

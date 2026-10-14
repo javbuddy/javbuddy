@@ -603,15 +603,10 @@ public class ActorImageCacheService(
             return (null, null);
         }
 
-        byte[] sourceBytes;
-        try
+        var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(), remoteImageUrl, ct);
+        if (download.Bytes is not { } sourceBytes)
         {
-            var client = httpClientFactory.CreateClient();
-            sourceBytes = await client.GetByteArrayAsync(remoteImageUrl, ct);
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UriFormatException or InvalidOperationException)
-        {
-            logger?.LogWarning(ex, "Failed to download remote actor image for actor {ActorId} from {Url}", actorId, remoteImageUrl);
+            logger?.LogWarning(download.Error, "Failed to download remote actor image for actor {ActorId} from {Url}: {Failure}", actorId, remoteImageUrl, download.Failure);
             return (null, null);
         }
 
