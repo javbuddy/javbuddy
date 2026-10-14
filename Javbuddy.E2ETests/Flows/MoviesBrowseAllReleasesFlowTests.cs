@@ -2,8 +2,10 @@ using System.Text.RegularExpressions;
 using Javbuddy.E2ETests.Fixtures;
 using Javbuddy.E2ETests.Support;
 using Javbuddy.Models;
+using Javbuddy.Services.R18Dev;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using static Microsoft.Playwright.Assertions;
 
@@ -225,6 +227,7 @@ public class MoviesBrowseAllReleasesFlowTests
                 new($"{prefix}-903", "Moodyz", "2020-03-01", "Also Not Owned"),
                 new($"{prefix}A-901", "Moodyz", "2020-04-01", "Different Prefix"),
             ]);
+            scope.ForgetCachedLibrary();
             return scope;
         }
 
@@ -236,6 +239,11 @@ public class MoviesBrowseAllReleasesFlowTests
             await db.Movies.Where(m => m.Code!.StartsWith(prefix)).ExecuteDeleteAsync();
             await db.DeletedMovies.Where(m => m.Code.StartsWith(prefix)).ExecuteDeleteAsync();
             if (prefix == "HIST") await db.Actors.Where(a => a.FirstName == "History589").ExecuteDeleteAsync();
+            ForgetCachedLibrary();
         }
+
+        /// <summary>The seeding writes the database behind the app's back, so the browse's short-lived library snapshot
+        /// (reloaded when the app itself changes a movie) has to be dropped by hand.</summary>
+        private void ForgetCachedLibrary() => fixture.App.Services.GetRequiredService<R18DevLibrarySnapshotCache>().Invalidate();
     }
 }

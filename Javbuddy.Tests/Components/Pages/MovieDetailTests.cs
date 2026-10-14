@@ -67,7 +67,7 @@ public class MovieDetailTests : BunitContext
         Services.AddSingleton<IMediaServerClient>(jellyfinClient);
         var dumpStore = r18DevDumpStore ?? Substitute.For<IR18DevDumpStore>();
         Services.AddSingleton(dumpStore);
-        Services.AddSingleton<IR18DevReleaseBrowseService>(new R18DevReleaseBrowseService(factory, dumpStore, TimeProvider.System));
+        Services.AddSingleton<IR18DevReleaseBrowseService>(new R18DevReleaseBrowseService(factory, dumpStore, new R18DevLibrarySnapshotCache(factory, TimeProvider.System), TimeProvider.System));
         Services.AddSingleton(Substitute.For<IMovieAddService>());
         var nfoSync = Substitute.For<INfoSyncService>();
         nfoSync.CheckMovieNfoConflictAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())

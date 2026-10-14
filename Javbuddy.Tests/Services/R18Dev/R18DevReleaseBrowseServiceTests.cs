@@ -21,7 +21,7 @@ public class R18DevReleaseBrowseServiceTests : IDisposable
 
     public void Dispose() => factory.Dispose();
 
-    private R18DevReleaseBrowseService Service => new(factory, store, time);
+    private R18DevReleaseBrowseService Service => new(factory, store, new R18DevLibrarySnapshotCache(factory, time), time);
 
     private static R18DevFilmographyEntry Entry(string dvdId, DateOnly? released = null, string? title = "Title") =>
         new(dvdId, title, null, released, null);

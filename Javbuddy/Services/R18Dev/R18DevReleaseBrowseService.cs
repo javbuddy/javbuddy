@@ -1,5 +1,4 @@
 using Javbuddy.Data;
-using Javbuddy.Models;
 using Javbuddy.Services.Movies;
 using Microsoft.EntityFrameworkCore;
 
@@ -71,7 +70,7 @@ public interface IR18DevReleaseBrowseService
 
 /// <summary>The Movies page's "All releases (r18.dev)" browse and the other catalog lookups: joins
 /// the sidecar dump store (which can't see the main database) with the local library.</summary>
-public class R18DevReleaseBrowseService(IDbContextFactory<AppDbContext> dbFactory, IR18DevDumpStore dumpStore, TimeProvider timeProvider) : IR18DevReleaseBrowseService
+public class R18DevReleaseBrowseService(IDbContextFactory<AppDbContext> dbFactory, IR18DevDumpStore dumpStore, R18DevLibrarySnapshotCache libraryCache, TimeProvider timeProvider) : IR18DevReleaseBrowseService
 {
     /// <summary>Rows fetched per page — what the Movies page shows per "Show more".</summary>
     public const int PageSize = 200;
@@ -178,65 +177,5 @@ public class R18DevReleaseBrowseService(IDbContextFactory<AppDbContext> dbFactor
         return enabled ? (true, await dumpStore.GetCatalogAvailabilityAsync(ct)) : (false, R18DevCatalogAvailability.NoDump);
     }
 
-    private async Task<LibrarySnapshot> LoadLibraryAsync(CancellationToken ct)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        // Only what matching reads (Code, Status), untracked — the full Movie rows carry
-        // description/genre text that's dead weight here.
-        var movies = await db.Movies
-            .Where(m => m.Code != null)
-            .AsNoTracking()
-            .Select(m => new Movie { Code = m.Code, Status = m.Status })
-            .ToListAsync(ct);
-        // The whole history: it only grows by one row per deleted movie, and the status filters need
-        // every key, not just the page's.
-        var deleted = await db.DeletedMovies.AsNoTracking().ToListAsync(ct);
-        return new LibrarySnapshot(movies, deleted);
-    }
-
-    private sealed class LibrarySnapshot
-    {
-        public LibrarySnapshot(List<Movie> movies, List<DeletedMovie> deleted)
-        {
-            Movies = movies;
-            Deleted = deleted;
-            WantedKeys = KeysWith(MovieStatus.Missing);
-            GotKeys = KeysWith(MovieStatus.Got);
-            // A movie that's tracked again counts as tracked, as in R18DevReleaseMatcher.Classify.
-            var tracked = WantedKeys.Concat(GotKeys).ToHashSet(StringComparer.Ordinal);
-            DeletedOnlyKeys = deleted.Select(d => d.CanonicalKey).Where(k => k.Length > 0 && !tracked.Contains(k)).Distinct().ToList();
-        }
-
-        public List<Movie> Movies { get; }
-
-        public List<DeletedMovie> Deleted { get; }
-
-        public IReadOnlyCollection<string> WantedKeys { get; }
-
-        public IReadOnlyCollection<string> GotKeys { get; }
-
-        public IReadOnlyCollection<string> DeletedOnlyKeys { get; }
-
-        public List<R18DevReleaseRow> Classify(IEnumerable<R18DevFilmographyEntry> entries) =>
-            R18DevReleaseMatcher.Classify(entries, Movies, Deleted);
-
-        public R18DevCanonicalKeyFilter? KeyFilterFor(R18DevCatalogStatus status, bool hidePreviouslyDeleted)
-        {
-            var hidden = hidePreviouslyDeleted ? DeletedOnlyKeys : [];
-            return status switch
-            {
-                R18DevCatalogStatus.Untracked => new R18DevCanonicalKeyFilter(WantedKeys.Concat(GotKeys).Concat(hidden).Distinct().ToList(), Exclude: true),
-                R18DevCatalogStatus.Wanted => new R18DevCanonicalKeyFilter(WantedKeys, Exclude: false),
-                R18DevCatalogStatus.Got => new R18DevCanonicalKeyFilter(GotKeys, Exclude: false),
-                _ => hidden.Count > 0 ? new R18DevCanonicalKeyFilter(hidden, Exclude: true) : null,
-            };
-        }
-
-        private List<string> KeysWith(MovieStatus status) => Movies
-            .Where(m => m.Status == status)
-            .Select(m => CodeNormalization.GetCanonicalKey(m.Code))
-            .Where(k => k.Length > 0)
-            .Distinct()
-            .ToList();
-    }
+    private Task<R18DevLibrarySnapshot> LoadLibraryAsync(CancellationToken ct) => libraryCache.GetAsync(ct);
 }

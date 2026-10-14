@@ -226,6 +226,7 @@ public static class ServiceRegistration
         services.AddScoped<IDiskSpaceService, DiskSpaceService>();
         services.AddScoped<IR18DevDumpImporter, R18DevDumpImporter>();
         services.AddScoped<IR18DevDumpStore, R18DevDumpStore>();
+        services.AddSingleton<R18DevLibrarySnapshotCache>();
         services.AddScoped<IR18DevReleaseBrowseService, R18DevReleaseBrowseService>();
         services.AddScoped<IActorFilmographyService, ActorFilmographyService>();
         services.AddScoped<IImageServingService, ImageServingService>();
