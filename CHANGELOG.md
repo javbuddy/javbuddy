@@ -15,6 +15,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - The Movies page's status counts and "Added" sort, the Jellyfin library filter, the NFO-drift counts and filter, the stale clip-actor refresh and the scheduler's last-run lookup use new indexes instead of scanning the whole table (#55).
 - Finished scheduled-task runs older than 90 days are deleted daily; each task's latest run is always kept (#55).
 - The image cache size on the metrics endpoint is only recalculated while something is scraping `/metrics` (the first pass runs at startup, and the first scrape after a quiet spell starts a refresh straight away), and the cache directory is walked once instead of once per file type. The System page's own stats are unchanged. Actor images and actor photos regenerated from their stored originals now count toward the image cache size limit, which previously relied on that per-minute walk to notice them (#56).
+- The System page no longer re-renders in full every second for the uptime clock; only the clock ticks (#61).
 - Hover previews on the Scenes wall start sooner: the pointer only has to rest on a card for 75 ms (was 150 ms), and the preview video begins loading right away.
 - Actor name matching now ignores full-width (ideographic) spaces everywhere, not just in the torrent sorter, so "山田　花子" matches "山田 花子" and "山田花子" when linking cast, merging and importing actors (#34).
 - Upgraded to .NET 11 RC2 (`11.0.0-rc.2.26504.105`), including EF Core and the `dotnet-ef` tool (#53).
