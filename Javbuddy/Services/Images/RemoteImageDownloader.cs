@@ -1,4 +1,5 @@
 using System.Net;
+using Javbuddy.Services.Infrastructure;
 
 namespace Javbuddy.Services.Images;
 
@@ -42,6 +43,22 @@ public sealed record RemoteImageDownloadResult(
 public static class RemoteImageDownloader
 {
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>True for an image content type, or a missing / generic binary one, which image CDNs do send.</summary>
+    public static bool IsImageMediaType(string? mediaType) =>
+        mediaType is null
+        || mediaType.StartsWith("image/", StringComparison.Ordinal)
+        || mediaType is "application/octet-stream" or "binary/octet-stream";
+
+    /// <summary>Downloads an image a metadata provider handed us (<paramref name="url"/> is not user-typed, so this takes the
+    /// plain client rather than the public-address-only import one) with the size cap, timeout and media-type check.</summary>
+    public static Task<RemoteImageDownloadResult> DownloadProviderImageAsync(HttpClient client, string? url, CancellationToken ct)
+    {
+        var failure = TryParseUrl(url, out var uri);
+        return failure != RemoteImageDownloadFailure.None
+            ? Task.FromResult(new RemoteImageDownloadResult(failure))
+            : DownloadAsync(client, uri!, BoundedHttpContent.MaxImageBytes, ct, isAcceptableMediaType: IsImageMediaType);
+    }
 
     /// <summary>Validates a user-supplied image URL: present, not on a defunct host, and an
     /// absolute HTTP(S) URL. Returns <see cref="RemoteImageDownloadFailure.None"/> with the parsed
@@ -134,20 +151,9 @@ public static class RemoteImageDownloader
             try
             {
                 await using var stream = await response.Content.ReadAsStreamAsync(requestCt);
-                using var ms = new MemoryStream();
-                var buffer = new byte[81920];
-                int read;
-                long totalRead = 0;
-                while ((read = await stream.ReadAsync(buffer, requestCt)) > 0)
-                {
-                    totalRead += read;
-                    if (totalRead > maxBytes)
-                    {
-                        return new(RemoteImageDownloadFailure.TooLarge);
-                    }
-                    await ms.WriteAsync(buffer.AsMemory(0, read), requestCt);
-                }
-                bytes = ms.ToArray();
+                var read = await BoundedHttpContent.ReadStreamAsync(stream, maxBytes, requestCt);
+                if (read is null) return new(RemoteImageDownloadFailure.TooLarge);
+                bytes = read;
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {

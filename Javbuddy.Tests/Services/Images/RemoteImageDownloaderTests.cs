@@ -1,5 +1,6 @@
 using System.Net;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Tests.TestSupport;
 
 namespace Javbuddy.Tests.Services.Images;
@@ -195,5 +196,51 @@ public class RemoteImageDownloaderTests
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => RemoteImageDownloader.DownloadAsync(ClientReturning(content), ImageUri, 1024, cts.Token));
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("image/webp", true)]
+    [InlineData("application/octet-stream", true)]
+    [InlineData("binary/octet-stream", true)]
+    [InlineData("text/html", false)]
+    [InlineData("application/json", false)]
+    public void IsImageMediaType_AcceptsImagesAndGenericBinary(string? mediaType, bool expected) =>
+        Assert.Equal(expected, RemoteImageDownloader.IsImageMediaType(mediaType));
+
+    [Fact]
+    public async Task DownloadProviderImageAsync_ReturnsAnImageWithinTheCap()
+    {
+        var result = await RemoteImageDownloader.DownloadProviderImageAsync(ClientReturning(Bytes(10)), ImageUri.ToString(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal(10, result.Bytes!.Length);
+    }
+
+    [Fact]
+    public async Task DownloadProviderImageAsync_RejectsAnHtmlErrorPage()
+    {
+        var result = await RemoteImageDownloader.DownloadProviderImageAsync(ClientReturning(Bytes(10, "text/html")), ImageUri.ToString(), CancellationToken.None);
+
+        Assert.Equal(RemoteImageDownloadFailure.UnacceptableMediaType, result.Failure);
+    }
+
+    [Fact]
+    public async Task DownloadProviderImageAsync_RejectsABodyOverTheCapEvenWithoutAContentLength()
+    {
+        var content = new StreamContent(new ControlledStream(new byte[(int)BoundedHttpContent.MaxImageBytes + 1]));
+        content.Headers.ContentType = new("image/jpeg");
+
+        var result = await RemoteImageDownloader.DownloadProviderImageAsync(ClientReturning(content), ImageUri.ToString(), CancellationToken.None);
+
+        Assert.Equal(RemoteImageDownloadFailure.TooLarge, result.Failure);
+    }
+
+    [Fact]
+    public async Task DownloadProviderImageAsync_BadUrl_FailsWithoutRequesting()
+    {
+        var result = await RemoteImageDownloader.DownloadProviderImageAsync(ClientReturning(Bytes(10)), "not-a-url", CancellationToken.None);
+
+        Assert.Equal(RemoteImageDownloadFailure.InvalidUrl, result.Failure);
     }
 }

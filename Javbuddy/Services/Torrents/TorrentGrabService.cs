@@ -1,6 +1,7 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Common;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Prowlarr;
 using Javbuddy.Services.QBittorrent;
@@ -38,6 +39,8 @@ public class TorrentGrabService(
 {
     private const string NoRedirectClientName = "NoRedirect";
     private const int MaxRedirects = 5;
+    /// <summary>A real .torrent file is a few hundred KB at most.</summary>
+    private const long MaxTorrentFileBytes = 10L * 1024 * 1024;
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromSeconds(30);
 
     private readonly IQBittorrentClient qBittorrentClient = qBittorrentClient;
@@ -146,7 +149,7 @@ public class TorrentGrabService(
                     return (false, $"Could not download the .torrent file — indexer returned {(int)response.StatusCode}.", null, null, null);
                 }
 
-                var bytes = await response.Content.ReadAsByteArrayAsync(cts.Token);
+                var bytes = await BoundedHttpContent.ReadBytesAsync(response.Content, MaxTorrentFileBytes, cts.Token);
                 var fileName = response.Content.Headers.ContentDisposition?.FileNameStar
                     ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"')
                     ?? SanitizeFileName(releaseTitle) + ".torrent";

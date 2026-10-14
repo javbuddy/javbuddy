@@ -141,15 +141,9 @@ public class MovieCoverCropService(
             var remoteUrl = movie?.MetaBackdropUrl ?? movie?.MetaCoverUrl;
             if (!string.IsNullOrWhiteSpace(remoteUrl))
             {
-                try
-                {
-                    var client = httpClientFactory.CreateClient();
-                    return await client.GetByteArrayAsync(remoteUrl, ct);
-                }
-                catch (Exception ex) when (!ct.IsCancellationRequested)
-                {
-                    logger.LogWarning(ex, "Failed to download remote backdrop for {Code} from {Url}", code, remoteUrl);
-                }
+                var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(), remoteUrl, ct);
+                if (download.Success) return download.Bytes;
+                logger.LogWarning(download.Error, "Failed to download remote backdrop for {Code} from {Url}: {Failure}", code, remoteUrl, download.Failure);
             }
             return null;
         }
@@ -167,15 +161,9 @@ public class MovieCoverCropService(
             var remoteUrl = movie?.MetaCoverUrl;
             if (!string.IsNullOrWhiteSpace(remoteUrl))
             {
-                try
-                {
-                    var client = httpClientFactory.CreateClient();
-                    return await client.GetByteArrayAsync(remoteUrl, ct);
-                }
-                catch (Exception ex) when (!ct.IsCancellationRequested)
-                {
-                    logger.LogWarning(ex, "Failed to download remote poster for {Code} from {Url}", code, remoteUrl);
-                }
+                var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(), remoteUrl, ct);
+                if (download.Success) return download.Bytes;
+                logger.LogWarning(download.Error, "Failed to download remote poster for {Code} from {Url}: {Failure}", code, remoteUrl, download.Failure);
             }
             return null;
         }
