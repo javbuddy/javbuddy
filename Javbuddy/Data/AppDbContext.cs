@@ -2,6 +2,7 @@ using System.Text.Json;
 using Javbuddy.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Javbuddy.Data;
 
@@ -80,10 +81,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(m => m.Code).UseCollation("NOCASE");
             entity.HasIndex(m => m.Code).IsUnique();
             entity.HasIndex(m => m.IsFavorite);
-            entity.Property(m => m.DateAdded).HasComputedColumnSql("COALESCE(\"FileAddedAt\", \"CreatedAt\")", stored: false);
+            // Query-only: never written, and never read back after a save (which would add RETURNING to every Movies write).
+            var dateAdded = entity.Property<DateTime>(Movie.DateAddedColumn)
+                .HasComputedColumnSql("COALESCE(\"FileAddedAt\", \"CreatedAt\")", stored: false)
+                .ValueGeneratedNever();
+            dateAdded.Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Ignore);
+            dateAdded.Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
             // (Status, DateAdded) also serves the status counts and Status filters; DateAdded alone the unfiltered sort.
-            entity.HasIndex(m => new { m.Status, m.DateAdded });
-            entity.HasIndex(m => m.DateAdded);
+            entity.HasIndex(nameof(Movie.Status), Movie.DateAddedColumn);
+            entity.HasIndex(Movie.DateAddedColumn);
             entity.HasIndex(m => m.JellyfinLibraryName);
             // A full index, not a partial one on <> 'None': the drift filter's IN (...) can't use the partial one.
             entity.HasIndex(m => m.NfoDriftKind);
@@ -92,7 +98,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(m => m.NfoDriftKind).HasConversion<string>().HasMaxLength(20);
         });
 
-        modelBuilder.Entity<ScheduledTaskRun>(entity => entity.HasIndex(r => new { r.TaskName, r.EndedAt }));
+        modelBuilder.Entity<ScheduledTaskRun>(entity =>
+        {
+            // Each task's latest-ended run (the scheduler and the Tasks page's last execution) and latest-queued run
+            // (the Tasks page's run state, and both kept by the history prune).
+            entity.HasIndex(r => new { r.TaskName, r.EndedAt });
+            entity.HasIndex(r => new { r.TaskName, r.QueuedAt });
+        });
 
         modelBuilder.Entity<DiscoverySourceSetting>(entity => entity.HasIndex(x => x.SourceName).IsUnique());
 

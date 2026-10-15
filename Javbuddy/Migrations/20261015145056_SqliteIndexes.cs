@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Javbuddy.Migrations;
 
 /// <inheritdoc />
-public partial class _20261015055851_SqliteIndexes : Migration
+public partial class _20261015145056_SqliteIndexes : Migration
 {
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
@@ -22,6 +22,11 @@ public partial class _20261015055851_SqliteIndexes : Migration
             name: "IX_ScheduledTaskRuns_TaskName_EndedAt",
             table: "ScheduledTaskRuns",
             columns: new[] { "TaskName", "EndedAt" });
+
+        migrationBuilder.CreateIndex(
+            name: "IX_ScheduledTaskRuns_TaskName_QueuedAt",
+            table: "ScheduledTaskRuns",
+            columns: new[] { "TaskName", "QueuedAt" });
 
         migrationBuilder.CreateIndex(
             name: "IX_Movies_ClipActorsStale",
@@ -55,6 +60,10 @@ public partial class _20261015055851_SqliteIndexes : Migration
     {
         migrationBuilder.DropIndex(
             name: "IX_ScheduledTaskRuns_TaskName_EndedAt",
+            table: "ScheduledTaskRuns");
+
+        migrationBuilder.DropIndex(
+            name: "IX_ScheduledTaskRuns_TaskName_QueuedAt",
             table: "ScheduledTaskRuns");
 
         migrationBuilder.DropIndex(

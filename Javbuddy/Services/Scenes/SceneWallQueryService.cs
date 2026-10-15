@@ -760,11 +760,11 @@ public sealed class SceneWallQueryService(
         };
 
     private static IOrderedQueryable<MovieApex> OrderApexes(IQueryable<MovieApex> query, SceneWallSort sort, int randomSeed) =>
-        OrderClips(query, sort, randomSeed, a => a.Movie.FileAddedAt ?? a.Movie.CreatedAt, a => a.Movie.MetaReleaseDate, a => a.MovieId, a => a.Seconds);
+        OrderClips(query, sort, randomSeed, a => EF.Property<DateTime>(a.Movie, Movie.DateAddedColumn), a => a.Movie.MetaReleaseDate, a => a.MovieId, a => a.Seconds);
 
     private static IOrderedQueryable<MovieHighlight> OrderHighlights(IQueryable<MovieHighlight> query, SceneWallSort sort, int randomSeed) =>
-        OrderClips(query, sort, randomSeed, h => h.Movie.FileAddedAt ?? h.Movie.CreatedAt, h => h.Movie.MetaReleaseDate, h => h.MovieId, h => h.StartSeconds);
+        OrderClips(query, sort, randomSeed, h => EF.Property<DateTime>(h.Movie, Movie.DateAddedColumn), h => h.Movie.MetaReleaseDate, h => h.MovieId, h => h.StartSeconds);
 
     private static IOrderedQueryable<Scene> Order(IQueryable<Scene> query, SceneWallSort sort, int randomSeed) =>
-        OrderClips(query, sort, randomSeed, s => s.Movie.FileAddedAt ?? s.Movie.CreatedAt, s => s.Movie.MetaReleaseDate, s => s.MovieId, s => s.StartSeconds);
+        OrderClips(query, sort, randomSeed, s => EF.Property<DateTime>(s.Movie, Movie.DateAddedColumn), s => s.Movie.MetaReleaseDate, s => s.MovieId, s => s.StartSeconds);
 }

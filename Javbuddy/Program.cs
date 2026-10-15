@@ -124,10 +124,11 @@ using (var scope = app.Services.CreateScope())
     var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
     using var db = factory.CreateDbContext();
     db.Database.Migrate();
+    if (db.Database.IsSqlite())
+        SqlitePragmaInterceptor.EnableWal(db.Database, app.Logger);
 
     var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
     await runner.CleanUpOrphanedRunsAsync();
-    await runner.PruneOldRunsAsync();
 }
 
 // Configure the HTTP request pipeline.

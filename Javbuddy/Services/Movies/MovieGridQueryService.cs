@@ -453,8 +453,8 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
             // DateAdded is FileAddedAt, falling back to CreatedAt (DB-insert time) for a movie with no resolved
             // local file yet (manually-added, still Missing, or not yet probed since import) — see Movie.FileAddedAt.
             _ => descending
-                ? query.OrderByDescending(m => m.DateAdded)
-                : query.OrderBy(m => m.DateAdded),
+                ? query.OrderByDescending(m => EF.Property<DateTime>(m, Movie.DateAddedColumn))
+                : query.OrderBy(m => EF.Property<DateTime>(m, Movie.DateAddedColumn)),
         };
     }
 }
