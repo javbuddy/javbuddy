@@ -24,7 +24,8 @@ public sealed record MovieGridFilter(
     ActorAttributeSelection? ActorAttributes = null,
     IReadOnlyCollection<int>? ActorIds = null,
     IReadOnlyCollection<int>? ActorTagIds = null,
-    bool MatchAllGenres = false);
+    bool MatchAllGenres = false,
+    bool MatchAllActorTags = false);
 
 /// <summary>A tracked actor offered by an actor-name filter.</summary>
 public sealed record MovieActorOption(int Id, string Name);
@@ -388,12 +389,16 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
             var anyActor = filter.ActorIds is not { Count: > 0 };
             var onlyActors = filter.ActorIds ?? [];
             // A parent tag matches its subtags, as for plain tags.
-            var matching = db.Tags.Where(t => actorTagIds.Contains(t.Id) || (t.ParentTagId != null && actorTagIds.Contains(t.ParentTagId.Value))).Select(t => t.Id);
-            var withActorTag = db.MovieActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId)
-                .Union(db.SceneActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId))
-                .Union(db.HighlightActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId))
-                .Union(db.ApexActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId));
-            query = query.Where(m => withActorTag.Contains(m.Id));
+            // With match-all, each selected tag (or one of its subtags) must be on the movie, in any of those places.
+            foreach (var group in filter.MatchAllActorTags ? actorTagIds.Select(id => new[] { id }) : [actorTagIds.ToArray()])
+            {
+                var matching = db.Tags.Where(t => group.Contains(t.Id) || (t.ParentTagId != null && group.Contains(t.ParentTagId.Value))).Select(t => t.Id);
+                var withActorTag = db.MovieActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId)
+                    .Union(db.SceneActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId))
+                    .Union(db.HighlightActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId))
+                    .Union(db.ApexActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId));
+                query = query.Where(m => withActorTag.Contains(m.Id));
+            }
         }
         query = MovieFilterPredicates.WhereActorAttributes(query, filter.ActorAttributes ?? ActorAttributeSelection.Empty, DateOnly.FromDateTime(DateTime.UtcNow));
         if (!string.IsNullOrWhiteSpace(filter.Text))

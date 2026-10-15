@@ -12,7 +12,10 @@
         <div class="multiselect-actions-row">
             <button type="button" class="multiselect-action-link" @onclick="SelectAllVisible">Select All</button>
             <button type="button" class="multiselect-action-link" @onclick="SelectNone">None</button>
-            @ActionsContent
+            @if (SelectedCount > 1 && OnMatchAllChanged.HasDelegate)
+            {
+                <MatchAllCheck Value="MatchAll" ValueChanged="OnMatchAllChanged" />
+            }
         </div>
     }
     <div class="@(Searchable ? "multiselect-scroll-area" : null)">
@@ -59,8 +62,11 @@
     /// search — matches how a "None"/reset action is conventionally scoped.</summary>
     [Parameter] public EventCallback OnSelectNone { get; set; }
 
-    /// <summary>Extra controls rendered after Select All/None in a Searchable group's actions row.</summary>
-    [Parameter] public RenderFragment? ActionsContent { get; set; }
+    /// <summary>Whether a row needs every selected option rather than any. The "Match all" checkbox shows
+    /// beside Select All/None, in a Searchable group with two or more selected, only when
+    /// <see cref="OnMatchAllChanged"/> is bound.</summary>
+    [Parameter] public bool MatchAll { get; set; }
+    [Parameter] public EventCallback<bool> OnMatchAllChanged { get; set; }
 
     private bool expanded;
     private string searchTerm = "";

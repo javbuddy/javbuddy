@@ -65,6 +65,8 @@ else
                         OnSelectNoneGenres="() => ApplyFilterAsync(() => filters.Genres.Clear())"
                         MatchAllGenres="@filters.MatchAllGenres"
                         OnMatchAllGenresChanged="matchAll => ApplyFilterAsync(() => filters.MatchAllGenres = matchAll)"
+                        MatchAllActorTags="@filters.MatchAllActorTags"
+                        OnMatchAllActorTagsChanged="matchAll => ApplyFilterAsync(() => filters.MatchAllActorTags = matchAll)"
                         FeatureFilter="@filters.Features"
                         OnToggleFeature="feature => ApplyFilterAsync(() => filters.Features.Toggle(feature))"
                         AvailableActors="@availableActors"

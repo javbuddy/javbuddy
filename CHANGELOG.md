@@ -6,7 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Added
 
-- The Movies Genre filter has a "Match all" checkbox beside Select All and None (shown once two or more genres are selected): a movie must have every selected genre instead of any. It is off by default and saved with the other filters (#68).
+- Multi-select filters have a "Match all" checkbox beside Select All and None (shown once two or more values are selected): a row must have every selected value instead of any. It is on the Movies page's Genre and Actor tag filters and the Scenes page's Tag, Actor tag and Apex tag filters. Off by default and saved with the other filters (#68).
 
 ### Changed
 
