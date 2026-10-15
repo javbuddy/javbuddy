@@ -65,7 +65,7 @@ public class SystemStatusHealthFlowTests
         var page = await fixture.NewPageAsync();
         await page.GotoInteractiveAsync("/system/status");
 
-        var uptime = page.Locator(".about-row", new() { Has = page.GetByText("Uptime", new() { Exact = true }) }).Locator("span").Last;
+        var uptime = page.GetByTestId("uptime-clock");
         await Expect(uptime).ToHaveTextAsync(new Regex(@"^(\d+d )?\d{2}:\d{2}:\d{2}$"));
         var first = await uptime.TextContentAsync();
 
