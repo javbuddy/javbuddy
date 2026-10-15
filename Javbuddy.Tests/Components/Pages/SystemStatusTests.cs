@@ -29,6 +29,7 @@ public class SystemStatusTests : BunitContext
     {
         var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        JSInterop.SetupModule("./Components/Shared/UptimeClock.razor.js").Mode = JSRuntimeMode.Loose;
 
         var javinizer = Substitute.For<IJavinizerClient>();
         var prowlarr = Substitute.For<IProwlarrClient>();
@@ -215,8 +216,7 @@ public class SystemStatusTests : BunitContext
         await javinizer.Received(1).TestConnectionAsync(Arg.Any<CancellationToken>());
 
         var refreshButton = cut.FindAll("button").Single(b => b.TextContent.Contains("Refresh"));
-        // Awaited: a plain Click() only queues the event when the page's 1-second uptime tick holds
-        // the renderer's dispatcher, so the check below could run before the refresh did.
+        // Awaited so the check below runs after the refresh did.
         await refreshButton.ClickAsync(new());
 
         await javinizer.Received(2).TestConnectionAsync(Arg.Any<CancellationToken>());

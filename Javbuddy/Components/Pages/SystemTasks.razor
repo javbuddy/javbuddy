@@ -39,7 +39,7 @@ else
                 </span>
                 <span>@FormatInterval(row.Interval)</span>
                 <span>@(row.LastExecution is null ? "Never" : FormatRelative(row.LastExecution.Value, future: false))</span>
-                <span>@(row.LastDuration is null ? "—" : FormatDuration(row.LastDuration.Value))</span>
+                <span>@(row.LastDuration is null ? "—" : DurationFormatter.Format(row.LastDuration.Value))</span>
                 <span>@FormatRelative(row.NextExecution, future: true)</span>
                 <span>
                     <button class="tasks-run-btn" title="Run now" disabled="@runningTasks.Contains(row.Name)" @onclick="() => RunNow(row.Name)">
@@ -102,7 +102,7 @@ else
                     }
                     <span>@FormatProgress(run)</span>
                 </span>
-                <span>@(run.StartedAt is not null && run.EndedAt is not null ? FormatDuration(run.EndedAt.Value - run.StartedAt.Value) : "—")</span>
+                <span>@(run.StartedAt is not null && run.EndedAt is not null ? DurationFormatter.Format(run.EndedAt.Value - run.StartedAt.Value) : "—")</span>
                 <span>
                     @if (run.EndedAt is null)
                     {
@@ -262,12 +262,6 @@ else
         if (span.TotalDays >= 1) return $"{(int)Math.Round(span.TotalDays)} day{(span.TotalDays >= 1.5 ? "s" : "")}";
         if (span.TotalHours >= 1) return $"{(int)Math.Round(span.TotalHours)} hour{(span.TotalHours >= 1.5 ? "s" : "")}";
         return $"{(int)Math.Round(span.TotalMinutes)} minute{(span.TotalMinutes >= 1.5 ? "s" : "")}";
-    }
-
-    private static string FormatDuration(TimeSpan span)
-    {
-        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
-        return span.ToString(@"hh\:mm\:ss");
     }
 
     private static string FormatRelative(DateTime utc, bool future)

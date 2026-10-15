@@ -1,28 +1,49 @@
-@implements IDisposable
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
-@* A ticking elapsed-time readout. It lives in its own component so the once-a-second re-render only repaints
-   this text and not the page that shows it. *@
-<span>@Format(DateTime.Now - Since)</span>
+@* A ticking elapsed-time readout. The server renders the starting value; the once-a-second tick lives in
+   UptimeClock.razor.js so it doesn't cost a render or a SignalR message. *@
+<span @ref="element" class="uptime-clock" data-testid="uptime-clock">@DurationFormatter.Format(Elapsed)</span>
 
 @code {
-    /// <summary>When the clock started counting (local time).</summary>
+    /// <summary>When the clock started counting. A local or UTC time; it's compared in UTC so a DST change doesn't shift it.</summary>
     [Parameter, EditorRequired] public DateTime Since { get; set; }
 
-    /// <summary>How often the readout refreshes.</summary>
-    [Parameter] public TimeSpan Interval { get; set; } = TimeSpan.FromSeconds(1);
+    private readonly string key = Guid.NewGuid().ToString("N");
+    private ElementReference element;
+    private IJSObjectReference? jsModule;
 
-    private Timer? timer;
+    private TimeSpan Elapsed => DateTime.UtcNow - Since.ToUniversalTime();
 
-    protected override void OnInitialized() =>
-        timer = new Timer(_ => InvokeAsync(StateHasChanged), null, Interval, Interval);
-
-    public static string Format(TimeSpan span)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (span < TimeSpan.Zero) span = TimeSpan.Zero;
-        return span.Days > 0
-            ? $"{span.Days}d {span:hh\\:mm\\:ss}"
-            : span.ToString(@"hh\:mm\:ss");
+        try
+        {
+            if (firstRender)
+            {
+                jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/UptimeClock.razor.js");
+            }
+            if (jsModule is null) return;
+
+            // Sent on every render, so a new Since (or a re-render that rewrote the text) re-syncs the clock.
+            await jsModule.InvokeVoidAsync("start", key, element, Elapsed.TotalMilliseconds);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
     }
 
-    public void Dispose() => timer?.Dispose();
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.InvokeVoidAsync("dispose", key);
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
 }
