@@ -292,7 +292,8 @@ public class JavinizerClient : ApiClientBase<JavinizerSettings>, IJavinizerClien
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, CombineUrl(settings.BaseUrl!, path));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiToken);
-                using var response = await client.SendAsync(request, token);
+                // Headers only, so the body is streamed through the size cap instead of buffered whole first.
+                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token);
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorMessage = await ReadErrorAsync(response, token);

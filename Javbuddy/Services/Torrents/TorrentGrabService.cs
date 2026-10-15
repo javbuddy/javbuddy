@@ -131,7 +131,8 @@ public class TorrentGrabService(
 
             for (var hop = 0; hop < MaxRedirects; hop++)
             {
-                using var response = await client.GetAsync(currentUrl, cts.Token);
+                // Headers only, so the body is streamed through the size cap instead of buffered whole first.
+                using var response = await client.GetAsync(currentUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token);
 
                 if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is { } location)
                 {
