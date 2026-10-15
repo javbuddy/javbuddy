@@ -98,7 +98,8 @@ public class WarashiClient(
 
             var client = CreateConfiguredClient();
             await ThrottleAsync(delayMs, ct);
-            var response = await client.GetAsync(fullUrl, ct);
+            // Headers only, so the body is streamed through the size cap instead of buffered whole first.
+            using var response = await client.GetAsync(fullUrl, HttpCompletionOption.ResponseHeadersRead, ct);
             if (!response.IsSuccessStatusCode)
             {
                 Logger.LogWarning("Warashi image download for '{Url}' returned HTTP status {StatusCode}", fullUrl, response.StatusCode);

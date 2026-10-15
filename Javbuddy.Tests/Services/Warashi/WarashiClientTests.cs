@@ -129,6 +129,24 @@ public class WarashiClientTests
         _ => client.GetPerformerDetailAsync("/performer/1", ct),
     };
 
+    // A body past the cap that then stalls: buffering it whole would hang until the token fires,
+    // streaming it through the cap gives up as soon as the limit is passed.
+    [Fact]
+    public async Task DownloadImageAsync_OversizedBody_GivesUpAtTheCapWithoutBufferingTheWholeBody()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new ControlledStream(
+                new byte[Javbuddy.Services.Infrastructure.BoundedHttpContent.MaxImageBytes + 1],
+                ControlledStream.AfterData.BlockUntilCancelled)),
+        }));
+        var client = new WarashiClient(new FakeHttpClientFactory(handler), dbFactory);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        Assert.Null(await client.DownloadImageAsync("/img/1.jpg", cts.Token));
+    }
+
     [Theory]
     [MemberData(nameof(Operations))]
     public async Task CallerCancellationDuringRequest_Propagates(string operation)
