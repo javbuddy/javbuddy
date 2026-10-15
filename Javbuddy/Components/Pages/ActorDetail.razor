@@ -637,8 +637,8 @@ else
                     : query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenBy(m => m.MetaRuntimeMinutes),
                 "random" => query.OrderBy(m => (long)m.Id * randomSortSeed % RandomSortModulus),
                 _ => sortDescending
-                    ? query.OrderByDescending(m => m.FileAddedAt ?? m.CreatedAt)
-                    : query.OrderBy(m => m.FileAddedAt ?? m.CreatedAt),
+                    ? query.OrderByDescending(m => m.DateAdded)
+                    : query.OrderBy(m => m.DateAdded),
             };
         }
     }

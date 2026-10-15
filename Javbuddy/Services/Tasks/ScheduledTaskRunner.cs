@@ -180,7 +180,8 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
     }
 
     /// <summary>Deletes finished runs older than <paramref name="retention"/> so the table doesn't grow forever. Each task's
-    /// newest run and newest finished run are always kept: the Tasks page derives "last execution" and the next due time from them.</summary>
+    /// latest-queued run and latest-ended run are always kept, picked the same way ScheduledTaskOverviewService and the
+    /// scheduler pick them: the Tasks page derives "last execution" and the next due time from them.</summary>
     public async Task<int> PruneOldRunsAsync(TimeSpan? retention = null, CancellationToken ct = default)
     {
         var cutoff = DateTime.UtcNow - (retention ?? RunRetention);
@@ -188,12 +189,12 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
 
         var newestIds = await db.ScheduledTaskRuns
             .GroupBy(r => r.TaskName)
-            .Select(g => g.Max(r => r.Id))
+            .Select(g => g.OrderByDescending(r => r.QueuedAt).Select(r => r.Id).First())
             .ToListAsync(ct);
         var newestFinishedIds = await db.ScheduledTaskRuns
             .Where(r => r.EndedAt != null)
             .GroupBy(r => r.TaskName)
-            .Select(g => g.Max(r => r.Id))
+            .Select(g => g.OrderByDescending(r => r.EndedAt).Select(r => r.Id).First())
             .ToListAsync(ct);
 
         var deleted = await db.ScheduledTaskRuns

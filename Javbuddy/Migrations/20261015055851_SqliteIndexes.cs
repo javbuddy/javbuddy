@@ -5,30 +5,34 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Javbuddy.Migrations;
 
 /// <inheritdoc />
-public partial class _20261014173755_SqliteIndexes : Migration
+public partial class _20261015055851_SqliteIndexes : Migration
 {
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
+        migrationBuilder.AddColumn<DateTime>(
+            name: "DateAdded",
+            table: "Movies",
+            type: "TEXT",
+            nullable: false,
+            computedColumnSql: "COALESCE(\"FileAddedAt\", \"CreatedAt\")",
+            stored: false);
+
         migrationBuilder.CreateIndex(
-            name: "IX_ScheduledTaskRuns_TaskName_QueuedAt",
+            name: "IX_ScheduledTaskRuns_TaskName_EndedAt",
             table: "ScheduledTaskRuns",
-            columns: new[] { "TaskName", "QueuedAt" });
+            columns: new[] { "TaskName", "EndedAt" });
 
         migrationBuilder.CreateIndex(
             name: "IX_Movies_ClipActorsStale",
             table: "Movies",
-            column: "ClipActorsStale");
+            column: "ClipActorsStale",
+            filter: "\"ClipActorsStale\"");
 
         migrationBuilder.CreateIndex(
-            name: "IX_Movies_CreatedAt",
+            name: "IX_Movies_DateAdded",
             table: "Movies",
-            column: "CreatedAt");
-
-        migrationBuilder.CreateIndex(
-            name: "IX_Movies_FileAddedAt",
-            table: "Movies",
-            column: "FileAddedAt");
+            column: "DateAdded");
 
         migrationBuilder.CreateIndex(
             name: "IX_Movies_JellyfinLibraryName",
@@ -36,26 +40,21 @@ public partial class _20261014173755_SqliteIndexes : Migration
             column: "JellyfinLibraryName");
 
         migrationBuilder.CreateIndex(
-            name: "IX_Movies_MetaReleaseDate",
-            table: "Movies",
-            column: "MetaReleaseDate");
-
-        migrationBuilder.CreateIndex(
             name: "IX_Movies_NfoDriftKind",
             table: "Movies",
             column: "NfoDriftKind");
 
         migrationBuilder.CreateIndex(
-            name: "IX_Movies_Status",
+            name: "IX_Movies_Status_DateAdded",
             table: "Movies",
-            column: "Status");
+            columns: new[] { "Status", "DateAdded" });
     }
 
     /// <inheritdoc />
     protected override void Down(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.DropIndex(
-            name: "IX_ScheduledTaskRuns_TaskName_QueuedAt",
+            name: "IX_ScheduledTaskRuns_TaskName_EndedAt",
             table: "ScheduledTaskRuns");
 
         migrationBuilder.DropIndex(
@@ -63,11 +62,7 @@ public partial class _20261014173755_SqliteIndexes : Migration
             table: "Movies");
 
         migrationBuilder.DropIndex(
-            name: "IX_Movies_CreatedAt",
-            table: "Movies");
-
-        migrationBuilder.DropIndex(
-            name: "IX_Movies_FileAddedAt",
+            name: "IX_Movies_DateAdded",
             table: "Movies");
 
         migrationBuilder.DropIndex(
@@ -75,15 +70,15 @@ public partial class _20261014173755_SqliteIndexes : Migration
             table: "Movies");
 
         migrationBuilder.DropIndex(
-            name: "IX_Movies_MetaReleaseDate",
-            table: "Movies");
-
-        migrationBuilder.DropIndex(
             name: "IX_Movies_NfoDriftKind",
             table: "Movies");
 
         migrationBuilder.DropIndex(
-            name: "IX_Movies_Status",
+            name: "IX_Movies_Status_DateAdded",
+            table: "Movies");
+
+        migrationBuilder.DropColumn(
+            name: "DateAdded",
             table: "Movies");
     }
 }
