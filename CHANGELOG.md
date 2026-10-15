@@ -23,10 +23,6 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 - The Scenes timeline's hover preview on the movie detail page no longer plays forward by itself; its frame follows only the pointer position (#69).
 
-### Fixed
-
-- The Scenes timeline's hover preview on the movie detail page no longer plays forward by itself; its frame follows only the pointer position (#69).
-
 ## [0.2.4] - 2026-10-11
 
 ### Changed
