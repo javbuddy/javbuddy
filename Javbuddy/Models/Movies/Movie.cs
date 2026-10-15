@@ -126,6 +126,11 @@ public class Movie : IMediaTechnicalInfo
     /// yet). Null means "never observed" — same baseline convention as the fields above.</summary>
     public DateTime? FileAddedAt { get; set; }
 
+    /// <summary><c>FileAddedAt ?? CreatedAt</c> as a generated column, so the "Added" sort can use an index
+    /// (SQLite only uses an index on a generated column when the query names the column, not the expression).
+    /// Computed by the database; read-only here.</summary>
+    public DateTime DateAdded { get; private set; }
+
     /// <summary>True once the user has blacklisted this movie from the Cleanup review flow
     /// — "never show this again." Set via MovieCleanupService.BlacklistAsync,
     /// cleared via UnblacklistAsync (surfaced as a reversible indicator on Movie Detail).</summary>

@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Javbuddy.Migrations;
 
 [DbContext(typeof(AppDbContext))]
-[Migration("20261014173755_SqliteIndexes")]
-partial class _20261014173755_SqliteIndexes
+[Migration("20261015055851_SqliteIndexes")]
+partial class _20261015055851_SqliteIndexes
 {
     /// <inheritdoc />
     protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -917,6 +917,11 @@ partial class _20261014173755_SqliteIndexes
                 b.Property<DateTime>("CreatedAt")
                     .HasColumnType("TEXT");
 
+                b.Property<DateTime>("DateAdded")
+                    .ValueGeneratedOnAddOrUpdate()
+                    .HasColumnType("TEXT")
+                    .HasComputedColumnSql("COALESCE(\"FileAddedAt\", \"CreatedAt\")", false);
+
                 b.Property<DateTime?>("FavoritedAt")
                     .HasColumnType("TEXT");
 
@@ -1231,24 +1236,21 @@ partial class _20261014173755_SqliteIndexes
 
                 b.HasKey("Id");
 
-                b.HasIndex("ClipActorsStale");
+                b.HasIndex("ClipActorsStale")
+                    .HasFilter("\"ClipActorsStale\"");
 
                 b.HasIndex("Code")
                     .IsUnique();
 
-                b.HasIndex("CreatedAt");
-
-                b.HasIndex("FileAddedAt");
+                b.HasIndex("DateAdded");
 
                 b.HasIndex("IsFavorite");
 
                 b.HasIndex("JellyfinLibraryName");
 
-                b.HasIndex("MetaReleaseDate");
-
                 b.HasIndex("NfoDriftKind");
 
-                b.HasIndex("Status");
+                b.HasIndex("Status", "DateAdded");
 
                 b.ToTable("Movies");
             });
@@ -1941,7 +1943,7 @@ partial class _20261014173755_SqliteIndexes
 
                 b.HasKey("Id");
 
-                b.HasIndex("TaskName", "QueuedAt");
+                b.HasIndex("TaskName", "EndedAt");
 
                 b.ToTable("ScheduledTaskRuns");
             });

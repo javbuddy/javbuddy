@@ -450,11 +450,11 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
             // modulus is a bijection over ids in range, i.e. a full shuffle — and unlike RANDOM(),
             // it gives the same order across every Skip/Take call until the seed changes.
             "random" => query.OrderBy(m => (long)m.Id * sort.RandomSeed % RandomSortModulus),
-            // Falls back to CreatedAt (DB-insert time) for a movie with no resolved local file yet
-            // (manually-added, still Missing, or not yet probed since import) — see Movie.FileAddedAt.
+            // DateAdded is FileAddedAt, falling back to CreatedAt (DB-insert time) for a movie with no resolved
+            // local file yet (manually-added, still Missing, or not yet probed since import) — see Movie.FileAddedAt.
             _ => descending
-                ? query.OrderByDescending(m => m.FileAddedAt ?? m.CreatedAt)
-                : query.OrderBy(m => m.FileAddedAt ?? m.CreatedAt),
+                ? query.OrderByDescending(m => m.DateAdded)
+                : query.OrderBy(m => m.DateAdded),
         };
     }
 }

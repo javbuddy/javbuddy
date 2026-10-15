@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261014173755_SqliteIndexes";
+    public override string LastMigrationId => "20261015055851_SqliteIndexes";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -919,6 +919,11 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<DateTime>("CreatedAt")
                     .HasColumnType("TEXT");
 
+                b.Property<DateTime>("DateAdded")
+                    .ValueGeneratedOnAddOrUpdate()
+                    .HasColumnType("TEXT")
+                    .HasComputedColumnSql("COALESCE(\"FileAddedAt\", \"CreatedAt\")", false);
+
                 b.Property<DateTime?>("FavoritedAt")
                     .HasColumnType("TEXT");
 
@@ -1233,24 +1238,21 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.HasKey("Id");
 
-                b.HasIndex("ClipActorsStale");
+                b.HasIndex("ClipActorsStale")
+                    .HasFilter("\"ClipActorsStale\"");
 
                 b.HasIndex("Code")
                     .IsUnique();
 
-                b.HasIndex("CreatedAt");
-
-                b.HasIndex("FileAddedAt");
+                b.HasIndex("DateAdded");
 
                 b.HasIndex("IsFavorite");
 
                 b.HasIndex("JellyfinLibraryName");
 
-                b.HasIndex("MetaReleaseDate");
-
                 b.HasIndex("NfoDriftKind");
 
-                b.HasIndex("Status");
+                b.HasIndex("Status", "DateAdded");
 
                 b.ToTable("Movies");
             });
@@ -1943,7 +1945,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.HasKey("Id");
 
-                b.HasIndex("TaskName", "QueuedAt");
+                b.HasIndex("TaskName", "EndedAt");
 
                 b.ToTable("ScheduledTaskRuns");
             });

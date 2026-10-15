@@ -23,7 +23,8 @@ public class SqlitePragmaInterceptorTests
             Assert.Equal("wal", await Scalar(conn, "PRAGMA journal_mode"));
             Assert.Equal("1", await Scalar(conn, "PRAGMA synchronous"));
             Assert.Equal("5000", await Scalar(conn, "PRAGMA busy_timeout"));
-            Assert.Equal("-16000", await Scalar(conn, "PRAGMA cache_size"));
+            Assert.Equal("-8000", await Scalar(conn, "PRAGMA cache_size"));
+            Assert.Equal("67108864", await Scalar(conn, "PRAGMA journal_size_limit"));
         }
         finally
         {
