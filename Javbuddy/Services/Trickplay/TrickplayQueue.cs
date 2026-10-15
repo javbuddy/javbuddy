@@ -69,13 +69,16 @@ public sealed class TrickplayQueue(IServiceScopeFactory scopeFactory, TaskActivi
             }
             activityId ??= activities.Start(ActivityName, "Generating trickplay…");
             var id = activityId.Value;
-            var started = timeProvider.GetTimestamp();
+            // Timed from ffmpeg's first progress report, not from the job's start: the job can first wait
+            // its turn at the FfmpegGate behind other ffmpeg work, and that wait isn't decode time.
+            long? decodeStarted = null;
             string? lastMessage = null;
 
             // Called on ffmpeg's stderr reader, one report at a time, while this job runs.
             void Report(FfmpegProgress? progress)
             {
                 var videoDone = progress?.Elapsed.TotalSeconds ?? 0;
+                if (progress is not null) decodeStarted ??= timeProvider.GetTimestamp();
                 double waiting;
                 lock (gate)
                 {
@@ -83,7 +86,7 @@ public sealed class TrickplayQueue(IServiceScopeFactory scopeFactory, TaskActivi
                 }
                 var remaining = EstimateRemaining(
                     decodedSeconds + videoDone,
-                    decodingSeconds + timeProvider.GetElapsedTime(started).TotalSeconds,
+                    decodingSeconds + DecodeElapsedSeconds(),
                     Math.Max(0, (job.DurationSeconds ?? 0) - videoDone) + waiting);
                 var message = ProgressMessage(done + 1, done + pending.Count, job.Code, progress?.PercentComplete, remaining);
                 // ffmpeg reports several times a second; the sidebar only needs the visible changes.
@@ -91,6 +94,8 @@ public sealed class TrickplayQueue(IServiceScopeFactory scopeFactory, TaskActivi
                 lastMessage = message;
                 activities.Update(id, message);
             }
+
+            double DecodeElapsedSeconds() => decodeStarted is { } t ? timeProvider.GetElapsedTime(t).TotalSeconds : 0;
 
             Report(null);
             try
@@ -104,7 +109,7 @@ public sealed class TrickplayQueue(IServiceScopeFactory scopeFactory, TaskActivi
                     if (job.DurationSeconds is { } duration)
                     {
                         decodedSeconds += duration;
-                        decodingSeconds += timeProvider.GetElapsedTime(started).TotalSeconds;
+                        decodingSeconds += DecodeElapsedSeconds();
                     }
                 }
                 else if (result is TrickplayGenerateResult.Failed or TrickplayGenerateResult.NoFile or TrickplayGenerateResult.NotProbed)
