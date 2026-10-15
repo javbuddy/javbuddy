@@ -11,11 +11,10 @@ namespace Javbuddy.Services.Metrics;
 /// loop: this is internal housekeeping with no user-visible run history, not a domain task.
 /// The first pass runs at startup; after that the refresh is skipped while nothing has scraped the gauges
 /// recently, so an app nobody monitors never pays for the directory walk. The first scrape after an idle
-/// stretch sees the last values and the next tick brings them up to date.</summary>
+/// stretch still sees the last values, but it starts a refresh straight away, so the next scrape is current.</summary>
 public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, JavbuddyMetrics metrics, ILogger<MetricsGaugeRefreshService> logger) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
-    private static readonly TimeSpan IdleAfter = TimeSpan.FromMinutes(5);
 
     private readonly IServiceScopeFactory scopeFactory = scopeFactory;
     private readonly JavbuddyMetrics metrics = metrics;
@@ -28,7 +27,7 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
         {
             try
             {
-                if (first || metrics.WasObservedWithin(IdleAfter))
+                if (first || metrics.WasObservedWithin(JavbuddyMetrics.ObservationIdleAfter))
                     await RefreshAsync(stoppingToken);
                 first = false;
             }
@@ -39,7 +38,7 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
 
             try
             {
-                await Task.Delay(Interval, stoppingToken);
+                await metrics.WaitForScrapeAfterIdleAsync(Interval, stoppingToken);
             }
             catch (OperationCanceledException)
             {
