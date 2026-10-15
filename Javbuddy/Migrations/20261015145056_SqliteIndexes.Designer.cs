@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Javbuddy.Migrations;
 
 [DbContext(typeof(AppDbContext))]
-[Migration("20261015055851_SqliteIndexes")]
-partial class _20261015055851_SqliteIndexes
+[Migration("20261015145056_SqliteIndexes")]
+partial class _20261015145056_SqliteIndexes
 {
     /// <inheritdoc />
     protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -918,7 +918,6 @@ partial class _20261015055851_SqliteIndexes
                     .HasColumnType("TEXT");
 
                 b.Property<DateTime>("DateAdded")
-                    .ValueGeneratedOnAddOrUpdate()
                     .HasColumnType("TEXT")
                     .HasComputedColumnSql("COALESCE(\"FileAddedAt\", \"CreatedAt\")", false);
 
@@ -1944,6 +1943,8 @@ partial class _20261015055851_SqliteIndexes
                 b.HasKey("Id");
 
                 b.HasIndex("TaskName", "EndedAt");
+
+                b.HasIndex("TaskName", "QueuedAt");
 
                 b.ToTable("ScheduledTaskRuns");
             });
