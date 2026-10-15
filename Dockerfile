@@ -121,6 +121,8 @@ ENV ConnectionStrings__Default="Data Source=/data/Javbuddy.db" \
     ObjectStore__Path=/objects
 VOLUME ["/data", "/cache", "/objects"]
 
+# $APP_UID is the base image's numeric non-root UID (1654); hadolint can't see through the variable.
+# hadolint ignore=DL3066
 USER $APP_UID
 
 ENTRYPOINT ["dotnet", "Javbuddy.dll"]
