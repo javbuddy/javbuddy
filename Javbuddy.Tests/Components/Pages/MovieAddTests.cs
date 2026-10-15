@@ -40,8 +40,13 @@ public class MovieAddTests : BunitContext
 
         cut.FindAll("button.add-suggestion")[0].Click();
 
-        Assert.Equal("SSIS-001", cut.Find("input.form-control").GetAttribute("value"));
-        Assert.Empty(cut.FindAll("button.add-suggestion"));
+        // Wait for the pick's render rather than asserting at once: on a busy CI runner it has landed
+        // after Click() returned (the box still empty), which made this test flaky.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("SSIS-001", cut.Find("input.form-control").GetAttribute("value"));
+            Assert.Empty(cut.FindAll("button.add-suggestion"));
+        });
     }
 
     [Fact]

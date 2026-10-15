@@ -163,8 +163,12 @@ public class MovieReleasesBrowserTests : BunitContext
 
         cut.Find("button[aria-label='Remove series filter']").Click();
 
-        Assert.Null(changed?.Series);
-        Assert.Equal(new R18DevCatalogRef(10, "Label B"), changed?.Label);
+        // Waited for, like MovieAddTests' pick: on a busy CI runner the callback has landed after Click() returned.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Null(changed?.Series);
+            Assert.Equal(new R18DevCatalogRef(10, "Label B"), changed?.Label);
+        });
     }
 
     [Fact]
