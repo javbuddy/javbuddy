@@ -18,6 +18,7 @@ public sealed class MovieGridFilterState
     public HashSet<string> Studios { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> Genres { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool MatchAllGenres { get; set; }
+    public bool MatchAllActorTags { get; set; }
     public HashSet<MovieFeatureFilterOption> Features { get; private set; } = [];
     public HashSet<int> ActorIds { get; private set; } = [];
     public HashSet<int> ActorTagIds { get; private set; } = [];
@@ -49,7 +50,8 @@ public sealed class MovieGridFilterState
         ActorAttributes.IsEmpty ? null : ActorAttributes,
         [.. ActorIds],
         [.. ActorTagIds],
-        MatchAllGenres);
+        MatchAllGenres,
+        MatchAllActorTags);
 
     public MovieGridSort ToSort() => new(SortField, SortDescending, RandomSortSeed);
 
@@ -81,6 +83,7 @@ public sealed class MovieGridFilterState
         Features.Clear();
         ActorIds.Clear();
         ActorTagIds.Clear();
+        MatchAllActorTags = false;
         if (actorTagTarget is { } actorTag) ActorTagIds.Add(actorTag);
         ActorAttributes = ActorAttributeSelection.Empty;
         return anyActive;
@@ -101,7 +104,7 @@ public sealed class MovieGridFilterState
         Status, Library, [.. Resolutions], [.. ScanTypes], [.. Codecs],
         [.. Studios], [.. Genres], [.. Features], Text, CodePrefix,
         SortField, SortDescending, [.. NfoDriftKinds],
-        ActorAttributes, [.. ActorIds], ActorTagFilter: [.. ActorTagIds], MatchAllGenres: MatchAllGenres);
+        ActorAttributes, [.. ActorIds], ActorTagFilter: [.. ActorTagIds], MatchAllGenres: MatchAllGenres, MatchAllActorTags: MatchAllActorTags);
 
     /// <summary>Applies a saved selection; a list the state doesn't carry (a cookie written before
     /// that filter existed) keeps its current value.</summary>
@@ -120,6 +123,7 @@ public sealed class MovieGridFilterState
         if (state.ActorFilter is not null) ActorIds = [.. state.ActorFilter];
         if (state.ActorTagFilter is not null) ActorTagIds = [.. state.ActorTagFilter];
         MatchAllGenres = state.MatchAllGenres;
+        MatchAllActorTags = state.MatchAllActorTags;
         MovieFilterOptions.MigrateLegacyNfoFeatures(Features, NfoDriftKinds);
         Text = state.TextFilter;
         CodePrefix = state.CodePrefixFilter;
@@ -155,7 +159,8 @@ public sealed record MoviesViewState(
     bool BrowseReleases = false,
     R18DevCatalogFilter? CatalogFilter = null,
     List<int>? ActorTagFilter = null,
-    bool MatchAllGenres = false)
+    bool MatchAllGenres = false,
+    bool MatchAllActorTags = false)
 {
     public const string CookieName = "javbuddy-movies-view";
 }

@@ -81,14 +81,16 @@
                     {
                         <MultiSelectFilterGroup GroupLabel="Tag" Options="@TagOptions" Searchable="true"
                                                  OnSelectAll="labels => SelectAllAsync(tagFilter, options.Tags, labels)"
-                                                 OnSelectNone="() => SelectNoneAsync(tagFilter, OfferedTagIds)" />
+                                                 OnSelectNone="() => SelectNoneAsync(tagFilter, OfferedTagIds)"
+                                                 MatchAll="matchAllTags" OnMatchAllChanged="v => { matchAllTags = v; return FiltersChangedAsync(); }" />
                     }
                     @* An apex's own tags are the Apex tag selection, so it carries over to the other views. *@
                     @if (ApexesView && options.ApexTags.Count > 0)
                     {
                         <MultiSelectFilterGroup GroupLabel="Tag" Options="@ApexTagOptions" Searchable="true"
                                                  OnSelectAll="labels => SelectAllAsync(apexTagFilter, options.ApexTags, labels)"
-                                                 OnSelectNone="() => SelectNoneAsync(apexTagFilter, OfferedApexTagIds)" />
+                                                 OnSelectNone="() => SelectNoneAsync(apexTagFilter, OfferedApexTagIds)"
+                                                 MatchAll="matchAllApexTags" OnMatchAllChanged="v => { matchAllApexTags = v; return FiltersChangedAsync(); }" />
                     }
                     @if (options.Actors.Count > 0 || options.ActorAttributes.HasAny || options.ActorTags.Count > 0)
                     {
@@ -104,7 +106,8 @@
                                 @* With Name selected, it is those actors who must have the tag. *@
                                 <MultiSelectFilterGroup GroupLabel="Actor tag" Options="@ActorTagOptions" Searchable="true"
                                                          OnSelectAll="labels => SelectAllAsync(actorTagFilter, options.ActorTags, labels)"
-                                                         OnSelectNone="() => SelectNoneAsync(actorTagFilter, OfferedActorTagIds)" />
+                                                         OnSelectNone="() => SelectNoneAsync(actorTagFilter, OfferedActorTagIds)"
+                                                         MatchAll="matchAllActorTags" OnMatchAllChanged="v => { matchAllActorTags = v; return FiltersChangedAsync(); }" />
                             }
                             <ActorAttributeFilters Options="options.ActorAttributes" Selection="AppliedActorAttributes" SelectionChanged="SetActorAttributesAsync" />
                         </FilterSection>
@@ -131,7 +134,8 @@
                             {
                                 <MultiSelectFilterGroup GroupLabel="Apex tag" Options="@ApexTagOptions" Searchable="true"
                                                          OnSelectAll="labels => SelectAllAsync(apexTagFilter, options.ApexTags, labels)"
-                                                         OnSelectNone="() => SelectNoneAsync(apexTagFilter, OfferedApexTagIds)" />
+                                                         OnSelectNone="() => SelectNoneAsync(apexTagFilter, OfferedApexTagIds)"
+                                                 MatchAll="matchAllApexTags" OnMatchAllChanged="v => { matchAllApexTags = v; return FiltersChangedAsync(); }" />
                             }
                         </FilterSection>
                     }
@@ -262,6 +266,10 @@
     // Actor tags ("blonde"): clips where an actor has one; with actors selected, one of those actors.
     private readonly HashSet<int> actorTagFilter = [];
     private bool apexOnly;
+    // Whether a clip needs every selected tag of that kind instead of any.
+    private bool matchAllTags;
+    private bool matchAllActorTags;
+    private bool matchAllApexTags;
     // Actress attributes, kept like the selections above; AppliedActorAttributes is the
     // part the current view's options still offer.
     private ActorAttributeSelection actorAttributes = ActorAttributeSelection.Empty;
@@ -297,7 +305,10 @@
         ActorAttributeSelection? ActorAttributes = null,
         bool ApexOnly = false,
         List<int>? ApexTagIds = null,
-        List<int>? ActorTagIds = null);
+        List<int>? ActorTagIds = null,
+        bool MatchAllTags = false,
+        bool MatchAllActorTags = false,
+        bool MatchAllApexTags = false);
 
     private enum WallView
     {
@@ -390,7 +401,10 @@
         AppliedActorAttributes is { IsEmpty: false } attributes ? attributes : null,
         AppliesApexOnly,
         AppliedApexTags is { Count: > 0 } apexTags ? apexTags : null,
-        AppliedActorTags is { Count: > 0 } actorTags ? actorTags : null);
+        AppliedActorTags is { Count: > 0 } actorTags ? actorTags : null,
+        matchAllTags,
+        matchAllActorTags,
+        matchAllApexTags);
 
     private IReadOnlyList<MultiSelectOption> TagOptions => IdOptions(options!.Tags, tagFilter);
 
@@ -497,6 +511,9 @@
         actorTagFilter.UnionWith((state.ActorTagIds ?? []).Where(id => allScenes.ActorTags.Any(t => t.Id == id) || highlights.ActorTags.Any(t => t.Id == id)
             || apexes.ActorTags.Any(t => t.Id == id)));
         apexOnly = state.ApexOnly;
+        matchAllTags = state.MatchAllTags;
+        matchAllActorTags = state.MatchAllActorTags;
+        matchAllApexTags = state.MatchAllApexTags;
         // Kept as remembered; AppliedActorAttributes drops what the view doesn't offer.
         actorAttributes = state.ActorAttributes ?? ActorAttributeSelection.Empty;
         favoritesOnly = state.FavoritesOnly;
@@ -506,7 +523,7 @@
 
     private Task SaveViewStateAsync() => JsonCookieState.SaveAsync(JS, ViewStateCookieName, new ScenesViewState(
         [.. tagFilter], [.. actorFilter], [.. studioFilter], favoritesOnly, textFilter, sort, showHidden,
-        actorAttributes, apexOnly, [.. apexTagFilter], [.. actorTagFilter]));
+        actorAttributes, apexOnly, [.. apexTagFilter], [.. actorTagFilter], matchAllTags, matchAllActorTags, matchAllApexTags));
 
     private async Task FiltersChangedAsync()
     {
@@ -583,6 +600,7 @@
         studioFilter.ExceptWith(OfferedStudios);
         apexTagFilter.ExceptWith(OfferedApexTagIds);
         actorTagFilter.ExceptWith(OfferedActorTagIds);
+        matchAllTags = matchAllActorTags = matchAllApexTags = false;
         if (!ApexesView) apexOnly = false;
         if (options is not null)
         {

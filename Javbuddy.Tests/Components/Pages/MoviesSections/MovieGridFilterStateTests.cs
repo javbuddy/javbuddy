@@ -79,17 +79,20 @@ public class MovieGridFilterStateTests
     [Fact]
     public void MatchAllGenres_FlowsToFilter_RoundTripsThroughViewState_AndClears()
     {
-        var state = new MovieGridFilterState { MatchAllGenres = true };
+        var state = new MovieGridFilterState { MatchAllGenres = true, MatchAllActorTags = true };
         state.Genres.Add("A");
         state.Genres.Add("B");
         Assert.True(state.ToFilter().MatchAllGenres);
+        Assert.True(state.ToFilter().MatchAllActorTags);
 
         var restored = new MovieGridFilterState();
         restored.Apply(System.Text.Json.JsonSerializer.Deserialize<MoviesViewState>(System.Text.Json.JsonSerializer.Serialize(state.ToViewState()))!);
         Assert.True(restored.MatchAllGenres);
+        Assert.True(restored.MatchAllActorTags);
 
         restored.Clear();
         Assert.False(restored.MatchAllGenres);
+        Assert.False(restored.MatchAllActorTags);
     }
 
     [Fact]

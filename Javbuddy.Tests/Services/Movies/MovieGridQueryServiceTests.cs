@@ -685,4 +685,41 @@ public sealed class MovieGridQueryServiceTests : IDisposable
 
         Assert.Equal(["Cosplay"], summary.Genres);
     }
+
+    [Fact]
+    public async Task ActorTagFilter_MatchAll_NeedsEverySelectedActorTag()
+    {
+        int blondeId, slimId;
+        using (var db = factory.CreateDbContext())
+        {
+            var blonde = new Tag { Name = "Blonde", IsActorTag = true };
+            var slim = new Tag { Name = "Slim", IsActorTag = true };
+            var both = new Movie { Code = "ACT-001" };
+            var onlyBlonde = new Movie { Code = "ACT-002" };
+            var split = new Movie { Code = "ACT-003" };
+            db.AddRange(blonde, slim, both, onlyBlonde, split);
+            var a1 = new Actor { FirstName = "A1" };
+            var a2 = new Actor { FirstName = "A2" };
+            db.AddRange(a1, a2);
+            db.SaveChanges();
+            foreach (var (movie, actor) in new[] { (both, a1), (onlyBlonde, a1), (split, a1), (split, a2) })
+            {
+                db.MovieActors.Add(new MovieActor { MovieId = movie.Id, ActorId = actor.Id });
+            }
+            db.SaveChanges();
+            db.MovieActorTags.AddRange(
+                new MovieActorTag { MovieId = both.Id, ActorId = a1.Id, TagId = blonde.Id },
+                new MovieActorTag { MovieId = both.Id, ActorId = a1.Id, TagId = slim.Id },
+                new MovieActorTag { MovieId = onlyBlonde.Id, ActorId = a1.Id, TagId = blonde.Id },
+                new MovieActorTag { MovieId = split.Id, ActorId = a1.Id, TagId = blonde.Id },
+                new MovieActorTag { MovieId = split.Id, ActorId = a2.Id, TagId = slim.Id });
+            db.SaveChanges();
+            (blondeId, slimId) = (blonde.Id, slim.Id);
+        }
+
+        var any = new MovieGridFilter(ActorTagIds: [blondeId, slimId]);
+        Assert.Equal(["ACT-001", "ACT-002", "ACT-003"], Codes(await service.GetRangeAsync(any, CodeAscending, 0, 10)));
+        // Each tag only has to be on the movie, not on the same actor.
+        Assert.Equal(["ACT-001", "ACT-003"], Codes(await service.GetRangeAsync(any with { MatchAllActorTags = true }, CodeAscending, 0, 10)));
+    }
 }

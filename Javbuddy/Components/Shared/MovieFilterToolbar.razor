@@ -71,7 +71,7 @@
                     <MultiSelectFilterGroup GroupLabel="Genre" Options="@GenreFilterOptions" Searchable="true"
                                              OnSelectAll="OnSelectAllGenres"
                                              OnSelectNone="OnSelectNoneGenres"
-                                             ActionsContent="@(GenreFilter.Count > 1 && OnMatchAllGenresChanged.HasDelegate ? MatchAllGenresCheck : null)" />
+                                             MatchAll="MatchAllGenres" OnMatchAllChanged="OnMatchAllGenresChanged" />
                 }
                 <MultiSelectFilterGroup GroupLabel="Features" Options="@FeatureFilterOptions" />
                 @if (AvailableActors.Count > 0 || AvailableActorTags.Count > 0 || (ShowActorAttributes && ActorAttributeOptions.HasAny))
@@ -88,7 +88,8 @@
                             @* With Name selected, it is those actors who must have the tag. *@
                             <MultiSelectFilterGroup GroupLabel="Actor tag" Options="@ActorTagFilterOptions" Searchable="true"
                                                      OnSelectAll="SelectAllActorTags"
-                                                     OnSelectNone="OnSelectNoneActorTags" />
+                                                     OnSelectNone="OnSelectNoneActorTags"
+                                                     MatchAll="MatchAllActorTags" OnMatchAllChanged="OnMatchAllActorTagsChanged" />
                         }
                         @if (ShowActorAttributes && ActorAttributeOptions.HasAny)
                         {
@@ -125,12 +126,6 @@
 </div>
 
 @code {
-    private RenderFragment MatchAllGenresCheck => @<label class="match-all-check">
-        <input type="checkbox" checked="@MatchAllGenres"
-               @onchange="e => OnMatchAllGenresChanged.InvokeAsync(e.Value is true)" />
-        Match all
-    </label>;
-
 
     [Parameter] public int TotalCount { get; set; }
     [Parameter] public int MissingCount { get; set; }
@@ -175,6 +170,8 @@
     /// <summary>Whether a movie needs every selected genre rather than any; the checkbox shows only when <see cref="OnMatchAllGenresChanged"/> is bound.</summary>
     [Parameter] public bool MatchAllGenres { get; set; }
     [Parameter] public EventCallback<bool> OnMatchAllGenresChanged { get; set; }
+    [Parameter] public bool MatchAllActorTags { get; set; }
+    [Parameter] public EventCallback<bool> OnMatchAllActorTagsChanged { get; set; }
 
     [Parameter] public IReadOnlySet<MovieFeatureFilterOption> FeatureFilter { get; set; } = new HashSet<MovieFeatureFilterOption>();
     [Parameter] public EventCallback<MovieFeatureFilterOption> OnToggleFeature { get; set; }
