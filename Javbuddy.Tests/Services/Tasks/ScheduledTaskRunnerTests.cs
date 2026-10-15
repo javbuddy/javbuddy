@@ -216,6 +216,55 @@ public class ScheduledTaskRunnerTests
     }
 
     [Fact]
+    public async Task PruneOldRunsAsync_DeletesOldFinishedRuns_ButKeepsEachTasksNewestAndRecentOnes()
+    {
+        using var factory = new TestDbContextFactory();
+        var now = DateTime.UtcNow;
+        var busyOld = Run("Busy", now.AddDays(-200), finished: true);
+        var freshOld = Run("Fresh", now.AddDays(-120), finished: true);
+        ScheduledTaskRun[] runs =
+        [
+            // "Busy": two old finished runs, only the older one may go.
+            busyOld,
+            Run("Busy", now.AddDays(-150), finished: true),
+            // "Rare": a single old finished run is its "last execution", so it stays.
+            Run("Rare", now.AddDays(-300), finished: true),
+            // "Fresh": a recent finished run behind an old one.
+            freshOld,
+            Run("Fresh", now.AddDays(-1), finished: true),
+            // "Stuck": an old run that never ended is not pruned.
+            Run("Stuck", now.AddDays(-400), finished: false),
+            Run("Stuck", now.AddDays(-399), finished: false),
+            // "Running": the newest run is unfinished, so the old finished one is still the last execution.
+            Run("Running", now.AddDays(-200), finished: true),
+            Run("Running", now.AddDays(-100), finished: false),
+            // "Late": the earlier-queued run ended last (the Tasks page's last execution), the other was queued last.
+            Run("Late", now.AddDays(-200), endedAt: now.AddDays(-10)),
+            Run("Late", now.AddDays(-150), finished: true),
+        ];
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.ScheduledTaskRuns.AddRange(runs);
+            await db.SaveChangesAsync();
+        }
+
+        var deleted = await CreateRunner(factory).PruneOldRunsAsync(TimeSpan.FromDays(90));
+
+        Assert.Equal(2, deleted);
+        await using var verify = await factory.CreateDbContextAsync();
+        var remaining = await verify.ScheduledTaskRuns.OrderBy(r => r.Id).Select(r => r.Id).ToListAsync();
+        Assert.Equal(runs.Where(r => r != busyOld && r != freshOld).Select(r => r.Id).Order(), remaining);
+
+        static ScheduledTaskRun Run(string name, DateTime queuedAt, bool finished = true, DateTime? endedAt = null) => new()
+        {
+            TaskName = name,
+            QueuedAt = queuedAt,
+            EndedAt = endedAt ?? (finished ? queuedAt.AddMinutes(1) : null),
+            Success = finished,
+        };
+    }
+
+    [Fact]
     public async Task CleanUpOrphanedRunsAsync_NoOrphanedRuns_ReturnsZeroAndDoesNotNotify()
     {
         using var factory = new TestDbContextFactory();

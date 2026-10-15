@@ -109,10 +109,17 @@ public static class MovieFilterPredicates
 
     /// <summary>Matched via the canonical Tags/MovieTags relation, not a MetaGenres substring check
     ///. Supports hierarchy rollup: a parent tag matches movies tagged with any of its
-    /// subtags, and "Parent##Subtag" or the bare subtag name matches directly.</summary>
-    public static IQueryable<Movie> WhereGenres(IQueryable<Movie> query, IReadOnlyCollection<string>? genres)
+    /// subtags, and "Parent##Subtag" or the bare subtag name matches directly. A movie matches any
+    /// selected genre, or with <paramref name="matchAll"/> every one of them.</summary>
+    public static IQueryable<Movie> WhereGenres(IQueryable<Movie> query, IReadOnlyCollection<string>? genres, bool matchAll = false)
     {
         if (genres is not { Count: > 0 }) return query;
+
+        if (matchAll)
+        {
+            foreach (var genre in genres) query = WhereGenres(query, [genre]);
+            return query;
+        }
 
         var directNames = new HashSet<string>(genres, StringComparer.OrdinalIgnoreCase);
         var parentNames = new HashSet<string>(genres, StringComparer.OrdinalIgnoreCase);

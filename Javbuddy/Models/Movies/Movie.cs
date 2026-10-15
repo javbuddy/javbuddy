@@ -126,6 +126,12 @@ public class Movie : IMediaTechnicalInfo
     /// yet). Null means "never observed" — same baseline convention as the fields above.</summary>
     public DateTime? FileAddedAt { get; set; }
 
+    /// <summary>Name of the <c>FileAddedAt ?? CreatedAt</c> generated column, mapped as a shadow property so queries
+    /// order by it with <c>EF.Property&lt;DateTime&gt;(m, Movie.DateAddedColumn)</c> and the "Added" sort can use its index
+    /// (SQLite only uses an index on a generated column when the query names the column, not the expression). It has no
+    /// CLR property because EF never reads it back after a save, so an in-memory value would be stale.</summary>
+    public const string DateAddedColumn = "DateAdded";
+
     /// <summary>True once the user has blacklisted this movie from the Cleanup review flow
     /// — "never show this again." Set via MovieCleanupService.BlacklistAsync,
     /// cleared via UnblacklistAsync (surfaced as a reversible indicator on Movie Detail).</summary>

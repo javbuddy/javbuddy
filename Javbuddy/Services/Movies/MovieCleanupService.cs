@@ -230,7 +230,7 @@ public class MovieCleanupService(
         var candidates = order switch
         {
             CleanupOrder.OldestAdded => await ApplyFavoriteExclusionAsync(
-                db, await ToCandidates(eligible.OrderBy(m => m.FileAddedAt ?? m.CreatedAt)).ToListAsync(ct), actorId, mode, ct),
+                db, await ToCandidates(eligible.OrderBy(m => EF.Property<DateTime>(m, Movie.DateAddedColumn))).ToListAsync(ct), actorId, mode, ct),
             CleanupOrder.LargestFirst => await ApplyFavoriteExclusionAsync(
                 db, await ToCandidates(eligible.OrderByDescending(m => m.LocalFileSizeBytes ?? 0)).ToListAsync(ct), actorId, mode, ct),
             // ThenBy(Code) breaks ties deterministically — without it, two movies with the same

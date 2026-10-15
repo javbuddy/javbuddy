@@ -47,9 +47,9 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
         var movieImageRows = await db.CachedImages.CountAsync(ct);
         var actorImageRows = 0;
 
-        // This walk runs every minute for the metrics gauges anyway, so it also re-baselines the
-        // size tracker, which picks up cache writes that don't report into it. It skips that
-        // rather than wait when an eviction pass holds the gate.
+        // The walk sees the true size anyway, so it also re-baselines the size tracker, dropping
+        // the overcount from deletions outside eviction. It skips that rather than wait when an
+        // eviction pass holds the gate.
         var rebase = sizeTracker.ScanGate.Wait(0);
         var stillImageFileCount = 0;
         var stillImageBytes = 0L;
@@ -62,10 +62,11 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
             var snapshot = sizeTracker.TrackedBytes;
             if (Directory.Exists(imageCache.RootPath))
             {
-                foreach (var file in ILocalImageCache.EnumerateFiles(imageCache.RootPath))
+                foreach (var fileInfo in ILocalImageCache.EnumerateFileInfos(imageCache.RootPath))
                 {
                     ct.ThrowIfCancellationRequested();
-                    var length = new FileInfo(file).Length;
+                    var file = fileInfo.Name;
+                    var length = fileInfo.Length;
                     if (file.EndsWith(".webm", StringComparison.OrdinalIgnoreCase))
                     {
                         previewFileCount++;
@@ -118,8 +119,7 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
     {
         var snapshot = sizeTracker.TrackedBytes;
         var files = Directory.Exists(imageCache.RootPath)
-            ? ILocalImageCache.EnumerateFiles(imageCache.RootPath)
-                .Select(path => new FileInfo(path))
+            ? ILocalImageCache.EnumerateFileInfos(imageCache.RootPath)
                 .OrderBy(file => file.LastWriteTimeUtc)
                 .ToList()
             : [];

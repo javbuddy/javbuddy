@@ -575,6 +575,23 @@ public sealed class SceneWallQueryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task MatchAllTags_NeedEveryTag_AndMatchAllApexTagsNeedOneApexWithAll()
+    {
+        await SeedAsync();
+        await AddApexAsync(oldMovieId, 100, [bathId, roughId]);
+        await AddApexAsync(oldMovieId, 900, [roughId]);
+
+        Assert.Equal(["OLD-001/Intro", "OLD-001/Scene 2"], await TitlesAsync(new SceneWallFilter(ApexTagIds: [bathId, roughId])));
+        Assert.Equal(["OLD-001/Intro"], await TitlesAsync(new SceneWallFilter(ApexTagIds: [bathId, roughId], MatchAllApexTags: true)));
+
+        Assert.Equal(["OLD-001/Intro", "OLD-001/Scene 2"], await TitlesAsync(new SceneWallFilter(TagIds: [bathId, playId])));
+        Assert.Equal(["OLD-001/Intro"], await TitlesAsync(new SceneWallFilter(TagIds: [bathId, playId], MatchAllTags: true)));
+        // A subtag counts for its selected parent and for itself.
+        Assert.Equal(["OLD-001/Intro", "OLD-001/Scene 2"], await TitlesAsync(new SceneWallFilter(TagIds: [playId, roughId], MatchAllTags: true)));
+        Assert.Equal(["OLD-001/Intro", "OLD-001/Scene 2"], await TitlesAsync(new SceneWallFilter(ApexTagIds: [playId, roughId], MatchAllApexTags: true)));
+    }
+
+    [Fact]
     public async Task ApexTags_KeepClipsWithAnApexOfThatTagOrASubtag()
     {
         await SeedAsync();

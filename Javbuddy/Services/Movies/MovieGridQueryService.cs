@@ -23,7 +23,9 @@ public sealed record MovieGridFilter(
     IReadOnlyCollection<NfoDriftKind>? NfoDriftKinds = null,
     ActorAttributeSelection? ActorAttributes = null,
     IReadOnlyCollection<int>? ActorIds = null,
-    IReadOnlyCollection<int>? ActorTagIds = null);
+    IReadOnlyCollection<int>? ActorTagIds = null,
+    bool MatchAllGenres = false,
+    bool MatchAllActorTags = false);
 
 /// <summary>A tracked actor offered by an actor-name filter.</summary>
 public sealed record MovieActorOption(int Id, string Name);
@@ -372,7 +374,7 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         query = MovieFilterPredicates.WhereScanTypes(query, filter.ScanTypes);
         query = MovieFilterPredicates.WhereCodecs(query, filter.Codecs);
         query = MovieFilterPredicates.WhereStudios(query, filter.Studios);
-        query = MovieFilterPredicates.WhereGenres(query, filter.Genres);
+        query = MovieFilterPredicates.WhereGenres(query, filter.Genres, filter.MatchAllGenres);
         query = MovieFilterPredicates.WhereFeatures(query, filter.Features);
         query = MovieFilterPredicates.WhereNfoDriftKinds(query, filter.NfoDriftKinds);
         if (filter.ActorIds is { Count: > 0 } actorIds)
@@ -384,15 +386,16 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         {
             // An actor tag (Tag.IsActorTag) on the movie or on any of its scenes, highlights or apexes; with the actor
             // filter, one of those actors must have it. Own rows are enough: what flows down or rolls up never adds a pair.
+            // A parent tag matches its subtags, as for plain tags; with match-all, one actor must have every selected tag.
             var anyActor = filter.ActorIds is not { Count: > 0 };
             var onlyActors = filter.ActorIds ?? [];
-            // A parent tag matches its subtags, as for plain tags.
-            var matching = db.Tags.Where(t => actorTagIds.Contains(t.Id) || (t.ParentTagId != null && actorTagIds.Contains(t.ParentTagId.Value))).Select(t => t.Id);
-            var withActorTag = db.MovieActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId)
-                .Union(db.SceneActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId))
-                .Union(db.HighlightActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId))
-                .Union(db.ApexActorTags.Where(t => matching.Contains(t.TagId) && (anyActor || onlyActors.Contains(t.ActorId))).Select(t => t.MovieId));
-            query = query.Where(m => withActorTag.Contains(m.Id));
+            var rows = db.MovieActorTags.Select(t => new TaggedRow { OwnerId = t.MovieId, HolderId = t.ActorId, TagId = t.TagId })
+                .Concat(db.SceneActorTags.Select(t => new TaggedRow { OwnerId = t.MovieId, HolderId = t.ActorId, TagId = t.TagId }))
+                .Concat(db.HighlightActorTags.Select(t => new TaggedRow { OwnerId = t.MovieId, HolderId = t.ActorId, TagId = t.TagId }))
+                .Concat(db.ApexActorTags.Select(t => new TaggedRow { OwnerId = t.MovieId, HolderId = t.ActorId, TagId = t.TagId }))
+                .Where(r => anyActor || onlyActors.Contains(r.HolderId));
+            var withActorTags = TagFilterQueries.OwnersWith(db, rows, actorTagIds, filter.MatchAllActorTags);
+            query = query.Where(m => withActorTags.Contains(m.Id));
         }
         query = MovieFilterPredicates.WhereActorAttributes(query, filter.ActorAttributes ?? ActorAttributeSelection.Empty, DateOnly.FromDateTime(DateTime.UtcNow));
         if (!string.IsNullOrWhiteSpace(filter.Text))
@@ -447,11 +450,11 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
             // modulus is a bijection over ids in range, i.e. a full shuffle — and unlike RANDOM(),
             // it gives the same order across every Skip/Take call until the seed changes.
             "random" => query.OrderBy(m => (long)m.Id * sort.RandomSeed % RandomSortModulus),
-            // Falls back to CreatedAt (DB-insert time) for a movie with no resolved local file yet
-            // (manually-added, still Missing, or not yet probed since import) — see Movie.FileAddedAt.
+            // DateAdded is FileAddedAt, falling back to CreatedAt (DB-insert time) for a movie with no resolved
+            // local file yet (manually-added, still Missing, or not yet probed since import) — see Movie.FileAddedAt.
             _ => descending
-                ? query.OrderByDescending(m => m.FileAddedAt ?? m.CreatedAt)
-                : query.OrderBy(m => m.FileAddedAt ?? m.CreatedAt),
+                ? query.OrderByDescending(m => EF.Property<DateTime>(m, Movie.DateAddedColumn))
+                : query.OrderBy(m => EF.Property<DateTime>(m, Movie.DateAddedColumn)),
         };
     }
 }

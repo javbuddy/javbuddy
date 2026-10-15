@@ -11,6 +11,7 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ILogg
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan StartupDelay = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan PruneInterval = TimeSpan.FromDays(1);
 
     private readonly IServiceScopeFactory scopeFactory = scopeFactory;
     private readonly ILogger<ScheduledTaskHostedService> logger = logger;
@@ -21,6 +22,9 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ILogg
     // this process's start before it's first due. A task that fell overdue while the app was off (it has
     // run before, but longer ago than its interval) still catches up right after restart.
     private readonly DateTime processStartUtc = DateTime.UtcNow;
+
+    // Old run history is pruned on the first tick and then daily, so a long-running instance doesn't keep it forever.
+    private DateTime? lastPruneUtc;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -61,6 +65,19 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ILogg
         var tasks = scope.ServiceProvider.GetServices<IScheduledTask>();
         var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
         var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
+
+        if (lastPruneUtc is null || DateTime.UtcNow - lastPruneUtc.Value >= PruneInterval)
+        {
+            lastPruneUtc = DateTime.UtcNow;
+            try
+            {
+                await runner.PruneOldRunsAsync(ct: ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Pruning old scheduled task runs failed.");
+            }
+        }
 
         foreach (var task in tasks)
         {

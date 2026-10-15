@@ -1,0 +1,12 @@
+<label class="match-all-check">
+    <input type="checkbox" checked="@Value" @onchange="e => ValueChanged.InvokeAsync(e.Value is true)" />
+    Match all
+</label>
+
+@code {
+    /// <summary>The "Match all" checkbox a multi-select filter group shows beside its Select All/None links
+    /// (via MultiSelectFilterGroup's ActionsContent) once two or more values are selected: a row must have every
+    /// selected value instead of any.</summary>
+    [Parameter] public bool Value { get; set; }
+    [Parameter] public EventCallback<bool> ValueChanged { get; set; }
+}

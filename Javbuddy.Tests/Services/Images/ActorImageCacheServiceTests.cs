@@ -1094,6 +1094,25 @@ public class ActorImageCacheServiceTests
         await dataStore.Received(1).DeleteAsync(previousSourceId, ".png", Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task GetOrCreateBothAsync_RestoringCustomImageFromSource_ReportsTheWrittenBytes()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        var client = Substitute.For<ILocalLibraryClient>();
+        var maintenance = Substitute.For<IImageCacheMaintenanceService>();
+        var (actorId, sourceStorageId) = await SeedActorWithSourcedImageAsync(factory, ActorImageCacheService.SourceMovieCodeCustom);
+        var dataStore = Substitute.For<IActorImageDataStore>();
+        dataStore.ReadAsync(sourceStorageId, ".png", Arg.Any<CancellationToken>()).Returns(CreateSampleImageBytes(300, 300));
+        var service = new ActorImageCacheService(client, cache, factory, maintenance, dataStore: dataStore);
+
+        var (thumb, full) = await service.GetOrCreateBothAsync(actorId);
+
+        Assert.NotNull(thumb);
+        Assert.NotNull(full);
+        await maintenance.Received(1).EnforceSizeLimitAsync(new FileInfo(thumb).Length + new FileInfo(full).Length, Arg.Any<CancellationToken>());
+    }
+
     private static async Task<(int ActorId, Guid SourceStorageId)> SeedActorWithSourcedImageAsync(TestDbContextFactory factory, string sourceMovieCode)
     {
         var sourceStorageId = Guid.NewGuid();

@@ -587,13 +587,18 @@ public class ActorPhotoServiceTests : IDisposable
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         await dataStore.WriteAsync(sourceId, data.ToArray());
 
-        var service = CreateService(factory, dataStore);
+        var maintenance = Substitute.For<IImageCacheMaintenanceService>();
+        var service = CreateService(factory, dataStore, cacheMaintenance: maintenance);
         var (thumb, full) = await service.GetOrCreateBothAsync(photoId);
 
         Assert.NotNull(thumb);
         Assert.NotNull(full);
         Assert.True(File.Exists(thumb));
         Assert.True(File.Exists(full));
+        var reportedBytes = maintenance.ReceivedCalls()
+            .Where(call => call.GetMethodInfo().Name == nameof(IImageCacheMaintenanceService.EnforceSizeLimitAsync))
+            .Sum(call => (long)call.GetArguments()[0]!);
+        Assert.Equal(new FileInfo(thumb).Length + new FileInfo(full).Length, reportedBytes);
 
         await using (var db = await factory.CreateDbContextAsync())
         {
@@ -733,13 +738,13 @@ public class ActorPhotoServiceTests : IDisposable
         Assert.False(gallery.Photos.Single(p => p.UploadedAt == gallery.Photos.Min(x => x.UploadedAt)).HasOriginal);
     }
 
-    private ActorPhotoService CreateService(TestDbContextFactory factory, IActorImageDataStore? dataStore = null, ImageUploadSettings? uploadSettings = null)
+    private ActorPhotoService CreateService(TestDbContextFactory factory, IActorImageDataStore? dataStore = null, ImageUploadSettings? uploadSettings = null, IImageCacheMaintenanceService? cacheMaintenance = null)
     {
         var cache = Substitute.For<ILocalImageCache>();
         cache.QualityFull.Returns(ImageConverter.WebPQualityFull);
         cache.QualityThumb.Returns(ImageConverter.WebPQualityThumb);
         cache.GetStoragePath(Arg.Any<Guid>()).Returns(call => StoragePath(call.Arg<Guid>()));
-        return new ActorPhotoService(factory, cache, dataStore, uploadSettings);
+        return new ActorPhotoService(factory, cache, dataStore, uploadSettings, cacheMaintenance);
     }
 
     private string StoragePath(Guid id) => Path.Combine(cacheRoot, id.ToString("N") + ".webp");

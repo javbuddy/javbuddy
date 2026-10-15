@@ -82,11 +82,19 @@ public static class LocalImageCacheEnvConfig
 /// scene/highlight hover preview, a JPEG for a DeoVR timeline mosaic).</summary>
 public interface ILocalImageCache
 {
-    /// <summary>The file patterns every cached file matches, for walking the cache root.</summary>
-    static readonly string[] FilePatterns = ["*.webp", "*.webm", "*.jpg"];
+    /// <summary>Every cached file under the root, in one directory walk. The FileInfos come straight from the
+    /// enumeration, so reading Length or LastWriteTimeUtc needs no second look-up per file.</summary>
+    static IEnumerable<FileInfo> EnumerateFileInfos(string rootPath) =>
+        new DirectoryInfo(rootPath).EnumerateFiles("*", SearchOption.AllDirectories)
+            .Where(file => IsCacheFile(file.Name));
 
     static IEnumerable<string> EnumerateFiles(string rootPath) =>
-        FilePatterns.SelectMany(pattern => Directory.EnumerateFiles(rootPath, pattern, SearchOption.AllDirectories));
+        EnumerateFileInfos(rootPath).Select(file => file.FullName);
+
+    private static bool IsCacheFile(string fileName) =>
+        fileName.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
+        || fileName.EndsWith(".webm", StringComparison.OrdinalIgnoreCase)
+        || fileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase);
 
     static string FileExtension(string variant) => variant switch
     {

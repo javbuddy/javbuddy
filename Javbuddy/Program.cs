@@ -93,6 +93,7 @@ builder.Services.AddDbContextFactory<AppDbContext>((sp, options) =>
         case "Sqlite":
             options.UseSqlite(connectionString, sqliteOptions =>
                 sqliteOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+            options.AddInterceptors(new SqlitePragmaInterceptor());
             break;
         // To enable Postgres later: add the Npgsql.EntityFrameworkCore.PostgreSQL
         // package and uncomment the line below.
@@ -123,6 +124,8 @@ using (var scope = app.Services.CreateScope())
     var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
     using var db = factory.CreateDbContext();
     db.Database.Migrate();
+    if (db.Database.IsSqlite())
+        SqlitePragmaInterceptor.EnableWal(db.Database, app.Logger);
 
     var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
     await runner.CleanUpOrphanedRunsAsync();

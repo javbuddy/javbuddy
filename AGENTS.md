@@ -24,7 +24,7 @@ A .NET Blazor Server app for tracking wanted/owned JAV movies, modeled on Sonarr
 
 ## Do's and Don'ts
 
-- Don't write raw SQL against the app's own database (`AppDbContext`) — use EF Core. The only permitted exceptions are encapsulated atomic upsert helpers for image cache metadata (`Data/AppDbContextImageCacheExtensions.cs`), where EF Core lacks native upsert and SQLite's atomic `ON CONFLICT DO UPDATE` prevents unique constraint concurrency races without noisy error logging. Raw SQL is also fine against the separate r18.dev dump DB (`Services/R18Dev/R18DevDumpStore.cs`, backed by `Javbuddy.r18dev.db`), since it's a read-only imported reference dataset, not app data.
+- Don't write raw SQL against the app's own database (`AppDbContext`) — use EF Core. The only permitted exceptions are encapsulated atomic upsert helpers for image cache metadata (`Data/AppDbContextImageCacheExtensions.cs`), where EF Core lacks native upsert and SQLite's atomic `ON CONFLICT DO UPDATE` prevents unique constraint concurrency races without noisy error logging, and the connection PRAGMAs (WAL, `synchronous`, `busy_timeout`, cache and journal size) in `Data/SqlitePragmaInterceptor.cs`, which EF Core has no API for. Raw SQL is also fine against the separate r18.dev dump DB (`Services/R18Dev/R18DevDumpStore.cs`, backed by `Javbuddy.r18dev.db`), since it's a read-only imported reference dataset, not app data.
 - Don't create, edit, or delete anything in a real media library (a configured library root outside the repo).
 - Run `dotnet format Javbuddy.slnx --verify-no-changes` before committing/pushing.
 
