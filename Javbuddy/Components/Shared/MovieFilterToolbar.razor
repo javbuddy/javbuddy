@@ -71,6 +71,14 @@
                     <MultiSelectFilterGroup GroupLabel="Genre" Options="@GenreFilterOptions" Searchable="true"
                                              OnSelectAll="OnSelectAllGenres"
                                              OnSelectNone="OnSelectNoneGenres" />
+                    @if (GenreFilter.Count > 1 && OnMatchAllGenresChanged.HasDelegate)
+                    {
+                        <label class="match-all-check">
+                            <input type="checkbox" checked="@MatchAllGenres"
+                                   @onchange="e => OnMatchAllGenresChanged.InvokeAsync(e.Value is true)" />
+                            Match all selected genres
+                        </label>
+                    }
                 }
                 <MultiSelectFilterGroup GroupLabel="Features" Options="@FeatureFilterOptions" />
                 @if (AvailableActors.Count > 0 || AvailableActorTags.Count > 0 || (ShowActorAttributes && ActorAttributeOptions.HasAny))
@@ -164,6 +172,9 @@
     [Parameter] public EventCallback<string> OnToggleGenre { get; set; }
     [Parameter] public EventCallback<IReadOnlyList<string>> OnSelectAllGenres { get; set; }
     [Parameter] public EventCallback OnSelectNoneGenres { get; set; }
+    /// <summary>Whether a movie needs every selected genre rather than any; the checkbox shows only when <see cref="OnMatchAllGenresChanged"/> is bound.</summary>
+    [Parameter] public bool MatchAllGenres { get; set; }
+    [Parameter] public EventCallback<bool> OnMatchAllGenresChanged { get; set; }
 
     [Parameter] public IReadOnlySet<MovieFeatureFilterOption> FeatureFilter { get; set; } = new HashSet<MovieFeatureFilterOption>();
     [Parameter] public EventCallback<MovieFeatureFilterOption> OnToggleFeature { get; set; }

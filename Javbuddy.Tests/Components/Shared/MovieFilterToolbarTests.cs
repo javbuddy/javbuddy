@@ -143,6 +143,25 @@ public class MovieFilterToolbarTests : BunitContext
     }
 
     [Fact]
+    public void MatchAllGenres_CheckboxShowsOnlyWithTwoGenres_AndReportsTheChange()
+    {
+        bool? changed = null;
+        Action<ComponentParameterCollectionBuilder<MovieFilterToolbar>> build(params string[] selected) => p => p
+            .Add(x => x.AvailableGenres, new[] { "Drama", "Solo" })
+            .Add(x => x.GenreFilter, selected.ToHashSet())
+            .Add(x => x.OnMatchAllGenresChanged, EventCallback.Factory.Create<bool>(this, v => changed = v));
+
+        var one = Render<MovieFilterToolbar>(build("Drama"));
+        OpenFilterMenu(one);
+        Assert.Empty(one.FindAll("label.match-all-check"));
+
+        var two = Render<MovieFilterToolbar>(build("Drama", "Solo"));
+        OpenFilterMenu(two);
+        two.Find("label.match-all-check input").Change(true);
+        Assert.True(changed);
+    }
+
+    [Fact]
     public void FilterDropdown_HasAnNfoDriftGroup_WithEveryDirection_AndTogglesOne()
     {
         NfoDriftKind? toggled = null;

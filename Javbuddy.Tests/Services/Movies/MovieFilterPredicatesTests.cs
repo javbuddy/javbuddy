@@ -32,6 +32,20 @@ public class MovieFilterPredicatesTests
     }
 
     [Fact]
+    public void WhereGenres_MatchAll_NeedsEverySelectedGenre_WithRollup()
+    {
+        var play = new Tag { Name = "Play" };
+        var rough = new Tag { Name = "Rough", ParentTag = play };
+        var drama = new Tag { Name = "Drama" };
+        var movies = new[] { MovieTagged("A-001", rough, drama), MovieTagged("A-002", play), MovieTagged("A-003", drama) }.AsQueryable();
+
+        Assert.Equal(["A-001", "A-002", "A-003"], Codes(MovieFilterPredicates.WhereGenres(movies, ["Play", "Drama"])));
+        Assert.Equal(["A-001"], Codes(MovieFilterPredicates.WhereGenres(movies, ["Play", "Drama"], matchAll: true)));
+        Assert.Equal(["A-001"], Codes(MovieFilterPredicates.WhereGenres(movies, ["Play##Rough", "drama"], matchAll: true)));
+        Assert.Equal(["A-001", "A-002", "A-003"], Codes(MovieFilterPredicates.WhereGenres(movies, [], matchAll: true)));
+    }
+
+    [Fact]
     public void WhereGenres_MatchesATagTheMovieOnlyHasThroughItsClips()
     {
         var squirt = new Tag { Name = "Squirt" };
