@@ -7,15 +7,8 @@
 {
     <MultiSelectFilterGroup GroupLabel="Genre (r18.dev)" Options="@GenreOptions" Searchable="true"
                             OnSelectAll="SelectAllGenresAsync"
-                            OnSelectNone="() => ChangeAsync(Filter with { Genres = [] })" />
-    @if (Filter.Genres.Count > 1)
-    {
-        <label class="catalog-filter-check">
-            <input type="checkbox" checked="@Filter.MatchAllGenres"
-                   @onchange="e => ChangeAsync(Filter with { MatchAllGenres = e.Value is true })" />
-            Match all selected genres
-        </label>
-    }
+                            OnSelectNone="() => ChangeAsync(Filter with { Genres = [] })"
+                            MatchAll="Filter.MatchAllGenres" OnMatchAllChanged="v => ChangeAsync(Filter with { MatchAllGenres = v })" />
 }
 @if (Options is { MinYear: { } minYear, MaxYear: { } maxYear } && minYear < maxYear)
 {
@@ -35,7 +28,9 @@
     [Parameter, EditorRequired] public R18DevCatalogOptions Options { get; set; } = R18DevCatalogOptions.None;
     [Parameter] public EventCallback<R18DevCatalogFilter> FilterChanged { get; set; }
 
-    private Task ChangeAsync(R18DevCatalogFilter next) => FilterChanged.InvokeAsync(next);
+    // Match-all is off for fewer than two genres, where its checkbox is hidden, so it isn't left on unseen.
+    private Task ChangeAsync(R18DevCatalogFilter next) =>
+        FilterChanged.InvokeAsync(next.Genres.Count > 1 ? next : next with { MatchAllGenres = false });
 
     private IReadOnlyList<MultiSelectOption> GenreOptions => Options.Categories
         .Select(category => new MultiSelectOption(

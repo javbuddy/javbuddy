@@ -16,7 +16,7 @@ namespace Javbuddy.Services.Scenes;
 ///. ActorTagIds keeps clips where an actor has one of the actor tags (Tag.IsActorTag), own, inherited or rolled
 /// up; with ActorIds, it must be one of those actors who has it ("Mei, brunette"). MatchAllTags, MatchAllActorTags and
 /// MatchAllApexTags make a clip need every selected tag of that kind (each with its subtags) instead of any; for apex
-/// tags, one apex must carry them all.</summary>
+/// tags, one apex must carry them all, and for actor tags one actor (one of ActorIds, if set).</summary>
 public sealed record SceneWallFilter(
     IReadOnlyCollection<int>? TagIds = null,
     IReadOnlyCollection<int>? ActorIds = null,
@@ -580,21 +580,6 @@ public sealed class SceneWallQueryService(
                select r.OwnerId;
     }
 
-    /// <summary>The tag selections to match: one for any-of, or one per tag for match-all.</summary>
-    private static IEnumerable<IReadOnlyCollection<int>> TagSelections(IReadOnlyCollection<int> tagIds, bool matchAll) =>
-        matchAll ? tagIds.Select(id => new[] { id }) : [tagIds];
-
-    /// <summary>The selected tags and their subtags (a filter on a parent tag matches its subtags).</summary>
-    private static IQueryable<int> MatchingTagIds(AppDbContext db, IReadOnlyCollection<int> tagIds) =>
-        db.Tags.Where(t => tagIds.Contains(t.Id) || (t.ParentTagId != null && tagIds.Contains(t.ParentTagId.Value))).Select(t => t.Id);
-
-    private sealed class OwnerActorTag
-    {
-        public int OwnerId { get; init; }
-        public int ActorId { get; init; }
-        public int TagId { get; init; }
-    }
-
     /// <summary>Keeps the clips whose id is in <paramref name="ids"/>. Id is read by name so one helper serves
     /// scenes, highlights and apexes alike.</summary>
     private static IQueryable<T> WhereIdIn<T>(IQueryable<T> query, IQueryable<int> ids) where T : class =>
@@ -603,7 +588,7 @@ public sealed class SceneWallQueryService(
     /// <summary>The actor, actor-tag and actor-attribute filters, shared by the three walls: each is a set of
     /// matching clip ids over the wall's own effective actors, tags and movie release dates.</summary>
     private static IQueryable<T> WhereActors<T>(AppDbContext db, IQueryable<T> query, SceneWallFilter filter,
-        IQueryable<OwnerActor> actors, IQueryable<OwnerActorTag> actorTags, IQueryable<OwnerRelease> releases) where T : class
+        IQueryable<OwnerActor> actors, IQueryable<TaggedRow> actorTags, IQueryable<OwnerRelease> releases) where T : class
     {
         if (filter.ActorIds is { Count: > 0 } actorIds)
         {
@@ -612,11 +597,8 @@ public sealed class SceneWallQueryService(
         if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
         {
             var (anyActor, onlyActors) = ActorTagActors(filter);
-            foreach (var selection in TagSelections(actorTagIds, filter.MatchAllActorTags))
-            {
-                var matchingActorTags = MatchingTagIds(db, selection);
-                query = WhereIdIn(query, actorTags.Where(r => matchingActorTags.Contains(r.TagId) && (anyActor || onlyActors.Contains(r.ActorId))).Select(r => r.OwnerId));
-            }
+            var rows = actorTags.Where(r => anyActor || onlyActors.Contains(r.HolderId));
+            query = WhereIdIn(query, TagFilterQueries.OwnersWith(db, rows, actorTagIds, filter.MatchAllActorTags));
         }
         if (filter.ActorAttributes is { IsEmpty: false } attributes)
         {
@@ -640,16 +622,13 @@ public sealed class SceneWallQueryService(
         // Tags rolled up from highlights and apexes, actors falling back to the cast.
         if (filter.TagIds is { Count: > 0 } tagIds)
         {
-            foreach (var selection in TagSelections(tagIds, filter.MatchAllTags))
-            {
-                var matching = MatchingTagIds(db, selection);
-                // Non-correlated IN (…) so SQLite evaluates the roll-up once, not once per scene.
-                query = WhereIdIn(query, ClipRollupQueries.SceneTags(db).Where(r => matching.Contains(r.TagId)).Select(r => r.OwnerId));
-            }
+            // Non-correlated IN (…) so SQLite evaluates the roll-up once, not once per scene.
+            var rows = ClipRollupQueries.SceneTags(db).Select(r => new TaggedRow { OwnerId = r.OwnerId, HolderId = 0, TagId = r.TagId });
+            query = WhereIdIn(query, TagFilterQueries.OwnersWith(db, rows, tagIds, filter.MatchAllTags));
         }
         query = WhereActors(db, query, filter,
             ClipRollupQueries.SceneActors(db),
-            db.SceneEffectiveActorTags.Select(r => new OwnerActorTag { OwnerId = r.SceneId, ActorId = r.ActorId, TagId = r.TagId }),
+            db.SceneEffectiveActorTags.Select(r => new TaggedRow { OwnerId = r.SceneId, HolderId = r.ActorId, TagId = r.TagId }),
             db.Scenes.Select(x => new OwnerRelease { OwnerId = x.Id, Release = x.Movie.MetaReleaseDate }));
         if (filter.Studios is { Count: > 0 } studios)
         {
@@ -682,15 +661,12 @@ public sealed class SceneWallQueryService(
         // Tags rolled up from its apexes, actors inherited when it has none.
         if (filter.TagIds is { Count: > 0 } tagIds)
         {
-            foreach (var selection in TagSelections(tagIds, filter.MatchAllTags))
-            {
-                var matching = MatchingTagIds(db, selection);
-                query = WhereIdIn(query, ClipRollupQueries.HighlightTags(db).Where(r => matching.Contains(r.TagId)).Select(r => r.OwnerId));
-            }
+            var rows = ClipRollupQueries.HighlightTags(db).Select(r => new TaggedRow { OwnerId = r.OwnerId, HolderId = 0, TagId = r.TagId });
+            query = WhereIdIn(query, TagFilterQueries.OwnersWith(db, rows, tagIds, filter.MatchAllTags));
         }
         query = WhereActors(db, query, filter,
             ClipRollupQueries.HighlightActors(db),
-            db.HighlightEffectiveActorTags.Select(r => new OwnerActorTag { OwnerId = r.HighlightId, ActorId = r.ActorId, TagId = r.TagId }),
+            db.HighlightEffectiveActorTags.Select(r => new TaggedRow { OwnerId = r.HighlightId, HolderId = r.ActorId, TagId = r.TagId }),
             db.MovieHighlights.Select(x => new OwnerRelease { OwnerId = x.Id, Release = x.Movie.MetaReleaseDate }));
         if (filter.Studios is { Count: > 0 } studios)
         {
@@ -736,10 +712,8 @@ public sealed class SceneWallQueryService(
         IQueryable<MovieApex> apexes = db.MovieApexes;
         if (filter.ApexTagIds is { Count: > 0 } tagIds)
         {
-            foreach (var selection in TagSelections(tagIds, filter.MatchAllApexTags))
-            {
-                apexes = apexes.Where(a => a.ApexTags.Any(at => selection.Contains(at.TagId) || (at.Tag.ParentTagId != null && selection.Contains(at.Tag.ParentTagId.Value))));
-            }
+            var rows = db.ApexTags.Select(r => new TaggedRow { OwnerId = r.ApexId, HolderId = 0, TagId = r.TagId });
+            apexes = WhereIdIn(apexes, TagFilterQueries.OwnersWith(db, rows, tagIds, filter.MatchAllApexTags));
         }
         return apexes;
     }
@@ -750,7 +724,7 @@ public sealed class SceneWallQueryService(
         // Actors inherited when it has none.
         query = WhereActors(db, query, filter,
             ClipRollupQueries.ApexActors(db),
-            db.ApexEffectiveActorTags.Select(r => new OwnerActorTag { OwnerId = r.ApexId, ActorId = r.ActorId, TagId = r.TagId }),
+            db.ApexEffectiveActorTags.Select(r => new TaggedRow { OwnerId = r.ApexId, HolderId = r.ActorId, TagId = r.TagId }),
             db.MovieApexes.Select(x => new OwnerRelease { OwnerId = x.Id, Release = x.Movie.MetaReleaseDate }));
         if (filter.Studios is { Count: > 0 } studios)
         {

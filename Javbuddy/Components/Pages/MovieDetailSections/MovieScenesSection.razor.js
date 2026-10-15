@@ -69,14 +69,14 @@ export function initTimeline(root, trickplay, highlightTrickplay, durationSecond
             const fraction = rect.width > 0 ? Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1) : 0;
             // The preview stays over the highlight's start on the bar while the pin is scrubbed.
             return {
-                start: from + fraction * (end - from), end, name: pin.dataset.highlightName, clientX: clientXAt(from),
+                start: from + fraction * (end - from), name: pin.dataset.highlightName, clientX: clientXAt(from),
                 layout: highlightTrickplay?.[pin.dataset.highlightId] ?? trickplay,
             };
         }
         if (!bar.contains(event.target)) return null;
         const start = secondsAt(event.clientX);
         const scene = sceneAt(start);
-        return { start, end: scene ? Number(scene.dataset.end) : durationSeconds, name: scene?.dataset.sceneName, clientX: event.clientX, layout: trickplay };
+        return { start, name: scene?.dataset.sceneName, clientX: event.clientX, layout: trickplay };
     };
 
     let hovered = null;
@@ -95,7 +95,7 @@ export function initTimeline(root, trickplay, highlightTrickplay, durationSecond
         const hover = hoverAt(event);
         if (!hover) return hide();
         // A move that lands on the same moment (e.g. vertically) leaves the preview as is.
-        if (hovered && hovered.start === hover.start && hovered.end === hover.end) return;
+        if (hovered && hovered.start === hover.start && hovered.name === hover.name && hovered.layout === hover.layout) return;
         hovered = hover;
         useLayout(hover.layout);
         paint(hover.start);

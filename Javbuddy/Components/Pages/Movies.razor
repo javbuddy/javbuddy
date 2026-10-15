@@ -582,6 +582,7 @@ else
         // Likewise a remembered actor tag nothing carries any more.
         if (filters.ActorTagIds.RemoveWhere(id => !availableActorTags.Any(t => t.Id == id)) > 0)
         {
+            filters.DropLoneMatchAll();
             await LoadCountsAsync();
             return true;
         }
@@ -679,6 +680,7 @@ else
     private Task ApplyFilterAsync(Action change)
     {
         change();
+        filters.DropLoneMatchAll();
         return ResetAndLoadAsync();
     }
 

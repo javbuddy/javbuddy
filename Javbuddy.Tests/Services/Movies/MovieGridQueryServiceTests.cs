@@ -719,7 +719,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
 
         var any = new MovieGridFilter(ActorTagIds: [blondeId, slimId]);
         Assert.Equal(["ACT-001", "ACT-002", "ACT-003"], Codes(await service.GetRangeAsync(any, CodeAscending, 0, 10)));
-        // Each tag only has to be on the movie, not on the same actor.
-        Assert.Equal(["ACT-001", "ACT-003"], Codes(await service.GetRangeAsync(any with { MatchAllActorTags = true }, CodeAscending, 0, 10)));
+        // One actor must have every tag: ACT-003 has each, but on different actors.
+        Assert.Equal(["ACT-001"], Codes(await service.GetRangeAsync(any with { MatchAllActorTags = true }, CodeAscending, 0, 10)));
     }
 }

@@ -66,8 +66,9 @@ public sealed class MovieGridFilterState
         || ActiveFilterCount > 0;
 
     /// <summary>Clears every filter a MovieFilterNavigationState target doesn't set itself (text,
-    /// code prefix, studio and genre are set by the page), and makes the actor-tag filter just
-    /// actorTagTarget when there is one. Returns whether that changed anything.</summary>
+    /// code prefix, studio and genre are set by the page, so genre match-all is reset here), and
+    /// makes the actor-tag filter just actorTagTarget when there is one. Returns whether that
+    /// changed anything.</summary>
     public bool ClearBesidesNavigationTargets(int? actorTagTarget = null)
     {
         var actorTagsChanged = actorTagTarget is { } target ? !(ActorTagIds.Count == 1 && ActorTagIds.Contains(target)) : ActorTagIds.Count > 0;
@@ -83,6 +84,7 @@ public sealed class MovieGridFilterState
         Features.Clear();
         ActorIds.Clear();
         ActorTagIds.Clear();
+        MatchAllGenres = false;
         MatchAllActorTags = false;
         if (actorTagTarget is { } actorTag) ActorTagIds.Add(actorTag);
         ActorAttributes = ActorAttributeSelection.Empty;
@@ -97,7 +99,14 @@ public sealed class MovieGridFilterState
         CodePrefix = null;
         Studios.Clear();
         Genres.Clear();
-        MatchAllGenres = false;
+    }
+
+    /// <summary>Turns match-all off for a selection of fewer than two, where its checkbox is hidden, so
+    /// it isn't left on unseen to apply again once a second value is picked.</summary>
+    public void DropLoneMatchAll()
+    {
+        MatchAllGenres &= Genres.Count > 1;
+        MatchAllActorTags &= ActorTagIds.Count > 1;
     }
 
     public MoviesViewState ToViewState() => new(
@@ -124,6 +133,7 @@ public sealed class MovieGridFilterState
         if (state.ActorTagFilter is not null) ActorTagIds = [.. state.ActorTagFilter];
         MatchAllGenres = state.MatchAllGenres;
         MatchAllActorTags = state.MatchAllActorTags;
+        DropLoneMatchAll();
         MovieFilterOptions.MigrateLegacyNfoFeatures(Features, NfoDriftKinds);
         Text = state.TextFilter;
         CodePrefix = state.CodePrefixFilter;
