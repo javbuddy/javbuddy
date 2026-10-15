@@ -803,6 +803,8 @@ else
     private async Task ToggleMovieFavorite(Movie movie)
     {
         movie.IsFavorite = await MovieService.ToggleFavoriteAsync(movie.Id);
+        // Changed in place, so the view key can't see it; the Favorites filter has to re-run.
+        viewKey = null;
     }
 
     private void OpenDeleteConfirmation() => showDeleteConfirmation = true;
