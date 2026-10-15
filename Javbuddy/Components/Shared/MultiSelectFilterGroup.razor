@@ -12,6 +12,7 @@
         <div class="multiselect-actions-row">
             <button type="button" class="multiselect-action-link" @onclick="SelectAllVisible">Select All</button>
             <button type="button" class="multiselect-action-link" @onclick="SelectNone">None</button>
+            @ActionsContent
         </div>
     }
     <div class="@(Searchable ? "multiselect-scroll-area" : null)">
@@ -57,6 +58,9 @@
     /// <summary>Clears the whole selection, not just what's currently visible under the active
     /// search — matches how a "None"/reset action is conventionally scoped.</summary>
     [Parameter] public EventCallback OnSelectNone { get; set; }
+
+    /// <summary>Extra controls rendered after Select All/None in a Searchable group's actions row.</summary>
+    [Parameter] public RenderFragment? ActionsContent { get; set; }
 
     private bool expanded;
     private string searchTerm = "";
