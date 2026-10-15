@@ -53,7 +53,8 @@ public class TrickplayQueueTests
         var second = new TaskCompletionSource<TrickplayGenerateResult>();
         generator.GenerateAsync(1, Arg.Any<IProgress<FfmpegProgress>?>(), Arg.Any<CancellationToken>()).Returns(call =>
         {
-            // A minute in, ffmpeg is 10 minutes into the 2-hour video: 10x real time.
+            // A minute after ffmpeg's first report, it is 10 minutes into the 2-hour video: 10x real time.
+            call.ArgAt<IProgress<FfmpegProgress>?>(1)!.Report(new FfmpegProgress(0, TimeSpan.Zero));
             clock.Advance(TimeSpan.FromMinutes(1));
             call.ArgAt<IProgress<FfmpegProgress>?>(1)!.Report(new FfmpegProgress(8.3, TimeSpan.FromMinutes(10)));
             return first.Task;
@@ -74,6 +75,35 @@ public class TrickplayQueueTests
         await WaitUntilAsync(() => activities.Current?.Message == "Generating trickplay 2 of 2: ABC-2 (about 6 min left)");
 
         second.SetResult(TrickplayGenerateResult.Generated);
+        await WaitUntilAsync(() => activities.Current is { IsRunning: false });
+        await queue.StopAsync(CancellationToken.None);
+        queue.Dispose();
+    }
+
+    [Fact]
+    public async Task TimeWaitingForAnFfmpegSlot_DoesNotCountAsDecodeTime()
+    {
+        var clock = new ManualClock();
+        var (queue, generator, activities) = Create(clock);
+        var first = new TaskCompletionSource<TrickplayGenerateResult>();
+        generator.GenerateAsync(1, Arg.Any<IProgress<FfmpegProgress>?>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            var progress = call.ArgAt<IProgress<FfmpegProgress>?>(1)!;
+            // Half an hour queued at the FfmpegGate behind other ffmpeg work before decoding starts.
+            clock.Advance(TimeSpan.FromMinutes(30));
+            progress.Report(new FfmpegProgress(0, TimeSpan.Zero));
+            clock.Advance(TimeSpan.FromMinutes(1));
+            progress.Report(new FfmpegProgress(8.3, TimeSpan.FromMinutes(10)));
+            return first.Task;
+        });
+
+        queue.Enqueue(1, "ABC-1", "0000000000000001", 7200);
+        await queue.StartAsync(CancellationToken.None);
+
+        // 110 min left at 10x: 11 min, not the ~5 h the half-hour wait would make it look like.
+        await WaitUntilAsync(() => activities.Current?.Message == "Generating trickplay 1 of 1: ABC-1 (8%, about 11 min left)");
+
+        first.SetResult(TrickplayGenerateResult.Generated);
         await WaitUntilAsync(() => activities.Current is { IsRunning: false });
         await queue.StopAsync(CancellationToken.None);
         queue.Dispose();
