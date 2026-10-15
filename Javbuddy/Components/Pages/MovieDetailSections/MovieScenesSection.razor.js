@@ -5,17 +5,11 @@ export function scrollShelf(shelf, direction) {
     shelf?.scrollBy({ left: direction * shelf.clientWidth * 0.8, behavior: "smooth" });
 }
 
-// How long the pointer rests before the timeline preview starts playing, and how long each
-// trickplay frame then shows.
-const PLAY_AFTER_MS = 300;
-const FRAME_MS = 500;
-
 const timelines = new WeakMap();
 
 // Hovering the scenes timeline previews the movie at that moment: the bar previews the time under
-// the pointer; a highlight pin scrubs across the whole highlight. Once the pointer rests, the preview
-// plays on through the trickplay frames to the end of the hovered scene or highlight (the movie's end
-// between scenes) and loops. It runs in the browser for the same reason ScrubBar does. `trickplay` is
+// the pointer; a highlight pin scrubs across the whole highlight. The frame only ever follows the
+// pointer; it never advances on its own. It runs in the browser for the same reason ScrubBar does. `trickplay` is
 // the movie's TrickplayLayout, or null (then only the time and name show); `highlightTrickplay` maps a
 // highlight's id to its own denser set. Clicking the bar outside any scene asks `dotNetRef` to play
 // from there.
@@ -86,34 +80,13 @@ export function initTimeline(root, trickplay, highlightTrickplay, durationSecond
     };
 
     let hovered = null;
-    let waitTimer = 0;
-    let frameTimer = 0;
-
-    const stop = () => {
-        clearTimeout(waitTimer);
-        clearInterval(frameTimer);
-        waitTimer = frameTimer = 0;
-    };
 
     const paint = (seconds) => {
         showThumbnail?.(seconds);
         label.textContent = hovered.name ? `${formatTime(seconds)} · ${hovered.name}` : formatTime(seconds);
     };
 
-    const play = () => {
-        const frameSeconds = layout.intervalMs / 1000;
-        let seconds = hovered.start;
-        frameTimer = setInterval(() => {
-            // Removed from the page (e.g. the scenes were all deleted) without a pointerleave.
-            if (!root.isConnected) return stop();
-            seconds += frameSeconds;
-            if (seconds >= hovered.end) seconds = hovered.start;
-            paint(seconds);
-        }, FRAME_MS);
-    };
-
     const hide = () => {
-        stop();
         hovered = null;
         preview.classList.remove('movie-scenes-timeline-preview-visible');
     };
@@ -121,15 +94,13 @@ export function initTimeline(root, trickplay, highlightTrickplay, durationSecond
     const onMove = (event) => {
         const hover = hoverAt(event);
         if (!hover) return hide();
-        // A move that lands on the same moment (e.g. vertically) keeps the preview playing.
+        // A move that lands on the same moment (e.g. vertically) leaves the preview as is.
         if (hovered && hovered.start === hover.start && hovered.end === hover.end) return;
-        stop();
         hovered = hover;
         useLayout(hover.layout);
         paint(hover.start);
         placePreview(preview, bar, hover.clientX);
         preview.classList.add('movie-scenes-timeline-preview-visible');
-        if (layout && hover.end - hover.start > layout.intervalMs / 1000) waitTimer = setTimeout(play, PLAY_AFTER_MS);
     };
 
     // Only the movie's sheets: a highlight's set is a sheet or two, fetched when its pin is hovered.
