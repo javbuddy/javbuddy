@@ -27,4 +27,19 @@ public class JavbuddyMetricsObservationTests
 
         Assert.False(metrics.WasObservedWithin(TimeSpan.Zero));
     }
+
+    [Fact]
+    public async Task WaitForScrapeAfterIdleAsync_WakesOnceForTheFirstScrape()
+    {
+        using var metrics = new JavbuddyMetrics();
+        using var recorder = new MetricsRecorder(metrics);
+
+        Assert.False(await metrics.WaitForScrapeAfterIdleAsync(TimeSpan.Zero, CancellationToken.None));
+
+        recorder.SampleGauges();
+        recorder.SampleGauges();
+
+        Assert.True(await metrics.WaitForScrapeAfterIdleAsync(TimeSpan.Zero, CancellationToken.None));
+        Assert.False(await metrics.WaitForScrapeAfterIdleAsync(TimeSpan.Zero, CancellationToken.None));
+    }
 }

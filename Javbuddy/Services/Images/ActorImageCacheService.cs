@@ -767,6 +767,9 @@ public class ActorImageCacheService(
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         await File.WriteAllBytesAsync(thumbPath, thumbBytes, ct);
         await File.WriteAllBytesAsync(fullPath, fullBytes, ct);
+        // The remote fallback can restore both variants into one file, the full bytes overwriting the thumb.
+        var addedBytes = thumbPath == fullPath ? fullBytes.Length : (long)thumbBytes.Length + fullBytes.Length;
+        await cacheMaintenance.EnforceSizeLimitAsync(addedBytes, ct);
     }
 
     private static bool IsFresh(ActorImage cached, FileInfo srcInfo, string sourceCode) =>

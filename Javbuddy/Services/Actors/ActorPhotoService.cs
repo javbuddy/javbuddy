@@ -68,7 +68,8 @@ public sealed class ActorPhotoService(
     IDbContextFactory<AppDbContext> dbFactory,
     ILocalImageCache imageCache,
     IActorImageDataStore? dataStore = null,
-    ImageUploadSettings? uploadSettings = null) : IActorPhotoService
+    ImageUploadSettings? uploadSettings = null,
+    IImageCacheMaintenanceService? cacheMaintenance = null) : IActorPhotoService
 {
     public const string VariantOriginal = "original";
 
@@ -527,6 +528,7 @@ public sealed class ActorPhotoService(
         var path = imageCache.GetStoragePath(storageId);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         await File.WriteAllBytesAsync(path, bytes, ct);
+        if (cacheMaintenance is not null) await cacheMaintenance.EnforceSizeLimitAsync(bytes.Length, ct);
     }
 
     private async Task DeleteFilesAsync(IEnumerable<ActorPhoto> photos)

@@ -18,6 +18,9 @@ public class JavbuddyMetrics : IDisposable
 {
     public const string MeterName = "Javbuddy";
 
+    /// <summary>How long after the last scrape the DB-/filesystem-backed gauges count as unread.</summary>
+    public static readonly TimeSpan ObservationIdleAfter = TimeSpan.FromMinutes(5);
+
     private readonly Meter meter;
 
     private int vrMergeActiveJobs;
@@ -27,6 +30,7 @@ public class JavbuddyMetrics : IDisposable
     private int moviesMissing;
     private int actorsTotal;
     private long lastObservedTimestamp;
+    private readonly SemaphoreSlim scrapedAfterIdle = new(0);
 
     public JavbuddyMetrics()
     {
@@ -90,7 +94,20 @@ public class JavbuddyMetrics : IDisposable
         return last != 0 && Stopwatch.GetElapsedTime(last) <= window;
     }
 
-    private void MarkObserved() => Interlocked.Exchange(ref lastObservedTimestamp, Stopwatch.GetTimestamp());
+    /// <summary>Waits up to <paramref name="timeout"/> for the first scrape after the gauges went unread for
+    /// ObservationIdleAfter (or were never read), so the refresh can start then rather than at its next tick.
+    /// True when such a scrape arrived.</summary>
+    public Task<bool> WaitForScrapeAfterIdleAsync(TimeSpan timeout, CancellationToken ct) =>
+        scrapedAfterIdle.WaitAsync(timeout, ct);
+
+    private void MarkObserved()
+    {
+        var now = Stopwatch.GetTimestamp();
+        var previous = Interlocked.Exchange(ref lastObservedTimestamp, now);
+        // One scrape reads several gauges; only the first sees the old timestamp, so one wake per idle stretch.
+        if (previous == 0 || Stopwatch.GetElapsedTime(previous, now) > ObservationIdleAfter)
+            scrapedAfterIdle.Release();
+    }
 
     private IEnumerable<Measurement<int>> ObserveMoviesTotal()
     {
@@ -99,5 +116,9 @@ public class JavbuddyMetrics : IDisposable
         yield return new Measurement<int>(Volatile.Read(ref moviesMissing), new KeyValuePair<string, object?>("status", "Missing"));
     }
 
-    public void Dispose() => meter.Dispose();
+    public void Dispose()
+    {
+        meter.Dispose();
+        scrapedAfterIdle.Dispose();
+    }
 }
