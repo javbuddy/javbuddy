@@ -358,6 +358,26 @@ public sealed class MovieGridQueryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GenreFilter_MatchAll_NeedsEverySelectedGenre()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            var category = new Tag { Name = "Play" };
+            var subtag = new Tag { Name = "Rough", ParentTag = category };
+            var drama = new Tag { Name = "Drama" };
+            db.Tags.AddRange(category, subtag, drama);
+            AddMovie(db, "ABC-001", subtag, drama);
+            AddMovie(db, "ABC-002", subtag);
+            AddMovie(db, "ABC-003", drama);
+            db.SaveChanges();
+        }
+
+        var filter = new MovieGridFilter(Genres: ["Play", "Drama"], MatchAllGenres: true);
+        Assert.Equal(["ABC-001"], Codes(await service.GetRangeAsync(filter, CodeAscending, 0, 10)));
+        Assert.Equal(3, await service.CountAsync(filter with { MatchAllGenres = false }));
+    }
+
+    [Fact]
     public async Task GenreOptions_ComeFromLinkedTagsOnly_NotTheMetaGenresCache()
     {
         // MetaGenres is a display cache rebuilt from MovieTag links (TagNormalization); a row

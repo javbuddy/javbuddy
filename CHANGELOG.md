@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- The Movies Genre filter has a "Match all selected genres" option (shown once two or more genres are selected): a movie must have every selected genre instead of any. It is off by default and saved with the other filters (#68).
+
 ### Changed
 
 - Hover previews on the Scenes wall start sooner: the pointer only has to rest on a card for 75 ms (was 150 ms), and the preview video begins loading right away.

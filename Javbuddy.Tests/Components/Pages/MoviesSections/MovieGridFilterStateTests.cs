@@ -77,6 +77,22 @@ public class MovieGridFilterStateTests
     }
 
     [Fact]
+    public void MatchAllGenres_FlowsToFilter_RoundTripsThroughViewState_AndClears()
+    {
+        var state = new MovieGridFilterState { MatchAllGenres = true };
+        state.Genres.Add("A");
+        state.Genres.Add("B");
+        Assert.True(state.ToFilter().MatchAllGenres);
+
+        var restored = new MovieGridFilterState();
+        restored.Apply(System.Text.Json.JsonSerializer.Deserialize<MoviesViewState>(System.Text.Json.JsonSerializer.Serialize(state.ToViewState()))!);
+        Assert.True(restored.MatchAllGenres);
+
+        restored.Clear();
+        Assert.False(restored.MatchAllGenres);
+    }
+
+    [Fact]
     public void ViewState_CatalogFilter_RoundTripsThroughTheCookieJson()
     {
         var state = new MoviesViewState(BrowseReleases: true, CatalogFilter: new Javbuddy.Services.R18Dev.R18DevCatalogFilter

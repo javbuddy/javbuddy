@@ -23,7 +23,8 @@ public sealed record MovieGridFilter(
     IReadOnlyCollection<NfoDriftKind>? NfoDriftKinds = null,
     ActorAttributeSelection? ActorAttributes = null,
     IReadOnlyCollection<int>? ActorIds = null,
-    IReadOnlyCollection<int>? ActorTagIds = null);
+    IReadOnlyCollection<int>? ActorTagIds = null,
+    bool MatchAllGenres = false);
 
 /// <summary>A tracked actor offered by an actor-name filter.</summary>
 public sealed record MovieActorOption(int Id, string Name);
@@ -372,7 +373,7 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         query = MovieFilterPredicates.WhereScanTypes(query, filter.ScanTypes);
         query = MovieFilterPredicates.WhereCodecs(query, filter.Codecs);
         query = MovieFilterPredicates.WhereStudios(query, filter.Studios);
-        query = MovieFilterPredicates.WhereGenres(query, filter.Genres);
+        query = MovieFilterPredicates.WhereGenres(query, filter.Genres, filter.MatchAllGenres);
         query = MovieFilterPredicates.WhereFeatures(query, filter.Features);
         query = MovieFilterPredicates.WhereNfoDriftKinds(query, filter.NfoDriftKinds);
         if (filter.ActorIds is { Count: > 0 } actorIds)
