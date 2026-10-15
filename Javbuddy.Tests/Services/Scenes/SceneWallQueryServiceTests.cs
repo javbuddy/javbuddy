@@ -586,6 +586,9 @@ public sealed class SceneWallQueryServiceTests : IDisposable
 
         Assert.Equal(["OLD-001/Intro", "OLD-001/Scene 2"], await TitlesAsync(new SceneWallFilter(TagIds: [bathId, playId])));
         Assert.Equal(["OLD-001/Intro"], await TitlesAsync(new SceneWallFilter(TagIds: [bathId, playId], MatchAllTags: true)));
+        // A subtag counts for its selected parent and for itself.
+        Assert.Equal(["OLD-001/Intro", "OLD-001/Scene 2"], await TitlesAsync(new SceneWallFilter(TagIds: [playId, roughId], MatchAllTags: true)));
+        Assert.Equal(["OLD-001/Intro", "OLD-001/Scene 2"], await TitlesAsync(new SceneWallFilter(ApexTagIds: [playId, roughId], MatchAllApexTags: true)));
     }
 
     [Fact]

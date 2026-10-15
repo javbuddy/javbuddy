@@ -97,6 +97,30 @@ public sealed class ActorTagFilterTests : IDisposable
     }
 
     [Fact]
+    public async Task MatchAll_NeedsOneActorWithEveryTag_OnTheWallAndTheGrid()
+    {
+        await SeedAsync();
+        var grid = new MovieGridQueryService(factory);
+        var both = new SceneWallFilter(ActorTagIds: [blonde, brunette]);
+
+        // Bea is blonde and Aika brunette: each tag is there, but no one actor has both.
+        Assert.Equal([scene], await SceneIdsAsync(both));
+        Assert.Empty(await SceneIdsAsync(both with { MatchAllActorTags = true }));
+        Assert.Equal(0, await grid.CountAsync(new MovieGridFilter(ActorTagIds: [blonde, brunette], MatchAllActorTags: true)));
+
+        // Aika blonde in the scene, with her brunette from the apex.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.SceneActorTags.Add(new SceneActorTag { SceneId = scene, MovieId = movieId, ActorId = aika, TagId = blonde });
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal([scene], await SceneIdsAsync(both with { MatchAllActorTags = true }));
+        Assert.Empty(await SceneIdsAsync(both with { MatchAllActorTags = true, ActorIds = [bea] }));
+        Assert.Equal(1, await grid.CountAsync(new MovieGridFilter(ActorTagIds: [blonde, brunette], MatchAllActorTags: true)));
+        Assert.Equal(0, await grid.CountAsync(new MovieGridFilter(ActorIds: [bea], ActorTagIds: [blonde, brunette], MatchAllActorTags: true)));
+    }
+
+    [Fact]
     public async Task AParentActorTag_MatchesItsSubtags_AndIsOffered()
     {
         await SeedAsync();

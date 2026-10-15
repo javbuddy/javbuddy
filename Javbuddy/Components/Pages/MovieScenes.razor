@@ -82,7 +82,7 @@
                         <MultiSelectFilterGroup GroupLabel="Tag" Options="@TagOptions" Searchable="true"
                                                  OnSelectAll="labels => SelectAllAsync(tagFilter, options.Tags, labels)"
                                                  OnSelectNone="() => SelectNoneAsync(tagFilter, OfferedTagIds)"
-                                                 MatchAll="matchAllTags" OnMatchAllChanged="v => { matchAllTags = v; return FiltersChangedAsync(); }" />
+                                                 MatchAll="matchAllTags" OnMatchAllChanged="SetMatchAllTagsAsync" />
                     }
                     @* An apex's own tags are the Apex tag selection, so it carries over to the other views. *@
                     @if (ApexesView && options.ApexTags.Count > 0)
@@ -90,7 +90,7 @@
                         <MultiSelectFilterGroup GroupLabel="Tag" Options="@ApexTagOptions" Searchable="true"
                                                  OnSelectAll="labels => SelectAllAsync(apexTagFilter, options.ApexTags, labels)"
                                                  OnSelectNone="() => SelectNoneAsync(apexTagFilter, OfferedApexTagIds)"
-                                                 MatchAll="matchAllApexTags" OnMatchAllChanged="v => { matchAllApexTags = v; return FiltersChangedAsync(); }" />
+                                                 MatchAll="matchAllApexTags" OnMatchAllChanged="SetMatchAllApexTagsAsync" />
                     }
                     @if (options.Actors.Count > 0 || options.ActorAttributes.HasAny || options.ActorTags.Count > 0)
                     {
@@ -107,7 +107,7 @@
                                 <MultiSelectFilterGroup GroupLabel="Actor tag" Options="@ActorTagOptions" Searchable="true"
                                                          OnSelectAll="labels => SelectAllAsync(actorTagFilter, options.ActorTags, labels)"
                                                          OnSelectNone="() => SelectNoneAsync(actorTagFilter, OfferedActorTagIds)"
-                                                         MatchAll="matchAllActorTags" OnMatchAllChanged="v => { matchAllActorTags = v; return FiltersChangedAsync(); }" />
+                                                         MatchAll="matchAllActorTags" OnMatchAllChanged="SetMatchAllActorTagsAsync" />
                             }
                             <ActorAttributeFilters Options="options.ActorAttributes" Selection="AppliedActorAttributes" SelectionChanged="SetActorAttributesAsync" />
                         </FilterSection>
@@ -135,7 +135,7 @@
                                 <MultiSelectFilterGroup GroupLabel="Apex tag" Options="@ApexTagOptions" Searchable="true"
                                                          OnSelectAll="labels => SelectAllAsync(apexTagFilter, options.ApexTags, labels)"
                                                          OnSelectNone="() => SelectNoneAsync(apexTagFilter, OfferedApexTagIds)"
-                                                 MatchAll="matchAllApexTags" OnMatchAllChanged="v => { matchAllApexTags = v; return FiltersChangedAsync(); }" />
+                                                         MatchAll="matchAllApexTags" OnMatchAllChanged="SetMatchAllApexTagsAsync" />
                             }
                         </FilterSection>
                     }
@@ -514,6 +514,7 @@
         matchAllTags = state.MatchAllTags;
         matchAllActorTags = state.MatchAllActorTags;
         matchAllApexTags = state.MatchAllApexTags;
+        DropLoneMatchAll();
         // Kept as remembered; AppliedActorAttributes drops what the view doesn't offer.
         actorAttributes = state.ActorAttributes ?? ActorAttributeSelection.Empty;
         favoritesOnly = state.FavoritesOnly;
@@ -527,8 +528,37 @@
 
     private async Task FiltersChangedAsync()
     {
+        DropLoneMatchAll();
         await SaveViewStateAsync();
         await ReloadAsync();
+    }
+
+    // Match-all is off for a selection of fewer than two, where its checkbox is hidden, so it isn't left
+    // on unseen to apply again once a second value is picked. Reset relies on this too: it turns off
+    // only the match-all of a selection it emptied, not one kept for the other view.
+    private void DropLoneMatchAll()
+    {
+        matchAllTags &= tagFilter.Count > 1;
+        matchAllActorTags &= actorTagFilter.Count > 1;
+        matchAllApexTags &= apexTagFilter.Count > 1;
+    }
+
+    private Task SetMatchAllTagsAsync(bool value)
+    {
+        matchAllTags = value;
+        return FiltersChangedAsync();
+    }
+
+    private Task SetMatchAllActorTagsAsync(bool value)
+    {
+        matchAllActorTags = value;
+        return FiltersChangedAsync();
+    }
+
+    private Task SetMatchAllApexTagsAsync(bool value)
+    {
+        matchAllApexTags = value;
+        return FiltersChangedAsync();
     }
 
     private Task ToggleAsync<T>(HashSet<T> set, T value)
@@ -600,7 +630,6 @@
         studioFilter.ExceptWith(OfferedStudios);
         apexTagFilter.ExceptWith(OfferedApexTagIds);
         actorTagFilter.ExceptWith(OfferedActorTagIds);
-        matchAllTags = matchAllActorTags = matchAllApexTags = false;
         if (!ApexesView) apexOnly = false;
         if (options is not null)
         {

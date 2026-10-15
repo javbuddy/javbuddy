@@ -82,6 +82,7 @@ public class MovieGridFilterStateTests
         var state = new MovieGridFilterState { MatchAllGenres = true, MatchAllActorTags = true };
         state.Genres.Add("A");
         state.Genres.Add("B");
+        state.ActorTagIds.UnionWith([1, 2]);
         Assert.True(state.ToFilter().MatchAllGenres);
         Assert.True(state.ToFilter().MatchAllActorTags);
 
@@ -93,6 +94,33 @@ public class MovieGridFilterStateTests
         restored.Clear();
         Assert.False(restored.MatchAllGenres);
         Assert.False(restored.MatchAllActorTags);
+    }
+
+    [Fact]
+    public void DropLoneMatchAll_TurnsOffMatchAllBelowTwoSelected()
+    {
+        var state = new MovieGridFilterState { MatchAllGenres = true, MatchAllActorTags = true };
+        state.Genres.UnionWith(["A", "B"]);
+        state.ActorTagIds.Add(1);
+
+        state.DropLoneMatchAll();
+
+        Assert.True(state.MatchAllGenres);
+        Assert.False(state.MatchAllActorTags);
+        state.Genres.Remove("B");
+        state.DropLoneMatchAll();
+        Assert.False(state.MatchAllGenres);
+    }
+
+    [Fact]
+    public void ClearBesidesNavigationTargets_ResetsGenreMatchAll()
+    {
+        var state = new MovieGridFilterState { MatchAllGenres = true };
+        state.Genres.UnionWith(["A", "B"]);
+
+        state.ClearBesidesNavigationTargets();
+
+        Assert.False(state.MatchAllGenres);
     }
 
     [Fact]
