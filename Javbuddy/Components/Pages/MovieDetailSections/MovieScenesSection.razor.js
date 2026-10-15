@@ -9,10 +9,10 @@ const timelines = new WeakMap();
 
 // Hovering the scenes timeline previews the movie at that moment: the bar previews the time under
 // the pointer; a highlight pin scrubs across the whole highlight. The frame only ever follows the
-// pointer; it never advances on its own. It runs in the browser for the same reason ScrubBar does. `trickplay` is
-// the movie's TrickplayLayout, or null (then only the time and name show); `highlightTrickplay` maps a
-// highlight's id to its own denser set. Clicking the bar outside any scene asks `dotNetRef` to play
-// from there.
+// pointer; it never advances on its own. It runs in the browser for the same reason ScrubBar does.
+// `trickplay` is the movie's TrickplayLayout, or null (then only the time and name show);
+// `highlightTrickplay` maps a highlight's id to its own denser set. Clicking the bar outside any
+// scene asks `dotNetRef` to play from there.
 export function initTimeline(root, trickplay, highlightTrickplay, durationSeconds, dotNetRef) {
     disposeTimeline(root);
     if (!root || !(durationSeconds > 0)) return;
