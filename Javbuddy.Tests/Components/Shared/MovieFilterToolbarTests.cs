@@ -153,11 +153,13 @@ public class MovieFilterToolbarTests : BunitContext
 
         var one = Render<MovieFilterToolbar>(build("Drama"));
         OpenFilterMenu(one);
+        OpenGenreGroup(one);
         Assert.Empty(one.FindAll("label.match-all-check"));
 
         var two = Render<MovieFilterToolbar>(build("Drama", "Solo"));
         OpenFilterMenu(two);
-        two.Find("label.match-all-check input").Change(true);
+        OpenGenreGroup(two);
+        two.Find(".multiselect-actions-row label.match-all-check input").Change(true);
         Assert.True(changed);
     }
 
@@ -332,6 +334,9 @@ public class MovieFilterToolbarTests : BunitContext
 
     private static void OpenFilterMenu(IRenderedComponent<MovieFilterToolbar> cut) =>
         cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
+
+    private static void OpenGenreGroup(IRenderedComponent<MovieFilterToolbar> cut) =>
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Genre")).Click();
 
     private static void OpenActorSection(IRenderedComponent<MovieFilterToolbar> cut) =>
         cut.FindAll("button").First(b => b.TextContent.StartsWith("Actor")).Click();
