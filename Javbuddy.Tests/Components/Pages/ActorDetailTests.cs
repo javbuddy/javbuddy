@@ -304,6 +304,48 @@ public class ActorDetailTests : BunitContext
         await movieService.Received(1).ToggleFavoriteAsync(movieId, Arg.Any<CancellationToken>());
     }
 
+    // The filtered list is cached; un-favoriting with the Favorites filter on still drops the movie.
+    [Fact]
+    public async Task ActorDetail_UnfavoritingWithTheFavoritesFilterOn_RemovesTheMovie()
+    {
+        using var factory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        var movieService = Substitute.For<Javbuddy.Services.Movies.IMovieService>();
+        Services.AddSingleton(movieService);
+
+        var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(actor);
+        Services.AddSingleton(actorService);
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>());
+        Services.AddSingleton(Substitute.For<INfoSyncService>());
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Actors.Add(new Actor { Id = actor.Id, FirstName = actor.FirstName, LastName = actor.LastName });
+            db.Movies.AddRange(
+                new Movie { Id = 10, Code = "FAV-001", Status = MovieStatus.Got, IsFavorite = true },
+                new Movie { Id = 11, Code = "FAV-002", Status = MovieStatus.Got, IsFavorite = true });
+            db.MovieActors.AddRange(new MovieActor { ActorId = actor.Id, MovieId = 10 }, new MovieActor { ActorId = actor.Id, MovieId = 11 });
+            await db.SaveChangesAsync();
+        }
+        movieService.ToggleFavoriteAsync(10, Arg.Any<CancellationToken>()).Returns(false);
+
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".poster-title").Count));
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
+        cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Features")).Click();
+        cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Trim() == "Favorites").Click();
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".poster-title").Count));
+
+        cut.FindAll(".poster-card-wrapper").First(c => c.TextContent.Contains("FAV-001")).QuerySelector(".poster-favorite")!.Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(new[] { "FAV-002" }, cut.FindAll(".poster-title").Select(t => t.TextContent.Trim())));
+    }
+
     [Theory]
     [InlineData("Genre", "Play", "GEN-001,GEN-002")]
     [InlineData("Genre", "Rough", "GEN-001")]
