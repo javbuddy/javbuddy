@@ -4,7 +4,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-10-17
+## [0.3.2] - 2026-10-17
 
 ### Added
 
