@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-17
+
 ### Added
 
 - Poster Options has a "Show Versions Badge" option (on by default). A movie with several file versions shows "N versions" as a badge in the poster's bottom-right corner, instead of in the text under the poster.
