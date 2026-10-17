@@ -1274,6 +1274,44 @@ public class ActorDetailTests : BunitContext
         Assert.Equal(new[] { "AAA-001", "BBB-002" }, renderedCodes);
     }
 
+    // The list is sorted in memory, where EF.Property<DateTime>(m, Movie.DateAddedColumn) throws.
+    [Fact]
+    public async Task ActorDetail_SortingMoviesByAdded_OrdersByFileAddedThenCreated()
+    {
+        using var factory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+
+        var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
+        var day = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        Movie[] movies =
+        [
+            new() { Id = 10, Code = "OLD-001", Status = MovieStatus.Got, CreatedAt = day.AddDays(5), FileAddedAt = day },
+            new() { Id = 11, Code = "NEW-002", Status = MovieStatus.Got, CreatedAt = day, FileAddedAt = day.AddDays(3) },
+            new() { Id = 12, Code = "MID-003", Status = MovieStatus.Missing, CreatedAt = day.AddDays(2) },
+        ];
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Actors.Add(new Actor { Id = actor.Id, FirstName = actor.FirstName, LastName = actor.LastName });
+            db.Movies.AddRange(movies);
+            db.MovieActors.AddRange(movies.Select(m => new MovieActor { ActorId = actor.Id, MovieId = m.Id }));
+            await db.SaveChangesAsync();
+        }
+
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(actor);
+        Services.AddSingleton(actorService);
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>());
+        Services.AddSingleton(Substitute.For<INfoSyncService>());
+
+        var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Sort:")).Click();
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Added").Click();
+
+        Assert.Equal(new[] { "NEW-002", "MID-003", "OLD-001" }, cut.FindAll(".poster-title").Select(e => e.TextContent));
+    }
+
     [Fact]
     public async Task ActorDetail_ChangingTheSortWithAStatusFilterOn_KeepsTheFilter_AndTheStatusCounts()
     {

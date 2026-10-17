@@ -662,6 +662,7 @@ else
                 ? query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenByDescending(m => m.MetaRuntimeMinutes)
                 : query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenBy(m => m.MetaRuntimeMinutes),
             "random" => query.OrderBy(m => (long)m.Id * randomSortSeed % RandomSortModulus),
+            // In memory, so the DateAdded column's own expression, not EF.Property (which only works inside an EF query).
             _ => sortDescending
                 ? query.OrderByDescending(m => m.FileAddedAt ?? m.CreatedAt)
                 : query.OrderBy(m => m.FileAddedAt ?? m.CreatedAt),
