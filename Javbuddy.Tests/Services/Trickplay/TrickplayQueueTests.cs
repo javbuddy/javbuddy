@@ -89,7 +89,7 @@ public class TrickplayQueueTests
         generator.GenerateAsync(1, Arg.Any<IProgress<FfmpegProgress>?>(), Arg.Any<CancellationToken>()).Returns(call =>
         {
             var progress = call.ArgAt<IProgress<FfmpegProgress>?>(1)!;
-            // Half an hour queued at the FfmpegGate behind other ffmpeg work before decoding starts.
+            // Half an hour queued at the FfmpegGate behind another long ffmpeg job before decoding starts.
             clock.Advance(TimeSpan.FromMinutes(30));
             progress.Report(new FfmpegProgress(0, TimeSpan.Zero));
             clock.Advance(TimeSpan.FromMinutes(1));

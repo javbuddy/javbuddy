@@ -49,9 +49,10 @@ public interface IFfmpegClient
     Task<FfmpegRunResult> GenerateTrickplayAsync(string inputPath, FfmpegTrickplayRequest request, string outputDirectory, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct = default);
 }
 
-public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGate? gate = null) : IFfmpegClient
+public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGate? longGate = null, FfmpegGate? shortGate = null) : IFfmpegClient
 {
-    private readonly FfmpegGate gate = gate ?? FfmpegGate.Shared;
+    private readonly FfmpegGate longGate = longGate ?? FfmpegGate.Long;
+    private readonly FfmpegGate shortGate = shortGate ?? FfmpegGate.Short;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
@@ -156,7 +157,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             return FfmpegRunResult.Failed("ffmpeg is not available (see Settings → Connections → Path Mappings for how the merge step locates it).");
         }
 
-        using var slot = await gate.EnterAsync(ct);
+        using var slot = await longGate.EnterAsync(ct);
 
         var concatListPath = Path.Combine(Path.GetTempPath(), $"javbuddy-vr-merge-{Guid.NewGuid():N}.concat.txt");
         var metadataPath = Path.Combine(Path.GetTempPath(), $"javbuddy-vr-merge-{Guid.NewGuid():N}.metadata.txt");
@@ -226,7 +227,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        using var slot = await gate.EnterAsync(ct);
+        using var slot = await longGate.EnterAsync(ct);
 
         var metadataPath = Path.Combine(Path.GetTempPath(), $"javbuddy-chapters-{Guid.NewGuid():N}.metadata.txt");
         try
@@ -271,7 +272,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
     {
         if (binaryResolver.FfmpegPath is null) return null;
 
-        using var slot = await gate.EnterAsync(ct);
+        using var slot = await longGate.EnterAsync(ct);
         var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
         {
             RedirectStandardError = true,
@@ -444,7 +445,8 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        using var slot = await gate.EnterAsync(ct);
+        // A highlight's clip is a few seconds of video, so it goes in the short lane rather than waiting behind a full decode.
+        using var slot = await (request.StartSeconds is null ? longGate : shortGate).EnterAsync(ct);
 
         var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
         {
@@ -544,7 +546,8 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        using var slot = await gate.EnterAsync(ct);
+        // Only stills and hover previews come through here: the short lane.
+        using var slot = await shortGate.EnterAsync(ct);
 
         var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
         {
@@ -645,7 +648,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        using var slot = await gate.EnterAsync(ct);
+        using var slot = await longGate.EnterAsync(ct);
 
         var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
         {

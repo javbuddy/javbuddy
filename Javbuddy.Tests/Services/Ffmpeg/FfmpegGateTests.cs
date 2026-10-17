@@ -35,11 +35,64 @@ public class FfmpegGateTests
     }
 
     [Fact]
-    public void Shared_AllowsOneOrTwoAtATime() =>
-        Assert.InRange(FfmpegGate.DefaultMaxConcurrency, 1, 2);
+    public void Lanes_AreSeparate()
+    {
+        Assert.NotSame(FfmpegGate.Long, FfmpegGate.Short);
+    }
+
+    [Theory]
+    [InlineData("still", false)]
+    [InlineData("preview", false)]
+    [InlineData("clip-trickplay", false)]
+    [InlineData("trickplay", true)]
+    [InlineData("scene-detection", true)]
+    public async Task ClientRuns_TakeTheirLane_SoShortWorkDoesNotWaitBehindALongDecode(string job, bool longLane)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var dir = Directory.CreateTempSubdirectory("javbuddy-ffmpeg-lane-test-").FullName;
+        try
+        {
+            var script = Path.Combine(dir, "ffmpeg");
+            await File.WriteAllTextAsync(script, "#!/bin/sh\nexit 0\n");
+            File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var resolver = Substitute.For<IFfmpegBinaryResolver>();
+            resolver.FfmpegPath.Returns(script);
+            var longGate = new FfmpegGate(1);
+            var shortGate = new FfmpegGate(1);
+            var client = new FfmpegClient(resolver, longGate, shortGate);
+            // The other lane is busy (say, a two-hour trickplay); the job must still run.
+            using var busy = await (longLane ? shortGate : longGate).EnterAsync(CancellationToken.None);
+
+            Task run = job switch
+            {
+                "still" => client.ExtractStillWebpAsync("in.mp4", 0, leftEyeOnly: false, "out.webp"),
+                "preview" => client.ExtractPreviewVideoAsync("in.mp4", 0, 5, leftEyeOnly: false, "out.webm"),
+                "clip-trickplay" => client.GenerateTrickplayAsync("in.mp4",
+                    new FfmpegTrickplayRequest(1, 320, 180, 10, 10, false, false, StartSeconds: 60, LengthSeconds: 30), dir, TimeSpan.FromSeconds(30), progress: null),
+                "trickplay" => client.GenerateTrickplayAsync("in.mp4",
+                    new FfmpegTrickplayRequest(10, 320, 180, 10, 10, false, false), dir, TimeSpan.FromHours(2), progress: null),
+                _ => client.DetectSceneSignalsAsync("in.mp4", TimeSpan.FromHours(2), progress: null),
+            };
+            await run.WaitAsync(TimeSpan.FromSeconds(5));
+
+            // And its own lane is the one it waits on.
+            using var own = await (longLane ? longGate : shortGate).EnterAsync(CancellationToken.None);
+            Task second = longLane
+                ? client.DetectSceneSignalsAsync("in.mp4", TimeSpan.FromHours(2), progress: null)
+                : client.ExtractStillWebpAsync("in.mp4", 0, leftEyeOnly: false, "out.webp");
+            await Task.Delay(50);
+            Assert.False(second.IsCompleted);
+            own.Dispose();
+            await second.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 
     [Fact]
-    public async Task ClientRuns_ShareTheGate_SoOnlyOneFfmpegRunsAtATime()
+    public async Task ClientRuns_InOneLane_RunOneAtATime()
     {
         if (OperatingSystem.IsWindows()) return;
         var dir = Directory.CreateTempSubdirectory("javbuddy-ffmpeg-gate-test-").FullName;
@@ -55,7 +108,7 @@ public class FfmpegGateTests
             var gate = new FfmpegGate(1);
 
             var results = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ =>
-                new FfmpegClient(resolver, gate).ExtractStillWebpAsync("in.mp4", 0, leftEyeOnly: false, "out.webp")));
+                new FfmpegClient(resolver, shortGate: gate).ExtractStillWebpAsync("in.mp4", 0, leftEyeOnly: false, "out.webp")));
 
             Assert.All(results, r => Assert.True(r.Success, r.ErrorMessage));
             Assert.Equal(["start", "end", "start", "end", "start", "end"], await File.ReadAllLinesAsync(log));
@@ -79,7 +132,7 @@ public class FfmpegGateTests
             var resolver = Substitute.For<IFfmpegBinaryResolver>();
             resolver.FfmpegPath.Returns(script);
 
-            var result = await new FfmpegClient(resolver, new FfmpegGate(1)).ExtractStillWebpAsync("in.mp4", 0, leftEyeOnly: false, "out.webp");
+            var result = await new FfmpegClient(resolver).ExtractStillWebpAsync("in.mp4", 0, leftEyeOnly: false, "out.webp");
 
             Assert.Contains("-loglevel error -nostats", result.ErrorMessage);
         }
