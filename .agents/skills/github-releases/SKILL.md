@@ -12,9 +12,9 @@ Use this skill when preparing or managing a release for `javbuddy/javbuddy`. Fol
 The current release history establishes these conventions:
 
 - Git tag: `v<major>.<minor>.<patch>` (for example, `v0.1.2`).
-- GitHub release title: `<major>.<minor>.<patch>` without the `v` prefix.
-- Release notes: the corresponding `CHANGELOG.md` entry, retaining its Keep a Changelog headings and bullets, followed by `Docker image: \`ghcr.io/javbuddy/javbuddy:<version>\``.
-- Releases below `1.0.0` are GitHub pre-releases. The existing `v0.1.0`, `v0.1.1`, and `v0.1.2` releases all use this setting.
+- GitHub release title: the tag itself, `v<major>.<minor>.<patch>` (for example, `v0.3.2`). Every release since `v0.2.0` uses this; only `v0.1.0`–`v0.1.2` were titled without the `v`.
+- Release notes: the corresponding `CHANGELOG.md` entry, retaining its Keep a Changelog headings and bullets, always ending with a blank line and `Docker image: \`ghcr.io/javbuddy/javbuddy:<version>\`` (the version without the `v`).
+- Releases are not marked as GitHub pre-releases. Only `v0.1.0`–`v0.1.2` were; every release since `v0.2.0` is a normal release, even though the version is still below `1.0.0`.
 
 The `CI` workflow runs on published releases. It runs formatting, unit and E2E checks, then builds and publishes the container. The release workflow tags the image with the full SemVer version and its major/minor aliases. Creating a draft does not start that published-release workflow; publishing does.
 
@@ -25,21 +25,20 @@ The `CI` workflow runs on published releases. It runs formatting, unit and E2E c
 3. Confirm the release changes are complete and verified. The matching `CHANGELOG.md` section must be dated, and `Directory.Build.props` must contain the same version. Do not invent release notes that are absent from the changelog.
 4. Confirm the release commit is available on GitHub and that no tag or release already uses the proposed version. Do not move or overwrite an existing tag/release.
 5. Prepare notes from that exact changelog section. Keep its headings and bullets, omit the changelog's dated version heading, and append the Docker image line. Use `First release.` only for the first release, following `v0.1.0`'s format.
-6. Create the release as a draft. For versions below `1.0.0`, set the pre-release flag. Set the tag to `v<version>`, title to `<version>`, and target to the verified release commit. GitHub CLI can create a missing tag from the specified target commit.
+6. Create the release as a draft, without the pre-release flag. Set the tag to `v<version>`, title to `v<version>`, and target to the verified release commit. GitHub CLI can create a missing tag from the specified target commit.
 
-Example for a pre-1.0 draft, after substituting the actual version, release commit, and notes file:
+Example draft, after substituting the actual version, release commit, and notes file (whose last line is the Docker image line):
 
 ```sh
-gh release create v0.1.3 \
+gh release create v0.3.2 \
   --repo javbuddy/javbuddy \
-  --title 0.1.3 \
-  --notes-file /tmp/javbuddy-release-notes-0.1.3.md \
+  --title v0.3.2 \
+  --notes-file /tmp/javbuddy-release-notes-0.3.2.md \
   --target <release-commit> \
-  --draft \
-  --prerelease
+  --draft
 ```
 
-For versions `1.0.0` and later, omit `--prerelease` unless the user explicitly requests a preview release. Keep `--draft` until the user authorizes publishing.
+Add `--prerelease` only when the user explicitly asks for a preview release. Keep `--draft` until the user authorizes publishing.
 
 ## Verify and hand off
 
