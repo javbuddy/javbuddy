@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-17
+
 ### Changed
 
 - ffmpeg work now runs in two lanes of one job each. Scene stills, hover previews and highlight-clip trickplay no longer wait behind a long job such as full-movie trickplay, scene detection, a chapter remux, a repair or a VR merge. Long jobs now run one at a time on every machine, where before two could run on machines with four or more cores.
