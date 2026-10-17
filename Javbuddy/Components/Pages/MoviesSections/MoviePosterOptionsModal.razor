@@ -51,6 +51,14 @@
             <label class="form-check-label" for="show-vr-check">Show VR format badge on poster</label>
         </div>
     </div>
+    <div class="options-row">
+        <span class="options-label">Show Versions Badge</span>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="show-versions-check" checked="@Options.ShowVersionsBadge"
+                   @onchange="e => Change(Options with { ShowVersionsBadge = IsChecked(e) })" />
+            <label class="form-check-label" for="show-versions-check">Show the number of file versions on poster</label>
+        </div>
+    </div>
 </OptionsModal>
 
 @code {

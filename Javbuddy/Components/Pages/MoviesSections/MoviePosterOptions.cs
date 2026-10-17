@@ -21,7 +21,8 @@ public sealed record MoviePosterOptions(
     bool ShowStatus = true,
     bool ShowSize = true,
     bool ShowQuality = true,
-    bool ShowVrBadge = true)
+    bool ShowVrBadge = true,
+    bool ShowVersionsBadge = true)
 {
     public const string CookieName = "poster-options";
 
@@ -31,9 +32,9 @@ public sealed record MoviePosterOptions(
     /// wrapper still has its own padding regardless of whether title/meta/meta-sub actually render
     /// anything inside it, so with nothing left to show that padding is just dead space under the
     /// status bar. movie-poster-hide-info (see MoviePosterGrid.razor.css) collapses the whole block in that
-    /// one case, rather than the padding needing to vary per individual toggle. ShowVrBadge isn't
-    /// one of them: the VR / 3D corner badge sits on the artwork (".poster-image"), not in
-    /// ".poster-info".</summary>
+    /// one case, rather than the padding needing to vary per individual toggle. ShowVrBadge and
+    /// ShowVersionsBadge aren't among them: those corner badges sit on the artwork (".poster-image"),
+    /// not in ".poster-info".</summary>
     [JsonIgnore]
     public bool AnyInfoVisible => ShowTitle || ShowStatus || ShowSize || ShowQuality;
 
@@ -53,25 +54,20 @@ public sealed record MoviePosterOptions(
     private static MoviePosterOptions Normalize(MoviePosterOptions? parsed) =>
         parsed is null ? Default : parsed with { PosterSize = NormalizeSize(parsed.PosterSize) };
 
+    /// <summary>"2 versions" for a movie with more than one file version, when the badge is on.</summary>
+    public string? VersionsBadge(Movie movie) =>
+        ShowVersionsBadge && movie.FileCount > 1 ? $"{movie.FileCount} versions" : null;
+
     public string ToJson() => JsonSerializer.Serialize(this);
 
     public string?[] MetaSubLines(Movie movie)
     {
         var lines = new List<string?>();
-        if (ShowSize)
-        {
-            var sizeText = movie.LocalFileSizeDisplay;
-            if (sizeText is not null && movie.FileCount > 1)
-            {
-                sizeText = $"{sizeText} · {movie.FileCount} versions";
-            }
-            lines.Add(sizeText);
-        }
-        else if (movie.FileCount > 1)
-        {
-            lines.Add($"{movie.FileCount} versions");
-        }
-
+        // Every line here is shown on every card (null renders as a blank row): the Movies grid is
+        // virtualized and needs every card to be the same height, so a line only some cards had made
+        // those rows taller and threw the grid's spacers off as it scrolled. The version count is a
+        // badge on the artwork instead (VersionsBadge).
+        if (ShowSize) lines.Add(movie.LocalFileSizeDisplay);
         if (ShowQuality) lines.Add(MoviePosterText.QualityLabel(movie));
         return lines.ToArray();
     }

@@ -41,8 +41,16 @@ public class MoviePosterTextTests
     {
         var movie = new Movie { LocalFileSizeBytes = 1024L * 1024 * 1024, FileCount = 2 };
 
-        Assert.Equal(new string?[] { "1 GB · 2 versions", null }, MoviePosterOptions.Default.MetaSubLines(movie));
-        Assert.Equal(new string?[] { "2 versions" }, (MoviePosterOptions.Default with { ShowSize = false, ShowQuality = false }).MetaSubLines(movie));
+        Assert.Equal(new string?[] { "1 GB", null }, MoviePosterOptions.Default.MetaSubLines(movie));
+        Assert.Empty((MoviePosterOptions.Default with { ShowSize = false, ShowQuality = false }).MetaSubLines(movie));
+    }
+
+    [Fact]
+    public void VersionsBadge_ShowsOnlyForSeveralVersions_WhenTheOptionIsOn()
+    {
+        Assert.Equal("2 versions", MoviePosterOptions.Default.VersionsBadge(new Movie { FileCount = 2 }));
+        Assert.Null(MoviePosterOptions.Default.VersionsBadge(new Movie { FileCount = 1 }));
+        Assert.Null((MoviePosterOptions.Default with { ShowVersionsBadge = false }).VersionsBadge(new Movie { FileCount = 2 }));
     }
 
     [Theory]
@@ -56,7 +64,7 @@ public class MoviePosterTextTests
     [Fact]
     public void PosterOptionsJson_KeepsTheCookieShape()
     {
-        Assert.Equal("""{"PosterSize":"large","ShowTitle":false,"ShowStatus":true,"ShowSize":true,"ShowQuality":true,"ShowVrBadge":true}""",
+        Assert.Equal("""{"PosterSize":"large","ShowTitle":false,"ShowStatus":true,"ShowSize":true,"ShowQuality":true,"ShowVrBadge":true,"ShowVersionsBadge":true}""",
             (MoviePosterOptions.Default with { PosterSize = "large", ShowTitle = false }).ToJson());
     }
 
@@ -67,6 +75,7 @@ public class MoviePosterTextTests
 
         Assert.True(System.Text.Json.JsonSerializer.Deserialize<MoviePosterOptions>(saved)!.ShowVrBadge);
         Assert.False(System.Text.Json.JsonSerializer.Deserialize<MoviePosterOptions>((MoviePosterOptions.Default with { ShowVrBadge = false }).ToJson())!.ShowVrBadge);
+        Assert.True(System.Text.Json.JsonSerializer.Deserialize<MoviePosterOptions>(saved)!.ShowVersionsBadge);
     }
 
     [Fact]

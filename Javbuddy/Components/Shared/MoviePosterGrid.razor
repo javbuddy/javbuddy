@@ -24,6 +24,7 @@
                         MetaSubLines="@Options.MetaSubLines(movie)"
                         CornerBadge="@(Options.ShowVrBadge ? VrFormat.BadgeText(movie.VrType) : null)"
                         CornerBadgeTooltip="@(Options.ShowVrBadge ? movie.VrType : null)"
+                        EndCornerBadge="@Options.VersionsBadge(movie)"
                         WarningTooltip="@MoviePosterText.ActorWarningTooltip(movie)"
                         IsFavorite="@movie.IsFavorite"
                         OnToggleFavorite="@(() => OnToggleFavorite.InvokeAsync(movie))" />

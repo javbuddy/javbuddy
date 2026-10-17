@@ -79,6 +79,21 @@ public class MoviePosterGridTests : BunitContext
     }
 
     [Fact]
+    public void VersionsBadgeFollowsTheShowVersionsBadgeOption()
+    {
+        var movie = NewMovie(1, "AAA-001");
+        movie.FileCount = 3;
+
+        var shown = Render<MoviePosterGrid>(p => p.Add(x => x.Movies, [movie]));
+        Assert.Equal("3 versions", shown.Find(".poster-corner-badge-end").TextContent);
+
+        var hidden = Render<MoviePosterGrid>(p => p
+            .Add(x => x.Movies, [movie])
+            .Add(x => x.Options, MoviePosterOptions.Default with { ShowVersionsBadge = false }));
+        Assert.Empty(hidden.FindAll(".poster-corner-badge-end"));
+    }
+
+    [Fact]
     public void FavoriteToggleReportsTheMovie()
     {
         var movie = NewMovie(1, "AAA-001");

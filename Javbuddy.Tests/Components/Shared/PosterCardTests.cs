@@ -166,4 +166,23 @@ public class PosterCardTests : BunitContext
         Assert.Equal("VR180 SBS", badge.GetAttribute("title"));
         Assert.Empty(plain.FindAll(".poster-corner-badge"));
     }
+
+    [Fact]
+    public void EndCornerBadge_RendersOnlyWhenSet()
+    {
+        var withBadge = Render<PosterCard>(p => p
+            .Add(c => c.Href, "/movie/1")
+            .Add(c => c.StatusCssClass, "status-got")
+            .Add(c => c.PlaceholderText, "No image")
+            .Add(c => c.TitleText, "SIVR-059")
+            .Add(c => c.EndCornerBadge, "2 versions"));
+        var plain = Render<PosterCard>(p => p
+            .Add(c => c.Href, "/movie/2")
+            .Add(c => c.StatusCssClass, "status-got")
+            .Add(c => c.PlaceholderText, "No image")
+            .Add(c => c.TitleText, "MIDE-400"));
+
+        Assert.Equal("2 versions", withBadge.Find(".poster-image .poster-corner-badge-end").TextContent);
+        Assert.Empty(plain.FindAll(".poster-corner-badge-end"));
+    }
 }

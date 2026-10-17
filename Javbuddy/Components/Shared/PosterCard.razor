@@ -29,6 +29,10 @@
             {
                 <div class="poster-corner-badge" title="@CornerBadgeTooltip">@CornerBadge</div>
             }
+            @if (!string.IsNullOrWhiteSpace(EndCornerBadge))
+            {
+                <div class="poster-corner-badge poster-corner-badge-end">@EndCornerBadge</div>
+            }
             @if (!string.IsNullOrWhiteSpace(WarningTooltip))
             {
                 <div class="poster-warning-badge" title="@WarningTooltip" aria-label="@WarningTooltip">
@@ -109,6 +113,10 @@
     /// grid's "VR" / "3D"; CornerBadgeTooltip names it in full.</summary>
     [Parameter] public string? CornerBadge { get; set; }
     [Parameter] public string? CornerBadgeTooltip { get; set; }
+
+    /// <summary>When set, a short label in the poster image's bottom-right corner, e.g. the Movies
+    /// grid's "2 versions".</summary>
+    [Parameter] public string? EndCornerBadge { get; set; }
 
     /// <summary>When set, renders a heart toggle over the poster's top-left corner (filled when
     /// true) that invokes <see cref="OnToggleFavorite"/> — Movies.razor's favorite toggle

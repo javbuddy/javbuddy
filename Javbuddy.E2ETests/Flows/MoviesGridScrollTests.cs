@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Javbuddy.E2ETests.Fixtures;
 using Javbuddy.E2ETests.Support;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Playwright;
 using static Microsoft.Playwright.Assertions;
 
@@ -91,6 +92,72 @@ public class MoviesGridScrollTests(E2EFixture fixture)
         // ever slid.
         var windowStart = await page.Locator(".movies-grid .virtualized-grid-spacer").First.GetAttributeAsync("data-window-start");
         Assert.True(int.Parse(windowStart!) > 0, $"Expected the window to have slid forward; data-window-start was '{windowStart}'.");
+    }
+
+    /// <summary>Regression test: with the Size line hidden, only a multi-version movie got the extra
+    /// "N versions" line, so its row was taller than the rest — and a long size/quality line could wrap
+    /// onto a second one. VirtualizedGrid sizes its spacers from the first rendered card's height, so
+    /// the page's total height flipped by thousands of pixels depending on which movie happened to
+    /// start the window: the scrollbar jumped and rows landed in the wrong place as it slid.</summary>
+    [Fact]
+    public async Task CardsWithDifferentMetaLines_KeepOneRowHeight_SoTheGridHeightHoldsSteady()
+    {
+        const string prefix = "E2E-ROWHEIGHT";
+        await DbSeeding.SeedManyMoviesAsync(fixture.DbFactory, 600, prefix);
+        await using (var db = await fixture.DbFactory.CreateDbContextAsync())
+        {
+            var movies = await db.Movies.Where(m => m.Code!.StartsWith(prefix)).OrderBy(m => m.Code).ToListAsync();
+            foreach (var movie in movies.Where((_, i) => i % 11 == 0))
+            {
+                movie.FileCount = 3;
+                movie.LocalFileSizeBytes = 123_456_789_012;
+                movie.MediaWidth = 3840;
+                movie.MediaHeight = 2160;
+                movie.VrType = "VR180 Fisheye";
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var page = await fixture.NewPageAsync();
+        await page.SetViewportSizeAsync(1280, 720);
+        // Small posters with the Size line hidden: the combination that made the "N versions" line
+        // appear on only some cards.
+        await page.Context.AddCookiesAsync([new()
+        {
+            Name = "poster-options",
+            Value = Uri.EscapeDataString("""{"PosterSize":"small","ShowTitle":true,"ShowStatus":true,"ShowSize":false,"ShowQuality":true,"ShowVrBadge":true}"""),
+            Url = fixture.App.ServerAddress,
+        }]);
+
+        await page.GotoInteractiveAsync("/");
+        await Expect(page.Locator(".poster-card").First).ToBeVisibleAsync();
+
+        // Jumps rather than steps, letting each window land, so the window starts on many different
+        // movies — whichever card comes first is the one VirtualizedGrid measures.
+        var json = await page.EvaluateAsync<string>(
+            """
+            async () => {
+                const frame = () => new Promise(r => requestAnimationFrame(r));
+                const grid = document.querySelector('.movies-grid');
+                const cardHeights = new Set();
+                const gridHeights = [];
+                for (const top of [3000, 9000, 15000, 21000, 12000, 6000, 18000]) {
+                    window.scrollTo({ top, behavior: 'instant' });
+                    for (let i = 0; i < 30; i++) await frame();
+                    document.querySelectorAll('.poster-card').forEach(c => cardHeights.add(c.getBoundingClientRect().height));
+                    gridHeights.push(grid.getBoundingClientRect().height);
+                }
+                return JSON.stringify({ cardHeights: [...cardHeights], gridHeights });
+            }
+            """);
+        var result = System.Text.Json.JsonDocument.Parse(json).RootElement;
+        var cardHeights = result.GetProperty("cardHeights").EnumerateArray().Select(e => e.GetDouble()).ToList();
+        var gridHeights = result.GetProperty("gridHeights").EnumerateArray().Select(e => e.GetDouble()).ToList();
+
+        Assert.True(cardHeights.Max() - cardHeights.Min() <= 0.5,
+            $"Expected every poster card to be the same height, but saw: {string.Join(", ", cardHeights)}px.");
+        Assert.True(gridHeights.Max() - gridHeights.Min() <= 1,
+            $"Expected the grid's height to hold steady as the window slid, but saw: {string.Join(", ", gridHeights)}px.");
     }
 
     /// <summary>Regression test: a first fix attempt saved window.scrollY to
