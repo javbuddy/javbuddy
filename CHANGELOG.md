@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-10-19
+
 ### Changed
 
 - The Movies, Actor Detail and DeoVR filters replace "Has scenes" with a Scenes range, and add Highlights and Apexes ranges. Each is a slider from 0 to the most any movie has; dragging the top thumb to the end means "or more". A saved "Has scenes" becomes Scenes 1 or more.
