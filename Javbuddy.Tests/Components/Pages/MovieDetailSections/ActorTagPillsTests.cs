@@ -57,7 +57,7 @@ public class ActorTagPillsTests : BunitContext
     {
         var cut = RenderPills(false, Own(Blonde), Own(Long), Own(Tattoo), FromClips(Short));
 
-        Assert.Equal(["Blonde", "Long"], cut.FindAll(".actor-pills-row .actor-pill:not(.actor-pill-more)").Select(p => p.TextContent.Trim()));
+        Assert.Equal(["Blonde", "Hair › Long"], cut.FindAll(".actor-pills-row .actor-pill:not(.actor-pill-more)").Select(p => p.TextContent.Trim()));
         Assert.Equal("+2", cut.Find(".actor-pill-more").TextContent.Trim());
     }
 
@@ -86,6 +86,8 @@ public class ActorTagPillsTests : BunitContext
         {
             Assert.Equal([Blonde, Tattoo], SavedIds().Order());
             Assert.True(Assert.Single(changes).MovieTagsChanged);
+            Assert.Equal("true", cut.Find(".actor-pill-add").GetAttribute("aria-expanded"));
+            Assert.NotEmpty(cut.FindAll("input.tag-search-input"));
         });
     }
 

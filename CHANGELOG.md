@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- Actor tag pills on Movie Detail show a subtag with its parent ("Hair › Long"), and the "+ tag" search stays open after adding one so several tags can be added in a row.
+
 ### Added
 
 - Actors have a "Transgender" checkbox on Edit Actor, shown as a badge on Actor Detail. The Actors list can filter to transgender actors or exclude them, and the Actress Attributes filter on Movies, Scenes & Highlights and the DeoVR lists gains a Transgender group (Only / Exclude) once any such actor is in view.

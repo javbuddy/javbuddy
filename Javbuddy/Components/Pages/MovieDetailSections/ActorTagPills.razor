@@ -13,7 +13,7 @@
         <div class="actor-pills-row">
             @foreach (var tag in own.Take(VisibleCount))
             {
-                <span class="actor-pill" aria-label="@LabelOf(tag.TagId)">@NameOf(tag.TagId)</span>
+                <span class="actor-pill" aria-label="@LabelOf(tag.TagId)">@LabelOf(tag.TagId)</span>
             }
             @if (hidden > 0)
             {
@@ -85,9 +85,12 @@
     /// <summary>Raised after a change was saved; the host re-reads the tags.</summary>
     [Parameter] public EventCallback<ActorTagResult> OnChanged { get; set; }
 
-    private bool Busy => busy;
+    protected override void OnParametersSet()
+    {
+        if (!Editing) adding = false;
+    }
 
-    private string NameOf(int tagId) => Library.FirstOrDefault(t => t.Id == tagId)?.Name ?? $"Tag {tagId}";
+    private bool Busy => busy;
 
     private string LabelOf(int tagId) => ActorTagPillStyle.Label(Library, tagId);
 
@@ -102,7 +105,6 @@
         {
             var result = await ActorTagService.SetAsync(ActorTagLevel.Movie, MovieId, ActorId, [.. tagIds.Distinct()]);
             if (!result.Success) error = result.ErrorMessage;
-            adding = false;
             await OnChanged.InvokeAsync(result);
         }
         finally
