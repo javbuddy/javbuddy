@@ -545,7 +545,7 @@ public sealed class SceneWallQueryService(
     /// <summary>Ids of the actors meeting the measurement criteria, or null when there are none. Cup size and
     /// age need the scene's movie, so the filters below add them per owner: one actress must meet everything.</summary>
     private static IQueryable<int>? MatchingActorIds(AppDbContext db, ActorAttributeSelection selection) =>
-        selection.Height.IsSet || selection.Bust.IsSet || selection.Waist.IsSet || selection.Hips.IsSet
+        selection.Height.IsSet || selection.Bust.IsSet || selection.Waist.IsSet || selection.Hips.IsSet || selection.Transgender == TransgenderFilter.Only
             ? MovieFilterPredicates.WhereActors(db.Actors, selection).Select(a => a.Id)
             : null;
 
@@ -600,11 +600,18 @@ public sealed class SceneWallQueryService(
             var rows = actorTags.Where(r => anyActor || onlyActors.Contains(r.HolderId));
             query = WhereIdIn(query, TagFilterQueries.OwnersWith(db, rows, actorTagIds, filter.MatchAllActorTags));
         }
-        if (filter.ActorAttributes is { IsEmpty: false } attributes)
+        if (filter.ActorAttributes is { } allAttributes
+            && allAttributes with { Transgender = allAttributes.Transgender == TransgenderFilter.Only ? TransgenderFilter.Only : TransgenderFilter.Any } is { IsEmpty: false } attributes)
         {
             // One of the clip's effective actresses must meet every criterion; age is hers on the clip's
             // movie's release date (today without one).
             query = WhereIdIn(query, OwnersWithMatchingActress(db, actors, releases, attributes));
+        }
+        if (filter.ActorAttributes is { Transgender: TransgenderFilter.Exclude })
+        {
+            // Exclude covers the whole cast: the clip has no transgender effective actress.
+            var transgenderIds = db.Actors.Where(a => a.IsTransgender).Select(a => a.Id);
+            query = query.Where(x => !actors.Where(r => transgenderIds.Contains(r.ActorId)).Select(r => r.OwnerId).Contains(EF.Property<int>(x, "Id")));
         }
         return query;
     }

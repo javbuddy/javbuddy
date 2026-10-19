@@ -132,6 +132,21 @@ public sealed class ClipWallFilterTests : IDisposable
     }
 
     [Fact]
+    public async Task TransgenderFilter_OnlyAndExclude_FollowTheClipsEffectiveActors()
+    {
+        await SeedAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            (await db.Actors.FindAsync(cora))!.IsTransgender = true;
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal([scene2], await SceneIdsAsync(new SceneWallFilter(ActorAttributes: new ActorAttributeSelection { Transgender = TransgenderFilter.Only })));
+        Assert.Equal([scene1], await SceneIdsAsync(new SceneWallFilter(ActorAttributes: new ActorAttributeSelection { Transgender = TransgenderFilter.Exclude })));
+        Assert.True((await wall.GetOptionsAsync()).ActorAttributes.Transgender);
+    }
+
+    [Fact]
     public async Task Options_OfferRolledUpTagsAndInheritedActors()
     {
         await SeedAsync();

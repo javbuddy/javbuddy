@@ -7,6 +7,7 @@ public enum ActorMovieFilter { All, HasMovies, NoMovies }
 public enum ActorPhotoFilter { All, HasPhoto, MissingPhoto }
 public enum ActorImageFilter { All, HasImages, NoImages }
 public enum ActorStatusFilter { All, ActiveOnly, RetiredOnly }
+public enum ActorTransgenderFilter { All, TransgenderOnly, Exclude }
 public enum ActorViewMode { Grid, Table }
 
 /// <summary>The Actors list's selected filters and sort order, and the in-memory query they make
@@ -20,6 +21,7 @@ public sealed class ActorListFilter
     public ActorPhotoFilter Photo { get; set; } = ActorPhotoFilter.All;
     public ActorImageFilter Images { get; set; } = ActorImageFilter.All;
     public ActorStatusFilter Status { get; set; } = ActorStatusFilter.All;
+    public ActorTransgenderFilter Transgender { get; set; } = ActorTransgenderFilter.All;
     public bool JellyfinLinkedOnly { get; set; }
     public bool FavoritesOnly { get; set; }
     public bool NoMetadataOnly { get; set; }
@@ -48,6 +50,7 @@ public sealed class ActorListFilter
         (NoMetadataOnly ? 1 : 0) +
         (MissingMoviesOnly ? 1 : 0) +
         (Status != ActorStatusFilter.All ? 1 : 0) +
+        (Transgender != ActorTransgenderFilter.All ? 1 : 0) +
         CupSizes.Count +
         (HeightFilterActive ? 1 : 0);
 
@@ -67,6 +70,20 @@ public sealed class ActorListFilter
         ActorStatusFilter.ActiveOnly => "Active only",
         ActorStatusFilter.RetiredOnly => "Retired only",
         _ => "Status: All"
+    };
+
+    public string TransgenderFilterLabel => Transgender switch
+    {
+        ActorTransgenderFilter.TransgenderOnly => "Transgender only",
+        ActorTransgenderFilter.Exclude => "Exclude transgender",
+        _ => "Transgender: All"
+    };
+
+    public void CycleTransgender() => Transgender = Transgender switch
+    {
+        ActorTransgenderFilter.All => ActorTransgenderFilter.TransgenderOnly,
+        ActorTransgenderFilter.TransgenderOnly => ActorTransgenderFilter.Exclude,
+        _ => ActorTransgenderFilter.All
     };
 
     public void CycleMovies() => Movies = Movies switch
@@ -130,6 +147,7 @@ public sealed class ActorListFilter
         Photo = ActorPhotoFilter.All;
         Images = ActorImageFilter.All;
         Status = ActorStatusFilter.All;
+        Transgender = ActorTransgenderFilter.All;
         JellyfinLinkedOnly = false;
         FavoritesOnly = false;
         NoMetadataOnly = false;
@@ -144,7 +162,8 @@ public sealed class ActorListFilter
         Text, Movies, Photo, Images, Status,
         JellyfinLinkedOnly, FavoritesOnly, CupSizes.ToList(), HeightMin, HeightMax,
         SortField, SortDescending,
-        NoMetadataOnly: NoMetadataOnly, MissingMoviesOnly: MissingMoviesOnly);
+        NoMetadataOnly: NoMetadataOnly, MissingMoviesOnly: MissingMoviesOnly,
+        TransgenderFilter: Transgender);
 
     public void Apply(ActorsViewState state)
     {
@@ -166,6 +185,7 @@ public sealed class ActorListFilter
         SortDescending = state.SortDescending;
         NoMetadataOnly = state.NoMetadataOnly;
         MissingMoviesOnly = state.MissingMoviesOnly;
+        Transgender = state.TransgenderFilter;
     }
 
     public IEnumerable<ActorCardModel> Apply(IEnumerable<ActorCardModel> actors)
@@ -226,6 +246,15 @@ public sealed class ActorListFilter
         else if (Status == ActorStatusFilter.RetiredOnly)
         {
             query = query.Where(a => a.IsRetired);
+        }
+
+        if (Transgender == ActorTransgenderFilter.TransgenderOnly)
+        {
+            query = query.Where(a => a.IsTransgender);
+        }
+        else if (Transgender == ActorTransgenderFilter.Exclude)
+        {
+            query = query.Where(a => !a.IsTransgender);
         }
 
         if (NoMetadataOnly)
@@ -303,7 +332,8 @@ public sealed record ActorsViewState(
     int SizeStep = ActorsViewState.DefaultSizeStep,
     bool NoMetadataOnly = false,
     bool MissingMoviesOnly = false,
-    List<string>? TableColumns = null)
+    List<string>? TableColumns = null,
+    ActorTransgenderFilter TransgenderFilter = ActorTransgenderFilter.All)
 {
     public const string CookieName = "javbuddy-actors-view";
     public const int MaxSizeStep = 3;

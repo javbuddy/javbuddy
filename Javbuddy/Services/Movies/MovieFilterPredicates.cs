@@ -59,8 +59,19 @@ public static class MovieFilterPredicates
         var hasAge = selection.Age.IsSet;
         var (ageLo, ageHi) = (selection.Age.Min ?? int.MinValue, selection.Age.Max ?? int.MaxValue);
         var todayDate = today.ToDateTime(TimeOnly.MinValue);
+        var onlyTransgender = selection.Transgender == TransgenderFilter.Only;
+
+        // Exclude is about the whole cast, not one actress: no linked actress is transgender.
+        if (selection.Transgender == TransgenderFilter.Exclude)
+        {
+            query = query.Where(m => !m.MovieActors.Any(ma => ma.Actor.IsTransgender));
+        }
+
+        // Nothing but Exclude set: the cast check above is all there is, and a movie without cast must stay.
+        if (selection with { Transgender = onlyTransgender ? TransgenderFilter.Only : TransgenderFilter.Any } is { IsEmpty: true }) return query;
 
         return query.Where(m => m.MovieActors.Any(ma =>
+            (!onlyTransgender || ma.Actor.IsTransgender) &&
             // The latest cup size period starting on or before the release, else the regular cup size.
             // Never "" in cups, so the ?? "" just keeps the in-memory evaluation null-safe.
             (cups == null || cups.Contains((ma.Actor.CupSizePeriods
@@ -85,14 +96,17 @@ public static class MovieFilterPredicates
     /// except Cup Size and Age, which need the movie's release date (the scene wall adds them per scene).</summary>
     public static IQueryable<Actor> WhereActors(IQueryable<Actor> actors, ActorAttributeSelection selection)
     {
-        if (!selection.Height.IsSet && !selection.Bust.IsSet && !selection.Waist.IsSet && !selection.Hips.IsSet) return actors;
+        if (!selection.Height.IsSet && !selection.Bust.IsSet && !selection.Waist.IsSet && !selection.Hips.IsSet && selection.Transgender != TransgenderFilter.Only) return actors;
 
         var (hMin, hMax) = (selection.Height.Min, selection.Height.Max);
         var (bMin, bMax) = (selection.Bust.Min, selection.Bust.Max);
         var (wMin, wMax) = (selection.Waist.Min, selection.Waist.Max);
         var (pMin, pMax) = (selection.Hips.Min, selection.Hips.Max);
 
+        var onlyTransgender = selection.Transgender == TransgenderFilter.Only;
+
         return actors.Where(a =>
+            (!onlyTransgender || a.IsTransgender) &&
             (hMin == null || (a.HeightCm != null && a.HeightCm >= hMin)) &&
             (hMax == null || (a.HeightCm != null && a.HeightCm <= hMax)) &&
             (bMin == null || (a.Bust != null && a.Bust >= bMin)) &&

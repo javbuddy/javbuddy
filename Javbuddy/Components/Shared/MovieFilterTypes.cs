@@ -66,6 +66,7 @@ public static class MovieFilterOptions
             Waist = NormalizeRange(selection.Waist, options.Waist),
             Hips = NormalizeRange(selection.Hips, options.Hips),
             Age = NormalizeRange(selection.Age, options.Age),
+            Transgender = options.Transgender ? selection.Transgender : TransgenderFilter.Any,
         };
     }
 
@@ -96,6 +97,7 @@ public static class MovieFilterOptions
             Waist = MergeRange(current.Waist, edited.Waist, options.Waist),
             Hips = MergeRange(current.Hips, edited.Hips, options.Hips),
             Age = MergeRange(current.Age, edited.Age, options.Age),
+            Transgender = options.Transgender ? edited.Transgender : current.Transgender,
         };
     }
 

@@ -63,6 +63,9 @@ public class Actor
     /// <summary>Indicates whether the actor has retired from the industry.</summary>
     public bool IsRetired { get; set; }
 
+    /// <summary>Indicates whether the actor is transgender; the Actress Attributes filter and the Actors list filter on it.</summary>
+    public bool IsTransgender { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>LastName FirstName, matching the established cast-linking and route convention.</summary>

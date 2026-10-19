@@ -267,6 +267,14 @@
     margin-left: 0.5rem;
 }
 
+.actor-badge-transgender {
+    background-color: #2a3340;
+    color: #8fc3e8;
+    border-color: #3b4a5e;
+    vertical-align: middle;
+    margin-left: 0.5rem;
+}
+
 .actor-badge-jellyfin {
     gap: 0.3rem;
     text-decoration: none;

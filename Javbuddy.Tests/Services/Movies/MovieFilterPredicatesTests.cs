@@ -202,6 +202,25 @@ public class MovieFilterPredicatesTests
         Assert.Equal(["M-E158", "M-PADDED", "M-SPLIT"], Codes(MovieFilterPredicates.WhereActorAttributes(ActorAttributeMovies(), new ActorAttributeSelection { CupSizes = ["E"], Height = new IntRange(null, 158) }, Today)));
     }
 
+    [Fact]
+    public void WhereActorAttributes_Transgender_OnlyNeedsOneTransgenderActress_ExcludeNeedsNone()
+    {
+        var movies = new[]
+        {
+            MovieWithCast("TRANS", new Actor { IsTransgender = true, CupSize = "E" }),
+            MovieWithCast("MIXED", new Actor { IsTransgender = true, CupSize = "B" }, new Actor { CupSize = "E" }),
+            MovieWithCast("PLAIN", new Actor { CupSize = "E" }),
+            MovieWithCast("NOCAST"),
+        }.AsQueryable();
+
+        Assert.Equal(["MIXED", "TRANS"], Codes(MovieFilterPredicates.WhereActorAttributes(movies, new ActorAttributeSelection { Transgender = TransgenderFilter.Only }, Today)));
+        // With another criterion, the same actress has to meet both.
+        Assert.Equal(["TRANS"], Codes(MovieFilterPredicates.WhereActorAttributes(movies, new ActorAttributeSelection { Transgender = TransgenderFilter.Only, CupSizes = ["E"] }, Today)));
+        // Exclude is about the whole cast and keeps a movie without one.
+        Assert.Equal(["NOCAST", "PLAIN"], Codes(MovieFilterPredicates.WhereActorAttributes(movies, new ActorAttributeSelection { Transgender = TransgenderFilter.Exclude }, Today)));
+        Assert.Equal(["PLAIN"], Codes(MovieFilterPredicates.WhereActorAttributes(movies, new ActorAttributeSelection { Transgender = TransgenderFilter.Exclude, CupSizes = ["E"] }, Today)));
+    }
+
     private static Actor Act(string? cup = null, int? h = null, int? b = null, int? w = null, int? hip = null, string? born = null) =>
         new() { CupSize = cup, HeightCm = h, Bust = b, Waist = w, Hips = hip, BirthDate = born is null ? null : DateTime.Parse(born) };
 

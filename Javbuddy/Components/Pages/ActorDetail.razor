@@ -138,6 +138,10 @@ else
                 {
                     <span class="actor-badge actor-badge-retired" title="Retired from the industry">Retired</span>
                 }
+                @if (actor.IsTransgender)
+                {
+                    <span class="actor-badge actor-badge-transgender" title="Transgender">Transgender</span>
+                }
                 @if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKanji) || !string.IsNullOrWhiteSpace(actor.JapaneseNameKana))
                 {
                     <span class="actor-hero-japanese">

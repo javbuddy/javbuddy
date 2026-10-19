@@ -44,6 +44,31 @@ public class ActorListFilterTests
     }
 
     [Fact]
+    public void Transgender_CyclesThroughOnlyAndExclude_AndRoundTripsThroughTheViewState()
+    {
+        var actors = new[]
+        {
+            new ActorCardModel(1, "A", 0, false, IsTransgender: true),
+            new ActorCardModel(2, "B", 0, false),
+        };
+        var filter = new ActorListFilter();
+
+        filter.CycleTransgender();
+        Assert.Equal([1], filter.Apply(actors).Select(a => a.Id).ToList());
+        Assert.Equal("Transgender only", filter.TransgenderFilterLabel);
+        Assert.Equal(1, filter.ActiveFilterCount);
+
+        var restored = new ActorListFilter();
+        restored.Apply(filter.ToViewState());
+        Assert.Equal(ActorTransgenderFilter.TransgenderOnly, restored.Transgender);
+
+        filter.CycleTransgender();
+        Assert.Equal([2], filter.Apply(actors).Select(a => a.Id).ToList());
+        filter.Clear();
+        Assert.Equal(ActorTransgenderFilter.All, filter.Transgender);
+    }
+
+    [Fact]
     public void HeightRange_AtTheBoundsIsNoFilter()
     {
         var filter = CreateFilter();
