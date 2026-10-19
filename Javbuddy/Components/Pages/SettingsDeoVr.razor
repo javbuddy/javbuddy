@@ -136,6 +136,9 @@ else
                                         OnSelectNoneGenres="() => UpdateAsync(editor.Genres.Clear)"
                                         FeatureFilter="@editor.Features"
                                         OnToggleFeature="o => UpdateAsync(() => Toggle(editor.Features, o))"
+                                        CountOptions="@(summary?.Counts ?? MovieCountOptions.None)"
+                                        CountSelection="@editor.Counts"
+                                        OnCountsChanged="c => UpdateAsync(() => editor.Counts = MovieFilterOptions.MergeCounts(editor.Counts, c, summary?.Counts ?? MovieCountOptions.None))"
                                         ShowActorAttributes="true"
                                         ActorAttributeOptions="@(summary?.ActorAttributes ?? ActorAttributeOptions.None)"
                                         ActorAttributeSelection="@editor.ActorAttributes"
@@ -333,13 +336,14 @@ else
         public HashSet<MovieFeatureFilterOption> Features { get; init; } = [];
         public HashSet<int> Actors { get; init; } = [];
         public ActorAttributeSelection ActorAttributes { get; set; } = ActorAttributeSelection.Empty;
+        public MovieCountSelection Counts { get; set; } = MovieCountSelection.Empty;
         public string SortField { get; set; } = "added";
         public bool SortDescending { get; set; } = true;
 
         public bool HasFilters =>
             !string.IsNullOrEmpty(Library) || !string.IsNullOrWhiteSpace(Text)
             || Resolutions.Count + ScanTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count + Actors.Count > 0
-            || !ActorAttributes.IsEmpty;
+            || !ActorAttributes.IsEmpty || !Counts.IsEmpty;
 
         public void ClearFilters()
         {
@@ -354,6 +358,7 @@ else
             Features.Clear();
             Actors.Clear();
             ActorAttributes = ActorAttributeSelection.Empty;
+            Counts = MovieCountSelection.Empty;
         }
 
         // No status: the DeoVR lists only ever hold Got movies (MovieGridQueryService.GetWithFilesAsync).
@@ -368,11 +373,14 @@ else
             Text: string.IsNullOrWhiteSpace(Text) ? null : Text.Trim(),
             NfoDriftKinds: NfoDriftKinds.ToList(),
             ActorAttributes: ActorAttributes,
-            ActorIds: Actors.ToList());
+            ActorIds: Actors.ToList(),
+            Counts: Counts.IsEmpty ? null : Counts);
 
         public static GroupEditor From(DeoVrGroupDefinition group)
         {
             var f = group.Filter;
+            var features = new HashSet<MovieFeatureFilterOption>(f.Features ?? []);
+            var counts = MovieFilterOptions.MigrateLegacyHasScenes(features, f.Counts ?? MovieCountSelection.Empty);
             return new GroupEditor
             {
                 Id = group.Id,
@@ -386,7 +394,8 @@ else
                 Codecs = new(f.Codecs ?? [], StringComparer.OrdinalIgnoreCase),
                 Studios = new(f.Studios ?? [], StringComparer.OrdinalIgnoreCase),
                 Genres = new(f.Genres ?? [], StringComparer.OrdinalIgnoreCase),
-                Features = [.. f.Features ?? []],
+                Features = features,
+                Counts = counts,
                 Actors = [.. f.ActorIds ?? []],
                 ActorAttributes = f.ActorAttributes ?? ActorAttributeSelection.Empty,
                 SortField = group.Sort.Field,

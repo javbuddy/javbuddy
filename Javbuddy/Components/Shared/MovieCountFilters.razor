@@ -1,0 +1,37 @@
+@using Javbuddy.Services.Movies
+
+@foreach (var row in Rows)
+{
+    @if (row.Bounds is { } bounds)
+    {
+        <RangeFilter @key="row.Label" Label="@row.Label" Unit=""
+                     BoundsMin="bounds.Min" BoundsMax="bounds.Max"
+                     SelectedMin="@(row.Selected.Min ?? bounds.Min)" SelectedMax="@(row.Selected.Max ?? bounds.Max)"
+                     OnRangeCommitted="r => CommitRangeAsync(row, r)" />
+    }
+}
+
+@code {
+    /// <summary>The Movies filter's Scenes / Highlights / Apexes range sliders: how many of each a movie has, from 0 to the
+    /// most any movie has. Selection is the applied one; edits are raised as a modified copy through SelectionChanged.</summary>
+    [Parameter, EditorRequired] public MovieCountOptions Options { get; set; } = MovieCountOptions.None;
+    [Parameter, EditorRequired] public MovieCountSelection Selection { get; set; } = MovieCountSelection.Empty;
+    [Parameter] public EventCallback<MovieCountSelection> SelectionChanged { get; set; }
+
+    private sealed record Row(string Label, RangeBounds? Bounds, IntRange Selected, Func<MovieCountSelection, IntRange, MovieCountSelection> With);
+
+    private IEnumerable<Row> Rows =>
+    [
+        new("Scenes", Options.Scenes, Selection.Scenes, (s, r) => s with { Scenes = r }),
+        new("Highlights", Options.Highlights, Selection.Highlights, (s, r) => s with { Highlights = r }),
+        new("Apexes", Options.Apexes, Selection.Apexes, (s, r) => s with { Apexes = r }),
+    ];
+
+    // A thumb at its end stop means "no limit" on that side, so a movie with more than today's maximum isn't excluded.
+    private Task CommitRangeAsync(Row row, (int Min, int Max) range)
+    {
+        var bounds = row.Bounds!;
+        var next = new IntRange(range.Min <= bounds.Min ? null : range.Min, range.Max >= bounds.Max ? null : range.Max);
+        return SelectionChanged.InvokeAsync(row.With(Selection, next));
+    }
+}

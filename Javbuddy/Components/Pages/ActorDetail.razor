@@ -312,6 +312,9 @@ else
                                                 OnSelectNoneGenres="SelectNoneGenres"
                                                 FeatureFilter="@featureFilter"
                                                 OnToggleFeature="ToggleFeatureFilter"
+                                                CountOptions="@countOptions"
+                                                CountSelection="@countFilter"
+                                                OnCountsChanged="edited => countFilter = MovieFilterOptions.MergeCounts(countFilter, edited, countOptions)"
                                                 SortField="@sortField"
                                                 SortDescending="@sortDescending"
                                                 OnSortChanged="SetSort"
@@ -427,6 +430,8 @@ else
     private HashSet<string> studioFilter = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> genreFilter = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<MovieFeatureFilterOption> featureFilter = new();
+    private MovieCountSelection countFilter = MovieCountSelection.Empty;
+    private MovieCountOptions countOptions = MovieCountOptions.None;
     private string textFilter = "";
     private string sortField = "release";
     private bool sortDescending = true;
@@ -558,6 +563,12 @@ else
         availableGenres = MovieFilterPredicates.BuildGenreOptions(allMovies
             .SelectMany(m => m.MovieTags.Select(mt => (mt.Tag.Name, mt.Tag.ParentTag?.Name))));
 
+        countOptions = MovieCountOptions.FromMaximums(
+            allMovies.Select(m => m.Scenes.Count).DefaultIfEmpty().Max(),
+            allMovies.Select(m => m.Highlights.Count).DefaultIfEmpty().Max(),
+            allMovies.Select(m => m.Apexes.Count).DefaultIfEmpty().Max());
+        countFilter = MovieFilterOptions.NormalizeCounts(countFilter, countOptions);
+
         libraryNames = allMovies
             .Where(m => !string.IsNullOrWhiteSpace(m.JellyfinLibraryName))
             .Select(m => m.JellyfinLibraryName!)
@@ -591,7 +602,8 @@ else
 
     private string FilterFingerprint() => string.Join('|',
         Fingerprint(resolutionFilter), Fingerprint(scanTypeFilter), Fingerprint(nfoDriftFilter), Fingerprint(codecFilter),
-        Fingerprint(studioFilter), Fingerprint(genreFilter), Fingerprint(featureFilter));
+        Fingerprint(studioFilter), Fingerprint(genreFilter), Fingerprint(featureFilter),
+        $"{countFilter.Scenes}{countFilter.Highlights}{countFilter.Apexes}");
 
     private static string Fingerprint<T>(HashSet<T> set) =>
         string.Join(',', set.Select(item => item?.ToString() ?? "").Order(StringComparer.Ordinal));
@@ -611,9 +623,10 @@ else
         query = MovieFilterPredicates.WhereStudios(query.AsQueryable(), studioFilter);
 
         // Same predicates as the Movies page, evaluated in memory over the
-        // loaded movies (MovieTags → Tag → ParentTag and Scenes are included above).
+        // loaded movies (MovieTags → Tag → ParentTag, Scenes, Highlights and Apexes are included above).
         query = MovieFilterPredicates.WhereGenres(query.AsQueryable(), genreFilter);
         query = MovieFilterPredicates.WhereFeatures(query.AsQueryable(), featureFilter);
+        query = MovieFilterPredicates.WhereCounts(query.AsQueryable(), countFilter);
 
         query = MovieFilterPredicates.WhereNfoDriftKinds(query.AsQueryable(), nfoDriftFilter);
 
@@ -672,7 +685,7 @@ else
                 : query.OrderBy(m => m.FileAddedAt ?? m.CreatedAt),
         };
 
-    private int ActiveFilterCount => resolutionFilter.Count + scanTypeFilter.Count + nfoDriftFilter.Count + codecFilter.Count + studioFilter.Count + genreFilter.Count + featureFilter.Count;
+    private int ActiveFilterCount => resolutionFilter.Count + scanTypeFilter.Count + nfoDriftFilter.Count + codecFilter.Count + studioFilter.Count + genreFilter.Count + featureFilter.Count + countFilter.Count;
 
     private bool HasActiveFilters =>
         filter is not null
@@ -692,6 +705,7 @@ else
         studioFilter.Clear();
         genreFilter.Clear();
         featureFilter.Clear();
+        countFilter = MovieCountSelection.Empty;
     }
 
     private void SetFilter(MovieStatus? status) => filter = status;

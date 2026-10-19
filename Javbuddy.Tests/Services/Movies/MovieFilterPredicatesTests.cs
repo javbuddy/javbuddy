@@ -57,7 +57,6 @@ public class MovieFilterPredicatesTests
 
     [Theory]
     [InlineData(MovieFeatureFilterOption.Favorites, "F-FAV")]
-    [InlineData(MovieFeatureFilterOption.HasScenes, "F-SCENE,F-FAVSCENE")]
     [InlineData(MovieFeatureFilterOption.HasFavoriteScene, "F-FAVSCENE")]
     [InlineData(MovieFeatureFilterOption.UnmatchedActors, "F-UNMATCHED")]
     [InlineData(MovieFeatureFilterOption.MissingCast, "F-NOCAST")]

@@ -28,6 +28,7 @@ public sealed record MoviesPersistedState(
     List<string> AvailableStudios,
     List<string> AvailableGenres,
     ActorAttributeOptions ActorAttributeOptions,
+    MovieCountOptions CountOptions,
     MoviesViewState Filters,
     int RandomSortSeed)
 {

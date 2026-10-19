@@ -23,6 +23,7 @@ public sealed class MovieGridFilterState
     public HashSet<int> ActorIds { get; private set; } = [];
     public HashSet<int> ActorTagIds { get; private set; } = [];
     public ActorAttributeSelection ActorAttributes { get; set; } = ActorAttributeSelection.Empty;
+    public MovieCountSelection Counts { get; set; } = MovieCountSelection.Empty;
     public string Text { get; set; } = "";
     public string? CodePrefix { get; set; }
     public string SortField { get; set; } = "added";
@@ -51,12 +52,13 @@ public sealed class MovieGridFilterState
         [.. ActorIds],
         [.. ActorTagIds],
         MatchAllGenres,
-        MatchAllActorTags);
+        MatchAllActorTags,
+        Counts.IsEmpty ? null : Counts);
 
     public MovieGridSort ToSort() => new(SortField, SortDescending, RandomSortSeed);
 
     private int ActiveFilterCount => Resolutions.Count + ScanTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count
-        + ActorIds.Count + ActorTagIds.Count + ActorAttributes.Count;
+        + ActorIds.Count + ActorTagIds.Count + ActorAttributes.Count + Counts.Count;
 
     public bool HasActiveFilters =>
         Status is not null
@@ -74,7 +76,7 @@ public sealed class MovieGridFilterState
         var actorTagsChanged = actorTagTarget is { } target ? !(ActorTagIds.Count == 1 && ActorTagIds.Contains(target)) : ActorTagIds.Count > 0;
         var anyActive = Status is not null || !string.IsNullOrEmpty(Library) || Resolutions.Count > 0
             || ScanTypes.Count > 0 || NfoDriftKinds.Count > 0 || Codecs.Count > 0 || Features.Count > 0
-            || ActorIds.Count > 0 || actorTagsChanged || ActorAttributes.Count > 0;
+            || ActorIds.Count > 0 || actorTagsChanged || ActorAttributes.Count > 0 || Counts.Count > 0;
         Status = null;
         Library = null;
         Resolutions.Clear();
@@ -88,6 +90,7 @@ public sealed class MovieGridFilterState
         MatchAllActorTags = false;
         if (actorTagTarget is { } actorTag) ActorTagIds.Add(actorTag);
         ActorAttributes = ActorAttributeSelection.Empty;
+        Counts = MovieCountSelection.Empty;
         return anyActive;
     }
 
@@ -113,7 +116,7 @@ public sealed class MovieGridFilterState
         Status, Library, [.. Resolutions], [.. ScanTypes], [.. Codecs],
         [.. Studios], [.. Genres], [.. Features], Text, CodePrefix,
         SortField, SortDescending, [.. NfoDriftKinds],
-        ActorAttributes, [.. ActorIds], ActorTagFilter: [.. ActorTagIds], MatchAllGenres: MatchAllGenres, MatchAllActorTags: MatchAllActorTags);
+        ActorAttributes, [.. ActorIds], ActorTagFilter: [.. ActorTagIds], MatchAllGenres: MatchAllGenres, MatchAllActorTags: MatchAllActorTags, Counts: Counts);
 
     /// <summary>Applies a saved selection; a list the state doesn't carry (a cookie written before
     /// that filter existed) keeps its current value.</summary>
@@ -129,12 +132,14 @@ public sealed class MovieGridFilterState
         if (state.FeatureFilter is not null) Features = [.. state.FeatureFilter];
         if (state.NfoDriftFilter is not null) NfoDriftKinds = [.. state.NfoDriftFilter];
         if (state.ActorAttributes is not null) ActorAttributes = state.ActorAttributes;
+        if (state.Counts is not null) Counts = state.Counts;
         if (state.ActorFilter is not null) ActorIds = [.. state.ActorFilter];
         if (state.ActorTagFilter is not null) ActorTagIds = [.. state.ActorTagFilter];
         MatchAllGenres = state.MatchAllGenres;
         MatchAllActorTags = state.MatchAllActorTags;
         DropLoneMatchAll();
         MovieFilterOptions.MigrateLegacyNfoFeatures(Features, NfoDriftKinds);
+        Counts = MovieFilterOptions.MigrateLegacyHasScenes(Features, Counts);
         Text = state.TextFilter;
         CodePrefix = state.CodePrefixFilter;
         SortField = state.SortField;
@@ -170,7 +175,8 @@ public sealed record MoviesViewState(
     R18DevCatalogFilter? CatalogFilter = null,
     List<int>? ActorTagFilter = null,
     bool MatchAllGenres = false,
-    bool MatchAllActorTags = false)
+    bool MatchAllActorTags = false,
+    MovieCountSelection? Counts = null)
 {
     public const string CookieName = "javbuddy-movies-view";
 }
