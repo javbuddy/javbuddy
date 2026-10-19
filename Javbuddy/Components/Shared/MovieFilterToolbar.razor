@@ -76,7 +76,7 @@
                 <MultiSelectFilterGroup GroupLabel="Features" Options="@FeatureFilterOptions" />
                 @if (CountOptions.HasAny)
                 {
-                    <FilterSection Label="Scenes" ActiveCount="@CountSelection.Count">
+                    <FilterSection Label="Clips" ActiveCount="@CountSelection.Count">
                         <MovieCountFilters Options="CountOptions" Selection="CountSelection" SelectionChanged="OnCountsChanged" />
                     </FilterSection>
                 }

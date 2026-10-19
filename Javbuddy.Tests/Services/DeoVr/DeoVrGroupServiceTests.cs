@@ -76,6 +76,19 @@ public class DeoVrGroupServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task AGroupSavedWithHasScenes_ListsAsAtLeastOneScene()
+    {
+        await ClearAsync();
+        // Stored as "HasScenes" by name, as a group saved before the Scenes range existed was.
+        await Service().SaveAsync(0, "G", new MovieGridFilter(Features: [MovieFeatureFilterOption.HasScenes, MovieFeatureFilterOption.Favorites]), "added", true);
+
+        var filter = Assert.Single(await Service().ListAsync()).Filter;
+
+        Assert.Equal([MovieFeatureFilterOption.Favorites], filter.Features!);
+        Assert.Equal(new IntRange(1, null), filter.Counts!.Scenes);
+    }
+
+    [Fact]
     public async Task SaveAsync_UpdatesAnExistingGroupInPlace()
     {
         await ClearAsync();
