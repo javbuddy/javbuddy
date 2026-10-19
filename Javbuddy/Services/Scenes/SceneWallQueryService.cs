@@ -585,6 +585,10 @@ public sealed class SceneWallQueryService(
     private static IQueryable<T> WhereIdIn<T>(IQueryable<T> query, IQueryable<int> ids) where T : class =>
         query.Where(x => ids.Contains(EF.Property<int>(x, "Id")));
 
+    /// <summary>Drops the clips whose id is in <paramref name="ids"/>; see <see cref="WhereIdIn{T}"/>.</summary>
+    private static IQueryable<T> WhereIdNotIn<T>(IQueryable<T> query, IQueryable<int> ids) where T : class =>
+        query.Where(x => !ids.Contains(EF.Property<int>(x, "Id")));
+
     /// <summary>The actor, actor-tag and actor-attribute filters, shared by the three walls: each is a set of
     /// matching clip ids over the wall's own effective actors, tags and movie release dates.</summary>
     private static IQueryable<T> WhereActors<T>(AppDbContext db, IQueryable<T> query, SceneWallFilter filter,
@@ -600,8 +604,7 @@ public sealed class SceneWallQueryService(
             var rows = actorTags.Where(r => anyActor || onlyActors.Contains(r.HolderId));
             query = WhereIdIn(query, TagFilterQueries.OwnersWith(db, rows, actorTagIds, filter.MatchAllActorTags));
         }
-        if (filter.ActorAttributes is { } allAttributes
-            && allAttributes with { Transgender = allAttributes.Transgender == TransgenderFilter.Only ? TransgenderFilter.Only : TransgenderFilter.Any } is { IsEmpty: false } attributes)
+        if (filter.ActorAttributes?.PerActressCriteria() is { IsEmpty: false } attributes)
         {
             // One of the clip's effective actresses must meet every criterion; age is hers on the clip's
             // movie's release date (today without one).
@@ -611,7 +614,7 @@ public sealed class SceneWallQueryService(
         {
             // Exclude covers the whole cast: the clip has no transgender effective actress.
             var transgenderIds = db.Actors.Where(a => a.IsTransgender).Select(a => a.Id);
-            query = query.Where(x => !actors.Where(r => transgenderIds.Contains(r.ActorId)).Select(r => r.OwnerId).Contains(EF.Property<int>(x, "Id")));
+            query = WhereIdNotIn(query, actors.Where(r => transgenderIds.Contains(r.ActorId)).Select(r => r.OwnerId));
         }
         return query;
     }

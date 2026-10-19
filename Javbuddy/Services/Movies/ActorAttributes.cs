@@ -42,6 +42,11 @@ public sealed record ActorAttributeSelection
 
     [JsonIgnore] private IEnumerable<IntRange> Ranges => [Height, Bust, Waist, Hips, Age];
 
+    /// <summary>The criteria one actress has to meet: everything but a Transgender Exclude, which is about the
+    /// whole cast and is applied separately.</summary>
+    public ActorAttributeSelection PerActressCriteria() =>
+        Transgender == TransgenderFilter.Exclude ? this with { Transgender = TransgenderFilter.Any } : this;
+
     /// <summary>Value equality, which the record's own <c>==</c> can't give because CupSizes is a list.</summary>
     public bool SameAs(ActorAttributeSelection other) =>
         CupSizes.SequenceEqual(other.CupSizes)

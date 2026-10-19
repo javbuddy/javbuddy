@@ -12,7 +12,7 @@ The library grid with status, filters and sorting.
 
 The Filter menu on the Movies grid combines filter groups: resolution, scan type, `.nfo` drift, codec, studio, genre, features and, under **Actor**, the cast's profile data. Selected groups show a count, the grid and the status tabs update as you go, and the × next to the Filter button clears everything at once.
 
-Actor filters work on the profile data of the people in a movie's cast: cup size, height, bust, waist, hips, age and name. This shows movies whose cast includes someone with cup size C or D who is 163 cm or taller.
+Actor filters work on the profile data of the people in a movie's cast: cup size, height, bust, waist, hips, age, transgender (only or exclude) and name. This shows movies whose cast includes someone with cup size C or D who is 163 cm or taller.
 
 ![Actor filters: cup size and height](assets/filter-actor-cup-height.png)
 
