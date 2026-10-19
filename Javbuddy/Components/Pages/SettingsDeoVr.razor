@@ -379,8 +379,6 @@ else
         public static GroupEditor From(DeoVrGroupDefinition group)
         {
             var f = group.Filter;
-            var features = new HashSet<MovieFeatureFilterOption>(f.Features ?? []);
-            var counts = MovieFilterOptions.MigrateLegacyHasScenes(features, f.Counts ?? MovieCountSelection.Empty);
             return new GroupEditor
             {
                 Id = group.Id,
@@ -394,8 +392,8 @@ else
                 Codecs = new(f.Codecs ?? [], StringComparer.OrdinalIgnoreCase),
                 Studios = new(f.Studios ?? [], StringComparer.OrdinalIgnoreCase),
                 Genres = new(f.Genres ?? [], StringComparer.OrdinalIgnoreCase),
-                Features = features,
-                Counts = counts,
+                Features = [.. f.Features ?? []],
+                Counts = f.Counts ?? MovieCountSelection.Empty,
                 Actors = [.. f.ActorIds ?? []],
                 ActorAttributes = f.ActorAttributes ?? ActorAttributeSelection.Empty,
                 SortField = group.Sort.Field,

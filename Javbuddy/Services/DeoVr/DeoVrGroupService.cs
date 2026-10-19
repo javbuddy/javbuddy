@@ -25,12 +25,22 @@ public static class DeoVrGroupFilter
         if (string.IsNullOrWhiteSpace(json)) return new MovieGridFilter();
         try
         {
-            return JsonSerializer.Deserialize<MovieGridFilter>(json, Options) ?? new MovieGridFilter();
+            return MigrateLegacyHasScenes(JsonSerializer.Deserialize<MovieGridFilter>(json, Options) ?? new MovieGridFilter());
         }
         catch (JsonException)
         {
             return new MovieGridFilter();
         }
+    }
+
+    // A group saved with "Has scenes" (replaced by the Scenes count range) is converted here, so both the
+    // /deovr list and the Settings editor apply it without the group having to be re-saved.
+    private static MovieGridFilter MigrateLegacyHasScenes(MovieGridFilter filter)
+    {
+        if (filter.Features is not { } saved || !saved.Contains(MovieFeatureFilterOption.HasScenes)) return filter;
+        var features = new HashSet<MovieFeatureFilterOption>(saved);
+        var counts = MovieFilterOptions.MigrateLegacyHasScenes(features, filter.Counts ?? MovieCountSelection.Empty);
+        return filter with { Features = [.. features], Counts = counts };
     }
 }
 
