@@ -68,7 +68,7 @@ public static class MovieFilterPredicates
         }
 
         // Nothing but Exclude set: the cast check above is all there is, and a movie without cast must stay.
-        if (selection with { Transgender = onlyTransgender ? TransgenderFilter.Only : TransgenderFilter.Any } is { IsEmpty: true }) return query;
+        if (selection.PerActressCriteria().IsEmpty) return query;
 
         return query.Where(m => m.MovieActors.Any(ma =>
             (!onlyTransgender || ma.Actor.IsTransgender) &&
