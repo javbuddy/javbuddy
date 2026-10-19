@@ -5,7 +5,10 @@
 @if (expanded)
 {
     <div class="multiselect-actions-row">
-        <button type="button" class="multiselect-action-link" @onclick="() => OnSelectAll.InvokeAsync()">All</button>
+        @if (ShowSelectAll)
+        {
+            <button type="button" class="multiselect-action-link" @onclick="() => OnSelectAll.InvokeAsync()">All</button>
+        }
         <button type="button" class="multiselect-action-link" @onclick="() => OnSelectNone.InvokeAsync()">Clear</button>
     </div>
     <div class="chip-grid">
@@ -28,6 +31,8 @@
     [Parameter, EditorRequired] public IReadOnlyList<MultiSelectOption> Options { get; set; } = Array.Empty<MultiSelectOption>();
 
     [Parameter] public EventCallback OnSelectAll { get; set; }
+    /// <summary>False hides the "All" link, for groups whose options exclude each other.</summary>
+    [Parameter] public bool ShowSelectAll { get; set; } = true;
     [Parameter] public EventCallback OnSelectNone { get; set; }
 
     private bool expanded;

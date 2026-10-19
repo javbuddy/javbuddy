@@ -64,8 +64,11 @@ public static class ActorAttributeOptionsQuery
             })
             .ToListAsync(ct)).SingleOrDefault();
 
+        var hasTransgender = await appearances.AnyAsync(a => a.Actor.IsTransgender, ct);
+
         return new ActorAttributeOptions
         {
+            Transgender = hasTransgender,
             CupSizes = cupSizes,
             Height = Bounds(totals?.HeightMin, totals?.HeightMax),
             Bust = Bounds(totals?.BustMin, totals?.BustMax),

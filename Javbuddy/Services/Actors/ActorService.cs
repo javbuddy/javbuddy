@@ -32,6 +32,7 @@ public class ActorUpdateModel
     public int? Hips { get; set; }
     public DateTime? BirthDate { get; set; }
     public bool IsRetired { get; set; }
+    public bool IsTransgender { get; set; }
     public List<ActorCupSizePeriodModel> CupSizePeriods { get; set; } = new();
 }
 
@@ -81,7 +82,8 @@ public record ActorCardModel(
     DateTime? BirthDate = null,
     bool IsRetired = false,
     int? HeightCm = null,
-    int OwnedCount = 0)
+    int OwnedCount = 0,
+    bool IsTransgender = false)
 {
     public int MissingCount => Math.Max(0, MovieCount - OwnedCount);
 
@@ -309,6 +311,7 @@ public class ActorService(
         actor.Hips = model.Hips is > 0 ? model.Hips : null;
         actor.BirthDate = model.BirthDate;
         actor.IsRetired = model.IsRetired;
+        actor.IsTransgender = model.IsTransgender;
         ApplyCupSizePeriods(actor, model.CupSizePeriods);
 
         await db.SaveChangesAsync(ct);
@@ -766,6 +769,7 @@ public class ActorService(
             target.BirthDate ??= source.BirthDate;
         }
         target.IsRetired |= source.IsRetired;
+        target.IsTransgender |= source.IsTransgender;
 
         // 2. Consolidate and create aliases on target
         var targetKnownNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -887,6 +891,7 @@ public class ActorService(
                 a.CupSize,
                 a.BirthDate,
                 a.IsRetired,
+                a.IsTransgender,
                 a.HeightCm
             })
             .ToListAsync(ct);
@@ -908,7 +913,8 @@ public class ActorService(
             a.BirthDate,
             a.IsRetired,
             a.HeightCm,
-            a.OwnedCount
+            a.OwnedCount,
+            a.IsTransgender
         )).ToList();
     }
 

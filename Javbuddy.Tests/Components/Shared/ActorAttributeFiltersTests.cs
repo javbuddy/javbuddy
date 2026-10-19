@@ -67,6 +67,30 @@ public class ActorAttributeFiltersTests : BunitContext
     }
 
     [Fact]
+    public void TransgenderChoices_AreOfferedOnlyWhenRelevant_AndExcludeEachOther()
+    {
+        var hidden = Render<ActorAttributeFilters>(p => p
+            .Add(x => x.Options, Full())
+            .Add(x => x.Selection, ActorAttributeSelection.Empty));
+        Assert.DoesNotContain("Transgender", hidden.Markup);
+
+        ActorAttributeSelection? emitted = null;
+        var cut = Render<ActorAttributeFilters>(p => p
+            .Add(x => x.Options, Full() with { Transgender = true })
+            .Add(x => x.Selection, new ActorAttributeSelection { Transgender = TransgenderFilter.Only })
+            .Add(x => x.SelectionChanged, EventCallback.Factory.Create<ActorAttributeSelection>(this, s => emitted = s)));
+
+        Assert.Contains("Transgender (1)", cut.Markup);
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Transgender")).Click();
+        Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.Trim() == "All");
+
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Exclude").Click();
+        Assert.Equal(TransgenderFilter.Exclude, emitted!.Transgender);
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Only").Click(); // the active choice toggles off
+        Assert.Equal(TransgenderFilter.Any, emitted!.Transgender);
+    }
+
+    [Fact]
     public void CommittingARange_EmitsItWithEndStopsAsOpenEnds()
     {
         ActorAttributeSelection? emitted = null;

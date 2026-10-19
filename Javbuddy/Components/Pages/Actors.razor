@@ -72,6 +72,13 @@ else
                         <span class="ms-2">✓</span>
                     }
                 </button>
+                <button type="button" class="sort-dropdown-item @(filter.Transgender != ActorTransgenderFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CycleTransgender)">
+                    <span>@filter.TransgenderFilterLabel</span>
+                    @if (filter.Transgender != ActorTransgenderFilter.All)
+                    {
+                        <span class="ms-2">✓</span>
+                    }
+                </button>
                 <div class="sort-dropdown-divider"></div>
                 @if (jellyfinEnabled)
                 {

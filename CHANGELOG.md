@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- Actors have a "Transgender" checkbox on Edit Actor, shown as a badge on Actor Detail. The Actors list can filter to transgender actors or exclude them, and the Actress Attributes filter on Movies, Scenes & Highlights and the DeoVR lists gains a Transgender group (Only / Exclude) once any such actor is in view.
+
 ## [0.3.2] - 2026-10-17
 
 ### Added

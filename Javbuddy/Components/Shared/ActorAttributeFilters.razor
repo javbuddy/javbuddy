@@ -5,6 +5,11 @@
     <ChipMultiSelectGroup GroupLabel="Cup Size" Options="@CupSizeOptions"
                           OnSelectAll="SelectAllCupsAsync" OnSelectNone="SelectNoCupsAsync" />
 }
+@if (Options.Transgender)
+{
+    <ChipMultiSelectGroup GroupLabel="Transgender" Options="@TransgenderOptions" ShowSelectAll="false"
+                          OnSelectNone="SelectNoTransgenderAsync" />
+}
 @foreach (var row in Rows)
 {
     @if (row.Bounds is { } bounds)
@@ -48,6 +53,20 @@
         if (cups.RemoveAll(c => string.Equals(c, cup, StringComparison.OrdinalIgnoreCase)) == 0) cups.Add(cup);
         return SelectionChanged.InvokeAsync(Selection with { CupSizes = cups });
     }
+
+    // The two choices exclude each other: clicking the active one clears it.
+    private IReadOnlyList<MultiSelectOption> TransgenderOptions =>
+    [
+        new("Only", Selection.Transgender == TransgenderFilter.Only,
+            EventCallback.Factory.Create(this, () => ToggleTransgenderAsync(TransgenderFilter.Only))),
+        new("Exclude", Selection.Transgender == TransgenderFilter.Exclude,
+            EventCallback.Factory.Create(this, () => ToggleTransgenderAsync(TransgenderFilter.Exclude))),
+    ];
+
+    private Task ToggleTransgenderAsync(TransgenderFilter choice) =>
+        SelectionChanged.InvokeAsync(Selection with { Transgender = Selection.Transgender == choice ? TransgenderFilter.Any : choice });
+
+    private Task SelectNoTransgenderAsync() => SelectionChanged.InvokeAsync(Selection with { Transgender = TransgenderFilter.Any });
 
     private Task SelectAllCupsAsync() => SelectionChanged.InvokeAsync(Selection with { CupSizes = Options.CupSizes.ToList() });
 
