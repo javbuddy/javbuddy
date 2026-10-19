@@ -41,7 +41,8 @@ public enum MovieFeatureFilterOption
     LegacyNfoDriftBothChanged,
     //; appended for the same cookie reason as Favorites, shown right after it.
     HasFavoriteScene,
-    //; appended for the same cookie reason, shown between Favorites and HasFavoriteScene.
+    //; appended for the same cookie reason. Superseded by the Scenes count range
+    // (MovieCountSelection); never offered, and MovieFilterOptions.MigrateLegacyHasScenes converts it on load.
     HasScenes,
     //; appended for the same cookie reason. A movie with any VR / 3D format (Movie.IsVr).
     Vr,
@@ -75,6 +76,24 @@ public static class MovieFilterOptions
     // Scenes/Highlights view may show it differently).
     private static IntRange MergeRange(IntRange current, IntRange edited, RangeBounds? bounds) =>
         bounds is null || edited == NormalizeRange(current, bounds) ? current : edited;
+
+    /// <summary>Reconciles a saved Scenes / Highlights / Apexes selection with the library's maximums, as
+    /// <see cref="NormalizeActorAttributes"/> does for its ranges.</summary>
+    public static MovieCountSelection NormalizeCounts(MovieCountSelection selection, MovieCountOptions options) => new()
+    {
+        Scenes = NormalizeRange(selection.Scenes, options.Scenes),
+        Highlights = NormalizeRange(selection.Highlights, options.Highlights),
+        Apexes = NormalizeRange(selection.Apexes, options.Apexes),
+    };
+
+    /// <summary>Folds the edits made in the filter back into the remembered selection; a range the library doesn't
+    /// offer is kept, as for <see cref="MergeActorAttributes"/>.</summary>
+    public static MovieCountSelection MergeCounts(MovieCountSelection current, MovieCountSelection edited, MovieCountOptions options) => new()
+    {
+        Scenes = MergeRange(current.Scenes, edited.Scenes, options.Scenes),
+        Highlights = MergeRange(current.Highlights, edited.Highlights, options.Highlights),
+        Apexes = MergeRange(current.Apexes, edited.Apexes, options.Apexes),
+    };
 
     private static IntRange NormalizeRange(IntRange range, RangeBounds? bounds)
     {
@@ -114,11 +133,18 @@ public static class MovieFilterOptions
     public static readonly MovieFeatureFilterOption[] Features =
     [
         MovieFeatureFilterOption.Favorites,
-        MovieFeatureFilterOption.HasScenes,
         MovieFeatureFilterOption.HasFavoriteScene,
         .. Enum.GetValues<MovieFeatureFilterOption>()
             .Where(f => f is not MovieFeatureFilterOption.Favorites and not MovieFeatureFilterOption.HasScenes and not MovieFeatureFilterOption.HasFavoriteScene && !LegacyNfoFeatures.ContainsKey(f)),
     ];
+
+    /// <summary>Moves a saved "Has scenes" feature (replaced by the Scenes count range) into that range as "at least 1",
+    /// keeping a stricter minimum already set. Returns the selection to use.</summary>
+    public static MovieCountSelection MigrateLegacyHasScenes(ISet<MovieFeatureFilterOption> features, MovieCountSelection counts)
+    {
+        if (!features.Remove(MovieFeatureFilterOption.HasScenes)) return counts;
+        return counts with { Scenes = counts.Scenes with { Min = Math.Max(counts.Scenes.Min ?? 0, 1) } };
+    }
 
     /// <summary>The NFO drift filter group's options — every direction a movie can drift
     /// in, OR-combined within the group like Scan Type. Selecting all of them means "any drift".</summary>
@@ -158,7 +184,6 @@ public static class MovieFilterOptions
         MovieFeatureFilterOption.BrokenBFrames => "Broken B-frames",
         MovieFeatureFilterOption.Favorites => "Favorites",
         MovieFeatureFilterOption.HasFavoriteScene => "Has favorite scene",
-        MovieFeatureFilterOption.HasScenes => "Has scenes",
         MovieFeatureFilterOption.Vr => "VR",
         _ => option.ToString(),
     };

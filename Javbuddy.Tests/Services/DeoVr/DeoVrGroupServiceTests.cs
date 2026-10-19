@@ -69,10 +69,10 @@ public class DeoVrGroupServiceTests : IDisposable
     public async Task TheStoredFilter_NamesEnumsRatherThanNumbering()
     {
         await ClearAsync();
-        await Service().SaveAsync(0, "G", new MovieGridFilter(Features: [MovieFeatureFilterOption.HasScenes]), "added", true);
+        await Service().SaveAsync(0, "G", new MovieGridFilter(Features: [MovieFeatureFilterOption.HasFavoriteScene]), "added", true);
 
         await using var db = await dbFactory.CreateDbContextAsync();
-        Assert.Contains("\"HasScenes\"", Assert.Single(db.DeoVrGroups).FilterJson, StringComparison.Ordinal);
+        Assert.Contains("\"HasFavoriteScene\"", Assert.Single(db.DeoVrGroups).FilterJson, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -74,6 +74,12 @@
                                              MatchAll="MatchAllGenres" OnMatchAllChanged="OnMatchAllGenresChanged" />
                 }
                 <MultiSelectFilterGroup GroupLabel="Features" Options="@FeatureFilterOptions" />
+                @if (CountOptions.HasAny)
+                {
+                    <FilterSection Label="Scenes" ActiveCount="@CountSelection.Count">
+                        <MovieCountFilters Options="CountOptions" Selection="CountSelection" SelectionChanged="OnCountsChanged" />
+                    </FilterSection>
+                }
                 @if (AvailableActors.Count > 0 || AvailableActorTags.Count > 0 || (ShowActorAttributes && ActorAttributeOptions.HasAny))
                 {
                     <FilterSection Label="Actor" ActiveCount="@(ActorFilter.Count + ActorTagFilter.Count + (ShowActorAttributes ? ActorAttributeSelection.Count : 0))">
@@ -184,6 +190,12 @@
     [Parameter] public ActorAttributeSelection ActorAttributeSelection { get; set; } = ActorAttributeSelection.Empty;
     [Parameter] public EventCallback<ActorAttributeSelection> OnActorAttributesChanged { get; set; }
 
+    /// <summary>The Scenes / Highlights / Apexes count ranges. Shown once any movie offered has some; selection is the applied
+    /// one and edits come back as a modified copy.</summary>
+    [Parameter] public MovieCountOptions CountOptions { get; set; } = MovieCountOptions.None;
+    [Parameter] public MovieCountSelection CountSelection { get; set; } = MovieCountSelection.Empty;
+    [Parameter] public EventCallback<MovieCountSelection> OnCountsChanged { get; set; }
+
     /// <summary>The actor-name filter, like the Scenes wall's (a movie matches any selected actor). Shown
     /// only when the host offers actors.</summary>
     [Parameter] public IReadOnlyList<MovieActorOption> AvailableActors { get; set; } = Array.Empty<MovieActorOption>();
@@ -255,6 +267,7 @@
             + StudioFilter.Count
             + GenreFilter.Count
             + FeatureFilter.Count
+            + CountSelection.Count
             + ActorFilter.Count
             + ActorTagFilter.Count
             + (ShowActorAttributes ? ActorAttributeSelection.Count : 0);

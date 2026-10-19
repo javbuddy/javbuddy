@@ -25,7 +25,8 @@ public sealed record MovieGridFilter(
     IReadOnlyCollection<int>? ActorIds = null,
     IReadOnlyCollection<int>? ActorTagIds = null,
     bool MatchAllGenres = false,
-    bool MatchAllActorTags = false);
+    bool MatchAllActorTags = false,
+    MovieCountSelection? Counts = null);
 
 /// <summary>A tracked actor offered by an actor-name filter.</summary>
 public sealed record MovieActorOption(int Id, string Name);
@@ -48,6 +49,10 @@ public sealed record MovieGridSummary(
     List<string> Genres,
     ActorAttributeOptions ActorAttributes)
 {
+    /// <summary>The Scenes / Highlights / Apexes filter's bounds: the most any movie has of each. Like the lists above,
+    /// unaffected by the active filters.</summary>
+    public MovieCountOptions Counts { get; init; } = MovieCountOptions.None;
+
     /// <summary>The actor-name filter's options: tracked actors linked to any movie, by name. Like the
     /// lists above, unaffected by the active filters.</summary>
     public IReadOnlyList<MovieActorOption> Actors { get; init; } = [];
@@ -168,9 +173,19 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
             libraryNames, codecs, studios, await LoadGenreOptionsAsync(db, ct),
             actorAttributes)
         {
+            Counts = await LoadCountOptionsAsync(db, ct),
             Actors = await LoadLinkedActorOptionsAsync(db, ct),
             ActorTags = await LoadActorTagOptionsAsync(db, ct),
         };
+    }
+
+    private static async Task<MovieCountOptions> LoadCountOptionsAsync(AppDbContext db, CancellationToken ct)
+    {
+        // One aggregate row per kind (MAX over the per-movie counts); an empty table has none, hence the null becomes 0.
+        var scenes = await db.Scenes.GroupBy(s => s.MovieId).Select(g => (int?)g.Count()).MaxAsync(ct) ?? 0;
+        var highlights = await db.MovieHighlights.GroupBy(h => h.MovieId).Select(g => (int?)g.Count()).MaxAsync(ct) ?? 0;
+        var apexes = await db.MovieApexes.GroupBy(a => a.MovieId).Select(g => (int?)g.Count()).MaxAsync(ct) ?? 0;
+        return MovieCountOptions.FromMaximums(scenes, highlights, apexes);
     }
 
     // The actor tags some actor has in a movie or one of its clips (own rows: nothing flows down or rolls up a new tag).
@@ -376,6 +391,7 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         query = MovieFilterPredicates.WhereStudios(query, filter.Studios);
         query = MovieFilterPredicates.WhereGenres(query, filter.Genres, filter.MatchAllGenres);
         query = MovieFilterPredicates.WhereFeatures(query, filter.Features);
+        query = MovieFilterPredicates.WhereCounts(query, filter.Counts);
         query = MovieFilterPredicates.WhereNfoDriftKinds(query, filter.NfoDriftKinds);
         if (filter.ActorIds is { Count: > 0 } actorIds)
         {

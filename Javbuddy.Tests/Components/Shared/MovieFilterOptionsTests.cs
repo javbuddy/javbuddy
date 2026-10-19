@@ -45,15 +45,62 @@ public class MovieFilterOptionsTests
     }
 
     [Fact]
-    public void Features_ListsHasScenesAfterFavorites_WithoutRemappingSavedValues()
+    public void Features_NoLongerOffersHasScenes_ButKeepsItsSavedValue()
     {
         Assert.Equal(
-            [MovieFeatureFilterOption.Favorites, MovieFeatureFilterOption.HasScenes, MovieFeatureFilterOption.HasFavoriteScene],
-            MovieFilterOptions.Features.Take(3));
-        Assert.Equal("Has scenes", MovieFilterOptions.FeatureLabel(MovieFeatureFilterOption.HasScenes));
+            [MovieFeatureFilterOption.Favorites, MovieFeatureFilterOption.HasFavoriteScene],
+            MovieFilterOptions.Features.Take(2));
+        Assert.DoesNotContain(MovieFeatureFilterOption.HasScenes, MovieFilterOptions.Features);
         // Appended, so a saved Movies view-state cookie keeps its meaning.
         Assert.Equal(11, (int)MovieFeatureFilterOption.HasFavoriteScene);
         Assert.Equal(12, (int)MovieFeatureFilterOption.HasScenes);
+    }
+
+    [Fact]
+    public void MigrateLegacyHasScenes_BecomesAtLeastOneScene_KeepingAStricterMinimum()
+    {
+        var features = new HashSet<MovieFeatureFilterOption> { MovieFeatureFilterOption.HasScenes, MovieFeatureFilterOption.Favorites };
+
+        var migrated = MovieFilterOptions.MigrateLegacyHasScenes(features, new MovieCountSelection { Scenes = new IntRange(null, 5) });
+        Assert.Equal(new IntRange(1, 5), migrated.Scenes);
+        Assert.Equal([MovieFeatureFilterOption.Favorites], features);
+
+        var stricter = MovieFilterOptions.MigrateLegacyHasScenes(
+            new HashSet<MovieFeatureFilterOption> { MovieFeatureFilterOption.HasScenes }, new MovieCountSelection { Scenes = new IntRange(3, null) });
+        Assert.Equal(new IntRange(3, null), stricter.Scenes);
+
+        var untouched = new MovieCountSelection { Apexes = new IntRange(2, null) };
+        Assert.Same(untouched, MovieFilterOptions.MigrateLegacyHasScenes(new HashSet<MovieFeatureFilterOption>(), untouched));
+    }
+
+    [Fact]
+    public void NormalizeCounts_DropsEndsAtOrPastTheBounds_AndRangesNobodyOffers()
+    {
+        var options = MovieCountOptions.FromMaximums(maxScenes: 6, maxHighlights: 0, maxApexes: 3);
+        var saved = new MovieCountSelection
+        {
+            Scenes = new IntRange(0, 6),
+            Highlights = new IntRange(1, 2),
+            Apexes = new IntRange(2, 9),
+        };
+
+        var normalized = MovieFilterOptions.NormalizeCounts(saved, options);
+
+        Assert.Equal(IntRange.None, normalized.Scenes);
+        Assert.Equal(IntRange.None, normalized.Highlights);
+        Assert.Equal(new IntRange(2, null), normalized.Apexes);
+    }
+
+    [Fact]
+    public void FromMaximums_OffersZeroToTheMaximum_AndNothingWhenNoMovieHasAny()
+    {
+        var options = MovieCountOptions.FromMaximums(4, 0, 1);
+
+        Assert.Equal(new RangeBounds(0, 4), options.Scenes);
+        Assert.Null(options.Highlights);
+        Assert.Equal(new RangeBounds(0, 1), options.Apexes);
+        Assert.True(options.HasAny);
+        Assert.False(MovieCountOptions.FromMaximums(0, 0, 0).HasAny);
     }
 
     private static ActorAttributeOptions Offered(string[]? cups = null, RangeBounds? height = null, RangeBounds? age = null) =>

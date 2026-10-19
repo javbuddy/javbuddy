@@ -191,20 +191,74 @@ public class MovieSceneServiceTests
         Assert.Equal(["FAV-001"], result.Select(m => m.Code));
     }
 
-    [Fact]
-    public async Task HasScenesFilter_MatchesMoviesWithAnyScene()
+    // Movies: ONE has 1 scene, TWO has 3 scenes + 1 apex, NONE has nothing, HIGH has 2 highlights.
+    private static async Task<MovieGridQueryService> SeedCountsAsync(TestDbContextFactory factory)
+    {
+        var scenes = new MovieSceneService(factory);
+        var one = await SeedMovieAsync(factory, code: "ONE-001");
+        var two = await SeedMovieAsync(factory, code: "TWO-001");
+        await SeedMovieAsync(factory, code: "NONE-001");
+        var high = await SeedMovieAsync(factory, code: "HIGH-001");
+        await scenes.AddSceneAsync(one, 0, null, null);
+        foreach (var start in new[] { 0, 100, 200 }) await scenes.AddSceneAsync(two, start, null, null);
+
+        await using var db = await factory.CreateDbContextAsync();
+        db.MovieApexes.Add(new MovieApex { MovieId = two, Seconds = 50 });
+        db.MovieHighlights.AddRange(
+            new MovieHighlight { MovieId = high, StartSeconds = 10, EndSeconds = 20 },
+            new MovieHighlight { MovieId = high, StartSeconds = 30, EndSeconds = 40 });
+        await db.SaveChangesAsync();
+        return new MovieGridQueryService(factory);
+    }
+
+    private static async Task<string[]> CodesAsync(MovieGridQueryService grid, MovieCountSelection counts) =>
+        [.. (await grid.GetRangeAsync(new MovieGridFilter(Counts: counts), new MovieGridSort("title", false, 1), 0, 10)).Select(m => m.Code!)];
+
+    [Theory]
+    [InlineData(null, null, new[] { "HIGH-001", "NONE-001", "ONE-001", "TWO-001" })]
+    [InlineData(1, null, new[] { "ONE-001", "TWO-001" })]
+    [InlineData(0, 0, new[] { "HIGH-001", "NONE-001" })]
+    [InlineData(null, 1, new[] { "HIGH-001", "NONE-001", "ONE-001" })]
+    [InlineData(2, 3, new[] { "TWO-001" })]
+    public async Task SceneCountFilter_KeepsMoviesWithinTheRange(int? min, int? max, string[] expected)
     {
         using var factory = new TestDbContextFactory();
-        var withScene = await SeedMovieAsync(factory, code: "SCN-001");
-        await SeedMovieAsync(factory, code: "NOS-001");
-        await new MovieSceneService(factory).AddSceneAsync(withScene, 0, null, null);
+        var grid = await SeedCountsAsync(factory);
 
-        var grid = new MovieGridQueryService(factory);
-        var result = await grid.GetRangeAsync(
-            new MovieGridFilter(Features: [Javbuddy.Components.Shared.MovieFeatureFilterOption.HasScenes]),
-            new MovieGridSort("title", false, 1), 0, 10);
+        // A range whose open end is null is what the slider's end stop saves.
+        Assert.Equal(expected, await CodesAsync(grid, new MovieCountSelection { Scenes = new IntRange(min, max) }));
+    }
 
-        Assert.Equal(["SCN-001"], result.Select(m => m.Code));
+    [Fact]
+    public async Task HighlightAndApexCountFilters_AreAppliedTogether()
+    {
+        using var factory = new TestDbContextFactory();
+        var grid = await SeedCountsAsync(factory);
+
+        Assert.Equal(["HIGH-001"], await CodesAsync(grid, new MovieCountSelection { Highlights = new IntRange(2, null) }));
+        Assert.Equal(["TWO-001"], await CodesAsync(grid, new MovieCountSelection { Apexes = new IntRange(1, null) }));
+        Assert.Empty(await CodesAsync(grid, new MovieCountSelection { Highlights = new IntRange(1, null), Apexes = new IntRange(1, null) }));
+    }
+
+    [Fact]
+    public async Task Summary_OffersZeroToTheMostAnyMovieHas()
+    {
+        using var factory = new TestDbContextFactory();
+        var grid = await SeedCountsAsync(factory);
+
+        var counts = (await grid.GetSummaryAsync(new MovieGridFilter())).Counts;
+
+        Assert.Equal(new RangeBounds(0, 3), counts.Scenes);
+        Assert.Equal(new RangeBounds(0, 2), counts.Highlights);
+        Assert.Equal(new RangeBounds(0, 1), counts.Apexes);
+    }
+
+    [Fact]
+    public async Task Summary_OffersNoCountRangesForAnEmptyLibrary()
+    {
+        using var factory = new TestDbContextFactory();
+
+        Assert.False((await new MovieGridQueryService(factory).GetSummaryAsync(new MovieGridFilter())).Counts.HasAny);
     }
 
     [Fact]
@@ -225,7 +279,7 @@ public class MovieSceneServiceTests
     }
 
     [Fact]
-    public async Task HasScenesFilter_CountsHiddenScenes()
+    public async Task SceneCountFilter_CountsHiddenScenes()
     {
         using var factory = new TestDbContextFactory();
         var movieId = await SeedMovieAsync(factory, code: "HID-001");
@@ -233,7 +287,7 @@ public class MovieSceneServiceTests
         await service.SetHiddenFromOverviewAsync((await service.AddSceneAsync(movieId, 0, null, null)).SceneId!.Value, true);
 
         var result = await new MovieGridQueryService(factory).GetRangeAsync(
-            new MovieGridFilter(Features: [Javbuddy.Components.Shared.MovieFeatureFilterOption.HasScenes]),
+            new MovieGridFilter(Counts: new MovieCountSelection { Scenes = new IntRange(1, null) }),
             new MovieGridSort("title", false, 1), 0, 10);
 
         Assert.Equal(["HID-001"], result.Select(m => m.Code));

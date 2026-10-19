@@ -188,10 +188,6 @@ public static class MovieFilterPredicates
         {
             query = query.Where(m => m.HasBrokenBFrames);
         }
-        if (features.Contains(MovieFeatureFilterOption.HasScenes))
-        {
-            query = query.Where(m => m.Scenes.Any());
-        }
         if (features.Contains(MovieFeatureFilterOption.HasFavoriteScene))
         {
             query = query.Where(m => m.Scenes.Any(s => s.IsFavorite));
@@ -199,6 +195,29 @@ public static class MovieFilterPredicates
         if (features.Contains(MovieFeatureFilterOption.Favorites))
         {
             query = query.Where(m => m.IsFavorite);
+        }
+        return query;
+    }
+
+    /// <summary>A movie's scene, highlight and apex counts each within their range (AND across kinds). An open end is no limit.</summary>
+    public static IQueryable<Movie> WhereCounts(IQueryable<Movie> query, MovieCountSelection? counts)
+    {
+        if (counts is null) return query;
+
+        var (sMin, sMax) = (counts.Scenes.Min, counts.Scenes.Max);
+        var (hMin, hMax) = (counts.Highlights.Min, counts.Highlights.Max);
+        var (aMin, aMax) = (counts.Apexes.Min, counts.Apexes.Max);
+        if (counts.Scenes.IsSet)
+        {
+            query = query.Where(m => (sMin == null || m.Scenes.Count >= sMin) && (sMax == null || m.Scenes.Count <= sMax));
+        }
+        if (counts.Highlights.IsSet)
+        {
+            query = query.Where(m => (hMin == null || m.Highlights.Count >= hMin) && (hMax == null || m.Highlights.Count <= hMax));
+        }
+        if (counts.Apexes.IsSet)
+        {
+            query = query.Where(m => (aMin == null || m.Apexes.Count >= aMin) && (aMax == null || m.Apexes.Count <= aMax));
         }
         return query;
     }

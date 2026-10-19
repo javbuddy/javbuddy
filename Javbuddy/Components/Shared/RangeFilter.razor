@@ -61,7 +61,7 @@
 
     /// <summary>"150–165 cm", or just "25 yrs" when both ends are the same value.</summary>
     private static string FormatRange(int min, int max, string unit) =>
-        min == max ? $"{min} {unit}" : $"{min}–{max} {unit}";
+        (min == max ? $"{min} {unit}" : $"{min}–{max} {unit}").TrimEnd();
 
     private string FillStyle
     {

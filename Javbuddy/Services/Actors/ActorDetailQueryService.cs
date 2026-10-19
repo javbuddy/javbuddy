@@ -28,6 +28,8 @@ public class ActorDetailQueryService(IDbContextFactory<AppDbContext> dbFactory) 
             .Where(m => m.MovieActors.Any(link => link.ActorId == actorId))
             .Include(m => m.MovieTags).ThenInclude(mt => mt.Tag).ThenInclude(t => t.ParentTag)
             .Include(m => m.Scenes)
+            .Include(m => m.Highlights)
+            .Include(m => m.Apexes)
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync(ct);
 

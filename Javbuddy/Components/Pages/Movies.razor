@@ -69,6 +69,9 @@ else
                         OnMatchAllActorTagsChanged="matchAll => ApplyFilterAsync(() => filters.MatchAllActorTags = matchAll)"
                         FeatureFilter="@filters.Features"
                         OnToggleFeature="feature => ApplyFilterAsync(() => filters.Features.Toggle(feature))"
+                        CountOptions="@countOptions"
+                        CountSelection="@filters.Counts"
+                        OnCountsChanged="edited => ApplyFilterAsync(() => filters.Counts = MovieFilterOptions.MergeCounts(filters.Counts, edited, countOptions))"
                         AvailableActors="@availableActors"
                         ActorFilter="@filters.ActorIds"
                         OnToggleActor="actorId => ApplyFilterAsync(() => filters.ActorIds.Toggle(actorId))"
@@ -229,6 +232,7 @@ else
     private IReadOnlyList<MovieActorOption> availableActors = [];
     private IReadOnlyList<MovieActorOption> availableActorTags = [];
     private ActorAttributeOptions actorAttributeOptions = ActorAttributeOptions.None;
+    private MovieCountOptions countOptions = MovieCountOptions.None;
 
     private bool showOptionsModal;
     private bool showNfoPushModal;
@@ -295,7 +299,7 @@ else
         applicationState!.PersistAsJson(MoviesPersistedState.Key, new MoviesPersistedState(
             window.Visible.Select(MoviesPersistedState.PersistedMovie.FromMovie).ToList(), window.Start, window.FilteredCount,
             totalCount, missingCount, gotCount, filesCount, totalFileSizeBytes, libraryNames, downloadingCodes.ToList(),
-            availableCodecs, availableStudios, availableGenres, actorAttributeOptions,
+            availableCodecs, availableStudios, availableGenres, actorAttributeOptions, countOptions,
             ViewState, filters.RandomSortSeed));
         return Task.CompletedTask;
     }
@@ -315,6 +319,7 @@ else
         availableStudios = state.AvailableStudios;
         availableGenres = state.AvailableGenres;
         actorAttributeOptions = state.ActorAttributeOptions;
+        countOptions = state.CountOptions;
         filters.Apply(state.Filters);
         browseAllReleases = state.Filters.BrowseReleases;
         catalogFilter = state.Filters.CatalogFilter ?? new();
@@ -576,6 +581,7 @@ else
         availableStudios = summary.Studios;
         availableGenres = summary.Genres;
         actorAttributeOptions = summary.ActorAttributes;
+        countOptions = summary.Counts;
         availableActors = summary.Actors;
         availableActorTags = summary.ActorTags;
 
@@ -597,9 +603,11 @@ else
         // A remembered selection the library no longer offers (a cup nobody has, a limit outside the new
         // bounds) is corrected here, and the caller re-counts with the corrected filter.
         var normalized = MovieFilterOptions.NormalizeActorAttributes(filters.ActorAttributes, actorAttributeOptions);
-        if (normalized.SameAs(filters.ActorAttributes)) return false;
+        var normalizedCounts = MovieFilterOptions.NormalizeCounts(filters.Counts, countOptions);
+        if (normalized.SameAs(filters.ActorAttributes) && normalizedCounts == filters.Counts) return false;
 
         filters.ActorAttributes = normalized;
+        filters.Counts = normalizedCounts;
         await LoadCountsAsync();
         return true;
     }
