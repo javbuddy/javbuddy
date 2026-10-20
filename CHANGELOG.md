@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- Scrubbing the Scenes timeline on Movie Detail shows the "Generating previews…" placeholder with progress while the movie's trickplay is being generated, as the player does, and switches to thumbnails once it's ready.
+
 ## [0.3.4] - 2026-10-19
 
 ### Changed

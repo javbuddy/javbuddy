@@ -27,6 +27,7 @@ public class MovieScenesSectionTests : BunitContext
     private readonly ITrickplayService trickplayService = Substitute.For<ITrickplayService>();
     private readonly IHighlightTrickplayService highlightTrickplay = Substitute.For<IHighlightTrickplayService>();
     private readonly SceneMediaQueue mediaQueue;
+    private readonly TrickplayGenerationTracker generation = new();
 
     private static readonly ClipActorTagsResult NoActorTags = new(
         new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>());
@@ -81,7 +82,7 @@ public class MovieScenesSectionTests : BunitContext
         Services.AddSingleton(Substitute.For<IJellyfinClient>());
         Services.AddSingleton(StreamServiceStubs.AllPlayable());
         Services.AddSingleton(trickplayService);
-        Services.AddSingleton(new TrickplayGenerationTracker());
+        Services.AddSingleton(generation);
         Services.AddSingleton(highlightTrickplay);
         // A real queue whose worker resolves workerMedia, so a test can drive a "generated" event.
         var workerServices = new ServiceCollection().AddSingleton(workerMedia).BuildServiceProvider();
@@ -114,6 +115,25 @@ public class MovieScenesSectionTests : BunitContext
             .Add(x => x.OnScenesChanged, onScenesChanged ?? (_ => { }))
             .Add(x => x.OnHighlightsChanged, onHighlightsChanged ?? (_ => { }))
             .Add(x => x.OnEdit, onEdit ?? (_ => { })));
+
+    [Fact]
+    public void Timeline_ShowsGeneratingPreview_WhileTrickplayIsGenerated()
+    {
+        using var run = generation.Start(new TrickplayTarget(PlayableMovie.Id));
+        run.Report(42);
+
+        var cut = RenderSection();
+
+        Assert.Contains("Generating previews… 42%", cut.Find(".movie-scenes-timeline-preview").TextContent);
+    }
+
+    [Fact]
+    public void Timeline_ShowsNoGeneratingPreview_WhenNothingIsGenerated()
+    {
+        var cut = RenderSection();
+
+        Assert.Empty(cut.FindAll(".trickplay-generating"));
+    }
 
     [Fact]
     public void Timeline_DrawsEachSceneToScale_WithTimeMarksToTheMoviesEnd()

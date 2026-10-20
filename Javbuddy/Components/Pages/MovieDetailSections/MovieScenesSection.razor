@@ -12,6 +12,7 @@
 @inject IApexMediaService ApexMedia
 @inject ITrickplayService TrickplayService
 @inject IHighlightTrickplayService HighlightTrickplay
+@inject TrickplayGenerationTracker TrickplayGeneration
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -40,6 +41,10 @@
                 @if (trickplay is not null || highlightTrickplay.Count > 0)
                 {
                     <div class="movie-scenes-timeline-thumb"></div>
+                }
+                else if (generating is not null)
+                {
+                    <TrickplayGeneratingPreview Generating="generating" />
                 }
                 <span class="movie-scenes-timeline-time"></span>
             </div>
@@ -297,6 +302,9 @@
     private DotNetObjectReference<MovieScenesSection>? selfRef;
     private TrickplayLayout? trickplay;
     private int? trickplayMovieId;
+    // The movie's trickplay while it's being generated and there's none to show yet; the timeline
+    // preview shows that in the thumbnail's place.
+    private TrickplayGenerating? generating;
     // The highlights' own sets by highlight id; replaced whole on each load, so the init below can
     // tell a new one by reference.
     private IReadOnlyDictionary<int, TrickplayLayout> highlightTrickplay = new Dictionary<int, TrickplayLayout>();
@@ -320,7 +328,30 @@
     private int playlistIndex;
     private bool disposed;
 
-    protected override void OnInitialized() => SceneMediaQueue.Generated += OnMediaGenerated;
+    protected override void OnInitialized()
+    {
+        SceneMediaQueue.Generated += OnMediaGenerated;
+        TrickplayGeneration.Changed += OnTrickplayGenerationChanged;
+    }
+
+    // Raised on the generating thread. Shows the progress while the movie's set is being generated and
+    // loads it once written, so the timeline switches to thumbnails without a refresh.
+    private void OnTrickplayGenerationChanged(TrickplayTarget target)
+    {
+        if (disposed || target.Clip is not null || target.MovieId != Movie.Id) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (disposed || target.MovieId != Movie.Id) return;
+            var wasGenerating = generating is not null;
+            generating = trickplay is null ? TrickplayGeneration.Get(target) : null;
+            if (wasGenerating && generating is null && trickplay is null)
+            {
+                trickplayMovieId = null;
+                await LoadTrickplayAsync();
+            }
+            StateHasChanged();
+        });
+    }
 
     // Raised on the queue's worker thread once a scene's, highlight's or apex's screenshot/preview was
     // written: reload the cards so media that was missing shows up without a refresh.
@@ -354,10 +385,17 @@
         var movieId = Movie.Id;
         trickplayMovieId = movieId;
         trickplay = null;
+        // Read before loading: a run that ends after this is caught by OnTrickplayGenerationChanged,
+        // and one that already ended saved its set first.
+        generating = TrickplayGeneration.Get(new TrickplayTarget(movieId));
         try
         {
             var loaded = await TrickplayService.GetAsync(movieId);
-            if (Movie.Id == movieId) trickplay = loaded;
+            if (Movie.Id == movieId)
+            {
+                trickplay = loaded;
+                if (loaded is not null) generating = null;
+            }
         }
         catch
         {
@@ -562,6 +600,7 @@
     {
         disposed = true;
         SceneMediaQueue.Generated -= OnMediaGenerated;
+        TrickplayGeneration.Changed -= OnTrickplayGenerationChanged;
         // An init still in flight would otherwise bind its listeners after this dispose.
         await timelineInitialising;
         if (module is null) return;
