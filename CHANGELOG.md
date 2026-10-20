@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-10-20
+
 ### Fixed
 
 - The video player's hidden controls stay hidden when the next clip starts (e.g. while playing scenes), in and out of fullscreen, instead of reappearing.
