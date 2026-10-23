@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- Long actor tags, and tags under a parent, are no longer cut off in the cast pills on Movie Detail or in the actor-tag hover popovers; they wrap instead.
 ## [0.3.6] - 2026-10-22
 
 ### Changed
