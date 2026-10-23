@@ -7,6 +7,11 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ### Fixed
 
 - Long actor tags, and tags under a parent, are no longer cut off in the cast pills on Movie Detail or in the actor-tag hover popovers; they wrap instead.
+## [0.3.6] - 2026-10-22
+
+### Changed
+
+- The video player's header and scrub bar (or clip controls) now overlay the video instead of taking space above and below it, so the video fills the whole player and no longer resizes when the controls hide.
 
 ## [0.3.5] - 2026-10-20
 

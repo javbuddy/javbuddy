@@ -1,4 +1,5 @@
 .video-player-modal-backdrop {
+    --video-player-header-height: 3.25rem;
     position: fixed;
     inset: 0;
     z-index: 1050;
@@ -18,6 +19,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
 }
 
 .video-player-modal-header {
@@ -26,9 +28,16 @@
     justify-content: space-between;
     gap: 1rem;
     padding: 0.75rem 1.25rem;
-    background-color: #1a1d27;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
+    /* Overlays the video instead of taking space above it, on a scrim so it stays legible over bright footage. */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 3;
+    box-sizing: border-box;
+    height: var(--video-player-header-height);
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
 }
 
 .video-player-modal-title {
@@ -162,7 +171,6 @@
     flex-direction: column;
     background-color: #000;
     position: relative;
-    padding: 0.75rem;
 }
 
 .video-player-loading,
@@ -188,6 +196,31 @@
     min-height: 0;
     display: flex;
     gap: 0.75rem;
+}
+
+/* The header overlays the video column; the side panel sits beside it, so it starts below the header. */
+.video-player-side-panel {
+    margin: var(--video-player-header-height) 0.75rem 0.75rem 0;
+}
+
+/* The scrub bar / clip controls overlay the bottom of the video on a scrim, like the header. */
+.video-player-modal-panel ::deep .video-player-column {
+    position: relative;
+}
+
+.video-player-modal-panel ::deep .video-player-area {
+    border-radius: 0;
+}
+
+.video-player-modal-panel ::deep .scrub-bar,
+.video-player-modal-panel ::deep .clip-controls {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    padding: 1.5rem 0.75rem 0.5rem;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
 }
 
 .video-player-side-panel {
@@ -227,6 +260,7 @@
     .video-player-side-panel {
         width: auto;
         max-height: 40%;
+        margin: 0 0.75rem 0.75rem;
     }
 }
 
