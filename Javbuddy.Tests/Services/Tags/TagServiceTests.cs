@@ -416,8 +416,9 @@ public class TagServiceTests
         Assert.True(result.Success);
 
         await using var verifyDb = await factory.CreateDbContextAsync();
-        var values = await verifyDb.TagReplacementRules.Where(r => r.TargetTagId == targetId).Select(r => r.SourceValue).OrderBy(v => v).ToListAsync();
-        Assert.Equal(["SOLO", "solo"], values);
+        var values = await verifyDb.TagReplacementRules.Where(r => r.TargetTagId == targetId).Select(r => r.SourceValue).ToListAsync();
+        // Ordinal, client-side: Postgres would otherwise order by the database collation (lowercase first).
+        Assert.Equal(["SOLO", "solo"], values.Order(StringComparer.Ordinal));
     }
 
     [Fact]

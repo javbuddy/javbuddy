@@ -2,6 +2,7 @@ using System.Xml;
 using System.Xml.Linq;
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -727,7 +728,7 @@ public class NfoSyncService(
         var baseline = NfoBaselineState.FromJson(movie.NfoBaselineJson);
         NfoFieldValues disk;
         if (baseline?.LastDisk is { } cached
-            && movie.NfoBaselineLastWriteUtc == info.LastWriteTimeUtc
+            && FileTimestamps.Same(movie.NfoBaselineLastWriteUtc, info.LastWriteTimeUtc)
             && movie.NfoBaselineSize == info.Length)
         {
             disk = cached;
@@ -775,7 +776,7 @@ public class NfoSyncService(
         bool changed = movie.NfoDriftKind != outcome.Kind
             || movie.NfoConflictDetails != outcome.Details
             || movie.NfoBaselineJson != baselineJson
-            || movie.NfoBaselineLastWriteUtc != nfoLastWriteUtc
+            || !FileTimestamps.Same(movie.NfoBaselineLastWriteUtc, nfoLastWriteUtc)
             || movie.NfoBaselineSize != nfoSize;
 
         movie.NfoDriftKind = outcome.Kind;

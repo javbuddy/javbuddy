@@ -142,15 +142,17 @@ public class ActorService(
 
         // NOCASE rather than ToUpper() on both sides: SQLite's UPPER() only folds ASCII, while C#'s
         // ToUpper() also folds "ū" to "Ū", so a name like "Ichiiyūka" could never match.
-        // NOCASE still ignores ASCII case and compares every other character exactly.
+        // NOCASE still ignores ASCII case and compares every other character exactly. (On Postgres the
+        // provider's ICU case-insensitive collation plays that role.)
+        var nocase = db.CaseInsensitiveCollation;
         return await db.Actors
             .AsNoTracking()
             .Include(a => a.Aliases)
             .Include(a => a.CupSizePeriods)
             .FirstOrDefaultAsync(a => a.FirstName != null
-                && ((a.LastName == null && EF.Functions.Collate(a.FirstName, "NOCASE") == route)
-                    || (a.LastName != null && EF.Functions.Collate(a.LastName + " " + a.FirstName, "NOCASE") == route)
-                    || a.Aliases.Any(al => EF.Functions.Collate(al.Name, "NOCASE") == route)), ct);
+                && ((a.LastName == null && EF.Functions.Collate(a.FirstName, nocase) == route)
+                    || (a.LastName != null && EF.Functions.Collate(a.LastName + " " + a.FirstName, nocase) == route)
+                    || a.Aliases.Any(al => EF.Functions.Collate(al.Name, nocase) == route)), ct);
     }
 
     public async Task<Actor?> GetByIdAsync(int id, CancellationToken ct = default)
@@ -643,7 +645,8 @@ public class ActorService(
                 MovieCount = a.MovieActors.Count,
                 HasCustomOrCachedImage = db.ActorImages.Any(ai => ai.ActorId == a.Id)
             })
-            .OrderBy(a => a.LastName)
+            .OrderBy(a => a.LastName != null) // single-name actors first, on Postgres as on SQLite
+            .ThenBy(a => a.LastName)
             .ThenBy(a => a.FirstName)
             .Take(50)
             .ToListAsync(ct);
@@ -691,7 +694,8 @@ public class ActorService(
                 a.LastName,
                 HasImage = db.ActorImages.Any(ai => ai.ActorId == a.Id && ai.Variant == "thumb")
             })
-            .OrderBy(a => a.LastName)
+            .OrderBy(a => a.LastName != null) // single-name actors first, on Postgres as on SQLite
+            .ThenBy(a => a.LastName)
             .ThenBy(a => a.FirstName)
             .Take(10)
             .ToListAsync(ct);
@@ -868,7 +872,8 @@ public class ActorService(
 
         var raw = await db.Actors
             .AsNoTracking()
-            .OrderBy(a => a.LastName)
+            .OrderBy(a => a.LastName != null) // single-name actors first, on Postgres as on SQLite
+            .ThenBy(a => a.LastName)
             .ThenBy(a => a.FirstName)
             .Select(a => new
             {

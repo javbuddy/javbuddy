@@ -17,7 +17,7 @@ public class TorrentDownload
     [StringLength(50)]
     public string MovieCode { get; set; } = "";
 
-    [StringLength(500)]
+    // Unbounded: indexer-supplied text. Postgres enforces a declared limit, SQLite never did.
     public string? ReleaseTitle { get; set; }
 
     [StringLength(200)]
@@ -26,7 +26,7 @@ public class TorrentDownload
     public long? Size { get; set; }
 
     /// <summary>The magnet/download URL that was sent to qBittorrent.</summary>
-    [StringLength(2000)]
+    // Unbounded: a magnet link carries the whole tracker list (2.6k characters in real data). Postgres enforces a declared limit, SQLite never did.
     public string? SourceUrl { get; set; }
 
     /// <summary>qBittorrent's torrent hash, set once QBittorrentSyncTask correlates this row to a

@@ -23,7 +23,7 @@ public static class ClipTagSync
         {
             return await RefreshOnceAsync(db, movieId, ct);
         }
-        catch (DbUpdateException ex) when (SqliteConstraintErrors.IsDuplicateKey(ex))
+        catch (DbUpdateException ex) when (DbConstraintErrors.IsDuplicateKey(ex))
         {
             // Still possible from outside this process (a duplicate link; other constraint errors still throw); start over from what it saved. Only the MovieTag rows are
             // dropped from the tracker; any other pending change of the caller's stays and is saved with the retry.

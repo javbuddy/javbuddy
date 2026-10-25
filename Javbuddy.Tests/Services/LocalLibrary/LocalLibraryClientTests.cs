@@ -713,7 +713,7 @@ public class LocalLibraryClientTests
         await client.RefreshMediaInfoOnlyAsync(movieId);
 
         using var verifyDb = factory.CreateDbContext();
-        Assert.Equal(creationTimeUtc, verifyDb.Movies.Single(m => m.Id == movieId).FileAddedAt);
+        FileTimestampAssert.Same(creationTimeUtc, verifyDb.Movies.Single(m => m.Id == movieId).FileAddedAt);
     }
 
     [Fact]
@@ -753,7 +753,7 @@ public class LocalLibraryClientTests
         await client.RefreshMediaInfoOnlyAsync(movieId);
 
         using var verifyDb = factory.CreateDbContext();
-        Assert.Equal(originalFileAddedAt, verifyDb.Movies.Single(m => m.Id == movieId).FileAddedAt);
+        FileTimestampAssert.Same(originalFileAddedAt, verifyDb.Movies.Single(m => m.Id == movieId).FileAddedAt);
     }
 
     [Fact]
@@ -1200,7 +1200,7 @@ public class LocalLibraryClientTests
         using var verifyDb = factory.CreateDbContext();
         var movie2 = verifyDb.Movies.Single(m => m.Id == movieId);
         Assert.Equal("Some Title", movie2.MetaTitle);
-        Assert.Equal(writeTimeUtc, movie2.MediaNfoLastWriteUtc);
+        FileTimestampAssert.Same(writeTimeUtc, movie2.MediaNfoLastWriteUtc);
     }
 
     [Fact]

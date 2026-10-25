@@ -770,5 +770,5 @@ public class ActorImageCacheService(
     private static bool IsFresh(ActorImage cached, FileInfo srcInfo, string sourceCode) =>
         string.Equals(cached.SourceMovieCode, sourceCode, StringComparison.OrdinalIgnoreCase)
         && cached.SourceLength == srcInfo.Length
-        && cached.SourceLastWriteUtc >= srcInfo.LastWriteTimeUtc;
+        && FileTimestamps.AtLeast(cached.SourceLastWriteUtc, srcInfo.LastWriteTimeUtc);
 }

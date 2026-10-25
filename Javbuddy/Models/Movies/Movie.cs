@@ -95,7 +95,7 @@ public class Movie : IMediaTechnicalInfo
 
     /// <summary>Human-readable per-field drift detail, each line prefixed by its direction (e.g.
     /// "[Javbuddy changed] Title: .nfo has 'Old', canonical is 'New'"). Null when NfoDriftKind is None.</summary>
-    [StringLength(1000)]
+    // Unbounded: one line per drifted field, so it grows with the NFO (4.8k characters in real data). Postgres enforces a declared limit, SQLite never did.
     public string? NfoConflictDetails { get; set; }
 
     /// <summary>Serialized NfoBaselineState: per field, both sides' values at the last check where

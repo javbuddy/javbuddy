@@ -52,7 +52,7 @@ public class ActorImage
     /// <summary>Set only for an image downloaded from an actor's remote ThumbnailUrl fallback.
     /// Freshness is "does this still match the actor's current ThumbnailUrl", not a local file's
     /// size/last-write time; null for every locally-sourced row.</summary>
-    [StringLength(2000)]
+    // Unbounded: a scraped URL. Postgres enforces a declared limit, SQLite never did.
     public string? SourceUrl { get; set; }
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

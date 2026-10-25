@@ -8,7 +8,9 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 namespace Javbuddy.Tests.TestSupport;
 
 /// <summary>
-/// An <see cref="IDbContextFactory{TContext}"/> backed by an in-memory SQLite database, so
+/// An <see cref="IDbContextFactory{TContext}"/> backed by an in-memory SQLite database (or, when
+/// <c>JAVBUDDY_TEST_POSTGRES</c> is set, a throwaway Postgres database cloned from a migrated template: see
+/// <see cref="PostgresTestDatabase"/>), so
 /// tests exercise the same provider (constraints, indexes, conversions) as production instead
 /// of EF Core's InMemory provider, which silently ignores relational behavior.
 /// The underlying connection must stay open for the lifetime of the in-memory database, so
@@ -18,8 +20,9 @@ namespace Javbuddy.Tests.TestSupport;
 /// </summary>
 public sealed class TestDbContextFactory : IDbContextFactory<AppDbContext>, IDisposable
 {
-    private readonly SqliteConnection _connection;
-    private readonly DbContextOptions<AppDbContext> _options;
+    private readonly SqliteConnection? _connection;
+    private readonly Func<AppDbContext> _create;
+    private readonly string? _postgresDatabase;
 
     /// <summary>What the contexts' ClipActorStaleInterceptor signals, as the app's worker would see it.</summary>
     public ClipActorRefreshSignal ClipActorSignal { get; } = new();
@@ -31,26 +34,41 @@ public sealed class TestDbContextFactory : IDbContextFactory<AppDbContext>, IDis
 
     private TestDbContextFactory(bool connectionPerContext, IInterceptor[] interceptors)
     {
+        // As in the app, every save keeps the stored effective actors' stale flag in step.
+        IInterceptor[] allInterceptors = [new ClipActorStaleInterceptor(ClipActorSignal), .. interceptors];
+
+        if (PostgresTestDatabase.IsEnabled)
+        {
+            // Postgres gives every context its own connection, so connectionPerContext changes nothing.
+            var (connectionString, name) = PostgresTestDatabase.CreateDatabase();
+            _postgresDatabase = name;
+            var postgresOptions = PostgresTestDatabase.Options(connectionString)
+                .AddInterceptors([new SynchronousCompletionInterceptor(), .. allInterceptors])
+                .Options;
+            _create = () => new PostgresAppDbContext(postgresOptions);
+            return;
+        }
+
         // A named shared-cache database lets each context open its own connection to it, as
         // production's file database does; the factory's connection keeps it alive. Pooling is off
         // so no pooled connection keeps it alive after the factory is disposed.
-        var connectionString = connectionPerContext
+        var sqliteConnectionString = connectionPerContext
             ? $"DataSource=file:{Guid.NewGuid():N}?mode=memory&cache=shared;Pooling=False"
             : "DataSource=:memory:";
-        _connection = new SqliteConnection(connectionString);
+        _connection = new SqliteConnection(sqliteConnectionString);
         _connection.Open();
 
         var builder = new DbContextOptionsBuilder<AppDbContext>();
         Action<SqliteDbContextOptionsBuilder> sqliteOptions = o =>
             o.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
-        _options = (connectionPerContext
-                ? builder.UseSqlite(connectionString, sqliteOptions)
+        var options = (connectionPerContext
+                ? builder.UseSqlite(sqliteConnectionString, sqliteOptions)
                 : builder.UseSqlite(_connection, sqliteOptions))
-            // As in the app, every save keeps the stored effective actors' stale flag in step.
-            .AddInterceptors([new ClipActorStaleInterceptor(ClipActorSignal), .. interceptors])
+            .AddInterceptors(allInterceptors)
             .Options;
+        _create = () => new AppDbContext(options);
 
-        using var context = new AppDbContext(_options);
+        using var context = _create();
         context.Database.EnsureCreated();
     }
 
@@ -59,10 +77,17 @@ public sealed class TestDbContextFactory : IDbContextFactory<AppDbContext>, IDis
     public static TestDbContextFactory WithConnectionPerContext(params IInterceptor[] interceptors) =>
         new(connectionPerContext: true, interceptors);
 
-    public AppDbContext CreateDbContext() => new(_options);
+    public AppDbContext CreateDbContext() => _create();
 
     public Task<AppDbContext> CreateDbContextAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(CreateDbContext());
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose()
+    {
+        _connection?.Dispose();
+        if (_postgresDatabase is not null)
+        {
+            PostgresTestDatabase.DropDatabase(_postgresDatabase);
+        }
+    }
 }

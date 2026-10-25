@@ -73,7 +73,9 @@ public class ScheduledTaskOverviewService(
         return await db.ScheduledTaskRuns
             .AsNoTracking()
             .Where(r => r.EndedAt == null && visibleTaskNames.Contains(r.TaskName))
-            .OrderByDescending(r => r.StartedAt)
+            // A started run beats one still queued (NULL StartedAt): NULL sorts last descending on SQLite, first on Postgres.
+            .OrderByDescending(r => r.StartedAt != null)
+            .ThenByDescending(r => r.StartedAt)
             .FirstOrDefaultAsync(ct);
     }
 

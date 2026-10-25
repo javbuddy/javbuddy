@@ -77,7 +77,7 @@ services:
     environment:
       LocalLibrary__RootPaths__0: /media
     volumes:
-      - ./data:/data        # SQLite database + key ring — needs reliable file locking (not NFS)
+      - ./data:/data        # SQLite database + key ring — needs reliable file locking (not NFS); see docs/configuration.md to use PostgreSQL instead
       - ./cache:/cache      # Regenerable image cache — fast disk, safe to lose
       - ./objects:/objects  # Actor photos and trickplay — bulk storage, NFS is fine
       - /path/to/your/library:/media
@@ -112,7 +112,7 @@ dotnet run --project Javbuddy
 ## Tech stack
 
 - .NET 11 Blazor Server (interactive server rendering over SignalR)
-- EF Core with SQLite
+- EF Core with SQLite by default, or PostgreSQL 18 (opt-in)
 - FFmpeg and MediaInfo for media work; WebGL for the VR viewer
 - Docker image with FFmpeg bundled
 
@@ -131,7 +131,7 @@ For contributors (see also [CONTRIBUTING](CONTRIBUTING.md) and the [security pol
 - [Architecture](docs/architecture.md) — layering rules and why
 - [Codebase map](docs/codebase-map.md) — where each page, service and test lives
 - [Scenes, highlights and apexes](docs/scenes-and-apexes.md) — how they relate, tag propagation and actor assignment
-- [Database workflow](docs/database-workflow.md) — EF Core migrations and the database roadmap
+- [Database workflow](docs/database-workflow.md) — EF Core migrations for SQLite and PostgreSQL, and running the tests on both
 - [Feature workflow](docs/feature-workflow.md) — request → plan → implement → verify, and git hygiene
 - [UI guidelines](docs/ui-guidelines.md) — the Sonarr-style patterns to follow
 - Issues and backlog: [GitHub issues](https://github.com/javbuddy/javbuddy/issues)

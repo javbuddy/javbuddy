@@ -1006,7 +1006,7 @@ public class LocalLibraryClient(
             && existing.MediaScannedAt is not null
             && existing.MediaScanError is null
             && existing.FileSizeBytes == d.Info.Length
-            && existing.LastWriteUtc == d.Info.LastWriteTimeUtc);
+            && FileTimestamps.Same(existing.LastWriteUtc, d.Info.LastWriteTimeUtc));
 
         if (allUnchanged)
         {
@@ -1023,7 +1023,7 @@ public class LocalLibraryClient(
         if (movie.MovieFiles.Count == 0 && diskFileInfos.Count == 1 && movieAlreadySucceeded)
         {
             var single = diskFileInfos[0];
-            if (movie.LocalFileSizeBytes == single.Info.Length && movie.MediaVideoFileLastWriteUtc == single.Info.LastWriteTimeUtc)
+            if (movie.LocalFileSizeBytes == single.Info.Length && FileTimestamps.Same(movie.MediaVideoFileLastWriteUtc, single.Info.LastWriteTimeUtc))
             {
                 var mf = new MovieFile
                 {
@@ -1082,7 +1082,7 @@ public class LocalLibraryClient(
                 var fileUnchanged = mf.MediaScannedAt is not null
                     && mf.MediaScanError is null
                     && mf.FileSizeBytes == fInfo.Length
-                    && mf.LastWriteUtc == fInfo.LastWriteTimeUtc;
+                    && FileTimestamps.Same(mf.LastWriteUtc, fInfo.LastWriteTimeUtc);
 
                 if (!fileUnchanged)
                 {
@@ -1244,7 +1244,7 @@ public class LocalLibraryClient(
             return new OperationResult(true, null);
         }
 
-        if (movie.MediaNfoLastWriteUtc.Value == currentWriteUtc)
+        if (FileTimestamps.Same(movie.MediaNfoLastWriteUtc, currentWriteUtc))
         {
             return new OperationResult(true, null);
         }

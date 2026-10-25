@@ -80,33 +80,46 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
         .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
 }
 
-// Database. Provider is configurable so we can move from SQLite (dev) to
-// Postgres later without touching call sites. Default is SQLite.
+// Database. SQLite is the zero-setup default; Postgres is opt-in (Database:Provider=Postgres plus a Postgres
+// ConnectionStrings:Default) and starts from an empty database. Both register IDbContextFactory<AppDbContext>, so
+// call sites never see the provider: on Postgres the concrete context is PostgresAppDbContext, with its own migrations.
 var provider = builder.Configuration.GetValue("Database:Provider", "Sqlite");
-var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? "Data Source=Javbuddy.db";
+var connectionString = builder.Configuration.GetConnectionString("Default");
 
-builder.Services.AddDbContextFactory<AppDbContext>((sp, options) =>
+switch (provider)
 {
-    switch (provider)
-    {
-        case "Sqlite":
+    case "Sqlite":
+        connectionString ??= "Data Source=Javbuddy.db";
+        builder.Services.AddDbContextFactory<AppDbContext>((sp, options) =>
+        {
             options.UseSqlite(connectionString, sqliteOptions =>
                 sqliteOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
             options.AddInterceptors(new SqlitePragmaInterceptor());
-            break;
-        // To enable Postgres later: add the Npgsql.EntityFrameworkCore.PostgreSQL
-        // package and uncomment the line below.
-        // case "Postgres":
-        //     options.UseNpgsql(connectionString);
-        //     break;
-        default:
+            // Keeps the stored effective actors' stale flag in step with every tracked write.
+            options.AddInterceptors(sp.GetRequiredService<ClipActorStaleInterceptor>());
+        });
+        break;
+    case "Postgres":
+        if (string.IsNullOrWhiteSpace(connectionString)
+            || connectionString.Contains("Data Source=", StringComparison.OrdinalIgnoreCase))
+        {
             throw new InvalidOperationException(
-                $"Unsupported Database:Provider '{provider}'.");
-    }
-    // Keeps the stored effective actors' stale flag in step with every tracked write.
-    options.AddInterceptors(sp.GetRequiredService<ClipActorStaleInterceptor>());
-});
+                "Database:Provider is 'Postgres' but ConnectionStrings:Default is missing or still a SQLite connection string. "
+                + "Set ConnectionStrings__Default to a Postgres connection string, e.g. "
+                + "'Host=postgres;Database=javbuddy;Username=javbuddy;Password=...'.");
+        }
+        builder.Services.AddDbContextFactory<PostgresAppDbContext>((sp, options) =>
+        {
+            options.UseNpgsql(connectionString, npgsqlOptions =>
+                npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery));
+            options.AddInterceptors(sp.GetRequiredService<ClipActorStaleInterceptor>());
+        });
+        builder.Services.AddSingleton<IDbContextFactory<AppDbContext>, PostgresAppDbContextFactoryAdapter>();
+        break;
+    default:
+        throw new InvalidOperationException(
+            $"Unsupported Database:Provider '{provider}'. Use 'Sqlite' or 'Postgres'.");
+}
 
 builder.Services
     .AddJavbuddyHttpClients(builder.Configuration)

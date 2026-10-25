@@ -3,6 +3,7 @@
 @using System.Reflection
 @using System.Runtime.InteropServices
 @using Microsoft.Data.Sqlite
+@using Javbuddy.Services.R18Dev
 @using Javbuddy.Services
 @using Javbuddy.Services.Javinizer
 @using Javbuddy.Services.Prowlarr
@@ -378,6 +379,12 @@ else
     // volume mount is pointed at the right place.
     private string ResolveDataDirectory()
     {
+        // Postgres keeps the database elsewhere; the local data (r18.dev dump) is what lives on the data volume.
+        if (!R18DevDumpPaths.IsSqlite(Configuration))
+        {
+            return Path.GetDirectoryName(R18DevDumpPaths.GetDbPath(Configuration)) ?? Env.ContentRootPath;
+        }
+
         var connectionString = Configuration.GetConnectionString("Default") ?? "Data Source=Javbuddy.db";
         var dataSource = new SqliteConnectionStringBuilder(connectionString).DataSource;
         var directory = Path.GetDirectoryName(dataSource);

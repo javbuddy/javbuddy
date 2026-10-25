@@ -43,7 +43,7 @@ public class CachedImage
     /// — see RemotePosterCropService. Freshness for these rows is "does this still match the
     /// movie's current MetaCoverUrl", not a local file's size/last-write time; null for every
     /// locally-sourced row.</summary>
-    [StringLength(2000)]
+    // Unbounded: a scraped URL. Postgres enforces a declared limit, SQLite never did.
     public string? SourceUrl { get; set; }
 
     /// <summary>Set only for a scene screenshot/preview (Role "scene", Index = Scene.Id,

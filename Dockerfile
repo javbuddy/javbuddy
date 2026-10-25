@@ -112,10 +112,12 @@ ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080
 
 # Three storage tiers, each its own volume so they can sit on different storage classes:
-# - /data: SQLite DB + DataProtection keys. Needs strong POSIX locking; never NFS.
+# - /data: SQLite DB + DataProtection keys + the r18.dev dump. Needs strong POSIX locking; never NFS.
+#   (With Database__Provider=Postgres the DB is on the Postgres server and /data only holds the rest.)
 # - /cache: disposable, regenerable image cache. Fast disk; safe to lose.
 # - /objects: durable object store (actor photos, trickplay). Bulk capacity; NFS is fine.
 ENV ConnectionStrings__Default="Data Source=/data/Javbuddy.db" \
+    R18Dev__DbPath=/data/Javbuddy.r18dev.db \
     DataProtection__KeysPath=/data/dataprotection-keys \
     ImageCache__Path=/cache \
     ObjectStore__Path=/objects

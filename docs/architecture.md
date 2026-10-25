@@ -41,7 +41,7 @@ Dependency direction: Razor pages/components → concrete services (`Services/<G
 
 ## Data layer
 
-EF Core + SQLite, via `AppDbContext` and `IDbContextFactory<AppDbContext>` (see above). No migration workaround policy: the app is expected to support recreating the SQLite DB from scratch rather than guaranteeing in-place migration of old data.
+EF Core + SQLite (default) or PostgreSQL (opt-in), via `AppDbContext` and `IDbContextFactory<AppDbContext>` (see above; `PostgresAppDbContext` is the Postgres flavour, see `docs/database-workflow.md`). No migration workaround policy: the app is expected to support recreating the database from scratch rather than guaranteeing in-place migration of old data.
 
 Always inspect a freshly generated EF Core migration for spurious column renames before applying it — see `docs/database-workflow.md` for the full migration workflow and current-vs-future (Postgres) notes.
 
