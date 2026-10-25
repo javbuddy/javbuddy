@@ -33,6 +33,27 @@ public static class ImageConverter
         }
     }
 
+    /// <summary>Converts sourcePath to JPEG bytes, downscaled (never upscaled) to maxEdge on its
+    /// longer edge — for consumers that can't decode WebP, such as DeoVR.</summary>
+    public static byte[] ConvertToJpeg(string sourcePath, int maxEdge, int quality)
+    {
+        using var bitmap = DecodeScaled(sourcePath, maxEdge);
+
+        var pressure = (long)bitmap.Width * bitmap.Height * 4;
+        GC.AddMemoryPressure(pressure);
+        var resized = Downscale(bitmap, maxEdge);
+        try
+        {
+            using var data = (resized ?? bitmap).Encode(SKEncodedImageFormat.Jpeg, quality);
+            return data.ToArray();
+        }
+        finally
+        {
+            resized?.Dispose();
+            GC.RemoveMemoryPressure(pressure);
+        }
+    }
+
     /// <summary>Converts source image to both Thumb and Full WebP bytes in a single decode pass,
     /// avoiding redundant disk/network reads and 8K uncompressed bitmap decodes.</summary>
     public static (byte[] ThumbBytes, byte[] FullBytes) ConvertToBothWebP(

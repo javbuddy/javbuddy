@@ -1,6 +1,7 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.DeoVr;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.LocalLibrary;
@@ -20,6 +21,8 @@ namespace Javbuddy.Services.Tasks;
 /// 1. Caches every tracked Movie's poster/fanart/extrafanart images (unchanged from
 ///    LocalImageCacheTask — see ILocalImageCacheService). Images already cached and up to date are
 ///    skipped, so repeat runs after the first full scan are fast.
+///    While DeoVR is enabled, each movie's DeoVR thumbnail (a JPEG of its fanart — see
+///    IDeoVrThumbnailService) is built here too, so DeoVR's list doesn't wait on conversions.
 /// 2. Caches every tracked Actor's image the same way (unchanged from ActorImageCacheTask — see
 ///    IActorImageCacheService).
 /// 3. One combined cleanup pass: prunes CachedImages rows (movies no longer tracked, or an
@@ -34,7 +37,9 @@ public class ImageCacheTask(
     IDbContextFactory<AppDbContext> dbFactory,
     IActorImageDataStore? dataStore = null,
     ILogger<ImageCacheTask>? logger = null,
-    IActorPhotoService? actorPhotoService = null) : IScheduledTask
+    IActorPhotoService? actorPhotoService = null,
+    IDeoVrSettingsService? deoVrSettingsService = null,
+    IDeoVrThumbnailService? deoVrThumbnailService = null) : IScheduledTask
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromHours(24);
 
@@ -46,11 +51,13 @@ public class ImageCacheTask(
     private readonly IActorImageDataStore? dataStore = dataStore;
     private readonly ILogger<ImageCacheTask> logger = logger ?? NullLogger<ImageCacheTask>.Instance;
     private readonly IActorPhotoService? actorPhotoService = actorPhotoService;
+    private readonly IDeoVrSettingsService? deoVrSettingsService = deoVrSettingsService;
+    private readonly IDeoVrThumbnailService? deoVrThumbnailService = deoVrThumbnailService;
 
     public string Name => "Image Cache";
 
     public string Description =>
-        "Caches poster/fanart/extrafanart images for every tracked movie, actor portraits, and actor photos, " +
+        "Caches poster/fanart/extrafanart images for every tracked movie (and its DeoVR thumbnail while DeoVR is enabled), actor portraits, and actor photos, " +
         "then prunes cached files for anything no longer tracked.";
 
     public TimeSpan GetInterval() => DefaultInterval;
@@ -108,6 +115,11 @@ public class ImageCacheTask(
         // via ListExtraFanartFileNamesAsync.
         var sourcelessRoles = new HashSet<(string Code, string Role)>();
 
+        var deoVrThumbnails = deoVrThumbnailService is not null && deoVrSettingsService is not null
+            && (await deoVrSettingsService.GetEffectiveAsync(ct)).Enabled
+            ? deoVrThumbnailService
+            : null;
+
         foreach (var code in codes)
         {
             if (ct.IsCancellationRequested) break;
@@ -124,7 +136,19 @@ public class ImageCacheTask(
             {
                 case true: processed += 2; break;
                 case false: failed += 2; break;
-                case null when !allRootsOffline: sourcelessRoles.Add((code, LocalImageCacheService.RoleFanart)); break;
+                case null when !allRootsOffline:
+                    sourcelessRoles.Add((code, LocalImageCacheService.RoleFanart));
+                    // Built from the fanart, so it's as stale as a cached copy of it.
+                    sourcelessRoles.Add((code, DeoVrThumbnailService.CacheRole));
+                    break;
+            }
+            if (deoVrThumbnails is not null)
+            {
+                switch (await CacheDeoVrThumbnailAsync(deoVrThumbnails, code, ct))
+                {
+                    case true: processed++; break;
+                    case false: failed++; break;
+                }
             }
 
             List<string> extraNames;
@@ -201,6 +225,19 @@ public class ImageCacheTask(
             // from disk I/O). Skip this one item and keep the run going rather than enumerating
             // every failure mode one exception type at a time.
             logger.LogWarning(ex, "Failed to cache image for movie {Code} ({Role} index {Index}) — skipping", code, role, index);
+            return false;
+        }
+    }
+
+    private async Task<bool?> CacheDeoVrThumbnailAsync(IDeoVrThumbnailService thumbnails, string code, CancellationToken ct)
+    {
+        try
+        {
+            return await thumbnails.PregenerateAsync(code, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to cache the DeoVR thumbnail for movie {Code} — skipping", code);
             return false;
         }
     }

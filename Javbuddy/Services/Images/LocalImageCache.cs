@@ -100,6 +100,7 @@ public interface ILocalImageCache
     {
         SceneMediaService.VariantPreview => ".webm",
         DeoVrTimeline.CacheVariant => ".jpg",
+        DeoVrThumbnailService.CacheVariant => ".jpg",
         _ => ".webp",
     };
 
