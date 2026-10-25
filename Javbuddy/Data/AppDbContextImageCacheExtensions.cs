@@ -1,11 +1,13 @@
 using System.Runtime.CompilerServices;
 using Javbuddy.Models;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using NpgsqlTypes;
 
 namespace Javbuddy.Data;
 
-/// <summary>Encapsulates compile-time-safe, atomic SQLite upserts for image cache metadata tables.
-/// EF Core 9 lacks a native atomic upsert primitive; SQLite's native "INSERT ... ON CONFLICT DO UPDATE"
+/// <summary>Encapsulates compile-time-safe, atomic SQLite/Postgres upserts for image cache metadata tables.
+/// EF Core lacks a native atomic upsert primitive; the native "INSERT ... ON CONFLICT DO UPDATE" (same syntax on both providers)
 /// prevents concurrent cache misses from racing on the UNIQUE constraint and polluting application
 /// logs with DbUpdateException errors. All table and column names are checked at compile-time via nameof().</summary>
 public static class AppDbContextImageCacheExtensions
@@ -71,6 +73,15 @@ public static class AppDbContextImageCacheExtensions
             "{{nameof(CachedImage.UpdatedAt)}}" = excluded."{{nameof(CachedImage.UpdatedAt)}}"
         """;
 
+    /// <summary>Raw parameters bypass the model's DateTime converter. Npgsql would send a Kind=Utc value as <c>timestamptz</c>,
+    /// which the server shifts by the session time zone's offset on its way into the <c>timestamp</c> column (and it refuses
+    /// an Unspecified one), so on Postgres the value goes as an explicit <c>timestamp</c> parameter, stored as is, as the
+    /// model does. SQLite takes the DateTime as it is.</summary>
+    private static object Timestamp(AppDbContext db, DateTime value) =>
+        db.Database.IsNpgsql()
+            ? new NpgsqlParameter { NpgsqlDbType = NpgsqlDbType.Timestamp, Value = DateTime.SpecifyKind(value, DateTimeKind.Unspecified) }
+            : value;
+
     public static async Task UpsertActorImagePairAsync(
         this AppDbContext db,
         int actorId,
@@ -89,8 +100,9 @@ public static class AppDbContextImageCacheExtensions
         DateTime? updatedAt = null,
         CancellationToken ct = default)
     {
-        var updated = updatedAt ?? DateTime.UtcNow;
-        var lastWrite = sourceLastWriteUtc ?? updated;
+        var updatedValue = updatedAt ?? DateTime.UtcNow;
+        var updated = Timestamp(db, updatedValue);
+        var lastWrite = Timestamp(db, sourceLastWriteUtc ?? updatedValue);
 
         var sql = FormattableStringFactory.Create(
             UpsertActorImagesFormat,
@@ -127,8 +139,9 @@ public static class AppDbContextImageCacheExtensions
         DateTime? updatedAt = null,
         CancellationToken ct = default)
     {
-        var updated = updatedAt ?? DateTime.UtcNow;
-        var lastWrite = sourceLastWriteUtc ?? updated;
+        var updatedValue = updatedAt ?? DateTime.UtcNow;
+        var updated = Timestamp(db, updatedValue);
+        var lastWrite = Timestamp(db, sourceLastWriteUtc ?? updatedValue);
 
         var sql = FormattableStringFactory.Create(
             UpsertCachedImagesFormat,

@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Tests.Data;
 
-public class SqliteConstraintErrorsTests
+public class DbConstraintErrorsTests
 {
     [Fact]
     public async Task IsDuplicateKey_TrueForADuplicateCompositePrimaryKey()
@@ -23,7 +23,7 @@ public class SqliteConstraintErrorsTests
         other.MovieTags.Add(new MovieTag { MovieId = movie.Id, TagId = tag.Id });
         var ex = await Assert.ThrowsAsync<DbUpdateException>(() => other.SaveChangesAsync());
 
-        Assert.True(SqliteConstraintErrors.IsDuplicateKey(ex));
+        Assert.True(DbConstraintErrors.IsDuplicateKey(ex));
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class SqliteConstraintErrorsTests
         other.Actors.Add(new Actor { FirstName = "Mei", LastName = "Ito" });
         var ex = await Assert.ThrowsAsync<DbUpdateException>(() => other.SaveChangesAsync());
 
-        Assert.True(SqliteConstraintErrors.IsDuplicateKey(ex));
+        Assert.True(DbConstraintErrors.IsDuplicateKey(ex));
     }
 
     [Fact]
@@ -49,6 +49,6 @@ public class SqliteConstraintErrorsTests
         db.MovieTags.Add(new MovieTag { MovieId = 999, TagId = 999 });
         var ex = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
 
-        Assert.False(SqliteConstraintErrors.IsDuplicateKey(ex));
+        Assert.False(DbConstraintErrors.IsDuplicateKey(ex));
     }
 }

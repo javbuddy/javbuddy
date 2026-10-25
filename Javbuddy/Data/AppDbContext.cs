@@ -3,11 +3,33 @@ using Javbuddy.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Javbuddy.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+/// <summary>The app's EF Core model. This type is the SQLite context (its migrations live in <c>Migrations/</c>);
+/// <see cref="PostgresAppDbContext"/> derives from it for the opt-in Postgres provider, with its own migrations in
+/// <c>Migrations/Postgres/</c>. The few provider differences are gated on <c>Database.IsNpgsql()</c> below.
+/// Every schema change therefore needs a migration for both contexts.</summary>
+public class AppDbContext : DbContext
 {
+    /// <summary>Case-insensitive ICU collation the Postgres context gives <c>Movie.Code</c>, matching SQLite's NOCASE.</summary>
+    public const string PostgresCaseInsensitiveCollation = "case_insensitive";
+
+    // Two constructors (so the Postgres subclass can pass its own options type), hence not a primary constructor.
+    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+    {
+    }
+
+    protected AppDbContext(DbContextOptions options) : base(options)
+    {
+    }
+
+    private bool IsPostgres => Database.IsNpgsql();
+
+    /// <summary>The provider's case-insensitive collation, for <c>EF.Functions.Collate</c> (NOCASE on SQLite, an ICU collation on Postgres).</summary>
+    public string CaseInsensitiveCollation => IsPostgres ? PostgresCaseInsensitiveCollation : "NOCASE";
+
     public DbSet<Movie> Movies => Set<Movie>();
     public DbSet<DeletedMovie> DeletedMovies => Set<DeletedMovie>();
     public DbSet<MovieFile> MovieFiles => Set<MovieFile>();
@@ -65,8 +87,29 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<NfoGeneration> NfoGenerations => Set<NfoGeneration>();
     public DbSet<DiscoverySourceSetting> DiscoverySourceSettings => Set<DiscoverySourceSetting>();
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        // SQLite stores a DateTime without caring about its Kind and reads it back Unspecified. Npgsql's default
+        // timestamptz rejects any non-UTC DateTime, and timestamp rejects a UTC one, so on Postgres every DateTime is a
+        // plain timestamp whose Kind is dropped on write: both providers then behave the same.
+        if (IsPostgres)
+        {
+            configurationBuilder.Properties<DateTime>()
+                .HaveColumnType("timestamp without time zone")
+                .HaveConversion<UnspecifiedKindDateTimeConverter>();
+        }
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        if (IsPostgres)
+        {
+            modelBuilder.HasCollation(PostgresCaseInsensitiveCollation, locale: "und-u-ks-level2", provider: "icu", deterministic: false);
+            // Trigram indexes for the case-insensitive substring search (see CaseInsensitiveSearch). A trusted extension
+            // since PG 13, so the database owner can create it.
+            modelBuilder.HasPostgresExtension("pg_trgm");
+        }
+
         modelBuilder.Entity<DeletedMovie>(entity =>
         {
             entity.HasIndex(m => m.NormalizedCode).IsUnique();
@@ -78,12 +121,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Movie>(entity =>
         {
             // NOCASE so a case-insensitive code lookup is a plain equality the unique index can seek.
-            entity.Property(m => m.Code).UseCollation("NOCASE");
+            // (On Postgres a nondeterministic collation, which ILIKE refuses: CaseInsensitiveSearch casts to "default".)
+            entity.Property(m => m.Code).UseCollation(CaseInsensitiveCollation);
             entity.HasIndex(m => m.Code).IsUnique();
             entity.HasIndex(m => m.IsFavorite);
             // Query-only: never written, and never read back after a save (which would add RETURNING to every Movies write).
             var dateAdded = entity.Property<DateTime>(Movie.DateAddedColumn)
-                .HasComputedColumnSql("COALESCE(\"FileAddedAt\", \"CreatedAt\")", stored: false)
+                // Postgres can only index a stored generated column.
+                .HasComputedColumnSql("COALESCE(\"FileAddedAt\", \"CreatedAt\")", stored: IsPostgres)
                 .ValueGeneratedNever();
             dateAdded.Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Ignore);
             dateAdded.Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
@@ -91,6 +136,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(nameof(Movie.Status), Movie.DateAddedColumn);
             entity.HasIndex(Movie.DateAddedColumn);
             entity.HasIndex(m => m.JellyfinLibraryName);
+            if (IsPostgres)
+            {
+                // ILIKE refuses the nondeterministic collation Code carries, so its search runs as COLLATE "default" and
+                // the index is declared with that collation to match.
+                entity.HasIndex(m => m.Code, "IX_Movies_Code_Trgm").HasMethod("gin").HasOperators("gin_trgm_ops").UseCollation(CaseInsensitiveSearch.PostgresIndexCollation);
+                entity.HasIndex(m => m.MetaTitle, "IX_Movies_MetaTitle_Trgm").HasMethod("gin").HasOperators("gin_trgm_ops");
+                entity.HasIndex(m => m.Title, "IX_Movies_Title_Trgm").HasMethod("gin").HasOperators("gin_trgm_ops");
+            }
             // A full index, not a partial one on <> 'None': the drift filter's IN (...) can't use the partial one.
             entity.HasIndex(m => m.NfoDriftKind);
             entity.HasIndex(m => m.ClipActorsStale).HasFilter("\"ClipActorsStale\"");
@@ -119,17 +172,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
             entity.HasIndex(c => c.Code).IsUnique();
             entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(20);
+            // The two JSON lists carry no length limit: a compilation lists well over 100 actresses (a dev-database row
+            // held 1450 characters against an earlier 500 limit), and Postgres, unlike SQLite, enforces a declared limit.
             entity.Property(c => c.GalleryImageUrls)
                 .HasConversion(
                     urls => JsonSerializer.Serialize(urls, (JsonSerializerOptions?)null),
                     json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>())
-                .HasMaxLength(8000)
                 .Metadata.SetValueComparer(stringListComparer);
             entity.Property(c => c.ActressNames)
                 .HasConversion(
                     names => JsonSerializer.Serialize(names, (JsonSerializerOptions?)null),
                     json => JsonSerializer.Deserialize<List<string>>(json, (JsonSerializerOptions?)null) ?? new List<string>())
-                .HasMaxLength(500)
                 .Metadata.SetValueComparer(stringListComparer);
         });
 
@@ -183,7 +236,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        modelBuilder.Entity<CachedImage>(entity => entity.HasIndex(c => new { c.Code, c.Role, c.Index, c.Variant }).IsUnique());
+        modelBuilder.Entity<CachedImage>(entity =>
+        {
+            // Compared with Movie.Code (the grid's poster subquery): Postgres can only use the index below for that
+            // comparison when both columns carry the same nondeterministic collation. SQLite compares them as plain text.
+            if (IsPostgres)
+            {
+                entity.Property(c => c.Code).UseCollation(PostgresCaseInsensitiveCollation);
+            }
+
+            entity.HasIndex(c => new { c.Code, c.Role, c.Index, c.Variant }).IsUnique();
+        });
 
         modelBuilder.Entity<ActorImage>(entity => entity.HasIndex(a => new { a.ActorId, a.Variant }).IsUnique());
 
@@ -552,7 +615,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<NfoGeneration>(entity =>
         {
-            entity.Property(g => g.Trigger).HasConversion<string>().HasMaxLength(20);
+            entity.Property(g => g.Trigger).HasConversion<string>().HasMaxLength(50);
             entity.HasIndex(g => new { g.MovieId, g.ReplacedAtUtc });
             entity.HasOne(g => g.Movie)
                 .WithMany()
@@ -565,3 +628,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         base.OnModelCreating(modelBuilder);
     }
 }
+
+/// <summary>Drops a DateTime's Kind on write (see <see cref="AppDbContext"/>'s conventions); the value read back is Unspecified.</summary>
+internal sealed class UnspecifiedKindDateTimeConverter()
+    : ValueConverter<DateTime, DateTime>(v => DateTime.SpecifyKind(v, DateTimeKind.Unspecified), v => v);

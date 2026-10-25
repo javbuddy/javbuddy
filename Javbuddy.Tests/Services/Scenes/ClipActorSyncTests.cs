@@ -9,7 +9,7 @@ namespace Javbuddy.Tests.Services.Scenes;
 /// <summary>ClipActorSync keeps the stored effective actors equal to ClipActors.</summary>
 public sealed class ClipActorSyncTests : IDisposable
 {
-    private readonly TestDbContextFactory factory = new();
+    private TestDbContextFactory factory = new();
     private int movieId, aikaId, rinId, sceneId, highlightId, apexId;
 
     public void Dispose() => factory.Dispose();
@@ -155,5 +155,57 @@ public sealed class ClipActorSyncTests : IDisposable
         var (scenes, _, _, stale) = await LoadAsync();
         Assert.Equal([(sceneId, aikaId), (sceneId, rinId)], scenes);
         Assert.False(stale);
+    }
+
+    /// <summary>Postgres runs Read Committed, with no database-wide write lock: the refresh's flag clear takes a row lock
+    /// instead, and an edit made mid-refresh must wait on it and then mark the movie stale again.</summary>
+    [PostgresFact]
+    public async Task EditDuringRefresh_WaitsForTheRowLock_AndLeavesTheMovieStale()
+    {
+        Task? edit = null;
+        var editFinishedWhileRefreshing = false;
+        factory.Dispose();
+        factory = new TestDbContextFactory(new MidRefreshEditInterceptor(() =>
+        {
+            edit = Task.Run(async () =>
+            {
+                await using var other = await factory.CreateDbContextAsync();
+                await other.SceneActors.Where(sa => sa.SceneId == sceneId).ExecuteDeleteAsync();
+                await ClipActorStale.MarkAsync(other, movieId, CancellationToken.None);
+            });
+            // The edit's UPDATE of the movie row has to queue behind the refresh's own.
+            editFinishedWhileRefreshing = edit.Wait(TimeSpan.FromMilliseconds(500));
+        }));
+        await SeedAsync();
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            Assert.True(await ClipActorSync.RefreshAsync(db, movieId, CancellationToken.None));
+        }
+        await edit!.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.False(editFinishedWhileRefreshing);
+        Assert.True((await LoadAsync()).Stale);
+        await RefreshStaleAsync();
+        var (scenes, _, _, stale) = await LoadAsync();
+        Assert.Equal([(sceneId, aikaId), (sceneId, rinId)], scenes);
+        Assert.False(stale);
+    }
+
+    /// <summary>Runs an action once, as the refresh reads its first stored effective-actor rows (so after its flag clear).</summary>
+    private sealed class MidRefreshEditInterceptor(Action edit) : Microsoft.EntityFrameworkCore.Diagnostics.DbCommandInterceptor
+    {
+        private int fired;
+
+        public override ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<System.Data.Common.DbDataReader>> ReaderExecutingAsync(
+            System.Data.Common.DbCommand command, Microsoft.EntityFrameworkCore.Diagnostics.CommandEventData eventData,
+            Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<System.Data.Common.DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("\"SceneEffectiveActors\"") && Interlocked.Exchange(ref fired, 1) == 0)
+            {
+                edit();
+            }
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
     }
 }

@@ -242,4 +242,34 @@ public class AppDbContextImageCacheExtensionsTests
         var rows = await verifyDb.CachedImages.Where(c => c.Code == code && c.Role == "poster" && c.Index == 0).ToListAsync();
         Assert.Equal(2, rows.Count);
     }
+
+    [PostgresFact]
+    public async Task Upserts_StoreTheSameTimestampsWhateverTheSessionTimeZone()
+    {
+        // The raw upsert parameters bypass the model's DateTime converter: sent as timestamptz they would be shifted by the
+        // session zone's offset on their way into the timestamp columns.
+        var (connectionString, name) = PostgresTestDatabase.CreateDatabase();
+        try
+        {
+            var tokyo = new Npgsql.NpgsqlConnectionStringBuilder(connectionString) { Timezone = "Asia/Tokyo" }.ConnectionString;
+            await using var db = new PostgresAppDbContext(PostgresTestDatabase.Options(tokyo).Options);
+            Assert.Equal("Asia/Tokyo", await db.Database.SqlQueryRaw<string>("SELECT current_setting('TimeZone') AS \"Value\"").SingleAsync());
+
+            var written = new DateTime(2026, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+            var updated = new DateTime(2026, 3, 4, 9, 10, 11, DateTimeKind.Utc);
+            await db.UpsertCachedImagePairAsync("TZ-001", "poster", 0, Guid.NewGuid(), Guid.NewGuid(), sourceLastWriteUtc: written, updatedAt: updated);
+            await db.UpsertActorImagePairAsync(1, "TZ-001", Guid.NewGuid(), Guid.NewGuid(), sourceLastWriteUtc: written, updatedAt: updated);
+
+            var cached = await db.CachedImages.AsNoTracking().ToListAsync();
+            var actor = await db.ActorImages.AsNoTracking().ToListAsync();
+            Assert.All(cached, c => Assert.Equal(written, c.SourceLastWriteUtc));
+            Assert.All(cached, c => Assert.Equal(updated, c.UpdatedAt));
+            Assert.All(actor, a => Assert.Equal(written, a.SourceLastWriteUtc));
+            Assert.All(actor, a => Assert.Equal(updated, a.UpdatedAt));
+        }
+        finally
+        {
+            PostgresTestDatabase.DropDatabase(name);
+        }
+    }
 }

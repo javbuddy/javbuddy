@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Metrics;
 using Microsoft.EntityFrameworkCore;
@@ -197,7 +198,7 @@ public class LocalImageCacheService(ILocalLibraryClient localLibraryClient, ILoc
     }
 
     private static bool IsFresh(CachedImage cached, FileInfo srcInfo) =>
-        cached.SourceLength == srcInfo.Length && cached.SourceLastWriteUtc >= srcInfo.LastWriteTimeUtc;
+        cached.SourceLength == srcInfo.Length && FileTimestamps.AtLeast(cached.SourceLastWriteUtc, srcInfo.LastWriteTimeUtc);
 
     // Preference order: poster.* before folder.*, and within each, .jpg before .jpeg/.png/.webp —
     // must match LocalLibraryClient's PosterFileNames/FanartFileNames ordering.

@@ -619,8 +619,7 @@ public sealed class SceneWallQueryService(
         return query;
     }
 
-    /// <summary>LIKE, as on the Movies grid, for SQLite's case-insensitive ASCII matching.</summary>
-    private static string TextPattern(SceneWallFilter filter) => $"%{filter.Text!.Trim()}%";
+    private static string SearchText(SceneWallFilter filter) => filter.Text!.Trim();
 
     private static IQueryable<Scene> Filter(AppDbContext db, SceneWallFilter filter)
     {
@@ -646,12 +645,8 @@ public sealed class SceneWallQueryService(
         }
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
-            var pattern = TextPattern(filter);
-            query = query.Where(s =>
-                (s.Title != null && EF.Functions.Like(s.Title, pattern))
-                || (s.Movie.Code != null && EF.Functions.Like(s.Movie.Code, pattern))
-                || (s.Movie.MetaTitle != null && EF.Functions.Like(s.Movie.MetaTitle, pattern))
-                || (s.Movie.Title != null && EF.Functions.Like(s.Movie.Title, pattern)));
+            var text = SearchText(filter);
+            query = query.Where(db.ContainsAnyOrMovie<Scene>(text, s => s.Movie, s => s.MovieId, MovieTextColumns, s => s.Title));
         }
         if (filter.FavoritesOnly)
         {
@@ -664,6 +659,9 @@ public sealed class SceneWallQueryService(
         }
         return query;
     }
+
+    /// <summary>The movie columns the walls' text filter matches.</summary>
+    private static readonly Expression<Func<Movie, string?>>[] MovieTextColumns = [m => m.Code, m => m.MetaTitle, m => m.Title];
 
     private static IQueryable<MovieHighlight> FilterHighlights(AppDbContext db, SceneWallFilter filter)
     {
@@ -684,12 +682,8 @@ public sealed class SceneWallQueryService(
         }
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
-            var pattern = TextPattern(filter);
-            query = query.Where(h =>
-                (h.Title != null && EF.Functions.Like(h.Title, pattern))
-                || (h.Movie.Code != null && EF.Functions.Like(h.Movie.Code, pattern))
-                || (h.Movie.MetaTitle != null && EF.Functions.Like(h.Movie.MetaTitle, pattern))
-                || (h.Movie.Title != null && EF.Functions.Like(h.Movie.Title, pattern)));
+            var text = SearchText(filter);
+            query = query.Where(db.ContainsAnyOrMovie<MovieHighlight>(text, h => h.Movie, h => h.MovieId, MovieTextColumns, h => h.Title));
         }
         if (filter.FavoritesOnly)
         {
@@ -742,11 +736,8 @@ public sealed class SceneWallQueryService(
         }
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
-            var pattern = TextPattern(filter);
-            query = query.Where(a =>
-                (a.Movie.Code != null && EF.Functions.Like(a.Movie.Code, pattern))
-                || (a.Movie.MetaTitle != null && EF.Functions.Like(a.Movie.MetaTitle, pattern))
-                || (a.Movie.Title != null && EF.Functions.Like(a.Movie.Title, pattern)));
+            var text = SearchText(filter);
+            query = query.Where(db.ContainsAnyOrMovie<MovieApex>(text, a => a.Movie, a => a.MovieId, MovieTextColumns));
         }
         if (filter.FavoritesOnly)
         {
@@ -765,9 +756,13 @@ public sealed class SceneWallQueryService(
                 .ThenBy(movieId).ThenBy(position).ThenBy(x => EF.Property<int>(x, "Id")),
             SceneWallSort.Random => query.OrderBy(x => (long)EF.Property<int>(x, "Id") * randomSeed % RandomSortModulus)
                 .ThenBy(x => EF.Property<int>(x, "Id")),
-            _ => query.OrderByDescending(released)
+            // Undated last, spelled out because Postgres orders NULL above every date when descending.
+            _ => query.OrderByDescending(IsNotNull(released)).ThenByDescending(released)
                 .ThenBy(movieId).ThenBy(position).ThenBy(x => EF.Property<int>(x, "Id")),
         };
+
+    private static Expression<Func<T, bool>> IsNotNull<T>(Expression<Func<T, DateTime?>> value) =>
+        Expression.Lambda<Func<T, bool>>(Expression.NotEqual(value.Body, Expression.Constant(null, typeof(DateTime?))), value.Parameters);
 
     private static IOrderedQueryable<MovieApex> OrderApexes(IQueryable<MovieApex> query, SceneWallSort sort, int randomSeed) =>
         OrderClips(query, sort, randomSeed, a => EF.Property<DateTime>(a.Movie, Movie.DateAddedColumn), a => a.Movie.MetaReleaseDate, a => a.MovieId, a => a.Seconds);

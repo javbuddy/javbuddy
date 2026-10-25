@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261019053120_ActorIsTransgender";
+    public override string LastMigrationId => "20261024080149_UnlimitedTextColumns";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -221,7 +221,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("TEXT");
 
                 b.Property<string>("SourceUrl")
-                    .HasMaxLength(2000)
                     .HasColumnType("TEXT");
 
                 b.Property<Guid>("StorageId")
@@ -435,7 +434,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("INTEGER");
 
                 b.Property<string>("SourceUrl")
-                    .HasMaxLength(2000)
                     .HasColumnType("TEXT");
 
                 b.Property<Guid>("StorageId")
@@ -569,7 +567,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.Property<string>("ActressNames")
                     .IsRequired()
-                    .HasMaxLength(500)
                     .HasColumnType("TEXT");
 
                 b.Property<string>("Code")
@@ -585,7 +582,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.Property<string>("GalleryImageUrls")
                     .IsRequired()
-                    .HasMaxLength(8000)
                     .HasColumnType("TEXT");
 
                 b.Property<bool>("IsUpcoming")
@@ -1209,7 +1205,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("INTEGER");
 
                 b.Property<string>("NfoConflictDetails")
-                    .HasMaxLength(1000)
                     .HasColumnType("TEXT");
 
                 b.Property<string>("NfoDriftKind")
@@ -1608,7 +1603,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.Property<string>("Trigger")
                     .IsRequired()
-                    .HasMaxLength(20)
+                    .HasMaxLength(50)
                     .HasColumnType("TEXT");
 
                 b.HasKey("Id");
@@ -2083,7 +2078,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("REAL");
 
                 b.Property<string>("ReleaseTitle")
-                    .HasMaxLength(500)
                     .HasColumnType("TEXT");
 
                 b.Property<DateTime?>("RemovedFromClientAt")
@@ -2100,7 +2094,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("TEXT");
 
                 b.Property<string>("SourceUrl")
-                    .HasMaxLength(2000)
                     .HasColumnType("TEXT");
 
                 b.Property<string>("Status")

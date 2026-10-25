@@ -127,6 +127,24 @@ public sealed class SceneWallQueryServiceTests : IDisposable
         Assert.Empty(await TitlesAsync(new SceneWallFilter(Text: "nothing like this")));
     }
 
+    // The Postgres filter is the scene's own match OR "movie id in (matching movies)"; a scene both halves match must
+    // still count once, and the text must combine with the other filters by AND, as on SQLite.
+    [Fact]
+    public async Task TextFilter_CountsASceneOnce_WhenItsTitleAndMovieBothMatch_AndCombinesWithOtherFilters()
+    {
+        await SeedAsync();
+        await scenes.AddSceneAsync(oldMovieId, 1200, null, "Old Intro Reprise");
+
+        var page = await wall.GetPageAsync(new SceneWallFilter(Text: "OLD"), SceneWallSort.ReleaseDate, 1, 0, 50);
+
+        Assert.Equal(3, page.TotalCount);
+        Assert.Equal(3, page.Cards.Count);
+        Assert.Equal(["OLD-001/Intro"], await TitlesAsync(new SceneWallFilter(Text: "old", FavoritesOnly: true)));
+        Assert.Equal(["OLD-001/Old Intro Reprise"], await TitlesAsync(new SceneWallFilter(Text: "reprise")));
+        Assert.Equal(["NEW-001/Scene 1"], await TitlesAsync(new SceneWallFilter(Text: "NEW ONE", Studios: ["Moodyz"])));
+        Assert.Empty(await TitlesAsync(new SceneWallFilter(Text: "old", Studios: ["Moodyz"])));
+    }
+
     [Fact]
     public async Task Sorts_ReleaseDate_DateAdded()
     {

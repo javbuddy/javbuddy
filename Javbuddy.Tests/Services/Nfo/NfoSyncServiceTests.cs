@@ -294,7 +294,7 @@ public class NfoSyncServiceTests
             var dbMovie = verifyDb.Movies.Single(m => m.Id == movieId);
             Assert.Equal("Asakura Momose, Emiri Takayama", dbMovie.MetaActresses);
             Assert.NotNull(dbMovie.MediaNfoLastWriteUtc);
-            Assert.Equal(File.GetLastWriteTimeUtc(nfoPath), dbMovie.MediaNfoLastWriteUtc.Value);
+            FileTimestampAssert.Same(File.GetLastWriteTimeUtc(nfoPath), dbMovie.MediaNfoLastWriteUtc);
         }
 
         // Verify RefreshLocalMetadataIfNfoChangedAsync sees no external conflict
@@ -1623,7 +1623,7 @@ public class NfoSyncServiceTests
 
         using var verifyDb = factory.CreateDbContext();
         var reloaded = verifyDb.Movies.Single(m => m.Id == movieId);
-        Assert.Equal(File.GetLastWriteTimeUtc(nfoPath), reloaded.MediaNfoLastWriteUtc);
+        FileTimestampAssert.Same(File.GetLastWriteTimeUtc(nfoPath), reloaded.MediaNfoLastWriteUtc);
     }
 
     [Fact]
@@ -1775,7 +1775,7 @@ public class NfoSyncServiceTests
         Assert.False((await service.CheckMovieNfoConflictAsync(movieId)).HasConflict);
         var baselined = Reload(factory, movieId);
         Assert.NotNull(baselined.NfoBaselineJson);
-        Assert.Equal(File.GetLastWriteTimeUtc(nfoPath), baselined.NfoBaselineLastWriteUtc);
+        FileTimestampAssert.Same(File.GetLastWriteTimeUtc(nfoPath), baselined.NfoBaselineLastWriteUtc);
         Assert.Equal(new FileInfo(nfoPath).Length, baselined.NfoBaselineSize);
 
         // Unreadable from here on: any attempt to re-read the unchanged file would surface as
@@ -1813,7 +1813,7 @@ public class NfoSyncServiceTests
         var reloaded = Reload(factory, movieId);
         Assert.Equal(NfoDriftKind.ExternalEdit, reloaded.NfoDriftKind);
         Assert.Equal("[External edit] Title: .nfo has 'Title C', canonical is 'Title A'", reloaded.NfoConflictDetails);
-        Assert.Equal(File.GetLastWriteTimeUtc(nfoPath), reloaded.NfoBaselineLastWriteUtc);
+        FileTimestampAssert.Same(File.GetLastWriteTimeUtc(nfoPath), reloaded.NfoBaselineLastWriteUtc);
     }
 
     [Fact]
@@ -1872,7 +1872,7 @@ public class NfoSyncServiceTests
         var reloaded = Reload(factory, movieId);
         Assert.Equal(NfoDriftKind.JavbuddyChanged, reloaded.NfoDriftKind);
         Assert.Equal("[Javbuddy changed] Title: .nfo has 'Title A', canonical is 'Title B'", reloaded.NfoConflictDetails);
-        Assert.Equal(File.GetLastWriteTimeUtc(nfoPath), reloaded.NfoBaselineLastWriteUtc);
+        FileTimestampAssert.Same(File.GetLastWriteTimeUtc(nfoPath), reloaded.NfoBaselineLastWriteUtc);
     }
 
     // ---- Bulk push of Javbuddy metadata to drifting .nfo files ----
@@ -1898,7 +1898,7 @@ public class NfoSyncServiceTests
         Assert.Contains("<title>Title A</title>", generation.Content);
         var reloaded = Reload(factory, movieId);
         Assert.Equal(NfoDriftKind.None, reloaded.NfoDriftKind);
-        Assert.Equal(File.GetLastWriteTimeUtc(nfoPath), reloaded.NfoBaselineLastWriteUtc);
+        FileTimestampAssert.Same(File.GetLastWriteTimeUtc(nfoPath), reloaded.NfoBaselineLastWriteUtc);
     }
 
     [Fact]

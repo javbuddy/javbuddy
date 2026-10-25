@@ -220,11 +220,11 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         var total = await missing.CountAsync(ct);
         if (take <= 0) return new MissingMoviesPage([], total);
 
-        // SQLite orders NULL below every date, so an undated movie counts as the oldest either way.
-        // Id breaks ties so neighboring windows agree on where each movie sits.
+        // An undated movie counts as the oldest either way: spelled out because SQLite orders NULL below every
+        // date but Postgres orders it above. Id breaks ties so neighboring windows agree on where each movie sits.
         var ordered = sortDescending
-            ? missing.OrderByDescending(m => m.MetaReleaseDate).ThenBy(m => m.Id)
-            : missing.OrderBy(m => m.MetaReleaseDate).ThenBy(m => m.Id);
+            ? missing.OrderByDescending(m => m.MetaReleaseDate != null).ThenByDescending(m => m.MetaReleaseDate).ThenBy(m => m.Id)
+            : missing.OrderBy(m => m.MetaReleaseDate != null).ThenBy(m => m.MetaReleaseDate).ThenBy(m => m.Id);
 
         var movies = await ordered
             .Skip(skip)
@@ -416,16 +416,11 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         query = MovieFilterPredicates.WhereActorAttributes(query, filter.ActorAttributes ?? ActorAttributeSelection.Empty, DateOnly.FromDateTime(DateTime.UtcNow));
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
-            var term = filter.Text.Trim();
-            query = query.Where(m =>
-                (m.Code != null && EF.Functions.Like(m.Code, $"%{term}%"))
-                || (m.MetaTitle != null && EF.Functions.Like(m.MetaTitle, $"%{term}%"))
-                || (m.Title != null && EF.Functions.Like(m.Title, $"%{term}%")));
+            query = query.Where(db.ContainsAny<Movie>(filter.Text.Trim(), m => m.Code, m => m.MetaTitle, m => m.Title));
         }
         if (!string.IsNullOrWhiteSpace(filter.CodePrefix))
         {
-            var codePrefix = filter.CodePrefix;
-            query = query.Where(m => m.Code != null && EF.Functions.Like(m.Code, $"{codePrefix}%"));
+            query = query.Where(db.StartsWithAny<Movie>(filter.CodePrefix, m => m.Code));
         }
 
         return query;

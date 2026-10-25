@@ -33,8 +33,8 @@ In Linux, Docker, and shell environments, nested JSON configuration keys use dou
 
 | Key | Environment Variable | Default | Description |
 |---|---|---|---|
-| `Database:Provider` | `Database__Provider` | `Sqlite` | Database provider (`Sqlite`). |
-| `ConnectionStrings:Default` | `ConnectionStrings__Default` | `Data Source=Javbuddy.db` | SQLite connection string or database file path. |
+| `Database:Provider` | `Database__Provider` | `Sqlite` | Database provider: `Sqlite` (zero setup) or `Postgres` (PostgreSQL 18; see [Using PostgreSQL](#using-postgresql)). |
+| `ConnectionStrings:Default` | `ConnectionStrings__Default` | `Data Source=Javbuddy.db` | SQLite connection string or database file path; with `Database:Provider=Postgres`, an Npgsql connection string such as `Host=postgres;Database=javbuddy;Username=javbuddy;Password=...` (startup fails if it is missing or still a SQLite string). |
 | `DataProtection:KeysPath` | `DataProtection__KeysPath` | *(system default)* | Directory for ASP.NET Data Protection XML keyring (persists auth cookies across container restarts). |
 
 ### Integrations
@@ -135,7 +135,7 @@ Controls the maximum permitted file size and batch file count when uploading act
 
 Javbuddy's persisted data splits into three independent tiers with different I/O, durability, and cost requirements, so each can be backed by a different volume/storage class:
 
-1. **Database & keys** (`ConnectionStrings:Default`, `DataProtection:KeysPath`) — the SQLite DB and the ASP.NET DataProtection key ring. Needs strong POSIX locking and low-latency random I/O; belongs on replicated block storage (Ceph RBD, Longhorn), never NFS — NFS risks corrupted SQLite locks and slow transactions. The database runs in WAL mode, so `Javbuddy.db-wal` and `Javbuddy.db-shm` appear next to it (keep them on the same volume; WAL also needs shared memory, which is another reason it can't live on NFS, and why Docker Desktop bind mounts from a Windows or macOS host are a poor fit too — use a named volume there). A file copy of the database alone, taken while the app is running, can miss recent writes.
+1. **Database & keys** (`ConnectionStrings:Default`, `DataProtection:KeysPath`) — the SQLite DB and the ASP.NET DataProtection key ring. (With PostgreSQL the database lives on the Postgres server instead, and this volume holds the key ring and the r18.dev dump file, so it no longer needs SQLite's locking guarantees; Postgres needs its own durable storage.) Needs strong POSIX locking and low-latency random I/O; belongs on replicated block storage (Ceph RBD, Longhorn), never NFS — NFS risks corrupted SQLite locks and slow transactions. The database runs in WAL mode, so `Javbuddy.db-wal` and `Javbuddy.db-shm` appear next to it (keep them on the same volume; WAL also needs shared memory, which is another reason it can't live on NFS, and why Docker Desktop bind mounts from a Windows or macOS host are a poor fit too — use a named volume there). A file copy of the database alone, taken while the app is running, can miss recent writes.
 2. **Disposable image cache** (`ImageCache:Path`) — generated WebP thumbnails/covers. High-IOPS, fully regenerable; fine on a single-replica PVC or fast local disk (NVMe/SSD), and safe to lose.
 3. **Durable object store** (`ObjectStore:Path`) — canonical uploaded actor portraits and gallery photos, and generated trickplay. Bulk capacity rather than latency-sensitive; suits NFS/ReadWriteMany without consuming expensive replicated block storage. One store (`Services/Infrastructure/ObjectStore.cs`, currently backed by the filesystem) with one key prefix per kind of data.
 
@@ -160,9 +160,26 @@ All durable files live in one object store under `ObjectStore:Path`, one key pre
 
 | Key | Environment Variable | Default | Description |
 |---|---|---|---|
+| `R18Dev:DbPath` | `R18Dev__DbPath` | *(next to the SQLite database; with Postgres, `Javbuddy.r18dev.db` in the working directory)* | File for the imported r18.dev dump. It is always a local SQLite file, whichever database provider the app uses. The Docker image sets it to `/data/Javbuddy.r18dev.db`. |
 | `R18Dev:DumpSourceOverride` | `R18Dev__DumpSourceOverride` | *(none)* | Path or URL to an r18.dev database dump archive. When unset, uses standard upstream release URL. |
 
 ---
+
+## Using PostgreSQL
+
+SQLite stays the default. To run on PostgreSQL 18 instead, set both of:
+
+```
+Database__Provider=Postgres
+ConnectionStrings__Default=Host=postgres;Database=javbuddy;Username=javbuddy;Password=change-me
+```
+
+- The database must exist; Javbuddy creates and migrates the tables itself at startup. Switching provider starts from an empty database: nothing is copied from SQLite.
+- Case-insensitive behaviour matches SQLite: movie codes (and the image cache's copy of them) use a case-insensitive ICU collation, and text searches use `ILIKE`. Other text sorts by the database's own collation, so lists of names can order slightly differently from SQLite's plain byte order.
+- Timestamps are stored as UTC `timestamp` columns at microsecond precision. They don't depend on the session time zone, so a connection string or database that sets one is fine.
+- Searches (the header box and the Movies filter) use `pg_trgm` trigram indexes on the movie code and titles. The first migration runs `CREATE EXTENSION pg_trgm`. It is a trusted extension, so no superuser is needed, but the app's database role must have `CREATE` privilege on the database (true for the database owner); otherwise `Migrate()` fails at startup. If your role can't have it, have an administrator run `CREATE EXTENSION pg_trgm` once in the Javbuddy database first.
+- The r18.dev dump stays a local SQLite file (see `R18Dev:DbPath`), and the image cache and object store are unchanged.
+- `docker-compose.yml` in the repository has a commented-out PostgreSQL 18 service and the matching environment block.
 
 ## Docker Compose Example
 

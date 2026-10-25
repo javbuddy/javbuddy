@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- PostgreSQL 18 as an opt-in database: set `Database__Provider=Postgres` and a Postgres `ConnectionStrings__Default` (see `docs/configuration.md`). SQLite remains the default, nothing is copied between the two, and the app behaves the same on both: case-insensitive movie codes and search, undated movies still sort as oldest, and the r18.dev dump stays a local SQLite file. The new `R18Dev__DbPath` setting chooses where that file lives (the Docker image sets it to `/data/Javbuddy.r18dev.db`, where it already was). `docker-compose.yml` has a commented-out Postgres service. On Postgres, movie and scene search uses `pg_trgm` trigram indexes, so the header search and the Movies filter stay fast on large libraries.
+
+### Fixed
+
+- Fields that can run long no longer have a length limit, so they are stored whole instead of hitting a column limit on Postgres: the Discover candidates' actress and gallery-image lists, a movie's NFO conflict details, a download's magnet link and release title, and the source URL of cached images and actor images.
+
 ## [0.3.6] - 2026-10-22
 
 ### Changed

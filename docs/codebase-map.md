@@ -152,7 +152,7 @@ Per-integration subfolders (`Services/<Integration>/`):
 
 `Startup/` (outside `Services/`) — `ServiceRegistration` holds Program.cs's DI registrations as `Add*` extension methods (order matters for multi-registrations such as `IActorMetadataSource` and `IScheduledTask`), `MediaEndpoints.MapMediaEndpoints` the image/stream/trickplay/scene-media endpoints, and `DeoVrEndpoints.MapDeoVrEndpoints` the DeoVR JSON API.
 
-`Tasks/ScheduledTaskOverviewService.cs` is System > Tasks' read model (per-task last run and next due, recent history, the active run for the sidebar, a task's latest/last-completed run). Single-row settings are read with `ReadSingleRowAsync` (`Data/SingleRowSettingsQueryExtensions.cs`, untracked) or through `SingleRowSettingsRepository.GetAsync`; `R18DevSettingsService` and `MediaInfoSettingsService` are the per-source settings services for those two tiles.
+`Tasks/ScheduledTaskOverviewService.cs` is System > Tasks' read model (per-task last run and next due, recent history, the active run for the sidebar, a task's latest/last-completed run). Single-row settings are read with `ReadSingleRowAsync` (`Data/SingleRowSettingsQueryExtensions.cs`, untracked) or through `SingleRowSettingsRepository.GetAsync`; `R18DevSettingsService` and `MediaInfoSettingsService` are the per-source settings services for those two tiles. `Data/CaseInsensitiveSearch.cs` builds the case-insensitive contains/starts-with predicates the header search, Movies grid and Scenes wall use (`Like` on SQLite, `ILIKE` served by the `pg_trgm` indexes on Postgres).
 
 `SceneMedia/` — `SceneMediaService` (scene screenshots/previews), `HighlightMediaService` (highlight ones), both over `ClipMediaGenerator` (ffmpeg → WebP image-cache rows stamped with the sampled range) and one background `SceneMediaQueue` worker (one ffmpeg media job at a time). Served at `/scene-image/{id}/{variant}` and `/highlight-image/{id}/{variant}`. The Scenes wall's queries, including the highlight view, are `SceneWallQueryService.cs`.
 
@@ -171,7 +171,7 @@ Unit tests for all of the above mirror this structure 1:1 under `Javbuddy.Tests/
 `Javbuddy.Tests/` (xUnit + bUnit + NSubstitute) mirrors the source tree:
 - `Components/Pages/`, `Components/Layout/`, `Components/Shared/` — bUnit render tests, one `*Tests.cs` per tested component (not every component has one — see tables above).
 - `Services/` (+ per-integration subfolders matching `Services/<Integration>/`) — unit tests for service/mapper/helper logic.
-- `Data/AppDbContextTests.cs` — EF Core/SQLite schema tests.
+- `Data/AppDbContextTests.cs` — EF Core schema tests; `Data/DatabaseProviderParityTests.cs` — behaviour that differs between SQLite and Postgres (case-insensitive code/search, `DateTime` kinds, `DateAdded`, the DeoVR seed sequence, migrations in step with the model). `TestSupport/PostgresTestDatabase.cs` and `SynchronousCompletionInterceptor.cs` run the whole suite on Postgres when `JAVBUDDY_TEST_POSTGRES` is set (see `docs/database-workflow.md`).
 - `TestSupport/` — `TestDbContextFactory` (in-memory SQLite), `FakeHttpClientFactory`/`FakeHttpMessageHandler` (HTTP client fakes), `ControlledStream` (chunked/blocking/failing response bodies), `StreamServiceStubs` (an `IMovieStreamService` where every movie is playable, for tests that render a player).
 
 `Javbuddy.E2ETests/` (xUnit + Playwright, real Kestrel) is organized by test *kind*, not by mirroring `Services/`/`Components/`:

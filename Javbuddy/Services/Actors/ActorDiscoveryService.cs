@@ -386,7 +386,7 @@ public class ActorDiscoveryService(
                     addedActorIds.Add(newActor.Id);
                     importedNames.Add(newActor.DisplayName);
                 }
-                catch (DbUpdateException ex) when (SqliteConstraintErrors.IsDuplicateKey(ex))
+                catch (DbUpdateException ex) when (DbConstraintErrors.IsDuplicateKey(ex))
                 {
                     logger?.LogWarning(ex, "Actor discovery import rejected candidate {ActorName} due to a database constraint", candidate.DisplayName);
                     failures.Add(new ActorImportFailure(candidate.DisplayName, "An actor with the same first and last name already exists."));

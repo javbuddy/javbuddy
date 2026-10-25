@@ -11,3 +11,18 @@ services:
       - ./objects:/objects  # Actor photos and trickplay — bulk storage, NFS is fine
       - /path/to/your/library:/media
     restart: unless-stopped
+    # To use PostgreSQL instead of SQLite, add these to `environment` (and `depends_on: [postgres]`), and
+    # uncomment the service below. The database starts empty: nothing is copied from SQLite.
+    #   Database__Provider: Postgres
+    #   ConnectionStrings__Default: Host=postgres;Database=javbuddy;Username=javbuddy;Password=change-me
+    # With Postgres, ./data only holds the key ring and the r18.dev dump (R18Dev__DbPath is already set in the image).
+
+  # postgres:
+  #   image: postgres:18.4
+  #   environment:
+  #     POSTGRES_DB: javbuddy
+  #     POSTGRES_USER: javbuddy
+  #     POSTGRES_PASSWORD: change-me
+  #   volumes:
+  #     - ./postgres:/var/lib/postgresql   # PostgreSQL 18 images keep a versioned data directory below this path
+  #   restart: unless-stopped

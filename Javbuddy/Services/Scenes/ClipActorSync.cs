@@ -12,8 +12,9 @@ namespace Javbuddy.Services.Scenes;
 public static class ClipActorSync
 {
     /// <summary>Recomputes one movie's rows in one transaction and returns false when there's no such movie.
-    /// The flag is cleared first: that write takes SQLite's write lock, so an edit made meanwhile waits and
-    /// then marks the movie stale again, and a failure rolls the clear back.</summary>
+    /// The flag is cleared first: that write takes SQLite's write lock (Postgres: the movie row's lock, as it runs
+    /// Read Committed), so an edit made meanwhile waits and then marks the movie stale again, and a failure rolls the
+    /// clear back.</summary>
     public static Task<bool> RefreshAsync(AppDbContext db, int movieId, CancellationToken ct) =>
         RefreshAsync(db, movieId, onMovieTagsChanged: null, ct);
 
