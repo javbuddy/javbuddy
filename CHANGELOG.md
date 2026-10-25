@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-10-25
+
 ### Changed
 
 - DeoVR's list thumbnails are now each movie's fanart downscaled to an 800px JPEG and kept in the image cache, instead of the full-size original or the remote cover, so DeoVR's lists load faster. A WebP fanart now gets a thumbnail too. While DeoVR is enabled, the Image Cache task builds them ahead of time; any not built yet are built on first request.
