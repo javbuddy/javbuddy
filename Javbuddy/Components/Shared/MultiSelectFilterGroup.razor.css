@@ -9,6 +9,15 @@
     color: #c4c8d4;
 }
 
+/* Excluded by an include/exclude group: struck through and red, with a ✕ in place of the ✓. */
+.multiselect-excluded {
+    color: #f28b82;
+}
+
+    .multiselect-excluded .multiselect-option-label {
+        text-decoration: line-through;
+    }
+
 .multiselect-search-row {
     padding: 0.4rem 1rem 0.25rem;
 }

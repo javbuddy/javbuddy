@@ -17,7 +17,7 @@ Javbuddy is a self-hosted manager for JAV collections, modeled on Sonarr/Radarr:
 ## Features
 
 ### Library & browsing
-- **Movies** grid with Missing / Downloading / Got status badges, search, faceted filters (resolution, codec, studio, label, genre, cast attributes, `.nfo` drift) and sorting.
+- **Movies** grid with Missing / Downloading / Got status badges, search, faceted filters (resolution, codec, studio, label, genre, cast attributes, `.nfo` drift; release year, runtime, bitrate, file size and cast size ranges; genres, studios and actors can be excluded as well as included) and sorting.
 - **Add New** (`/add/new`) adds a movie by its code and fetches its metadata. **Library Import** (`/add/import`) scans folders already on disk and imports what it finds, so an existing collection becomes tracked in one pass.
 - **Movie detail**: edit metadata, crop the cover, edit cast and tags, see media info, keep several file versions of one movie, and view or edit the `.nfo` and resolve conflicts between it and the database. VR / 3D format is detected from file names and can be overridden.
 - **Review** (`/movies/review`) walks the library one movie at a time in a player, so you can decide fast: mark it reviewed and move on, snooze it for 90 days or blacklist it. A related **Cleanup** mode adds deleting a movie and its folder.

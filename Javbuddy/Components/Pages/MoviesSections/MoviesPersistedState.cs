@@ -30,7 +30,8 @@ public sealed record MoviesPersistedState(
     ActorAttributeOptions ActorAttributeOptions,
     MovieCountOptions CountOptions,
     MoviesViewState Filters,
-    int RandomSortSeed)
+    int RandomSortSeed,
+    MovieRangeOptions RangeOptions)
 {
     public const string Key = "movies-initial-state";
 

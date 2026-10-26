@@ -30,6 +30,7 @@ public class ActorDetailQueryService(IDbContextFactory<AppDbContext> dbFactory) 
             .Include(m => m.Scenes)
             .Include(m => m.Highlights)
             .Include(m => m.Apexes)
+            .Include(m => m.MovieActors).ThenInclude(ma => ma.Actor)
             .OrderByDescending(m => m.CreatedAt)
             .ToListAsync(ct);
 

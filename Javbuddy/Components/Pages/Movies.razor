@@ -55,14 +55,19 @@ else
                         OnToggleCodec="codec => ApplyFilterAsync(() => filters.Codecs.Toggle(codec))"
                         AvailableStudios="@availableStudios"
                         StudioFilter="@filters.Studios"
-                        OnToggleStudio="studio => ApplyFilterAsync(() => filters.Studios.Toggle(studio))"
-                        OnSelectAllStudios="studios => ApplyFilterAsync(() => filters.Studios.UnionWith(studios))"
-                        OnSelectNoneStudios="() => ApplyFilterAsync(() => filters.Studios.Clear())"
+                        OnToggleStudio="studio => ApplyFilterAsync(() => ToggleStudio(studio))"
+                        OnSelectAllStudios="studios => ApplyFilterAsync(() => SelectAll(filters.Studios, filters.ExcludedStudios, studios))"
+                        OnSelectNoneStudios="() => ApplyFilterAsync(() => SelectNone(filters.Studios, filters.ExcludedStudios))"
+                        Excludable="true"
+                        ExcludedStudioFilter="@filters.ExcludedStudios"
+                        ExcludedGenreFilter="@filters.ExcludedGenres"
+                        ExcludedActorFilter="@filters.ExcludedActorIds"
+                        ExcludedActorTagFilter="@filters.ExcludedActorTagIds"
                         AvailableGenres="@availableGenres"
                         GenreFilter="@filters.Genres"
-                        OnToggleGenre="genre => ApplyFilterAsync(() => filters.Genres.Toggle(genre))"
-                        OnSelectAllGenres="genres => ApplyFilterAsync(() => filters.Genres.UnionWith(genres))"
-                        OnSelectNoneGenres="() => ApplyFilterAsync(() => filters.Genres.Clear())"
+                        OnToggleGenre="genre => ApplyFilterAsync(() => filters.Genres.CycleInclusion(filters.ExcludedGenres, genre))"
+                        OnSelectAllGenres="genres => ApplyFilterAsync(() => SelectAll(filters.Genres, filters.ExcludedGenres, genres))"
+                        OnSelectNoneGenres="() => ApplyFilterAsync(() => SelectNone(filters.Genres, filters.ExcludedGenres))"
                         MatchAllGenres="@filters.MatchAllGenres"
                         OnMatchAllGenresChanged="matchAll => ApplyFilterAsync(() => filters.MatchAllGenres = matchAll)"
                         MatchAllActorTags="@filters.MatchAllActorTags"
@@ -72,16 +77,19 @@ else
                         CountOptions="@countOptions"
                         CountSelection="@filters.Counts"
                         OnCountsChanged="edited => ApplyFilterAsync(() => filters.Counts = MovieFilterOptions.MergeCounts(filters.Counts, edited, countOptions))"
+                        RangeOptions="@rangeOptions"
+                        RangeSelection="@filters.Ranges"
+                        OnRangesChanged="edited => ApplyFilterAsync(() => filters.Ranges = MovieFilterOptions.MergeRanges(filters.Ranges, edited, rangeOptions))"
                         AvailableActors="@availableActors"
                         ActorFilter="@filters.ActorIds"
-                        OnToggleActor="actorId => ApplyFilterAsync(() => filters.ActorIds.Toggle(actorId))"
-                        OnSelectAllActors="actorIds => ApplyFilterAsync(() => filters.ActorIds.UnionWith(actorIds))"
-                        OnSelectNoneActors="() => ApplyFilterAsync(() => filters.ActorIds.Clear())"
+                        OnToggleActor="actorId => ApplyFilterAsync(() => filters.ActorIds.CycleInclusion(filters.ExcludedActorIds, actorId))"
+                        OnSelectAllActors="actorIds => ApplyFilterAsync(() => SelectAll(filters.ActorIds, filters.ExcludedActorIds, actorIds))"
+                        OnSelectNoneActors="() => ApplyFilterAsync(() => SelectNone(filters.ActorIds, filters.ExcludedActorIds))"
                         AvailableActorTags="@availableActorTags"
                         ActorTagFilter="@filters.ActorTagIds"
-                        OnToggleActorTag="tagId => ApplyFilterAsync(() => filters.ActorTagIds.Toggle(tagId))"
-                        OnSelectAllActorTags="tagIds => ApplyFilterAsync(() => filters.ActorTagIds.UnionWith(tagIds))"
-                        OnSelectNoneActorTags="() => ApplyFilterAsync(() => filters.ActorTagIds.Clear())"
+                        OnToggleActorTag="tagId => ApplyFilterAsync(() => filters.ActorTagIds.CycleInclusion(filters.ExcludedActorTagIds, tagId))"
+                        OnSelectAllActorTags="tagIds => ApplyFilterAsync(() => SelectAll(filters.ActorTagIds, filters.ExcludedActorTagIds, tagIds))"
+                        OnSelectNoneActorTags="() => ApplyFilterAsync(() => SelectNone(filters.ActorTagIds, filters.ExcludedActorTagIds))"
                         ShowActorAttributes="true"
                         ActorAttributeOptions="@actorAttributeOptions"
                         ActorAttributeSelection="@filters.ActorAttributes"
@@ -233,6 +241,7 @@ else
     private IReadOnlyList<MovieActorOption> availableActorTags = [];
     private ActorAttributeOptions actorAttributeOptions = ActorAttributeOptions.None;
     private MovieCountOptions countOptions = MovieCountOptions.None;
+    private MovieRangeOptions rangeOptions = MovieRangeOptions.None;
 
     private bool showOptionsModal;
     private bool showNfoPushModal;
@@ -300,7 +309,7 @@ else
             window.Visible.Select(MoviesPersistedState.PersistedMovie.FromMovie).ToList(), window.Start, window.FilteredCount,
             totalCount, missingCount, gotCount, filesCount, totalFileSizeBytes, libraryNames, downloadingCodes.ToList(),
             availableCodecs, availableStudios, availableGenres, actorAttributeOptions, countOptions,
-            ViewState, filters.RandomSortSeed));
+            ViewState, filters.RandomSortSeed, rangeOptions));
         return Task.CompletedTask;
     }
 
@@ -320,6 +329,7 @@ else
         availableGenres = state.AvailableGenres;
         actorAttributeOptions = state.ActorAttributeOptions;
         countOptions = state.CountOptions;
+        rangeOptions = state.RangeOptions;
         filters.Apply(state.Filters);
         browseAllReleases = state.Filters.BrowseReleases;
         catalogFilter = state.Filters.CatalogFilter ?? new();
@@ -582,11 +592,13 @@ else
         availableGenres = summary.Genres;
         actorAttributeOptions = summary.ActorAttributes;
         countOptions = summary.Counts;
+        rangeOptions = summary.Ranges;
         availableActors = summary.Actors;
         availableActorTags = summary.ActorTags;
 
         // Likewise a remembered actor tag nothing carries any more.
-        if (filters.ActorTagIds.RemoveWhere(id => !availableActorTags.Any(t => t.Id == id)) > 0)
+        if (filters.ActorTagIds.RemoveWhere(id => !availableActorTags.Any(t => t.Id == id))
+            + filters.ExcludedActorTagIds.RemoveWhere(id => !availableActorTags.Any(t => t.Id == id)) > 0)
         {
             filters.DropLoneMatchAll();
             await LoadCountsAsync();
@@ -594,7 +606,8 @@ else
         }
 
         // A remembered actor no longer linked to any movie (deleted, merged) would match nothing.
-        if (filters.ActorIds.RemoveWhere(id => !availableActors.Any(a => a.Id == id)) > 0)
+        if (filters.ActorIds.RemoveWhere(id => !availableActors.Any(a => a.Id == id))
+            + filters.ExcludedActorIds.RemoveWhere(id => !availableActors.Any(a => a.Id == id)) > 0)
         {
             await LoadCountsAsync();
             return true;
@@ -604,10 +617,12 @@ else
         // bounds) is corrected here, and the caller re-counts with the corrected filter.
         var normalized = MovieFilterOptions.NormalizeActorAttributes(filters.ActorAttributes, actorAttributeOptions);
         var normalizedCounts = MovieFilterOptions.NormalizeCounts(filters.Counts, countOptions);
-        if (normalized.SameAs(filters.ActorAttributes) && normalizedCounts == filters.Counts) return false;
+        var normalizedRanges = MovieFilterOptions.NormalizeRanges(filters.Ranges, rangeOptions);
+        if (normalized.SameAs(filters.ActorAttributes) && normalizedCounts == filters.Counts && normalizedRanges == filters.Ranges) return false;
 
         filters.ActorAttributes = normalized;
         filters.Counts = normalizedCounts;
+        filters.Ranges = normalizedRanges;
         await LoadCountsAsync();
         return true;
     }
@@ -683,6 +698,27 @@ else
         {
             StateHasChanged();
         }
+    }
+
+    // The r18.dev catalog can't exclude a studio, so there a click only includes or clears it.
+    private void ToggleStudio(string studio)
+    {
+        if (BrowseActive) filters.Studios.Toggle(studio);
+        else filters.Studios.CycleInclusion(filters.ExcludedStudios, studio);
+    }
+
+    // Select All includes what's visible, taking it out of the excluded set; None clears both.
+    private static void SelectAll<T>(HashSet<T> included, HashSet<T> excluded, IEnumerable<T> values)
+    {
+        var list = values.ToList();
+        included.UnionWith(list);
+        excluded.ExceptWith(list);
+    }
+
+    private static void SelectNone<T>(HashSet<T> included, HashSet<T> excluded)
+    {
+        included.Clear();
+        excluded.Clear();
     }
 
     private Task ApplyFilterAsync(Action change)

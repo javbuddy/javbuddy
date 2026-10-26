@@ -44,6 +44,10 @@ public static class MovieFilterPredicates
     public static IQueryable<Movie> WhereStudios(IQueryable<Movie> query, IReadOnlyCollection<string>? studios) =>
         studios is { Count: > 0 } ? query.Where(m => m.MetaStudio != null && studios.Contains(m.MetaStudio)) : query;
 
+    /// <summary>No excluded studio; a movie without one stays.</summary>
+    public static IQueryable<Movie> WhereNotStudios(IQueryable<Movie> query, IReadOnlyCollection<string>? excluded) =>
+        excluded is { Count: > 0 } ? query.Where(m => m.MetaStudio == null || !excluded.Contains(m.MetaStudio)) : query;
+
     /// <summary>Actress cup size / measurements / age for a movie: one linked actress must meet every
     /// criterion set. Age is her age on the movie's release date, or on <paramref name="today"/> when it has none.
     /// Cup size is the one she had on the release date, see <see cref="Javbuddy.Models.ActorCupSizePeriod"/>.</summary>
@@ -135,6 +139,25 @@ public static class MovieFilterPredicates
             return query;
         }
 
+        var (directNames, parentNames) = GenreNames(genres);
+        return query.Where(m => m.MovieTags.Any(mt =>
+            directNames.Contains(mt.Tag.Name) ||
+            (mt.Tag.ParentTag != null && parentNames.Contains(mt.Tag.ParentTag.Name))));
+    }
+
+    /// <summary>None of the excluded genres, matched as <see cref="WhereGenres"/> matches them (a parent excludes its subtags).</summary>
+    public static IQueryable<Movie> WhereNotGenres(IQueryable<Movie> query, IReadOnlyCollection<string>? excluded)
+    {
+        if (excluded is not { Count: > 0 }) return query;
+
+        var (directNames, parentNames) = GenreNames(excluded);
+        return query.Where(m => !m.MovieTags.Any(mt =>
+            directNames.Contains(mt.Tag.Name) ||
+            (mt.Tag.ParentTag != null && parentNames.Contains(mt.Tag.ParentTag.Name))));
+    }
+
+    private static (HashSet<string> DirectNames, HashSet<string> ParentNames) GenreNames(IReadOnlyCollection<string> genres)
+    {
         var directNames = new HashSet<string>(genres, StringComparer.OrdinalIgnoreCase);
         var parentNames = new HashSet<string>(genres, StringComparer.OrdinalIgnoreCase);
         foreach (var genre in genres)
@@ -144,10 +167,7 @@ public static class MovieFilterPredicates
                 directNames.Add(genre.Split(Tag.HierarchyDelimiter, 2)[1]);
             }
         }
-
-        return query.Where(m => m.MovieTags.Any(mt =>
-            directNames.Contains(mt.Tag.Name) ||
-            (mt.Tag.ParentTag != null && parentNames.Contains(mt.Tag.ParentTag.Name))));
+        return (directNames, parentNames);
     }
 
     /// <summary>Every selected Features option must hold (AND across the group).</summary>
@@ -195,6 +215,57 @@ public static class MovieFilterPredicates
         if (features.Contains(MovieFeatureFilterOption.Favorites))
         {
             query = query.Where(m => m.IsFavorite);
+        }
+        if (features.Contains(MovieFeatureFilterOption.HasFavoriteActor))
+        {
+            query = query.Where(m => m.MovieActors.Any(ma => ma.Actor.IsFavorite));
+        }
+        if (features.Contains(MovieFeatureFilterOption.HasRetiredActor))
+        {
+            query = query.Where(m => m.MovieActors.Any(ma => ma.Actor.IsRetired));
+        }
+        return query;
+    }
+
+    /// <summary>Each set range must hold (AND across ranges); a movie without the value doesn't match a set range. Cast size
+    /// counts the linked (tracked) actors, not unmatched names.</summary>
+    public static IQueryable<Movie> WhereRanges(IQueryable<Movie> query, MovieRangeSelection? ranges)
+    {
+        if (ranges is null || ranges.IsEmpty) return query;
+
+        if (ranges.ReleaseYear.IsSet)
+        {
+            // Whole years as date bounds rather than .Year, so SQLite compares the stored date directly.
+            DateTime? from = ranges.ReleaseYear.Min is { } y0 ? new DateTime(y0, 1, 1) : null;
+            DateTime? before = ranges.ReleaseYear.Max is { } y1 ? new DateTime(y1 + 1, 1, 1) : null;
+            query = query.Where(m => m.MetaReleaseDate != null
+                && (from == null || m.MetaReleaseDate >= from) && (before == null || m.MetaReleaseDate < before));
+        }
+        if (ranges.RuntimeMinutes.IsSet)
+        {
+            var (min, max) = (ranges.RuntimeMinutes.Min, ranges.RuntimeMinutes.Max);
+            query = query.Where(m => m.MetaRuntimeMinutes != null
+                && (min == null || m.MetaRuntimeMinutes >= min) && (max == null || m.MetaRuntimeMinutes <= max));
+        }
+        if (ranges.BitrateMbps.IsSet)
+        {
+            int? min = ranges.BitrateMbps.Min * 1000;
+            int? below = (ranges.BitrateMbps.Max + 1) * 1000;
+            query = query.Where(m => (m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps) != null
+                && (min == null || (m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps) >= min)
+                && (below == null || (m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps) < below));
+        }
+        if (ranges.FileSizeGb.IsSet)
+        {
+            long? min = ranges.FileSizeGb.Min * MovieRangeOptions.BytesPerGb;
+            long? below = (ranges.FileSizeGb.Max + 1) * MovieRangeOptions.BytesPerGb;
+            query = query.Where(m => m.LocalFileSizeBytes != null
+                && (min == null || m.LocalFileSizeBytes >= min) && (below == null || m.LocalFileSizeBytes < below));
+        }
+        if (ranges.CastSize.IsSet)
+        {
+            var (min, max) = (ranges.CastSize.Min, ranges.CastSize.Max);
+            query = query.Where(m => (min == null || m.MovieActors.Count >= min) && (max == null || m.MovieActors.Count <= max));
         }
         return query;
     }

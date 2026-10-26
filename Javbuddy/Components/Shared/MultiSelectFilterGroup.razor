@@ -1,5 +1,5 @@
-<button type="button" class="sort-dropdown-item @(SelectedCount > 0 ? "active" : "")" @onclick="ToggleExpanded">
-    <span>@GroupLabel@(SelectedCount > 0 ? $" ({SelectedCount})" : "")</span>
+<button type="button" class="sort-dropdown-item @(ActiveCount > 0 ? "active" : "")" @onclick="ToggleExpanded">
+    <span>@GroupLabel@(ActiveCount > 0 ? $" ({ActiveCount})" : "")</span>
     <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
 </button>
 @if (expanded)
@@ -22,11 +22,17 @@
         @foreach (var option in FilteredOptions)
         {
             var nested = option.IsNested && string.IsNullOrWhiteSpace(searchTerm);
-            <button type="button" class="sort-dropdown-item sort-dropdown-subitem @(nested ? "sort-dropdown-nested" : null) @(option.IsSelected ? "active" : "")" @onclick="option.OnClick">
-                @(nested ? option.NestedLabel : option.Label)
+            <button type="button" class="sort-dropdown-item sort-dropdown-subitem @(nested ? "sort-dropdown-nested" : null) @(option.IsSelected ? "active" : null) @(option.IsExcluded ? "multiselect-excluded" : null)"
+                    title="@(Excludable ? (option.IsSelected ? "Click to exclude" : option.IsExcluded ? "Click to clear" : "Click to include") : null)"
+                    @onclick="option.OnClick">
+                <span class="multiselect-option-label">@(nested ? option.NestedLabel : option.Label)</span>
                 @if (option.IsSelected)
                 {
                     <span class="ms-2">✓</span>
+                }
+                else if (option.IsExcluded)
+                {
+                    <span class="ms-2" aria-label="excluded">✕</span>
                 }
             </button>
         }
@@ -71,7 +77,13 @@
     private bool expanded;
     private string searchTerm = "";
 
+    /// <summary>Whether an option's click steps it through include and exclude (see <see cref="MultiSelectOption.IsExcluded"/>),
+    /// which only changes the options' hover hint; the stepping itself is the caller's.</summary>
+    [Parameter] public bool Excludable { get; set; }
+
     private int SelectedCount => Options.Count(o => o.IsSelected);
+
+    private int ActiveCount => Options.Count(o => o.IsSelected || o.IsExcluded);
 
     private IEnumerable<MultiSelectOption> FilteredOptions => string.IsNullOrWhiteSpace(searchTerm)
         ? Options
