@@ -338,4 +338,50 @@ public class MovieFilterPredicatesTests
 
         Assert.Equal(["NEW"], Codes(MovieFilterPredicates.WhereActorAttributes(movies, new ActorAttributeSelection { CupSizes = ["F"] }, Today)));
     }
+    [Fact]
+    public void WhereNotGenres_And_WhereNotStudios_Exclude_LikeTheirIncludeCounterparts()
+    {
+        var play = new Tag { Name = "Play" };
+        var rough = new Tag { Name = "Rough", ParentTag = play };
+        var drama = new Tag { Name = "Drama" };
+        var a = MovieTagged("A-001", rough);
+        a.MetaStudio = "S1";
+        var movies = new[] { a, MovieTagged("A-002", drama), MovieTagged("A-003") }.AsQueryable();
+
+        Assert.Equal(["A-002", "A-003"], Codes(MovieFilterPredicates.WhereNotGenres(movies, ["play"])));
+        Assert.Equal(["A-002", "A-003"], Codes(MovieFilterPredicates.WhereNotStudios(movies, ["S1"])));
+        Assert.Equal(["A-001", "A-002", "A-003"], Codes(MovieFilterPredicates.WhereNotGenres(movies, [])));
+    }
+
+    [Fact]
+    public void WhereRanges_InMemory_MatchesTheSameMoviesAsInSql()
+    {
+        var cast = new Movie { Code = "R-001", MetaReleaseDate = new DateTime(2020, 6, 1), MediaVideoBitRateKbps = 5500 };
+        cast.MovieActors.Add(new MovieActor { Actor = new Actor { IsFavorite = true } });
+        var movies = new[] { cast, new Movie { Code = "R-002", MetaReleaseDate = new DateTime(2021, 1, 1), MediaOverallBitRateKbps = 6000 }, new Movie { Code = "R-003" } }.AsQueryable();
+
+        Assert.Equal(["R-001"], Codes(MovieFilterPredicates.WhereRanges(movies, new() { ReleaseYear = new(null, 2020) })));
+        Assert.Equal(["R-001"], Codes(MovieFilterPredicates.WhereRanges(movies, new() { BitrateMbps = new(5, 5) })));
+        Assert.Equal(["R-002", "R-003"], Codes(MovieFilterPredicates.WhereRanges(movies, new() { CastSize = new(null, 0) })));
+        Assert.Equal(["R-001"], Codes(MovieFilterPredicates.WhereFeatures(movies, [MovieFeatureFilterOption.HasFavoriteActor])));
+    }
+
+    [Fact]
+    public void SortOrders_InMemory_SortCodesNaturally_AndCountsWithCodeBreakingTies()
+    {
+        var many = new Movie { Code = "B-1" };
+        many.Scenes.Add(new Scene());
+        var movies = new[] { new Movie { Code = "A-10" }, many, new Movie { Code = "A-9" } }.AsQueryable();
+
+        static List<string> Sorted(IQueryable<Movie> q, string field, bool descending) =>
+            MovieSortOrders.Apply(q, new MovieGridSort(field, descending, 1), m => m.CreatedAt).Select(m => m.Code!).ToList();
+
+        Assert.Equal(["A-9", "A-10", "B-1"], Sorted(movies, "code", false));
+        Assert.Equal(["B-1", "A-10", "A-9"], Sorted(movies, "scenes", true));
+        // Codes compare ignoring case, as in SQL (the Code column is NOCASE).
+        var mixed = new[] { new Movie { Code = "ZZZ-1" }, new Movie { Code = "abc-10" }, new Movie { Code = "Abd-1" }, new Movie { Code = "ABC-2" } }.AsQueryable();
+        Assert.Equal(["ABC-2", "abc-10", "Abd-1", "ZZZ-1"], Sorted(mixed, "code", false));
+        // No movie has a bitrate: code breaks the tie.
+        Assert.Equal(["A-10", "A-9", "B-1"], Sorted(movies, "bitrate", true));
+    }
 }

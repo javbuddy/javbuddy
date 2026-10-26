@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Javbuddy.Models;
 using Javbuddy.Services.DeoVr;
-using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Trickplay;
 using Javbuddy.Tests.TestSupport;
@@ -15,7 +14,6 @@ public class DeoVrServiceTests : IDisposable
 
     private readonly TestDbContextFactory dbFactory = new();
     private readonly IDeoVrSettingsService settings = Substitute.For<IDeoVrSettingsService>();
-    private readonly ILocalLibraryClient localLibrary = Substitute.For<ILocalLibraryClient>();
     private readonly InMemoryObjectStoreProvider stores = new();
     private int midePrimaryFileId;
     private int mideRifeFileId;
@@ -23,7 +21,7 @@ public class DeoVrServiceTests : IDisposable
     public void Dispose() => dbFactory.Dispose();
 
     private DeoVrService Service() =>
-        new(dbFactory, settings, new DeoVrGroupService(dbFactory), new MovieGridQueryService(dbFactory), localLibrary, new TrickplayStore(dbFactory, stores));
+        new(dbFactory, settings, new DeoVrGroupService(dbFactory), new MovieGridQueryService(dbFactory), new TrickplayStore(dbFactory, stores));
 
     private async Task<(Movie Mide, Movie Sivr, Movie Missing)> SeedAsync()
     {
@@ -193,32 +191,6 @@ public class DeoVrServiceTests : IDisposable
 
         Assert.Equal($"{Base}/deovr/timeline/{mide.Id}/{identity}/4096_timelinePreview341x195.jpg", video!.TimelinePreview);
         Assert.Contains("\"timelinePreview\"", JsonSerializer.Serialize(video), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task GetThumbnailAsync_PrefersLocalFanart_ThenTheRemoteCover()
-    {
-        var (mide, _, missing) = await SeedAsync();
-        localLibrary.ResolveFirstExistingLocalFilePathAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
-            .Returns((string?)null);
-        localLibrary.ResolveFirstExistingLocalFilePathAsync("MIDE-400", Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
-            .Returns("/lib/MIDE-400/fanart.jpg");
-
-        Assert.Equal(new DeoVrThumbnail("/lib/MIDE-400/fanart.jpg", null), await Service().GetThumbnailAsync(mide.Id));
-        Assert.Equal(new DeoVrThumbnail(null, "https://img.example.com/abc.jpg"), await Service().GetThumbnailAsync(missing.Id));
-        Assert.Null(await Service().GetThumbnailAsync(9999));
-    }
-
-    [Fact]
-    public async Task GetThumbnailAsync_NeverOffersWebPFanart()
-    {
-        var (mide, _, _) = await SeedAsync();
-
-        await Service().GetThumbnailAsync(mide.Id);
-
-        await localLibrary.Received().ResolveFirstExistingLocalFilePathAsync("MIDE-400",
-            Arg.Is<IReadOnlyList<string>>(names => !names.Any(n => n.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))),
-            Arg.Any<CancellationToken>());
     }
 
     [Fact]

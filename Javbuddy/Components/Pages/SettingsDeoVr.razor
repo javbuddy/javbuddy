@@ -126,28 +126,35 @@ else
                                         OnToggleCodec="o => UpdateAsync(() => Toggle(editor.Codecs, o))"
                                         AvailableStudios="@(summary?.Studios ?? [])"
                                         StudioFilter="@editor.Studios"
-                                        OnToggleStudio="o => UpdateAsync(() => Toggle(editor.Studios, o))"
-                                        OnSelectAllStudios="all => UpdateAsync(() => editor.Studios.UnionWith(all))"
-                                        OnSelectNoneStudios="() => UpdateAsync(editor.Studios.Clear)"
+                                        OnToggleStudio="o => UpdateAsync(() => editor.Studios.CycleInclusion(editor.ExcludedStudios, o))"
+                                        OnSelectAllStudios="all => UpdateAsync(() => SelectAll(editor.Studios, editor.ExcludedStudios, all))"
+                                        OnSelectNoneStudios="() => UpdateAsync(() => SelectNone(editor.Studios, editor.ExcludedStudios))"
+                                        Excludable="true"
+                                        ExcludedStudioFilter="@editor.ExcludedStudios"
+                                        ExcludedGenreFilter="@editor.ExcludedGenres"
+                                        ExcludedActorFilter="@editor.ExcludedActors"
                                         AvailableGenres="@(summary?.Genres ?? [])"
                                         GenreFilter="@editor.Genres"
-                                        OnToggleGenre="o => UpdateAsync(() => Toggle(editor.Genres, o))"
-                                        OnSelectAllGenres="all => UpdateAsync(() => editor.Genres.UnionWith(all))"
-                                        OnSelectNoneGenres="() => UpdateAsync(editor.Genres.Clear)"
+                                        OnToggleGenre="o => UpdateAsync(() => editor.Genres.CycleInclusion(editor.ExcludedGenres, o))"
+                                        OnSelectAllGenres="all => UpdateAsync(() => SelectAll(editor.Genres, editor.ExcludedGenres, all))"
+                                        OnSelectNoneGenres="() => UpdateAsync(() => SelectNone(editor.Genres, editor.ExcludedGenres))"
                                         FeatureFilter="@editor.Features"
                                         OnToggleFeature="o => UpdateAsync(() => Toggle(editor.Features, o))"
                                         CountOptions="@(summary?.Counts ?? MovieCountOptions.None)"
                                         CountSelection="@editor.Counts"
                                         OnCountsChanged="c => UpdateAsync(() => editor.Counts = MovieFilterOptions.MergeCounts(editor.Counts, c, summary?.Counts ?? MovieCountOptions.None))"
+                                        RangeOptions="@(summary?.Ranges ?? MovieRangeOptions.None)"
+                                        RangeSelection="@editor.Ranges"
+                                        OnRangesChanged="r => UpdateAsync(() => editor.Ranges = MovieFilterOptions.MergeRanges(editor.Ranges, r, summary?.Ranges ?? MovieRangeOptions.None))"
                                         ShowActorAttributes="true"
                                         ActorAttributeOptions="@(summary?.ActorAttributes ?? ActorAttributeOptions.None)"
                                         ActorAttributeSelection="@editor.ActorAttributes"
                                         OnActorAttributesChanged="a => UpdateAsync(() => editor.ActorAttributes = MovieFilterOptions.MergeActorAttributes(editor.ActorAttributes, a, summary?.ActorAttributes ?? ActorAttributeOptions.None))"
                                         AvailableActors="@actorOptions"
                                         ActorFilter="@editor.Actors"
-                                        OnToggleActor="id => UpdateAsync(() => Toggle(editor.Actors, id))"
-                                        OnSelectAllActors="ids => UpdateAsync(() => editor.Actors.UnionWith(ids))"
-                                        OnSelectNoneActors="() => UpdateAsync(editor.Actors.Clear)"
+                                        OnToggleActor="id => UpdateAsync(() => editor.Actors.CycleInclusion(editor.ExcludedActors, id))"
+                                        OnSelectAllActors="ids => UpdateAsync(() => SelectAll(editor.Actors, editor.ExcludedActors, ids))"
+                                        OnSelectNoneActors="() => UpdateAsync(() => SelectNone(editor.Actors, editor.ExcludedActors))"
                                         SortField="@editor.SortField"
                                         SortDescending="@editor.SortDescending"
                                         OnSortChanged="c => { editor.SortField = c.Field; editor.SortDescending = c.Descending; }"
@@ -250,6 +257,20 @@ else
         if (!set.Remove(value)) set.Add(value);
     }
 
+    // Select All includes what's visible, taking it out of the excluded set; None clears both.
+    private static void SelectAll<T>(HashSet<T> included, HashSet<T> excluded, IEnumerable<T> values)
+    {
+        var list = values.ToList();
+        included.UnionWith(list);
+        excluded.ExceptWith(list);
+    }
+
+    private static void SelectNone<T>(HashSet<T> included, HashSet<T> excluded)
+    {
+        included.Clear();
+        excluded.Clear();
+    }
+
     // The filter options come from the grid's summary; the match count is what DeoVR would list
     // (Got movies with a local file only).
     private async Task RefreshMatchesAsync()
@@ -335,15 +356,20 @@ else
         public HashSet<string> Genres { get; init; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<MovieFeatureFilterOption> Features { get; init; } = [];
         public HashSet<int> Actors { get; init; } = [];
+        public HashSet<string> ExcludedStudios { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<string> ExcludedGenres { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+        public HashSet<int> ExcludedActors { get; init; } = [];
         public ActorAttributeSelection ActorAttributes { get; set; } = ActorAttributeSelection.Empty;
         public MovieCountSelection Counts { get; set; } = MovieCountSelection.Empty;
+        public MovieRangeSelection Ranges { get; set; } = MovieRangeSelection.Empty;
         public string SortField { get; set; } = "added";
         public bool SortDescending { get; set; } = true;
 
         public bool HasFilters =>
             !string.IsNullOrEmpty(Library) || !string.IsNullOrWhiteSpace(Text)
             || Resolutions.Count + ScanTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count + Actors.Count > 0
-            || !ActorAttributes.IsEmpty || !Counts.IsEmpty;
+            || ExcludedStudios.Count + ExcludedGenres.Count + ExcludedActors.Count > 0
+            || !ActorAttributes.IsEmpty || !Counts.IsEmpty || !Ranges.IsEmpty;
 
         public void ClearFilters()
         {
@@ -357,8 +383,12 @@ else
             Genres.Clear();
             Features.Clear();
             Actors.Clear();
+            ExcludedStudios.Clear();
+            ExcludedGenres.Clear();
+            ExcludedActors.Clear();
             ActorAttributes = ActorAttributeSelection.Empty;
             Counts = MovieCountSelection.Empty;
+            Ranges = MovieRangeSelection.Empty;
         }
 
         // No status: the DeoVR lists only ever hold Got movies (MovieGridQueryService.GetWithFilesAsync).
@@ -374,7 +404,11 @@ else
             NfoDriftKinds: NfoDriftKinds.ToList(),
             ActorAttributes: ActorAttributes,
             ActorIds: Actors.ToList(),
-            Counts: Counts.IsEmpty ? null : Counts);
+            Counts: Counts.IsEmpty ? null : Counts,
+            Ranges: Ranges.IsEmpty ? null : Ranges,
+            ExcludedStudios: ExcludedStudios.ToList(),
+            ExcludedGenres: ExcludedGenres.ToList(),
+            ExcludedActorIds: ExcludedActors.ToList());
 
         public static GroupEditor From(DeoVrGroupDefinition group)
         {
@@ -395,6 +429,10 @@ else
                 Features = [.. f.Features ?? []],
                 Counts = f.Counts ?? MovieCountSelection.Empty,
                 Actors = [.. f.ActorIds ?? []],
+                ExcludedStudios = new(f.ExcludedStudios ?? [], StringComparer.OrdinalIgnoreCase),
+                ExcludedGenres = new(f.ExcludedGenres ?? [], StringComparer.OrdinalIgnoreCase),
+                ExcludedActors = [.. f.ExcludedActorIds ?? []],
+                Ranges = f.Ranges ?? MovieRangeSelection.Empty,
                 ActorAttributes = f.ActorAttributes ?? ActorAttributeSelection.Empty,
                 SortField = group.Sort.Field,
                 SortDescending = group.Sort.Descending,

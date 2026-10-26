@@ -24,6 +24,12 @@ public sealed class MovieGridFilterState
     public HashSet<int> ActorTagIds { get; private set; } = [];
     public ActorAttributeSelection ActorAttributes { get; set; } = ActorAttributeSelection.Empty;
     public MovieCountSelection Counts { get; set; } = MovieCountSelection.Empty;
+    public MovieRangeSelection Ranges { get; set; } = MovieRangeSelection.Empty;
+    // The include/exclude groups' excluded values; a value is in its group's included set or here, never both.
+    public HashSet<string> ExcludedStudios { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<string> ExcludedGenres { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
+    public HashSet<int> ExcludedActorIds { get; private set; } = [];
+    public HashSet<int> ExcludedActorTagIds { get; private set; } = [];
     public string Text { get; set; } = "";
     public string? CodePrefix { get; set; }
     public string SortField { get; set; } = "added";
@@ -53,12 +59,18 @@ public sealed class MovieGridFilterState
         [.. ActorTagIds],
         MatchAllGenres,
         MatchAllActorTags,
-        Counts.IsEmpty ? null : Counts);
+        Counts.IsEmpty ? null : Counts,
+        Ranges.IsEmpty ? null : Ranges,
+        [.. ExcludedStudios],
+        [.. ExcludedGenres],
+        [.. ExcludedActorIds],
+        [.. ExcludedActorTagIds]);
 
     public MovieGridSort ToSort() => new(SortField, SortDescending, RandomSortSeed);
 
     private int ActiveFilterCount => Resolutions.Count + ScanTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count
-        + ActorIds.Count + ActorTagIds.Count + ActorAttributes.Count + Counts.Count;
+        + ActorIds.Count + ActorTagIds.Count + ActorAttributes.Count + Counts.Count + Ranges.Count
+        + ExcludedStudios.Count + ExcludedGenres.Count + ExcludedActorIds.Count + ExcludedActorTagIds.Count;
 
     public bool HasActiveFilters =>
         Status is not null
@@ -68,7 +80,8 @@ public sealed class MovieGridFilterState
         || ActiveFilterCount > 0;
 
     /// <summary>Clears every filter a MovieFilterNavigationState target doesn't set itself (text,
-    /// code prefix, studio and genre are set by the page, so genre match-all is reset here), and
+    /// code prefix, studio and genre are set by the page, so genre match-all and the excluded studios
+    /// and genres are reset here), and
     /// makes the actor-tag filter just actorTagTarget when there is one. Returns whether that
     /// changed anything.</summary>
     public bool ClearBesidesNavigationTargets(int? actorTagTarget = null)
@@ -76,7 +89,8 @@ public sealed class MovieGridFilterState
         var actorTagsChanged = actorTagTarget is { } target ? !(ActorTagIds.Count == 1 && ActorTagIds.Contains(target)) : ActorTagIds.Count > 0;
         var anyActive = Status is not null || !string.IsNullOrEmpty(Library) || Resolutions.Count > 0
             || ScanTypes.Count > 0 || NfoDriftKinds.Count > 0 || Codecs.Count > 0 || Features.Count > 0
-            || ActorIds.Count > 0 || actorTagsChanged || ActorAttributes.Count > 0 || Counts.Count > 0;
+            || ActorIds.Count > 0 || actorTagsChanged || ActorAttributes.Count > 0 || Counts.Count > 0 || Ranges.Count > 0
+            || ExcludedStudios.Count > 0 || ExcludedGenres.Count > 0 || ExcludedActorIds.Count > 0 || ExcludedActorTagIds.Count > 0;
         Status = null;
         Library = null;
         Resolutions.Clear();
@@ -91,6 +105,11 @@ public sealed class MovieGridFilterState
         if (actorTagTarget is { } actorTag) ActorTagIds.Add(actorTag);
         ActorAttributes = ActorAttributeSelection.Empty;
         Counts = MovieCountSelection.Empty;
+        Ranges = MovieRangeSelection.Empty;
+        ExcludedStudios.Clear();
+        ExcludedGenres.Clear();
+        ExcludedActorIds.Clear();
+        ExcludedActorTagIds.Clear();
         return anyActive;
     }
 
@@ -116,7 +135,9 @@ public sealed class MovieGridFilterState
         Status, Library, [.. Resolutions], [.. ScanTypes], [.. Codecs],
         [.. Studios], [.. Genres], [.. Features], Text, CodePrefix,
         SortField, SortDescending, [.. NfoDriftKinds],
-        ActorAttributes, [.. ActorIds], ActorTagFilter: [.. ActorTagIds], MatchAllGenres: MatchAllGenres, MatchAllActorTags: MatchAllActorTags, Counts: Counts);
+        ActorAttributes, [.. ActorIds], ActorTagFilter: [.. ActorTagIds], MatchAllGenres: MatchAllGenres, MatchAllActorTags: MatchAllActorTags, Counts: Counts,
+        Ranges: Ranges, ExcludedStudioFilter: [.. ExcludedStudios], ExcludedGenreFilter: [.. ExcludedGenres],
+        ExcludedActorFilter: [.. ExcludedActorIds], ExcludedActorTagFilter: [.. ExcludedActorTagIds]);
 
     /// <summary>Applies a saved selection; a list the state doesn't carry (a cookie written before
     /// that filter existed) keeps its current value.</summary>
@@ -135,6 +156,11 @@ public sealed class MovieGridFilterState
         if (state.Counts is not null) Counts = state.Counts;
         if (state.ActorFilter is not null) ActorIds = [.. state.ActorFilter];
         if (state.ActorTagFilter is not null) ActorTagIds = [.. state.ActorTagFilter];
+        if (state.Ranges is not null) Ranges = state.Ranges;
+        if (state.ExcludedStudioFilter is not null) ExcludedStudios = new HashSet<string>(state.ExcludedStudioFilter, StringComparer.OrdinalIgnoreCase);
+        if (state.ExcludedGenreFilter is not null) ExcludedGenres = new HashSet<string>(state.ExcludedGenreFilter, StringComparer.OrdinalIgnoreCase);
+        if (state.ExcludedActorFilter is not null) ExcludedActorIds = [.. state.ExcludedActorFilter];
+        if (state.ExcludedActorTagFilter is not null) ExcludedActorTagIds = [.. state.ExcludedActorTagFilter];
         MatchAllGenres = state.MatchAllGenres;
         MatchAllActorTags = state.MatchAllActorTags;
         DropLoneMatchAll();
@@ -176,7 +202,12 @@ public sealed record MoviesViewState(
     List<int>? ActorTagFilter = null,
     bool MatchAllGenres = false,
     bool MatchAllActorTags = false,
-    MovieCountSelection? Counts = null)
+    MovieCountSelection? Counts = null,
+    MovieRangeSelection? Ranges = null,
+    List<string>? ExcludedStudioFilter = null,
+    List<string>? ExcludedGenreFilter = null,
+    List<int>? ExcludedActorFilter = null,
+    List<int>? ExcludedActorTagFilter = null)
 {
     public const string CookieName = "javbuddy-movies-view";
 }

@@ -305,6 +305,9 @@ else
                                                 OnToggleStudio="ToggleStudioFilter"
                                                 OnSelectAllStudios="SelectAllStudios"
                                                 OnSelectNoneStudios="SelectNoneStudios"
+                                                Excludable="true"
+                                                ExcludedStudioFilter="@excludedStudioFilter"
+                                                ExcludedGenreFilter="@excludedGenreFilter"
                                                 AvailableGenres="@availableGenres"
                                                 GenreFilter="@genreFilter"
                                                 OnToggleGenre="ToggleGenreFilter"
@@ -315,6 +318,9 @@ else
                                                 CountOptions="@countOptions"
                                                 CountSelection="@countFilter"
                                                 OnCountsChanged="edited => countFilter = MovieFilterOptions.MergeCounts(countFilter, edited, countOptions)"
+                                                RangeOptions="@rangeOptions"
+                                                RangeSelection="@rangeFilter"
+                                                OnRangesChanged="edited => rangeFilter = MovieFilterOptions.MergeRanges(rangeFilter, edited, rangeOptions)"
                                                 SortField="@sortField"
                                                 SortDescending="@sortDescending"
                                                 OnSortChanged="SetSort"
@@ -429,9 +435,13 @@ else
     private HashSet<string> codecFilter = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> studioFilter = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> genreFilter = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> excludedStudioFilter = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> excludedGenreFilter = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<MovieFeatureFilterOption> featureFilter = new();
     private MovieCountSelection countFilter = MovieCountSelection.Empty;
     private MovieCountOptions countOptions = MovieCountOptions.None;
+    private MovieRangeSelection rangeFilter = MovieRangeSelection.Empty;
+    private MovieRangeOptions rangeOptions = MovieRangeOptions.None;
     private string textFilter = "";
     private string sortField = "release";
     private bool sortDescending = true;
@@ -467,8 +477,6 @@ else
     private string? scrollTrackedRouteName;
     private ActorPhotoGallery? photoGalleryRef;
     private IReadOnlyList<ActorDetailSection> sectionOrder = ActorDetailSectionOrder.Default;
-
-    private const long RandomSortModulus = int.MaxValue;
 
     // Rendered as PosterImageLoading.Eager (real src, present from the very first server render)
     // instead of JsLazy — otherwise even the always-visible first screenful would show blank
@@ -568,6 +576,8 @@ else
             allMovies.Select(m => m.Highlights.Count).DefaultIfEmpty().Max(),
             allMovies.Select(m => m.Apexes.Count).DefaultIfEmpty().Max());
         countFilter = MovieFilterOptions.NormalizeCounts(countFilter, countOptions);
+        rangeOptions = MovieRangeOptions.FromMovies(allMovies);
+        rangeFilter = MovieFilterOptions.NormalizeRanges(rangeFilter, rangeOptions);
 
         libraryNames = allMovies
             .Where(m => !string.IsNullOrWhiteSpace(m.JellyfinLibraryName))
@@ -602,8 +612,9 @@ else
 
     private string FilterFingerprint() => string.Join('|',
         Fingerprint(resolutionFilter), Fingerprint(scanTypeFilter), Fingerprint(nfoDriftFilter), Fingerprint(codecFilter),
-        Fingerprint(studioFilter), Fingerprint(genreFilter), Fingerprint(featureFilter),
-        $"{countFilter.Scenes}{countFilter.Highlights}{countFilter.Apexes}");
+        Fingerprint(studioFilter), Fingerprint(genreFilter), Fingerprint(excludedStudioFilter), Fingerprint(excludedGenreFilter),
+        Fingerprint(featureFilter), $"{countFilter.Scenes}{countFilter.Highlights}{countFilter.Apexes}",
+        $"{rangeFilter.ReleaseYear}{rangeFilter.RuntimeMinutes}{rangeFilter.BitrateMbps}{rangeFilter.FileSizeGb}{rangeFilter.CastSize}");
 
     private static string Fingerprint<T>(HashSet<T> set) =>
         string.Join(',', set.Select(item => item?.ToString() ?? "").Order(StringComparer.Ordinal));
@@ -621,12 +632,15 @@ else
         query = MovieFilterPredicates.WhereScanTypes(query.AsQueryable(), scanTypeFilter);
         query = MovieFilterPredicates.WhereCodecs(query.AsQueryable(), codecFilter);
         query = MovieFilterPredicates.WhereStudios(query.AsQueryable(), studioFilter);
+        query = MovieFilterPredicates.WhereNotStudios(query.AsQueryable(), excludedStudioFilter);
 
         // Same predicates as the Movies page, evaluated in memory over the
-        // loaded movies (MovieTags → Tag → ParentTag, Scenes, Highlights and Apexes are included above).
+        // loaded movies (MovieTags → Tag → ParentTag, Scenes, Highlights, Apexes and MovieActors → Actor are included above).
         query = MovieFilterPredicates.WhereGenres(query.AsQueryable(), genreFilter);
+        query = MovieFilterPredicates.WhereNotGenres(query.AsQueryable(), excludedGenreFilter);
         query = MovieFilterPredicates.WhereFeatures(query.AsQueryable(), featureFilter);
         query = MovieFilterPredicates.WhereCounts(query.AsQueryable(), countFilter);
+        query = MovieFilterPredicates.WhereRanges(query.AsQueryable(), rangeFilter);
 
         query = MovieFilterPredicates.WhereNfoDriftKinds(query.AsQueryable(), nfoDriftFilter);
 
@@ -660,32 +674,12 @@ else
         }
     }
 
+    // In memory, so the DateAdded column's own expression, not EF.Property (which only works inside an EF query).
     private IEnumerable<Movie> SortMovies(IEnumerable<Movie> query) =>
-        sortField switch
-        {
-            "title" => sortDescending
-                ? query.OrderByDescending(m => m.Code)
-                : query.OrderBy(m => m.Code),
-            "size" => sortDescending
-                ? query.OrderBy(m => m.LocalFileSizeBytes == null).ThenByDescending(m => m.LocalFileSizeBytes)
-                : query.OrderBy(m => m.LocalFileSizeBytes == null).ThenBy(m => m.LocalFileSizeBytes),
-            "status" => sortDescending
-                ? query.OrderBy(m => m.Status == MovieStatus.Missing)
-                : query.OrderByDescending(m => m.Status == MovieStatus.Missing),
-            "release" => sortDescending
-                ? query.OrderBy(m => m.MetaReleaseDate == null).ThenByDescending(m => m.MetaReleaseDate)
-                : query.OrderBy(m => m.MetaReleaseDate == null).ThenBy(m => m.MetaReleaseDate),
-            "runtime" => sortDescending
-                ? query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenByDescending(m => m.MetaRuntimeMinutes)
-                : query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenBy(m => m.MetaRuntimeMinutes),
-            "random" => query.OrderBy(m => (long)m.Id * randomSortSeed % RandomSortModulus),
-            // In memory, so the DateAdded column's own expression, not EF.Property (which only works inside an EF query).
-            _ => sortDescending
-                ? query.OrderByDescending(m => m.FileAddedAt ?? m.CreatedAt)
-                : query.OrderBy(m => m.FileAddedAt ?? m.CreatedAt),
-        };
+        MovieSortOrders.Apply(query.AsQueryable(), new MovieGridSort(sortField, sortDescending, randomSortSeed), m => m.FileAddedAt ?? m.CreatedAt);
 
-    private int ActiveFilterCount => resolutionFilter.Count + scanTypeFilter.Count + nfoDriftFilter.Count + codecFilter.Count + studioFilter.Count + genreFilter.Count + featureFilter.Count + countFilter.Count;
+    private int ActiveFilterCount => resolutionFilter.Count + scanTypeFilter.Count + nfoDriftFilter.Count + codecFilter.Count + studioFilter.Count + genreFilter.Count
+        + excludedStudioFilter.Count + excludedGenreFilter.Count + featureFilter.Count + countFilter.Count + rangeFilter.Count;
 
     private bool HasActiveFilters =>
         filter is not null
@@ -704,8 +698,11 @@ else
         codecFilter.Clear();
         studioFilter.Clear();
         genreFilter.Clear();
+        excludedStudioFilter.Clear();
+        excludedGenreFilter.Clear();
         featureFilter.Clear();
         countFilter = MovieCountSelection.Empty;
+        rangeFilter = MovieRangeSelection.Empty;
     }
 
     private void SetFilter(MovieStatus? status) => filter = status;
@@ -736,21 +733,38 @@ else
 
     private void ToggleStudioFilter(string studio)
     {
-        studioFilter.Toggle(studio);
+        studioFilter.CycleInclusion(excludedStudioFilter, studio);
     }
 
-    private void SelectAllStudios(IReadOnlyList<string> studios) => studioFilter.UnionWith(studios);
+    // Select All includes what's visible, taking it out of the excluded set; None clears both.
+    private void SelectAllStudios(IReadOnlyList<string> studios)
+    {
+        studioFilter.UnionWith(studios);
+        excludedStudioFilter.ExceptWith(studios);
+    }
 
-    private void SelectNoneStudios() => studioFilter.Clear();
+    private void SelectNoneStudios()
+    {
+        studioFilter.Clear();
+        excludedStudioFilter.Clear();
+    }
 
     private void ToggleGenreFilter(string genre)
     {
-        genreFilter.Toggle(genre);
+        genreFilter.CycleInclusion(excludedGenreFilter, genre);
     }
 
-    private void SelectAllGenres(IReadOnlyList<string> genres) => genreFilter.UnionWith(genres);
+    private void SelectAllGenres(IReadOnlyList<string> genres)
+    {
+        genreFilter.UnionWith(genres);
+        excludedGenreFilter.ExceptWith(genres);
+    }
 
-    private void SelectNoneGenres() => genreFilter.Clear();
+    private void SelectNoneGenres()
+    {
+        genreFilter.Clear();
+        excludedGenreFilter.Clear();
+    }
 
     private void ToggleFeatureFilter(MovieFeatureFilterOption feature)
     {
@@ -816,13 +830,24 @@ else
         var newStatus = await ActorService.ToggleFavoriteAsync(actor.Id);
         actor.IsFavorite = newStatus;
         actor.FavoritedAt = newStatus ? DateTime.UtcNow : null;
+
+        // The movies' cast holds its own copy of this actor (loaded separately), which the
+        // "Has favorite actor" filter reads, so it is updated too and the view re-run.
+        foreach (var link in allMovies.SelectMany(m => m.MovieActors).Where(ma => ma.ActorId == actor.Id && ma.Actor is not null))
+        {
+            link.Actor.IsFavorite = actor.IsFavorite;
+            link.Actor.FavoritedAt = actor.FavoritedAt;
+        }
+        viewKey = null;
     }
 
     // Flips the heart from the returned value, like the Movies grid.
     private async Task ToggleMovieFavorite(Movie movie)
     {
         movie.IsFavorite = await MovieService.ToggleFavoriteAsync(movie.Id);
-        // Changed in place, so the view key can't see it; the Favorites filter has to re-run.
+        // As MovieService stores it, for the Date favorited sort.
+        movie.FavoritedAt = movie.IsFavorite ? DateTime.UtcNow : null;
+        // Changed in place, so the view key can't see it; the Favorites filter and sort have to re-run.
         viewKey = null;
     }
 

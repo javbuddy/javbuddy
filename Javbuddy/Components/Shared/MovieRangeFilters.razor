@@ -1,0 +1,43 @@
+@using Javbuddy.Services.Movies
+
+@foreach (var row in Rows)
+{
+    @if (row.Bounds is { } bounds)
+    {
+        <RangeFilter @key="row.Label" Label="@row.Label" Unit="@row.Unit"
+                     BoundsMin="bounds.Min" BoundsMax="bounds.Max"
+                     SelectedMin="@(row.Selected.Min ?? bounds.Min)" SelectedMax="@(row.Selected.Max ?? bounds.Max)"
+                     OnRangeCommitted="r => CommitRangeAsync(row, r)" />
+    }
+}
+
+@code {
+    /// <summary>The Movies filter's release year / runtime / bitrate / file size range sliders, each its own top-level
+    /// entry of the Filter menu and shown only when the movies span a range, or with <see cref="Cast"/> just
+    /// the cast size one (it sits under "Actor"). Like <see cref="MovieCountFilters"/>: Selection is the applied one, and
+    /// edits are raised as a modified copy through SelectionChanged.</summary>
+    [Parameter, EditorRequired] public MovieRangeOptions Options { get; set; } = MovieRangeOptions.None;
+    [Parameter, EditorRequired] public MovieRangeSelection Selection { get; set; } = MovieRangeSelection.Empty;
+    [Parameter] public EventCallback<MovieRangeSelection> SelectionChanged { get; set; }
+    [Parameter] public bool Cast { get; set; }
+
+    private sealed record Row(string Label, string Unit, RangeBounds? Bounds, IntRange Selected, Func<MovieRangeSelection, IntRange, MovieRangeSelection> With);
+
+    private IEnumerable<Row> Rows => Cast
+        ? [new("Cast size", "", Options.CastSize, Selection.CastSize, (s, r) => s with { CastSize = r })]
+        :
+        [
+            new("Release year", "", Options.ReleaseYear, Selection.ReleaseYear, (s, r) => s with { ReleaseYear = r }),
+            new("Runtime", "min", Options.RuntimeMinutes, Selection.RuntimeMinutes, (s, r) => s with { RuntimeMinutes = r }),
+            new("Bitrate", "Mbps", Options.BitrateMbps, Selection.BitrateMbps, (s, r) => s with { BitrateMbps = r }),
+            new("File size", "GB", Options.FileSizeGb, Selection.FileSizeGb, (s, r) => s with { FileSizeGb = r }),
+        ];
+
+    // A thumb at its end stop means "no limit" on that side, so a movie past today's extremes isn't excluded.
+    private Task CommitRangeAsync(Row row, (int Min, int Max) range)
+    {
+        var bounds = row.Bounds!;
+        var next = new IntRange(range.Min <= bounds.Min ? null : range.Min, range.Max >= bounds.Max ? null : range.Max);
+        return SelectionChanged.InvokeAsync(row.With(Selection, next));
+    }
+}

@@ -164,7 +164,7 @@ public class MovieFilterToolbarTests : BunitContext
     }
 
     [Fact]
-    public void FilterDropdown_HasAnNfoDriftGroup_WithEveryDirection_AndTogglesOne()
+    public void FilterDropdown_HasAnNfoDriftGroupUnderFeatures_WithEveryDirection_AndTogglesOne()
     {
         NfoDriftKind? toggled = null;
 
@@ -174,9 +174,13 @@ public class MovieFilterToolbarTests : BunitContext
 
         cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
         Assert.Contains("Filter (1)", cut.Markup);
+        // NFO drift sits inside the Features section, which counts it.
+        Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.StartsWith("NFO drift"));
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features (1)")).Click();
         cut.FindAll("button").First(b => b.TextContent.StartsWith("NFO drift")).Click();
 
-        var options = cut.FindAll("button.sort-dropdown-subitem");
+        // The Features options show first, above the NFO drift group.
+        var options = cut.FindAll("button.sort-dropdown-subitem").TakeLast(4).ToList();
         Assert.Equal(["Javbuddy changed", "External edit", "Both changed", "Unreadable"], options.Select(b => b.TextContent.Replace("✓", "").Trim()));
         Assert.Equal(["Unreadable"], options.Where(b => b.ClassList.Contains("active")).Select(b => b.TextContent.Replace("✓", "").Trim()));
 
@@ -184,8 +188,9 @@ public class MovieFilterToolbarTests : BunitContext
 
         Assert.Equal(NfoDriftKind.ExternalEdit, toggled);
 
-        // None of it is offered under Features any more.
-        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
+        // None of it is offered as a Features option any more, and the Features options show without a header of their own.
+        Assert.Single(cut.FindAll("button"), b => b.TextContent.StartsWith("Features"));
+        Assert.Contains(cut.FindAll("button.sort-dropdown-subitem"), b => b.TextContent.Trim() == "Has subtitles");
         Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.Contains("NFO drift:"));
     }
 
@@ -430,5 +435,82 @@ public class MovieFilterToolbarTests : BunitContext
         OpenFilterMenu(cut);
 
         Assert.DoesNotContain("Actor", cut.Markup.Replace("ActorAttribute", ""));
+    }
+    [Fact]
+    public void ExcludedGenres_ShowStruckThroughWithACross_AndCountInTheBadges()
+    {
+        var cut = Render<MovieFilterToolbar>(p => p
+            .Add(x => x.AvailableGenres, new[] { "Drama", "Comedy", "Horror" })
+            .Add(x => x.GenreFilter, new HashSet<string> { "Drama" })
+            .Add(x => x.Excludable, true)
+            .Add(x => x.ExcludedGenreFilter, new HashSet<string> { "Horror" }));
+
+        Assert.Contains("Filter (2)", cut.Markup);
+        OpenFilterMenu(cut);
+        Assert.Contains("Genre (2)", cut.Markup);
+        OpenGenreGroup(cut);
+
+        var items = cut.FindAll("button.sort-dropdown-subitem");
+        var horror = items.Single(b => b.TextContent.Contains("Horror"));
+        Assert.Contains("multiselect-excluded", horror.ClassList);
+        Assert.Contains("✕", horror.TextContent);
+        Assert.Equal("Click to clear", horror.GetAttribute("title"));
+        Assert.Contains("✓", items.Single(b => b.TextContent.Contains("Drama")).TextContent);
+        Assert.DoesNotContain("multiselect-excluded", items.Single(b => b.TextContent.Contains("Comedy")).ClassList);
+    }
+
+    [Fact]
+    public void ReleasesBrowseMode_DoesNotShowExcludedStudios()
+    {
+        var cut = Render<MovieFilterToolbar>(p => p
+            .Add(x => x.ReleasesBrowseMode, true)
+            .Add(x => x.AvailableStudios, new[] { "S1" })
+            .Add(x => x.Excludable, true)
+            .Add(x => x.ExcludedStudioFilter, new HashSet<string> { "S1" }));
+
+        OpenFilterMenu(cut);
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Studio")).Click();
+
+        Assert.Empty(cut.FindAll(".multiselect-excluded"));
+        Assert.Null(cut.FindAll("button.sort-dropdown-subitem").Single().GetAttribute("title"));
+    }
+
+    [Fact]
+    public void Ranges_AreTopLevelFilters_AndCastSizeSitsUnderActor()
+    {
+        MovieRangeSelection? emitted = null;
+        var cut = Render<MovieFilterToolbar>(p => p
+            .Add(x => x.RangeOptions, new MovieRangeOptions { ReleaseYear = new RangeBounds(2010, 2024), RuntimeMinutes = new RangeBounds(60, 240), CastSize = new RangeBounds(0, 4) })
+            .Add(x => x.RangeSelection, new MovieRangeSelection { RuntimeMinutes = new IntRange(90, null), CastSize = new IntRange(1, 1) })
+            .Add(x => x.OnRangesChanged, EventCallback.Factory.Create<MovieRangeSelection>(this, r => emitted = r)));
+
+        Assert.Contains("Filter (2)", cut.Markup);
+        OpenFilterMenu(cut);
+        Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.StartsWith("Ranges"));
+        Assert.Contains("Runtime (90–240 min)", cut.Markup);
+        Assert.DoesNotContain("Bitrate", cut.Markup);
+        Assert.DoesNotContain("Cast size", cut.Markup);
+
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Actor")).Click();
+        Assert.Contains("Cast size (1)", cut.Markup);
+
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Release year")).Click();
+        cut.FindAll(".range-thumb-input")[0].Change("2015");
+        Assert.Equal(new IntRange(2015, null), emitted!.ReleaseYear);
+        Assert.Equal(new IntRange(90, null), emitted.RuntimeMinutes);
+    }
+
+    [Fact]
+    public void SortDropdown_OffersTheNewSorts_AndLabelsFavoritesAsDateFavorited()
+    {
+        var cut = Render<MovieFilterToolbar>();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Sort:")).Click();
+
+        var labels = cut.FindAll("button.sort-dropdown-item").Select(b => b.TextContent.Trim()).ToList();
+        foreach (var label in new[] { "Code", "Bitrate", "Date favorited", "Scenes", "Highlights", "Apexes", "Cast size" })
+        {
+            Assert.Contains(labels, l => l.StartsWith(label, StringComparison.Ordinal));
+        }
+        Assert.DoesNotContain(labels, l => l == "Favorites");
     }
 }

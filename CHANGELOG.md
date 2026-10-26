@@ -4,9 +4,27 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- The Movies, Actor Detail and DeoVR filters gain Release year, Runtime, Bitrate and File size sliders, and the Actor section gains a Cast size slider (how many linked actors a movie has). Features gains "Has favorite actor" and "Has retired actor".
+- Genre, Studio, actor Name and Actor tag filter options can be excluded: clicking an option includes it (✓), clicking again excludes it (✕, struck through), and a third click clears it. Excluding is not offered for Studio while browsing all r18.dev releases.
+- New sorts: Code (natural order ignoring case, so ABC-2 comes before abc-10), Bitrate, Scenes, Highlights, Apexes and Cast size.
+
+### Changed
+
+- The Favorites sort is now Date favorited: favorites first, most recently favorited first (or oldest first when reversed), then everything else by code. Actor Detail now honors it too, where it previously fell back to Added.
+- The Filter menu's NFO drift group now sits inside Features, below the feature options.
+
 ### Fixed
 
 - Long actor tags, and tags under a parent, are no longer cut off in the cast pills on Movie Detail or in the actor-tag hover popovers; they wrap instead.
+
+## [0.3.7] - 2026-10-25
+
+### Changed
+
+- DeoVR's list thumbnails are now each movie's fanart downscaled to an 800px JPEG and kept in the image cache, instead of the full-size original or the remote cover, so DeoVR's lists load faster. A WebP fanart now gets a thumbnail too. While DeoVR is enabled, the Image Cache task builds them ahead of time; any not built yet are built on first request.
+
 ## [0.3.6] - 2026-10-22
 
 ### Changed

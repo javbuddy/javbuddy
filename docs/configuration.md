@@ -111,7 +111,7 @@ Used when services run in different Docker containers or across different networ
 
 ### Image Cache
 
-Javbuddy converts and caches cover posters, fanart, extrafanart, and actor images to WebP format for fast browsing. DeoVR's seek-bar preview mosaics are cached here too, as JPEGs, in every mode except `Disabled`, which builds them on each request instead. The TTL, size limit and purge apply to them like any cached image.
+Javbuddy converts and caches cover posters, fanart, extrafanart, and actor images to WebP format for fast browsing. DeoVR's seek-bar preview mosaics and list thumbnails (each movie's fanart, downscaled to 800px) are cached here too, as JPEGs since DeoVR doesn't show WebP, in every mode except `Disabled`, which builds them on each request instead. While DeoVR is enabled, the Image Cache task builds the thumbnails ahead of time; otherwise each is built on its first request. The TTL, size limit and purge apply to them like any cached image.
 
 | Key | Environment Variable | Default | Description |
 |---|---|---|---|

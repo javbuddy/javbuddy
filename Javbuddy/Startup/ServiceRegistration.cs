@@ -141,6 +141,7 @@ public static class ServiceRegistration
         services.AddScoped<IDeoVrGroupService, DeoVrGroupService>();
         services.AddScoped<IDeoVrService, DeoVrService>();
         services.AddScoped<IDeoVrTimelineService, DeoVrTimelineService>();
+        services.AddScoped<IDeoVrThumbnailService, DeoVrThumbnailService>();
         // Durable data (actor images, trickplay) lives in one object store under ObjectStore:Path, one
         // key prefix per area.
         services.AddSingleton<IObjectStoreProvider>(sp =>

@@ -48,23 +48,24 @@ public static class DeoVrEndpoints
             return Results.Stream(mosaic.Content, "image/jpeg", lastModified: mosaic.LastModified, entityTag: new EntityTagHeaderValue(mosaic.ETag));
         });
 
-        routes.MapGet("/thumb/{movieId:int}", async (int movieId, IDeoVrService deoVr, CancellationToken ct) =>
+        // A JPEG, since DeoVR doesn't show WebP; see IDeoVrThumbnailService.
+        routes.MapGet("/thumb/{movieId:int}", async (HttpContext http, int movieId, IDeoVrService deoVr, IDeoVrThumbnailService thumbnails, CancellationToken ct) =>
         {
             if (await deoVr.GetEnabledSettingsAsync(ct) is null) return Results.NotFound();
-            var thumbnail = await deoVr.GetThumbnailAsync(movieId, ct);
-            return thumbnail switch
+            switch (await thumbnails.GetAsync(movieId, ct))
             {
-                { FilePath: { } path } => Results.File(path, ImageContentType(path)),
-                { RedirectUrl: { } url } => Results.Redirect(url),
-                _ => Results.NotFound(),
-            };
+                case { Image: { } image }:
+                    http.Response.Headers.CacheControl = "private, max-age=300";
+                    return Results.Stream(image.Content, "image/jpeg", lastModified: image.LastModified, entityTag: new EntityTagHeaderValue(image.ETag));
+                case { RedirectUrl: { } url }:
+                    return Results.Redirect(url);
+                default:
+                    return Results.NotFound();
+            }
         });
     }
 
     // The links DeoVR follows go back to the address it reached Javbuddy at.
     private static string BaseUrl(HttpContext http) => DeoVrUrls.BaseUrl(
         http.Request.Scheme, http.Request.Host.ToString(), http.Request.PathBase.ToString(), http.Request.Headers["X-Forwarded-Proto"].FirstOrDefault());
-
-    private static string ImageContentType(string path) =>
-        Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase) ? "image/png" : "image/jpeg";
 }

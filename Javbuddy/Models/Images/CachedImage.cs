@@ -14,8 +14,8 @@ public class CachedImage
     [StringLength(50)]
     public string Code { get; set; } = string.Empty;
 
-    /// <summary>"poster", "fanart", "extrafanart", "scene", "highlight" or
-    /// "deovr-timeline".</summary>
+    /// <summary>"poster", "fanart", "extrafanart", "scene", "highlight", "deovr-timeline" or
+    /// "deovr-thumb".</summary>
     [Required]
     [StringLength(20)]
     public string Role { get; set; } = string.Empty;

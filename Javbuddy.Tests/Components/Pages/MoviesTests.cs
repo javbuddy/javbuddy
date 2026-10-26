@@ -787,6 +787,23 @@ public class MoviesTests : BunitContext
     }
 
     [Fact]
+    public void RememberedExclusions_OfAStudioOrGenreNoMovieHas_AreDropped()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.AddRange(new Movie { Code = "AAA-001", MetaStudio = "S1" }, new Movie { Code = "AAA-002", MetaStudio = "S2" });
+            db.SaveChanges();
+        }
+        RememberedMoviesState("""{"ExcludedStudioFilter":["S1","Gone"],"ExcludedGenreFilter":["Gone"]}""");
+
+        var cut = Render<Movies>();
+
+        Assert.Equal(new[] { "AAA-002" }, RenderedCodes(cut));
+        Assert.Contains("Filter (1)", cut.Markup);
+    }
+
+    [Fact]
     public void VrMovie_ShowsAVrBadgeOnItsPoster_AndItsFormatBesideTheResolution()
     {
         using var factory = SetUpServices();
@@ -842,7 +859,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll(".sort-dropdown-subitem").Single(b => b.TextContent.Trim() == "VR").Click();
 
         Assert.Equal(new[] { "AAA-001", "AAA-002" }, RenderedCodes(cut).OrderBy(c => c));
@@ -871,6 +888,33 @@ public class MoviesTests : BunitContext
 
         var codes = RenderedCodes(cut);
         Assert.Equal(new[] { "AAA-001", "AAA-003", "AAA-004" }, codes.OrderBy(c => c));
+    }
+
+    [Fact]
+    public void ClickingAGenreAgain_ExcludesIt_AndAThirdClickClearsIt()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            AddMovieWithGenres(db, "AAA-001", "VR");
+            AddMovieWithGenres(db, "AAA-002", "Solowork");
+            AddMovieWithGenres(db, "AAA-003", "Solowork", "VR");
+        }
+
+        var cut = Render<Movies>();
+        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
+        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Genre")).Click();
+        AngleSharp.Dom.IElement Vr() => cut.FindAll("button.sort-dropdown-subitem").Single(b => b.TextContent.StartsWith("VR"));
+
+        Vr().Click();
+        Assert.Equal(new[] { "AAA-001", "AAA-003" }, RenderedCodes(cut).OrderBy(c => c));
+
+        Vr().Click();
+        Assert.Equal(new[] { "AAA-002" }, RenderedCodes(cut));
+        Assert.Contains("multiselect-excluded", Vr().ClassList);
+
+        Vr().Click();
+        Assert.Equal(3, RenderedCodes(cut).Count);
     }
 
     [Fact]
@@ -1009,7 +1053,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent == "Has subtitles").Click();
 
         var codes = RenderedCodes(cut);
@@ -1031,7 +1075,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent == "Has trailers").Click();
 
         var codes = RenderedCodes(cut);
@@ -1052,7 +1096,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent == "Favorites").Click();
 
         Assert.Equal(new[] { "AAA-001" }, RenderedCodes(cut));
@@ -1074,6 +1118,7 @@ public class MoviesTests : BunitContext
         Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.Contains("Write Javbuddy metadata to .nfo"));
 
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("NFO drift")).Click();
         cut.FindAll("button.sort-dropdown-subitem").Single(b => b.TextContent.Trim() == "External edit").Click();
 
@@ -1085,23 +1130,23 @@ public class MoviesTests : BunitContext
     }
 
     [Fact]
-    public void FavoritesSort_PutsFavoritesFirstThenOrdersByCode()
+    public void DateFavoritedSort_PutsNewestFavoritesFirstThenTheRestByCode()
     {
         using var factory = SetUpServices();
         using (var db = factory.CreateDbContext())
         {
             db.Movies.Add(new Movie { Code = "AAA-001" });
-            db.Movies.Add(new Movie { Code = "AAA-002", IsFavorite = true });
+            db.Movies.Add(new Movie { Code = "AAA-002", IsFavorite = true, FavoritedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
             db.Movies.Add(new Movie { Code = "AAA-003" });
-            db.Movies.Add(new Movie { Code = "AAA-004", IsFavorite = true });
+            db.Movies.Add(new Movie { Code = "AAA-004", IsFavorite = true, FavoritedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc) });
             db.SaveChanges();
         }
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Sort:")).Click();
-        cut.FindAll("button.sort-dropdown-item").Single(b => b.TextContent.Trim().StartsWith("Favorites")).Click();
+        cut.FindAll("button.sort-dropdown-item").Single(b => b.TextContent.Trim().StartsWith("Date favorited")).Click();
 
-        Assert.Equal(new[] { "AAA-002", "AAA-004", "AAA-001", "AAA-003" }, RenderedCodes(cut));
+        Assert.Equal(new[] { "AAA-004", "AAA-002", "AAA-001", "AAA-003" }, RenderedCodes(cut));
     }
 
     [Fact]
@@ -1138,7 +1183,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent == "Favorites").Click();
         Assert.Equal(2, cut.FindAll(".poster-card").Count);
 
@@ -1763,7 +1808,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(button => button.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(button => button.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(button => button.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(button => button.TextContent.Trim() == "Multiple versions").Click();
 
         Assert.Equal(new[] { "BBB-002", "CCC-003" }, RenderedCodes(cut).OrderBy(code => code));
@@ -1894,6 +1939,43 @@ public class MoviesTests : BunitContext
         cut.WaitForAssertion(() => browse.Received().BrowseAsync(
             Arg.Is<R18DevCatalogFilter>(f => f.CodePrefix == null && string.IsNullOrEmpty(f.SearchText) && f.Studios.Count == 0 && f.ActiveCount == 0),
             0, null, Arg.Any<CancellationToken>()));
+    }
+
+    [Fact]
+    public void IncludingAnExcludedStudioInTheReleasesBrowse_ClearsTheExclusion()
+    {
+        using var factory = SetUpServices();
+        // The catalog's own filter options never arrive: this test doesn't use them, and their background
+        // re-render of the menu would race the clicks below.
+        SetUpReleaseBrowsing().GetFilterOptionsAsync(default).ReturnsForAnyArgs(new TaskCompletionSource<R18DevCatalogOptions>().Task);
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.AddRange(new Movie { Code = "AAA-001", MetaStudio = "S1" }, new Movie { Code = "AAA-002", MetaStudio = "S2" });
+            db.SaveChanges();
+        }
+        var cut = Render<Movies>();
+        AngleSharp.Dom.IElement? S1() => cut.FindAll("button.sort-dropdown-subitem").SingleOrDefault(b => b.TextContent.Trim().StartsWith("S1"));
+        void OpenStudios()
+        {
+            if (!cut.FindAll("button").Any(b => b.TextContent.Trim().StartsWith("Studio"))) cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Filter")).Click();
+            if (S1() is null) cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Studio")).Click();
+        }
+
+        OpenStudios();
+        S1()!.Click();
+        S1()!.Click();
+        cut.WaitForAssertion(() => Assert.Equal(new[] { "AAA-002" }, RenderedCodes(cut)));
+        Assert.Contains("multiselect-excluded", S1()!.ClassList);
+
+        FindButton(cut, "All releases (r18.dev)")!.Click();
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button"), b => b.TextContent.Trim().StartsWith("Hide previously deleted")));
+        OpenStudios();
+        S1()!.Click();
+        cut.WaitForAssertion(() => Assert.Contains("✓", S1()!.TextContent));
+        FindButton(cut, "In library")!.Click();
+
+        // Included, not both included and excluded (which matched nothing).
+        cut.WaitForAssertion(() => Assert.Equal(new[] { "AAA-001" }, RenderedCodes(cut)));
     }
 
     [Fact]
@@ -2079,6 +2161,8 @@ public class MoviesTests : BunitContext
         cut.WaitForAssertion(() => Assert.Contains(LastSavedViewState(), a => a.Contains("\"BrowseReleases\":true", StringComparison.Ordinal)));
 
         cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Filter")).Click();
+        // The catalog's genre options load after the page renders, so the group isn't in the menu straight away.
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button"), b => b.TextContent.Trim().StartsWith("Genre (r18.dev)")));
         cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Genre (r18.dev)")).Click();
         cut.FindAll("button").First(b => b.TextContent.Trim() == "Creampie").Click();
         cut.WaitForAssertion(() => Assert.Contains(LastSavedViewState(), a => a.Contains("\"Genres\":[\"Creampie\"]", StringComparison.Ordinal)));

@@ -1,5 +1,6 @@
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.DeoVr;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Tasks;
@@ -38,6 +39,13 @@ public class ImageCacheTaskTests
 
     private static IProgress<TaskProgress> NoopProgress => new Progress<TaskProgress>();
 
+    private static IDeoVrSettingsService DeoVrSettings(bool enabled)
+    {
+        var settings = Substitute.For<IDeoVrSettingsService>();
+        settings.GetEffectiveAsync(Arg.Any<CancellationToken>()).Returns(new DeoVrSettings { Enabled = enabled });
+        return settings;
+    }
+
     private static ILocalLibraryClient CreateLocalLibraryClient()
     {
         var client = Substitute.For<ILocalLibraryClient>();
@@ -57,7 +65,9 @@ public class ImageCacheTaskTests
         ILocalImageCacheService? movieImageCacheService = null,
         IActorImageCacheService? actorImageCacheService = null,
         ILocalLibraryClient? localLibraryClient = null,
-        IActorPhotoService? actorPhotoService = null)
+        IActorPhotoService? actorPhotoService = null,
+        IDeoVrSettingsService? deoVrSettingsService = null,
+        IDeoVrThumbnailService? deoVrThumbnailService = null)
     {
         if (movieImageCacheService is null)
         {
@@ -89,7 +99,8 @@ public class ImageCacheTaskTests
                 .Returns(((string?)null, (string?)null));
         }
 
-        return new ImageCacheTask(localLibraryClient, movieImageCacheService, actorImageCacheService, cache, factory, actorPhotoService: actorPhotoService);
+        return new ImageCacheTask(localLibraryClient, movieImageCacheService, actorImageCacheService, cache, factory, actorPhotoService: actorPhotoService,
+            deoVrSettingsService: deoVrSettingsService, deoVrThumbnailService: deoVrThumbnailService);
     }
 
     [Fact]
@@ -114,6 +125,68 @@ public class ImageCacheTaskTests
         await movieService.Received(1).GetOrCreateBothAsync("ABC-123", LocalImageCacheService.RoleFanart, 0, Arg.Any<CancellationToken>());
         await actorService.Received(1).GetOrCreateBothAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         Assert.Contains("1 movies / 1 actors", summary);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhileDeoVrIsEnabled_PregeneratesEachMoviesDeoVrThumbnail()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123" });
+            db.SaveChanges();
+        }
+
+        var thumbnails = Substitute.For<IDeoVrThumbnailService>();
+        thumbnails.PregenerateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+        var task = CreateTask(factory, cache, deoVrSettingsService: DeoVrSettings(enabled: true), deoVrThumbnailService: thumbnails);
+
+        var summary = await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        await thumbnails.Received(1).PregenerateAsync("ABC-123", Arg.Any<CancellationToken>());
+        Assert.Contains("1 images cached/up to date", summary);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhileDeoVrIsOff_SkipsDeoVrThumbnails()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123" });
+            db.SaveChanges();
+        }
+
+        var thumbnails = Substitute.For<IDeoVrThumbnailService>();
+        var task = CreateTask(factory, cache, deoVrSettingsService: DeoVrSettings(enabled: false), deoVrThumbnailService: thumbnails);
+
+        await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        await thumbnails.DidNotReceiveWithAnyArgs().PregenerateAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task RunAsync_DeoVrThumbnailFailure_IsCountedAndTheRunContinues()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.AddRange(new Movie { Code = "ABC-123" }, new Movie { Code = "DEF-456" });
+            db.SaveChanges();
+        }
+
+        var thumbnails = Substitute.For<IDeoVrThumbnailService>();
+        thumbnails.PregenerateAsync("ABC-123", Arg.Any<CancellationToken>()).Returns<bool?>(_ => throw new IOException("disk full"));
+        thumbnails.PregenerateAsync("DEF-456", Arg.Any<CancellationToken>()).Returns(true);
+        var task = CreateTask(factory, cache, deoVrSettingsService: DeoVrSettings(enabled: true), deoVrThumbnailService: thumbnails);
+
+        var summary = await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        await thumbnails.Received(1).PregenerateAsync("DEF-456", Arg.Any<CancellationToken>());
+        Assert.Contains("1 images cached/up to date, 1 failed", summary);
     }
 
     [Fact]
@@ -393,6 +466,30 @@ public class ImageCacheTaskTests
         Assert.Empty(verifyDb.CachedImages);
         Assert.False(File.Exists(cache.GetStoragePath(storageId)), "the stale poster file should be swept");
         Assert.Contains("pruned 1 orphaned rows", summary);
+    }
+
+    [Fact]
+    public async Task RunAsync_DeoVrThumbnailOfAMovieWhoseFanartIsGone_IsPruned()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        var row = new CachedImage { Code = "ABC-123", Role = DeoVrThumbnailService.CacheRole, Variant = DeoVrThumbnailService.CacheVariant, StorageId = Guid.NewGuid() };
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123" });
+            db.CachedImages.Add(row);
+            db.SaveChanges();
+        }
+        var path = ((ILocalImageCache)cache).GetStoragePath(row);
+        await File.WriteAllTextAsync(path, "stale thumbnail bytes");
+
+        // The default movie image service finds no local poster or fanart.
+        var task = CreateTask(factory, cache);
+        await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        using var verifyDb = factory.CreateDbContext();
+        Assert.Empty(verifyDb.CachedImages);
+        Assert.False(File.Exists(path), "the stale DeoVR thumbnail should be swept");
     }
 
     [Fact]

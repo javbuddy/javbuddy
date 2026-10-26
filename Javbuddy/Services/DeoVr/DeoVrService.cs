@@ -1,15 +1,11 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
-using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Scenes;
 using Javbuddy.Services.Trickplay;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.DeoVr;
-
-/// <summary>Where a movie's DeoVR thumbnail comes from: a local file, else a remote URL.</summary>
-public sealed record DeoVrThumbnail(string? FilePath, string? RedirectUrl);
 
 /// <summary>Builds DeoVR's JSON documents: the /deovr list (one list per group, in
 /// order) and one movie's document, with every version as an encoding and the
@@ -24,8 +20,6 @@ public interface IDeoVrService
 
     /// <summary>Null when the movie doesn't exist or has no local video file.</summary>
     Task<DeoVrVideoResponse?> GetVideoAsync(int movieId, string baseUrl, CancellationToken ct = default);
-
-    Task<DeoVrThumbnail?> GetThumbnailAsync(int movieId, CancellationToken ct = default);
 }
 
 public sealed class DeoVrService(
@@ -33,12 +27,8 @@ public sealed class DeoVrService(
     IDeoVrSettingsService settingsService,
     IDeoVrGroupService groupService,
     IMovieGridQueryService gridQuery,
-    ILocalLibraryClient localLibraryClient,
     ITrickplayStore trickplayStore) : IDeoVrService
 {
-    // Local fanart DeoVR can be expected to decode; a WebP fanart falls through to the remote cover.
-    private static readonly string[] ThumbnailCandidates = ["fanart.jpg", "fanart.jpeg", "fanart.png"];
-
     public async Task<DeoVrSettings?> GetEnabledSettingsAsync(CancellationToken ct = default)
     {
         var settings = await settingsService.GetEffectiveAsync(ct);
@@ -95,22 +85,6 @@ public sealed class DeoVrService(
                 .Select(s => new DeoVrTimestamp((int)s.Scene.StartSeconds, s.DisplayTitle))
                 .ToList(),
             TimelinePreview: timeline);
-    }
-
-    public async Task<DeoVrThumbnail?> GetThumbnailAsync(int movieId, CancellationToken ct = default)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var movie = await db.Movies.AsNoTracking()
-            .Where(m => m.Id == movieId)
-            .Select(m => new { m.Code, m.MetaCoverUrl })
-            .FirstOrDefaultAsync(ct);
-        if (movie is null || string.IsNullOrWhiteSpace(movie.Code)) return null;
-
-        var local = await localLibraryClient.ResolveFirstExistingLocalFilePathAsync(movie.Code, ThumbnailCandidates, ct);
-        if (local is not null) return new DeoVrThumbnail(local, null);
-        return Uri.TryCreate(movie.MetaCoverUrl, UriKind.Absolute, out var remote) && (remote.Scheme == Uri.UriSchemeHttp || remote.Scheme == Uri.UriSchemeHttps)
-            ? new DeoVrThumbnail(null, remote.AbsoluteUri)
-            : null;
     }
 
     private static List<DeoVrListItem> ToListItems(IEnumerable<Movie> movies, string baseUrl) =>
