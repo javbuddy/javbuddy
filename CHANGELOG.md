@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-10-26
+
 ### Added
 
 - The Movies, Actor Detail and DeoVR filters gain Release year, Runtime, Bitrate and File size sliders, and the Actor section gains a Cast size slider (how many linked actors a movie has). Features gains "Has favorite actor" and "Has retired actor".
