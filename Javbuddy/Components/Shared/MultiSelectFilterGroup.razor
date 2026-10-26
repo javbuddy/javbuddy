@@ -1,8 +1,11 @@
-<button type="button" class="sort-dropdown-item @(ActiveCount > 0 ? "active" : "")" @onclick="ToggleExpanded">
-    <span>@GroupLabel@(ActiveCount > 0 ? $" ({ActiveCount})" : "")</span>
-    <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
-</button>
-@if (expanded)
+@if (!AlwaysExpanded)
+{
+    <button type="button" class="sort-dropdown-item @(ActiveCount > 0 ? "active" : "")" @onclick="ToggleExpanded">
+        <span>@GroupLabel@(ActiveCount > 0 ? $" ({ActiveCount})" : "")</span>
+        <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
+    </button>
+}
+@if (expanded || AlwaysExpanded)
 {
     @if (Searchable)
     {
@@ -80,6 +83,10 @@
     /// <summary>Whether an option's click steps it through include and exclude (see <see cref="MultiSelectOption.IsExcluded"/>),
     /// which only changes the options' hover hint; the stepping itself is the caller's.</summary>
     [Parameter] public bool Excludable { get; set; }
+
+    /// <summary>Shows the options with no header to expand them, for a group that is the main content of the
+    /// <see cref="FilterSection"/> it sits in (Features, above its NFO drift group).</summary>
+    [Parameter] public bool AlwaysExpanded { get; set; }
 
     private int SelectedCount => Options.Count(o => o.IsSelected);
 

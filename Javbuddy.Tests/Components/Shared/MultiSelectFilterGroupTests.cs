@@ -37,6 +37,16 @@ public class MultiSelectFilterGroupTests : BunitContext
     }
 
     [Fact]
+    public void AlwaysExpanded_ShowsTheOptionsWithNoHeader()
+    {
+        var cut = Render<MultiSelectFilterGroup>(p => p.Add(x => x.GroupLabel, "Features").Add(x => x.Options, [Option("VR", false)]).Add(x => x.AlwaysExpanded, true));
+
+        Assert.Equal(["VR"], cut.FindAll("button").Select(b => b.TextContent.Trim()));
+        cut.Find("button").Click();
+        Assert.Equal(["VR"], clicked);
+    }
+
+    [Fact]
     public void WhileSearching_TheMatchesShowFlatWithTheirFullLabel()
     {
         var cut = RenderGroup();

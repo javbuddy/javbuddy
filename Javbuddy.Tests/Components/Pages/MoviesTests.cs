@@ -842,7 +842,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll(".sort-dropdown-subitem").Single(b => b.TextContent.Trim() == "VR").Click();
 
         Assert.Equal(new[] { "AAA-001", "AAA-002" }, RenderedCodes(cut).OrderBy(c => c));
@@ -1036,7 +1036,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent == "Has subtitles").Click();
 
         var codes = RenderedCodes(cut);
@@ -1058,7 +1058,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent == "Has trailers").Click();
 
         var codes = RenderedCodes(cut);
@@ -1079,7 +1079,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent == "Favorites").Click();
 
         Assert.Equal(new[] { "AAA-001" }, RenderedCodes(cut));
@@ -1101,6 +1101,7 @@ public class MoviesTests : BunitContext
         Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.Contains("Write Javbuddy metadata to .nfo"));
 
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("NFO drift")).Click();
         cut.FindAll("button.sort-dropdown-subitem").Single(b => b.TextContent.Trim() == "External edit").Click();
 
@@ -1165,7 +1166,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(b => b.TextContent == "Favorites").Click();
         Assert.Equal(2, cut.FindAll(".poster-card").Count);
 
@@ -1790,7 +1791,7 @@ public class MoviesTests : BunitContext
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(button => button.TextContent.StartsWith("Filter")).Click();
-        cut.FindAll("button").Single(button => button.TextContent.StartsWith("Features")).Click();
+        cut.FindAll("button").First(button => button.TextContent.StartsWith("Features")).Click();
         cut.FindAll("button").Single(button => button.TextContent.Trim() == "Multiple versions").Click();
 
         Assert.Equal(new[] { "BBB-002", "CCC-003" }, RenderedCodes(cut).OrderBy(code => code));

@@ -16,10 +16,7 @@ public sealed record MovieRangeSelection
     public IntRange FileSizeGb { get; init; } = IntRange.None;
     public IntRange CastSize { get; init; } = IntRange.None;
 
-    /// <summary>The ranges in the Filter menu's "Ranges" section; <see cref="CastSize"/> sits under "Actor".</summary>
-    [JsonIgnore] public int MediaCount => (ReleaseYear.IsSet ? 1 : 0) + (RuntimeMinutes.IsSet ? 1 : 0) + (BitrateMbps.IsSet ? 1 : 0) + (FileSizeGb.IsSet ? 1 : 0);
-
-    [JsonIgnore] public int Count => MediaCount + (CastSize.IsSet ? 1 : 0);
+    [JsonIgnore] public int Count => (ReleaseYear.IsSet ? 1 : 0) + (RuntimeMinutes.IsSet ? 1 : 0) + (BitrateMbps.IsSet ? 1 : 0) + (FileSizeGb.IsSet ? 1 : 0) + (CastSize.IsSet ? 1 : 0);
 
     [JsonIgnore] public bool IsEmpty => Count == 0;
 }
@@ -36,8 +33,6 @@ public sealed record MovieRangeOptions
     public RangeBounds? BitrateMbps { get; init; }
     public RangeBounds? FileSizeGb { get; init; }
     public RangeBounds? CastSize { get; init; }
-
-    [JsonIgnore] public bool HasMedia => ReleaseYear is not null || RuntimeMinutes is not null || BitrateMbps is not null || FileSizeGb is not null;
 
     /// <summary>Bounds from each value's lowest and highest (bitrate in kbps, size in bytes); a range whose ends are equal
     /// has nothing to slide either. Cast size always starts at 0 (a movie with nobody linked).</summary>

@@ -164,7 +164,7 @@ public class MovieFilterToolbarTests : BunitContext
     }
 
     [Fact]
-    public void FilterDropdown_HasAnNfoDriftGroup_WithEveryDirection_AndTogglesOne()
+    public void FilterDropdown_HasAnNfoDriftGroupUnderFeatures_WithEveryDirection_AndTogglesOne()
     {
         NfoDriftKind? toggled = null;
 
@@ -174,9 +174,13 @@ public class MovieFilterToolbarTests : BunitContext
 
         cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
         Assert.Contains("Filter (1)", cut.Markup);
+        // NFO drift sits inside the Features section, which counts it.
+        Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.StartsWith("NFO drift"));
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features (1)")).Click();
         cut.FindAll("button").First(b => b.TextContent.StartsWith("NFO drift")).Click();
 
-        var options = cut.FindAll("button.sort-dropdown-subitem");
+        // The Features options show first, above the NFO drift group.
+        var options = cut.FindAll("button.sort-dropdown-subitem").TakeLast(4).ToList();
         Assert.Equal(["Javbuddy changed", "External edit", "Both changed", "Unreadable"], options.Select(b => b.TextContent.Replace("✓", "").Trim()));
         Assert.Equal(["Unreadable"], options.Where(b => b.ClassList.Contains("active")).Select(b => b.TextContent.Replace("✓", "").Trim()));
 
@@ -184,8 +188,9 @@ public class MovieFilterToolbarTests : BunitContext
 
         Assert.Equal(NfoDriftKind.ExternalEdit, toggled);
 
-        // None of it is offered under Features any more.
-        cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
+        // None of it is offered as a Features option any more, and the Features options show without a header of their own.
+        Assert.Single(cut.FindAll("button"), b => b.TextContent.StartsWith("Features"));
+        Assert.Contains(cut.FindAll("button.sort-dropdown-subitem"), b => b.TextContent.Trim() == "Has subtitles");
         Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.Contains("NFO drift:"));
     }
 
@@ -471,7 +476,7 @@ public class MovieFilterToolbarTests : BunitContext
     }
 
     [Fact]
-    public void Ranges_AreASectionOfTheFilterMenu_AndCastSizeSitsUnderActor()
+    public void Ranges_AreTopLevelFilters_AndCastSizeSitsUnderActor()
     {
         MovieRangeSelection? emitted = null;
         var cut = Render<MovieFilterToolbar>(p => p
@@ -481,8 +486,7 @@ public class MovieFilterToolbarTests : BunitContext
 
         Assert.Contains("Filter (2)", cut.Markup);
         OpenFilterMenu(cut);
-        cut.FindAll("button").First(b => b.TextContent.StartsWith("Ranges")).Click();
-        Assert.Contains("Ranges (1)", cut.Markup);
+        Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.StartsWith("Ranges"));
         Assert.Contains("Runtime (90–240 min)", cut.Markup);
         Assert.DoesNotContain("Bitrate", cut.Markup);
         Assert.DoesNotContain("Cast size", cut.Markup);

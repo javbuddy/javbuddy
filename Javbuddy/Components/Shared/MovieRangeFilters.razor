@@ -12,7 +12,8 @@
 }
 
 @code {
-    /// <summary>The Movies filter's release year / runtime / bitrate / file size range sliders, or with <see cref="Cast"/> just
+    /// <summary>The Movies filter's release year / runtime / bitrate / file size range sliders, each its own top-level
+    /// entry of the Filter menu and shown only when the movies span a range, or with <see cref="Cast"/> just
     /// the cast size one (it sits under "Actor"). Like <see cref="MovieCountFilters"/>: Selection is the applied one, and
     /// edits are raised as a modified copy through SelectionChanged.</summary>
     [Parameter, EditorRequired] public MovieRangeOptions Options { get; set; } = MovieRangeOptions.None;
