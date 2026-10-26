@@ -196,8 +196,9 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
 
     private static async Task<MovieRangeOptions> LoadRangeOptionsAsync(AppDbContext db, CancellationToken ct)
     {
-        // One aggregate row over every movie; MIN/MAX skip nulls, and an all-null column gives null.
-        var extremes = await db.Movies
+        // One aggregate row over every movie (none when the table is empty); MIN/MAX skip nulls, and an all-null column
+        // gives null. Read as a list, not FirstOrDefault, which EF warns about without an OrderBy.
+        var rows = await db.Movies
             .GroupBy(_ => 1)
             .Select(g => new
             {
@@ -210,7 +211,8 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
                 SizeMin = g.Min(m => m.LocalFileSizeBytes),
                 SizeMax = g.Max(m => m.LocalFileSizeBytes),
             })
-            .FirstOrDefaultAsync(ct);
+            .ToListAsync(ct);
+        var extremes = rows.SingleOrDefault();
         var maxCast = await db.MovieActors.GroupBy(ma => ma.MovieId).Select(g => (int?)g.Count()).MaxAsync(ct) ?? 0;
         if (extremes is null) return MovieRangeOptions.FromExtremes(null, null, null, null, maxCast);
 
