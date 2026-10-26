@@ -20,9 +20,11 @@ public static class MovieSortOrders
 
         return sort.Field switch
         {
+            // The displayed title (see Movie.DisplayName: MetaTitle, else Title, else Code), upper-cased so it sorts ignoring
+            // case in SQL and in memory; code breaks ties.
             "title" => descending
-                ? query.OrderByDescending(m => m.Code)
-                : query.OrderBy(m => m.Code),
+                ? query.OrderByDescending(m => (!string.IsNullOrWhiteSpace(m.MetaTitle) ? m.MetaTitle : !string.IsNullOrWhiteSpace(m.Title) ? m.Title : m.Code ?? "")!.ToUpper()).ThenBy(m => m.Code)
+                : query.OrderBy(m => (!string.IsNullOrWhiteSpace(m.MetaTitle) ? m.MetaTitle : !string.IsNullOrWhiteSpace(m.Title) ? m.Title : m.Code ?? "")!.ToUpper()).ThenBy(m => m.Code),
             // Natural order: by the prefix before the first '-', then the rest by length before text, so ABC-2 comes
             // before ABC-10. A code without a '-' is all prefix. Upper-cased so codes compare ignoring case both in SQL
             // (substr drops the Code column's NOCASE collation) and in memory.

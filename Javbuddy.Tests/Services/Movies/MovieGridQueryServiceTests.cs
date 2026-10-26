@@ -875,6 +875,25 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         Assert.Equal(expected, Codes(await service.GetRangeAsync(new MovieGridFilter(), new MovieGridSort("code", descending, 1), 0, 10)));
     }
 
+    [Theory]
+    [InlineData(false, new[] { "TTL-2", "TTL-5", "TTL-1", "TTL-3", "TTL-4" })]
+    [InlineData(true, new[] { "TTL-4", "TTL-3", "TTL-1", "TTL-2", "TTL-5" })]
+    public async Task TitleSort_OrdersByDisplayedTitle_IgnoringCase_WithCodeBreakingTies(bool descending, string[] expected)
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.AddRange(
+                new Movie { Code = "TTL-1", MetaTitle = "banana", Title = "Aardvark" },
+                new Movie { Code = "TTL-2", MetaTitle = "  ", Title = "Apple" },
+                new Movie { Code = "TTL-3", MetaTitle = "Cherry" },
+                new Movie { Code = "TTL-4" },
+                new Movie { Code = "TTL-5", MetaTitle = "Apple" });
+            db.SaveChanges();
+        }
+
+        Assert.Equal(expected, Codes(await service.GetRangeAsync(new MovieGridFilter(), new MovieGridSort("title", descending, 1), 0, 10)));
+    }
+
     [Fact]
     public async Task NewSorts_OrderByTheirValue_WithMissingValuesLastAndCodeBreakingTies()
     {

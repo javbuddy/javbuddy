@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- The Title sort on Movies, Actor Detail and DeoVR now orders by the movie's displayed title (fetched title, else the manual title, else the code), ignoring case, with the code breaking ties. It used to order by code, so saved views and DeoVR groups sorted by Title show a different order.
+
 ## [0.3.8] - 2026-10-26
 
 ### Added

@@ -60,7 +60,7 @@ public class DeoVrServiceTests : IDisposable
             ],
             response.Scenes[0].List);
         Assert.Equal(["SIVR-001"], response.Scenes[1].List.Select(i => i.Title));
-        Assert.Equal(["MIDE-400 Title A", "SIVR-001"], response.Scenes[2].List.Select(i => i.Title));
+        Assert.Equal(["SIVR-001", "MIDE-400 Title A"], response.Scenes[2].List.Select(i => i.Title));
     }
 
     [Fact]
