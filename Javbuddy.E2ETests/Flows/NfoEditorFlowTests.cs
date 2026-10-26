@@ -573,6 +573,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
         await Expect(pushButton).ToHaveCountAsync(0);
 
         await page.Locator("button.dropdown-main-btn", new() { HasTextString = "Filter" }).ClickAsync();
+        await page.Locator("button.sort-dropdown-item", new() { HasTextString = "Features" }).First.ClickAsync();
         await page.Locator("button.sort-dropdown-item", new() { HasTextString = "NFO drift" }).ClickAsync();
         await page.Locator("button.sort-dropdown-subitem", new() { HasTextString = "Javbuddy changed" }).ClickAsync();
         await Expect(page.Locator(".poster-card")).ToHaveCountAsync(1);

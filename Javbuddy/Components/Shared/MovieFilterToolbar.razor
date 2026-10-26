@@ -38,7 +38,6 @@
                 }
                 <MultiSelectFilterGroup GroupLabel="Resolution" Options="@ResolutionFilterOptions" />
                 <MultiSelectFilterGroup GroupLabel="Scan Type" Options="@ScanTypeFilterOptions" />
-                <MultiSelectFilterGroup GroupLabel="NFO drift" Options="@NfoDriftFilterOptions" />
                 @if (AvailableCodecs.Count > 0)
                 {
                     <MultiSelectFilterGroup GroupLabel="Codec" Options="@CodecFilterOptions" />
@@ -75,19 +74,17 @@
                                              OnSelectNone="OnSelectNoneGenres"
                                              MatchAll="MatchAllGenres" OnMatchAllChanged="OnMatchAllGenresChanged" />
                 }
-                <MultiSelectFilterGroup GroupLabel="Features" Options="@FeatureFilterOptions" />
+                <FilterSection Label="Features" ActiveCount="@(FeatureFilter.Count + NfoDriftFilter.Count)">
+                    <MultiSelectFilterGroup GroupLabel="Features" Options="@FeatureFilterOptions" AlwaysExpanded="true" />
+                    <MultiSelectFilterGroup GroupLabel="NFO drift" Options="@NfoDriftFilterOptions" />
+                </FilterSection>
                 @if (CountOptions.HasAny)
                 {
                     <FilterSection Label="Clips" ActiveCount="@CountSelection.Count">
                         <MovieCountFilters Options="CountOptions" Selection="CountSelection" SelectionChanged="OnCountsChanged" />
                     </FilterSection>
                 }
-                @if (RangeOptions.HasMedia)
-                {
-                    <FilterSection Label="Ranges" ActiveCount="@RangeSelection.MediaCount">
-                        <MovieRangeFilters Options="RangeOptions" Selection="RangeSelection" SelectionChanged="OnRangesChanged" />
-                    </FilterSection>
-                }
+                <MovieRangeFilters Options="RangeOptions" Selection="RangeSelection" SelectionChanged="OnRangesChanged" />
                 @if (AvailableActors.Count > 0 || AvailableActorTags.Count > 0 || (ShowActorAttributes && ActorAttributeOptions.HasAny) || RangeOptions.CastSize is not null)
                 {
                     <FilterSection Label="Actor" ActiveCount="@(ActorFilter.Count + ExcludedActorFilter.Count + ActorTagFilter.Count + ExcludedActorTagFilter.Count + (ShowActorAttributes ? ActorAttributeSelection.Count : 0) + (RangeSelection.CastSize.IsSet ? 1 : 0))">

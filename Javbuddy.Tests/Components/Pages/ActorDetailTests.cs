@@ -173,6 +173,7 @@ public class ActorDetailTests : BunitContext
             if (!cut.FindAll("button.sort-dropdown-subitem").Any(b => b.TextContent.Trim().StartsWith(label)))
             {
                 cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
+                cut.FindAll("button").First(b => b.TextContent.StartsWith("Features")).Click();
                 cut.FindAll("button").First(b => b.TextContent.StartsWith("NFO drift")).Click();
             }
             cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Trim() == label).Click();

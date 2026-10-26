@@ -6,13 +6,14 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Added
 
-- The Movies, Actor Detail and DeoVR filters gain a Ranges section with Release year, Runtime, Bitrate and File size sliders, and the Actor section gains a Cast size slider (how many linked actors a movie has). Features gains "Has favorite actor" and "Has retired actor".
+- The Movies, Actor Detail and DeoVR filters gain Release year, Runtime, Bitrate and File size sliders, and the Actor section gains a Cast size slider (how many linked actors a movie has). Features gains "Has favorite actor" and "Has retired actor".
 - Genre, Studio, actor Name and Actor tag filter options can be excluded: clicking an option includes it (✓), clicking again excludes it (✕, struck through), and a third click clears it. Excluding is not offered for Studio while browsing all r18.dev releases.
 - New sorts: Code (natural order ignoring case, so ABC-2 comes before abc-10), Bitrate, Scenes, Highlights, Apexes and Cast size.
 
 ### Changed
 
 - The Favorites sort is now Date favorited: favorites first, most recently favorited first (or oldest first when reversed), then everything else by code. Actor Detail now honors it too, where it previously fell back to Added.
+- The Filter menu's NFO drift group now sits inside Features, below the feature options.
 
 ## [0.3.7] - 2026-10-25
 

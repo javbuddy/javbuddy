@@ -133,7 +133,7 @@ public class MovieFilterOptionsTests
         Assert.Null(options.RuntimeMinutes);
         Assert.Null(options.FileSizeGb);
         Assert.Equal(new RangeBounds(0, 1), options.CastSize);
-        Assert.False(MovieRangeOptions.FromMovies([]).HasMedia);
+        Assert.Equal(MovieRangeOptions.None, MovieRangeOptions.FromMovies([]));
     }
 
     [Theory]
