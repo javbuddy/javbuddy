@@ -787,6 +787,23 @@ public class MoviesTests : BunitContext
     }
 
     [Fact]
+    public void RememberedExclusions_OfAStudioOrGenreNoMovieHas_AreDropped()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.AddRange(new Movie { Code = "AAA-001", MetaStudio = "S1" }, new Movie { Code = "AAA-002", MetaStudio = "S2" });
+            db.SaveChanges();
+        }
+        RememberedMoviesState("""{"ExcludedStudioFilter":["S1","Gone"],"ExcludedGenreFilter":["Gone"]}""");
+
+        var cut = Render<Movies>();
+
+        Assert.Equal(new[] { "AAA-002" }, RenderedCodes(cut));
+        Assert.Contains("Filter (1)", cut.Markup);
+    }
+
+    [Fact]
     public void VrMovie_ShowsAVrBadgeOnItsPoster_AndItsFormatBesideTheResolution()
     {
         using var factory = SetUpServices();

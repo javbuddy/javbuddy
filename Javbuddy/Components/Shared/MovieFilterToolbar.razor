@@ -204,7 +204,8 @@
     [Parameter] public MovieCountSelection CountSelection { get; set; } = MovieCountSelection.Empty;
     [Parameter] public EventCallback<MovieCountSelection> OnCountsChanged { get; set; }
 
-    /// <summary>The release year / runtime / bitrate / file size ranges ("Ranges") and the cast size range (under "Actor").
+    /// <summary>The release year / runtime / bitrate / file size ranges (each its own Filter menu entry) and the cast size
+    /// range (under "Actor").
     /// Each slider shows once the movies offered span some values; selection is the applied one and edits come back as a
     /// modified copy.</summary>
     [Parameter] public MovieRangeOptions RangeOptions { get; set; } = MovieRangeOptions.None;
