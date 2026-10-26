@@ -38,9 +38,10 @@ public static class MovieSortOrders
                 ? query.OrderBy(m => m.LocalFileSizeBytes == null).ThenByDescending(m => m.LocalFileSizeBytes)
                 : query.OrderBy(m => m.LocalFileSizeBytes == null).ThenBy(m => m.LocalFileSizeBytes),
             // The video stream's bitrate, else the whole file's (some containers report only that), as the Bitrate filter.
+            // Every Missing movie has none, so code breaks ties and neighboring windows agree.
             "bitrate" => descending
-                ? query.OrderBy(m => (m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps) == null).ThenByDescending(m => m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps)
-                : query.OrderBy(m => (m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps) == null).ThenBy(m => m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps),
+                ? query.OrderBy(m => (m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps) == null).ThenByDescending(m => m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps).ThenBy(m => m.Code)
+                : query.OrderBy(m => (m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps) == null).ThenBy(m => m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps).ThenBy(m => m.Code),
             // Status is persisted as a string (see AppDbContext), so sorting the column directly
             // would order alphabetically ("Got" < "Missing") rather than Missing-before-Got — order
             // by a rank instead so ascending always means Missing first, Got last.

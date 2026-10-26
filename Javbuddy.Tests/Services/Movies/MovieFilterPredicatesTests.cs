@@ -378,5 +378,7 @@ public class MovieFilterPredicatesTests
 
         Assert.Equal(["A-9", "A-10", "B-1"], Sorted(movies, "code", false));
         Assert.Equal(["B-1", "A-10", "A-9"], Sorted(movies, "scenes", true));
+        // No movie has a bitrate: code breaks the tie.
+        Assert.Equal(["A-10", "A-9", "B-1"], Sorted(movies, "bitrate", true));
     }
 }
