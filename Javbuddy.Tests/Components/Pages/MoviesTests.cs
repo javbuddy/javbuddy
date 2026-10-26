@@ -1934,20 +1934,26 @@ public class MoviesTests : BunitContext
             db.SaveChanges();
         }
         var cut = Render<Movies>();
-        void ClickStudio(string studio)
+        AngleSharp.Dom.IElement? S1() => cut.FindAll("button.sort-dropdown-subitem").SingleOrDefault(b => b.TextContent.Trim().StartsWith("S1"));
+        void OpenStudios()
         {
-            if (!cut.FindAll("button.sort-dropdown-subitem").Any()) cut.FindAll("button").First(b => b.TextContent.StartsWith("Studio")).Click();
-            cut.FindAll("button.sort-dropdown-subitem").Single(b => b.TextContent.StartsWith(studio)).Click();
+            if (!cut.FindAll("button").Any(b => b.TextContent.Trim().StartsWith("Studio"))) cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Filter")).Click();
+            if (S1() is null) cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Studio")).Click();
         }
 
-        cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
-        ClickStudio("S1");
-        ClickStudio("S1");
+        OpenStudios();
+        S1()!.Click();
+        S1()!.Click();
         cut.WaitForAssertion(() => Assert.Equal(new[] { "AAA-002" }, RenderedCodes(cut)));
+        Assert.Contains("multiselect-excluded", S1()!.ClassList);
 
         FindButton(cut, "All releases (r18.dev)")!.Click();
-        if (!cut.FindAll("button.sort-dropdown-subitem").Any()) cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
-        ClickStudio("S1");
+        OpenStudios();
+        // The catalog's own filter options load in the background and re-render the menu; wait them out first.
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button"), b => b.TextContent.Trim().StartsWith("Genre (r18.dev)")));
+        OpenStudios();
+        S1()!.Click();
+        cut.WaitForAssertion(() => Assert.Contains("✓", S1()!.TextContent));
         FindButton(cut, "In library")!.Click();
 
         // Included, not both included and excluded (which matched nothing).
