@@ -1945,7 +1945,9 @@ public class MoviesTests : BunitContext
     public void IncludingAnExcludedStudioInTheReleasesBrowse_ClearsTheExclusion()
     {
         using var factory = SetUpServices();
-        SetUpReleaseBrowsing();
+        // The catalog's own filter options never arrive: this test doesn't use them, and their background
+        // re-render of the menu would race the clicks below.
+        SetUpReleaseBrowsing().GetFilterOptionsAsync(default).ReturnsForAnyArgs(new TaskCompletionSource<R18DevCatalogOptions>().Task);
         using (var db = factory.CreateDbContext())
         {
             db.Movies.AddRange(new Movie { Code = "AAA-001", MetaStudio = "S1" }, new Movie { Code = "AAA-002", MetaStudio = "S2" });
@@ -1966,9 +1968,7 @@ public class MoviesTests : BunitContext
         Assert.Contains("multiselect-excluded", S1()!.ClassList);
 
         FindButton(cut, "All releases (r18.dev)")!.Click();
-        OpenStudios();
-        // The catalog's own filter options load in the background and re-render the menu; wait them out first.
-        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button"), b => b.TextContent.Trim().StartsWith("Genre (r18.dev)")));
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button"), b => b.TextContent.Trim().StartsWith("Hide previously deleted")));
         OpenStudios();
         S1()!.Click();
         cut.WaitForAssertion(() => Assert.Contains("✓", S1()!.TextContent));
@@ -2161,6 +2161,8 @@ public class MoviesTests : BunitContext
         cut.WaitForAssertion(() => Assert.Contains(LastSavedViewState(), a => a.Contains("\"BrowseReleases\":true", StringComparison.Ordinal)));
 
         cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Filter")).Click();
+        // The catalog's genre options load after the page renders, so the group isn't in the menu straight away.
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button"), b => b.TextContent.Trim().StartsWith("Genre (r18.dev)")));
         cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Genre (r18.dev)")).Click();
         cut.FindAll("button").First(b => b.TextContent.Trim() == "Creampie").Click();
         cut.WaitForAssertion(() => Assert.Contains(LastSavedViewState(), a => a.Contains("\"Genres\":[\"Creampie\"]", StringComparison.Ordinal)));
