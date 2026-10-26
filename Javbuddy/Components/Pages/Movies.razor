@@ -700,10 +700,15 @@ else
         }
     }
 
-    // The r18.dev catalog can't exclude a studio, so there a click only includes or clears it.
+    // The r18.dev catalog can't exclude a studio, so there a click only includes or clears it — and
+    // clears an exclusion it hides, so a studio is never both included and excluded back in the library.
     private void ToggleStudio(string studio)
     {
-        if (BrowseActive) filters.Studios.Toggle(studio);
+        if (BrowseActive)
+        {
+            filters.ExcludedStudios.Remove(studio);
+            filters.Studios.Toggle(studio);
+        }
         else filters.Studios.CycleInclusion(filters.ExcludedStudios, studio);
     }
 

@@ -1924,6 +1924,37 @@ public class MoviesTests : BunitContext
     }
 
     [Fact]
+    public void IncludingAnExcludedStudioInTheReleasesBrowse_ClearsTheExclusion()
+    {
+        using var factory = SetUpServices();
+        SetUpReleaseBrowsing();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.AddRange(new Movie { Code = "AAA-001", MetaStudio = "S1" }, new Movie { Code = "AAA-002", MetaStudio = "S2" });
+            db.SaveChanges();
+        }
+        var cut = Render<Movies>();
+        void ClickStudio(string studio)
+        {
+            if (!cut.FindAll("button.sort-dropdown-subitem").Any()) cut.FindAll("button").First(b => b.TextContent.StartsWith("Studio")).Click();
+            cut.FindAll("button.sort-dropdown-subitem").Single(b => b.TextContent.StartsWith(studio)).Click();
+        }
+
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
+        ClickStudio("S1");
+        ClickStudio("S1");
+        cut.WaitForAssertion(() => Assert.Equal(new[] { "AAA-002" }, RenderedCodes(cut)));
+
+        FindButton(cut, "All releases (r18.dev)")!.Click();
+        if (!cut.FindAll("button.sort-dropdown-subitem").Any()) cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
+        ClickStudio("S1");
+        FindButton(cut, "In library")!.Click();
+
+        // Included, not both included and excluded (which matched nothing).
+        cut.WaitForAssertion(() => Assert.Equal(new[] { "AAA-001" }, RenderedCodes(cut)));
+    }
+
+    [Fact]
     public void AllReleases_TypedSearchText_IsTheR18DevQuery()
     {
         using var factory = SetUpServices();

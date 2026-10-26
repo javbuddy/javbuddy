@@ -830,13 +830,24 @@ else
         var newStatus = await ActorService.ToggleFavoriteAsync(actor.Id);
         actor.IsFavorite = newStatus;
         actor.FavoritedAt = newStatus ? DateTime.UtcNow : null;
+
+        // The movies' cast holds its own copy of this actor (loaded separately), which the
+        // "Has favorite actor" filter reads, so it is updated too and the view re-run.
+        foreach (var link in allMovies.SelectMany(m => m.MovieActors).Where(ma => ma.ActorId == actor.Id && ma.Actor is not null))
+        {
+            link.Actor.IsFavorite = actor.IsFavorite;
+            link.Actor.FavoritedAt = actor.FavoritedAt;
+        }
+        viewKey = null;
     }
 
     // Flips the heart from the returned value, like the Movies grid.
     private async Task ToggleMovieFavorite(Movie movie)
     {
         movie.IsFavorite = await MovieService.ToggleFavoriteAsync(movie.Id);
-        // Changed in place, so the view key can't see it; the Favorites filter has to re-run.
+        // As MovieService stores it, for the Date favorited sort.
+        movie.FavoritedAt = movie.IsFavorite ? DateTime.UtcNow : null;
+        // Changed in place, so the view key can't see it; the Favorites filter and sort have to re-run.
         viewKey = null;
     }
 
