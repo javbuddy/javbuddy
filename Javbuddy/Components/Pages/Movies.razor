@@ -613,6 +613,15 @@ else
             return true;
         }
 
+        // Likewise a remembered excluded studio or genre no movie has any more: it would exclude nothing, yet still count as
+        // an active filter that the menu no longer lists.
+        if (filters.ExcludedStudios.RemoveWhere(s => !availableStudios.Contains(s))
+            + filters.ExcludedGenres.RemoveWhere(g => !availableGenres.Contains(g)) > 0)
+        {
+            await LoadCountsAsync();
+            return true;
+        }
+
         // A remembered selection the library no longer offers (a cup nobody has, a limit outside the new
         // bounds) is corrected here, and the caller re-counts with the corrected filter.
         var normalized = MovieFilterOptions.NormalizeActorAttributes(filters.ActorAttributes, actorAttributeOptions);
