@@ -34,7 +34,7 @@ public static class PosterVersion
             .Where(c => c.Role == LocalImageCacheService.RolePoster && c.Index == 0 && codes.Contains(c.Code))
             .GroupBy(c => c.Code)
             .Select(g => new { Code = g.Key, UpdatedAt = g.Max(c => c.UpdatedAt) })
-            .ToDictionaryAsync(x => x.Code, x => x.UpdatedAt, ct);
+            .ToDictionaryAsync(x => x.Code, x => x.UpdatedAt, StringComparer.OrdinalIgnoreCase, ct);
         foreach (var movie in movies)
         {
             DateTime? cachedAt = movie.Code is not null && postersCachedAt.TryGetValue(movie.Code, out var at) ? at : null;

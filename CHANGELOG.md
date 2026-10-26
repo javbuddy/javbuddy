@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- Movie codes are now case-insensitive in the image cache, the torrent history and actor photos too, as they already were for movies, so an image cached under `abc-123` is found and replaced for `ABC-123` instead of being duplicated.
+
 ## [0.3.8] - 2026-10-26
 
 ### Added

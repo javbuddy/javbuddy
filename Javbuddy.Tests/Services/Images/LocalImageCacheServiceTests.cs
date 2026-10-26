@@ -91,6 +91,38 @@ public class LocalImageCacheServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetOrCreateAsync_ServesACachedImageStoredUnderTheCodeInAnotherCase()
+    {
+        using var factory = new TestDbContextFactory();
+        var storageId = Guid.NewGuid();
+        var cachedFilePath = cache.GetStoragePath(storageId);
+        await File.WriteAllTextAsync(cachedFilePath, "fake webp bytes");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.CachedImages.Add(new CachedImage
+            {
+                Code = "abc-123",
+                Role = LocalImageCacheService.RolePoster,
+                Index = 0,
+                Variant = LocalImageCacheService.VariantThumb,
+                StorageId = storageId,
+                UpdatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var libraryClient = Substitute.For<ILocalLibraryClient>();
+        libraryClient.ResolveFirstExistingLocalFilePathAsync("ABC-123", Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+            .Returns((string?)null);
+
+        var result = await CreateService(factory, cache, libraryClient)
+            .GetOrCreateAsync("ABC-123", LocalImageCacheService.RolePoster, 0, LocalImageCacheService.VariantThumb);
+
+        Assert.Equal(cachedFilePath, result);
+    }
+
+    [Fact]
     public async Task GetOrCreateAsync_SourceOffline_ReturnsNull_WhenNoCacheExists()
     {
         using var factory = new TestDbContextFactory();
