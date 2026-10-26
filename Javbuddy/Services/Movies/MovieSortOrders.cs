@@ -24,16 +24,17 @@ public static class MovieSortOrders
                 ? query.OrderByDescending(m => m.Code)
                 : query.OrderBy(m => m.Code),
             // Natural order: by the prefix before the first '-', then the rest by length before text, so ABC-2 comes
-            // before ABC-10. A code without a '-' is all prefix.
+            // before ABC-10. A code without a '-' is all prefix. Upper-cased so codes compare ignoring case both in SQL
+            // (substr drops the Code column's NOCASE collation) and in memory.
             "code" => descending
                 ? query.OrderBy(m => m.Code == null)
-                    .ThenByDescending(m => m.Code!.Contains('-') ? m.Code.Substring(0, m.Code.IndexOf('-')) : m.Code)
+                    .ThenByDescending(m => (m.Code!.Contains('-') ? m.Code.Substring(0, m.Code.IndexOf('-')) : m.Code).ToUpper())
                     .ThenByDescending(m => m.Code!.Contains('-') ? m.Code.Length - m.Code.IndexOf('-') : 0)
-                    .ThenByDescending(m => m.Code)
+                    .ThenByDescending(m => m.Code!.ToUpper())
                 : query.OrderBy(m => m.Code == null)
-                    .ThenBy(m => m.Code!.Contains('-') ? m.Code.Substring(0, m.Code.IndexOf('-')) : m.Code)
+                    .ThenBy(m => (m.Code!.Contains('-') ? m.Code.Substring(0, m.Code.IndexOf('-')) : m.Code).ToUpper())
                     .ThenBy(m => m.Code!.Contains('-') ? m.Code.Length - m.Code.IndexOf('-') : 0)
-                    .ThenBy(m => m.Code),
+                    .ThenBy(m => m.Code!.ToUpper()),
             "size" => descending
                 ? query.OrderBy(m => m.LocalFileSizeBytes == null).ThenByDescending(m => m.LocalFileSizeBytes)
                 : query.OrderBy(m => m.LocalFileSizeBytes == null).ThenBy(m => m.LocalFileSizeBytes),

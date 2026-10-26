@@ -861,6 +861,20 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         Assert.Equal(expected, Codes(await service.GetRangeAsync(new MovieGridFilter(), new MovieGridSort(field, descending, 1), 0, 10)));
     }
 
+    [Theory]
+    [InlineData(false, new[] { "ABC-2", "abc-10", "Abd-1", "ZZZ-1" })]
+    [InlineData(true, new[] { "ZZZ-1", "Abd-1", "abc-10", "ABC-2" })]
+    public async Task CodeSort_IgnoresCase(bool descending, string[] expected)
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            foreach (var code in new[] { "ZZZ-1", "abc-10", "Abd-1", "ABC-2" }) db.Movies.Add(new Movie { Code = code });
+            db.SaveChanges();
+        }
+
+        Assert.Equal(expected, Codes(await service.GetRangeAsync(new MovieGridFilter(), new MovieGridSort("code", descending, 1), 0, 10)));
+    }
+
     [Fact]
     public async Task NewSorts_OrderByTheirValue_WithMissingValuesLastAndCodeBreakingTies()
     {

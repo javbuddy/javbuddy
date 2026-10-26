@@ -378,6 +378,9 @@ public class MovieFilterPredicatesTests
 
         Assert.Equal(["A-9", "A-10", "B-1"], Sorted(movies, "code", false));
         Assert.Equal(["B-1", "A-10", "A-9"], Sorted(movies, "scenes", true));
+        // Codes compare ignoring case, as in SQL (the Code column is NOCASE).
+        var mixed = new[] { new Movie { Code = "ZZZ-1" }, new Movie { Code = "abc-10" }, new Movie { Code = "Abd-1" }, new Movie { Code = "ABC-2" } }.AsQueryable();
+        Assert.Equal(["ABC-2", "abc-10", "Abd-1", "ZZZ-1"], Sorted(mixed, "code", false));
         // No movie has a bitrate: code breaks the tie.
         Assert.Equal(["A-10", "A-9", "B-1"], Sorted(movies, "bitrate", true));
     }
