@@ -42,11 +42,12 @@
     padding: 0 0.45rem;
     font-size: 0.68rem;
     line-height: 1.5;
-    white-space: nowrap;
+    /* A long or nested ("Parent › Child") name wraps inside the popover instead of running out of it. */
+    overflow-wrap: anywhere;
     color: #d8dae0;
     background-color: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 999px;
+    border-radius: 0.8rem;
 }
 
 .actor-hover-pill-clip {

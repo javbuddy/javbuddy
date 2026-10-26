@@ -15,6 +15,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - The Favorites sort is now Date favorited: favorites first, most recently favorited first (or oldest first when reversed), then everything else by code. Actor Detail now honors it too, where it previously fell back to Added.
 - The Filter menu's NFO drift group now sits inside Features, below the feature options.
 
+### Fixed
+
+- Long actor tags, and tags under a parent, are no longer cut off in the cast pills on Movie Detail or in the actor-tag hover popovers; they wrap instead.
+
 ## [0.3.7] - 2026-10-25
 
 ### Changed
