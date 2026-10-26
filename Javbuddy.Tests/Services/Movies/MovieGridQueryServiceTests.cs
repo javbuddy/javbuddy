@@ -722,4 +722,174 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         // One actor must have every tag: ACT-003 has each, but on different actors.
         Assert.Equal(["ACT-001"], Codes(await service.GetRangeAsync(any with { MatchAllActorTags = true }, CodeAscending, 0, 10)));
     }
+    private static DateTime Utc(int year, int month = 1, int day = 1) => new(year, month, day, 0, 0, 0, DateTimeKind.Utc);
+
+    private async Task<List<string?>> FilteredCodes(MovieGridFilter filter) => Codes(await service.GetRangeAsync(filter, CodeAscending, 0, 100));
+
+    [Fact]
+    public async Task RangeFilters_MatchWholeUnits_AndLeaveOutMoviesWithoutTheValue()
+    {
+        const long gb = MovieRangeOptions.BytesPerGb;
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.AddRange(
+                new Movie { Code = "RNG-001", MetaReleaseDate = Utc(2019, 12, 31), MetaRuntimeMinutes = 90, MediaVideoBitRateKbps = 4999, LocalFileSizeBytes = 2 * gb - 1 },
+                new Movie { Code = "RNG-002", MetaReleaseDate = Utc(2020, 1, 1), MetaRuntimeMinutes = 120, MediaVideoBitRateKbps = 5000, LocalFileSizeBytes = 2 * gb },
+                new Movie { Code = "RNG-003", MetaReleaseDate = Utc(2021, 12, 31), MetaRuntimeMinutes = 240, MediaOverallBitRateKbps = 5999, LocalFileSizeBytes = 3 * gb - 1 },
+                new Movie { Code = "RNG-004" });
+            db.SaveChanges();
+        }
+
+        static MovieGridFilter R(MovieRangeSelection r) => new(Ranges: r);
+        Assert.Equal(["RNG-002", "RNG-003"], await FilteredCodes(R(new() { ReleaseYear = new(2020, 2021) })));
+        Assert.Equal(["RNG-001"], await FilteredCodes(R(new() { ReleaseYear = new(null, 2019) })));
+        Assert.Equal(["RNG-001", "RNG-002"], await FilteredCodes(R(new() { RuntimeMinutes = new(null, 120) })));
+        // 5 Mbps is 5000–5999 kbps; the overall bitrate stands in for a missing video one.
+        Assert.Equal(["RNG-002", "RNG-003"], await FilteredCodes(R(new() { BitrateMbps = new(5, 5) })));
+        Assert.Equal(["RNG-002", "RNG-003"], await FilteredCodes(R(new() { FileSizeGb = new(2, null) })));
+        Assert.Equal(["RNG-001"], await FilteredCodes(R(new() { FileSizeGb = new(null, 1) })));
+    }
+
+    [Fact]
+    public async Task CastSizeAndCastFeatures_UseTheLinkedActors()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            var fav = new Actor { FirstName = "Fav", IsFavorite = true };
+            var retired = new Actor { FirstName = "Ret", IsRetired = true };
+            var other = new Actor { FirstName = "Other" };
+            var solo = new Movie { Code = "CST-001" };
+            solo.MovieActors.Add(new MovieActor { Actor = fav });
+            var duo = new Movie { Code = "CST-002" };
+            duo.MovieActors.Add(new MovieActor { Actor = retired });
+            duo.MovieActors.Add(new MovieActor { Actor = other });
+            db.Movies.AddRange(solo, duo, new Movie { Code = "CST-003", UnmatchedActorNames = "Somebody", HasUnmatchedActors = true });
+            db.SaveChanges();
+        }
+
+        Assert.Equal(["CST-001"], await FilteredCodes(new(Ranges: new() { CastSize = new(1, 1) })));
+        Assert.Equal(["CST-003"], await FilteredCodes(new(Ranges: new() { CastSize = new(null, 0) })));
+        Assert.Equal(["CST-001"], await FilteredCodes(new(Features: [MovieFeatureFilterOption.HasFavoriteActor])));
+        Assert.Equal(["CST-002"], await FilteredCodes(new(Features: [MovieFeatureFilterOption.HasRetiredActor])));
+    }
+
+    [Fact]
+    public async Task Summary_RangeOptions_SpanTheLibrary_AndSkipRangesWithNothingToSlide()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "OPT-001", MetaReleaseDate = Utc(2018, 6, 1), MetaRuntimeMinutes = 60, MediaVideoBitRateKbps = 1500, LocalFileSizeBytes = MovieRangeOptions.BytesPerGb };
+            movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "A" } });
+            movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "B" } });
+            db.Movies.AddRange(movie,
+                new Movie { Code = "OPT-002", MetaReleaseDate = Utc(2023, 1, 1), MetaRuntimeMinutes = 150, MediaOverallBitRateKbps = 25_400, LocalFileSizeBytes = MovieRangeOptions.BytesPerGb + 5 });
+            db.SaveChanges();
+        }
+
+        var ranges = (await service.GetSummaryAsync(new MovieGridFilter(Ranges: new() { ReleaseYear = new(2023, null) }))).Ranges;
+
+        Assert.Equal(new RangeBounds(2018, 2023), ranges.ReleaseYear);
+        Assert.Equal(new RangeBounds(60, 150), ranges.RuntimeMinutes);
+        Assert.Equal(new RangeBounds(1, 25), ranges.BitrateMbps);
+        // Both files are 1 GiB and something, so there's nothing to slide.
+        Assert.Null(ranges.FileSizeGb);
+        Assert.Equal(new RangeBounds(0, 2), ranges.CastSize);
+    }
+
+    [Fact]
+    public async Task ExcludedStudiosGenresAndActors_DropMatchingMovies_AndCombineWithIncludes()
+    {
+        int a1Id;
+        using (var db = factory.CreateDbContext())
+        {
+            var play = new Tag { Name = "Play" };
+            var rough = new Tag { Name = "Rough", ParentTag = play };
+            var drama = new Tag { Name = "Drama" };
+            var a1 = new Actor { FirstName = "A1" };
+            AddMovie(db, "EXC-001", rough, drama);
+            AddMovie(db, "EXC-002", drama);
+            AddMovie(db, "EXC-003");
+            db.SaveChanges();
+            var movies = db.Movies.ToDictionary(m => m.Code!);
+            movies["EXC-001"].MetaStudio = "S1";
+            movies["EXC-002"].MetaStudio = "Moodyz";
+            movies["EXC-002"].MovieActors.Add(new MovieActor { Actor = a1 });
+            db.SaveChanges();
+            a1Id = a1.Id;
+        }
+
+        // A parent excludes its subtags; a movie without the studio stays.
+        Assert.Equal(["EXC-002", "EXC-003"], await FilteredCodes(new(ExcludedGenres: ["Play"])));
+        Assert.Equal(["EXC-002", "EXC-003"], await FilteredCodes(new(ExcludedStudios: ["S1"])));
+        Assert.Equal(["EXC-001", "EXC-003"], await FilteredCodes(new(ExcludedActorIds: [a1Id])));
+        Assert.Equal(["EXC-002"], await FilteredCodes(new(Genres: ["Drama"], ExcludedGenres: ["Play##Rough"])));
+    }
+
+    [Fact]
+    public async Task ExcludedActorTags_DropMoviesWhereAnActorHasOne()
+    {
+        int blondeId;
+        using (var db = factory.CreateDbContext())
+        {
+            var blonde = new Tag { Name = "Blonde", IsActorTag = true };
+            var tagged = new Movie { Code = "EAT-001" };
+            var untagged = new Movie { Code = "EAT-002" };
+            var actor = new Actor { FirstName = "A1" };
+            db.AddRange(blonde, tagged, untagged, actor);
+            db.SaveChanges();
+            db.MovieActors.AddRange(new MovieActor { MovieId = tagged.Id, ActorId = actor.Id }, new MovieActor { MovieId = untagged.Id, ActorId = actor.Id });
+            db.SaveChanges();
+            db.MovieActorTags.Add(new MovieActorTag { MovieId = tagged.Id, ActorId = actor.Id, TagId = blonde.Id });
+            db.SaveChanges();
+            blondeId = blonde.Id;
+        }
+
+        Assert.Equal(["EAT-002"], await FilteredCodes(new(ExcludedActorTagIds: [blondeId])));
+    }
+
+    [Theory]
+    [InlineData("code", false, new[] { "ABC-2", "ABC-10", "ABC-100", "SSIS-1", "ZZZ" })]
+    [InlineData("code", true, new[] { "ZZZ", "SSIS-1", "ABC-100", "ABC-10", "ABC-2" })]
+    public async Task CodeSort_IsNatural_ByPrefixThenNumber(string field, bool descending, string[] expected)
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            foreach (var code in new[] { "ABC-10", "SSIS-1", "ABC-2", "ZZZ", "ABC-100" }) db.Movies.Add(new Movie { Code = code });
+            db.SaveChanges();
+        }
+
+        Assert.Equal(expected, Codes(await service.GetRangeAsync(new MovieGridFilter(), new MovieGridSort(field, descending, 1), 0, 10)));
+    }
+
+    [Fact]
+    public async Task NewSorts_OrderByTheirValue_WithMissingValuesLastAndCodeBreakingTies()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            var a = new Movie { Code = "SRT-001", MediaVideoBitRateKbps = 3000, IsFavorite = true, FavoritedAt = Utc(2026, 2, 1) };
+            a.Scenes.Add(new Scene { StartSeconds = 0 });
+            a.Highlights.Add(new MovieHighlight { StartSeconds = 0, EndSeconds = 1 });
+            a.Highlights.Add(new MovieHighlight { StartSeconds = 2, EndSeconds = 3 });
+            var b = new Movie { Code = "SRT-002", MediaOverallBitRateKbps = 8000, IsFavorite = true, FavoritedAt = Utc(2026, 5, 1) };
+            b.Scenes.Add(new Scene { StartSeconds = 0 });
+            b.Scenes.Add(new Scene { StartSeconds = 10 });
+            b.Apexes.Add(new MovieApex { Seconds = 5 });
+            b.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "X" } });
+            var c = new Movie { Code = "SRT-003" };
+            db.Movies.AddRange(c, b, a);
+            db.SaveChanges();
+        }
+
+        async Task<List<string?>> Sorted(string field, bool descending) =>
+            Codes(await service.GetRangeAsync(new MovieGridFilter(), new MovieGridSort(field, descending, 1), 0, 10));
+
+        Assert.Equal(["SRT-002", "SRT-001", "SRT-003"], await Sorted("bitrate", true));
+        Assert.Equal(["SRT-001", "SRT-002", "SRT-003"], await Sorted("bitrate", false));
+        Assert.Equal(["SRT-002", "SRT-001", "SRT-003"], await Sorted("favorites", true));
+        Assert.Equal(["SRT-001", "SRT-002", "SRT-003"], await Sorted("favorites", false));
+        Assert.Equal(["SRT-002", "SRT-001", "SRT-003"], await Sorted("scenes", true));
+        Assert.Equal(["SRT-001", "SRT-002", "SRT-003"], await Sorted("highlights", true));
+        Assert.Equal(["SRT-002", "SRT-001", "SRT-003"], await Sorted("apexes", true));
+        Assert.Equal(["SRT-001", "SRT-003", "SRT-002"], await Sorted("cast", false));
+    }
 }

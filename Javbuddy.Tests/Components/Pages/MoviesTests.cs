@@ -874,6 +874,33 @@ public class MoviesTests : BunitContext
     }
 
     [Fact]
+    public void ClickingAGenreAgain_ExcludesIt_AndAThirdClickClearsIt()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            AddMovieWithGenres(db, "AAA-001", "VR");
+            AddMovieWithGenres(db, "AAA-002", "Solowork");
+            AddMovieWithGenres(db, "AAA-003", "Solowork", "VR");
+        }
+
+        var cut = Render<Movies>();
+        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Filter")).Click();
+        cut.FindAll("button").Single(b => b.TextContent.StartsWith("Genre")).Click();
+        AngleSharp.Dom.IElement Vr() => cut.FindAll("button.sort-dropdown-subitem").Single(b => b.TextContent.StartsWith("VR"));
+
+        Vr().Click();
+        Assert.Equal(new[] { "AAA-001", "AAA-003" }, RenderedCodes(cut).OrderBy(c => c));
+
+        Vr().Click();
+        Assert.Equal(new[] { "AAA-002" }, RenderedCodes(cut));
+        Assert.Contains("multiselect-excluded", Vr().ClassList);
+
+        Vr().Click();
+        Assert.Equal(3, RenderedCodes(cut).Count);
+    }
+
+    [Fact]
     public void GenreFacetsAndFilter_TagNameContainingAComma_ResolvesAsOneGenreNotTwo()
     {
         // A canonical Tag name that itself contains a comma (e.g. "Nasty, hardcore") must stay one
@@ -1085,23 +1112,23 @@ public class MoviesTests : BunitContext
     }
 
     [Fact]
-    public void FavoritesSort_PutsFavoritesFirstThenOrdersByCode()
+    public void DateFavoritedSort_PutsNewestFavoritesFirstThenTheRestByCode()
     {
         using var factory = SetUpServices();
         using (var db = factory.CreateDbContext())
         {
             db.Movies.Add(new Movie { Code = "AAA-001" });
-            db.Movies.Add(new Movie { Code = "AAA-002", IsFavorite = true });
+            db.Movies.Add(new Movie { Code = "AAA-002", IsFavorite = true, FavoritedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) });
             db.Movies.Add(new Movie { Code = "AAA-003" });
-            db.Movies.Add(new Movie { Code = "AAA-004", IsFavorite = true });
+            db.Movies.Add(new Movie { Code = "AAA-004", IsFavorite = true, FavoritedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc) });
             db.SaveChanges();
         }
 
         var cut = Render<Movies>();
         cut.FindAll("button").Single(b => b.TextContent.StartsWith("Sort:")).Click();
-        cut.FindAll("button.sort-dropdown-item").Single(b => b.TextContent.Trim().StartsWith("Favorites")).Click();
+        cut.FindAll("button.sort-dropdown-item").Single(b => b.TextContent.Trim().StartsWith("Date favorited")).Click();
 
-        Assert.Equal(new[] { "AAA-002", "AAA-004", "AAA-001", "AAA-003" }, RenderedCodes(cut));
+        Assert.Equal(new[] { "AAA-004", "AAA-002", "AAA-001", "AAA-003" }, RenderedCodes(cut));
     }
 
     [Fact]

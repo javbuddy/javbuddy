@@ -26,7 +26,12 @@ public sealed record MovieGridFilter(
     IReadOnlyCollection<int>? ActorTagIds = null,
     bool MatchAllGenres = false,
     bool MatchAllActorTags = false,
-    MovieCountSelection? Counts = null);
+    MovieCountSelection? Counts = null,
+    MovieRangeSelection? Ranges = null,
+    IReadOnlyCollection<string>? ExcludedStudios = null,
+    IReadOnlyCollection<string>? ExcludedGenres = null,
+    IReadOnlyCollection<int>? ExcludedActorIds = null,
+    IReadOnlyCollection<int>? ExcludedActorTagIds = null);
 
 /// <summary>A tracked actor offered by an actor-name filter.</summary>
 public sealed record MovieActorOption(int Id, string Name);
@@ -52,6 +57,10 @@ public sealed record MovieGridSummary(
     /// <summary>The Scenes / Highlights / Apexes filter's bounds: the most any movie has of each. Like the lists above,
     /// unaffected by the active filters.</summary>
     public MovieCountOptions Counts { get; init; } = MovieCountOptions.None;
+
+    /// <summary>The release year / runtime / bitrate / file size / cast size filters' bounds. Like the lists above,
+    /// unaffected by the active filters.</summary>
+    public MovieRangeOptions Ranges { get; init; } = MovieRangeOptions.None;
 
     /// <summary>The actor-name filter's options: tracked actors linked to any movie, by name. Like the
     /// lists above, unaffected by the active filters.</summary>
@@ -111,10 +120,6 @@ public interface IMovieGridQueryService
 
 public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFactory) : IMovieGridQueryService
 {
-    // int.MaxValue (2^31 - 1) is a Mersenne prime, so multiplying any nonzero seed by a value below
-    // it and reducing mod it never collides — see BuildOrderedQuery's "random" case.
-    private const long RandomSortModulus = int.MaxValue;
-
     public async Task<int> CountAsync(MovieGridFilter filter, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -174,6 +179,7 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
             actorAttributes)
         {
             Counts = await LoadCountOptionsAsync(db, ct),
+            Ranges = await LoadRangeOptionsAsync(db, ct),
             Actors = await LoadLinkedActorOptionsAsync(db, ct),
             ActorTags = await LoadActorTagOptionsAsync(db, ct),
         };
@@ -186,6 +192,34 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         var highlights = await db.MovieHighlights.GroupBy(h => h.MovieId).Select(g => (int?)g.Count()).MaxAsync(ct) ?? 0;
         var apexes = await db.MovieApexes.GroupBy(a => a.MovieId).Select(g => (int?)g.Count()).MaxAsync(ct) ?? 0;
         return MovieCountOptions.FromMaximums(scenes, highlights, apexes);
+    }
+
+    private static async Task<MovieRangeOptions> LoadRangeOptionsAsync(AppDbContext db, CancellationToken ct)
+    {
+        // One aggregate row over every movie; MIN/MAX skip nulls, and an all-null column gives null.
+        var extremes = await db.Movies
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                ReleaseMin = g.Min(m => m.MetaReleaseDate),
+                ReleaseMax = g.Max(m => m.MetaReleaseDate),
+                RuntimeMin = g.Min(m => m.MetaRuntimeMinutes),
+                RuntimeMax = g.Max(m => m.MetaRuntimeMinutes),
+                BitrateMin = g.Min(m => m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps),
+                BitrateMax = g.Max(m => m.MediaVideoBitRateKbps ?? m.MediaOverallBitRateKbps),
+                SizeMin = g.Min(m => m.LocalFileSizeBytes),
+                SizeMax = g.Max(m => m.LocalFileSizeBytes),
+            })
+            .FirstOrDefaultAsync(ct);
+        var maxCast = await db.MovieActors.GroupBy(ma => ma.MovieId).Select(g => (int?)g.Count()).MaxAsync(ct) ?? 0;
+        if (extremes is null) return MovieRangeOptions.FromExtremes(null, null, null, null, maxCast);
+
+        return MovieRangeOptions.FromExtremes(
+            extremes is { ReleaseMin: { } r0, ReleaseMax: { } r1 } ? (r0.Year, r1.Year) : null,
+            extremes is { RuntimeMin: { } t0, RuntimeMax: { } t1 } ? (t0, t1) : null,
+            extremes is { BitrateMin: { } b0, BitrateMax: { } b1 } ? (b0, b1) : null,
+            extremes is { SizeMin: { } s0, SizeMax: { } s1 } ? (s0, s1) : null,
+            maxCast);
     }
 
     // The actor tags some actor has in a movie or one of its clips (own rows: nothing flows down or rolls up a new tag).
@@ -389,16 +423,23 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         query = MovieFilterPredicates.WhereScanTypes(query, filter.ScanTypes);
         query = MovieFilterPredicates.WhereCodecs(query, filter.Codecs);
         query = MovieFilterPredicates.WhereStudios(query, filter.Studios);
+        query = MovieFilterPredicates.WhereNotStudios(query, filter.ExcludedStudios);
         query = MovieFilterPredicates.WhereGenres(query, filter.Genres, filter.MatchAllGenres);
+        query = MovieFilterPredicates.WhereNotGenres(query, filter.ExcludedGenres);
         query = MovieFilterPredicates.WhereFeatures(query, filter.Features);
         query = MovieFilterPredicates.WhereCounts(query, filter.Counts);
+        query = MovieFilterPredicates.WhereRanges(query, filter.Ranges);
         query = MovieFilterPredicates.WhereNfoDriftKinds(query, filter.NfoDriftKinds);
         if (filter.ActorIds is { Count: > 0 } actorIds)
         {
             // Any selected actor, like the Scenes wall's actor filter.
             query = query.Where(m => m.MovieActors.Any(ma => actorIds.Contains(ma.ActorId)));
         }
-        if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
+        if (filter.ExcludedActorIds is { Count: > 0 } excludedActorIds)
+        {
+            query = query.Where(m => !m.MovieActors.Any(ma => excludedActorIds.Contains(ma.ActorId)));
+        }
+        if (filter.ActorTagIds is { Count: > 0 } || filter.ExcludedActorTagIds is { Count: > 0 })
         {
             // An actor tag (Tag.IsActorTag) on the movie or on any of its scenes, highlights or apexes; with the actor
             // filter, one of those actors must have it. Own rows are enough: what flows down or rolls up never adds a pair.
@@ -410,8 +451,17 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
                 .Concat(db.HighlightActorTags.Select(t => new TaggedRow { OwnerId = t.MovieId, HolderId = t.ActorId, TagId = t.TagId }))
                 .Concat(db.ApexActorTags.Select(t => new TaggedRow { OwnerId = t.MovieId, HolderId = t.ActorId, TagId = t.TagId }))
                 .Where(r => anyActor || onlyActors.Contains(r.HolderId));
-            var withActorTags = TagFilterQueries.OwnersWith(db, rows, actorTagIds, filter.MatchAllActorTags);
-            query = query.Where(m => withActorTags.Contains(m.Id));
+            // Excluded: no actor (with the actor filter, none of those actors) has any of the tags.
+            if (filter.ActorTagIds is { Count: > 0 } actorTagIds)
+            {
+                var withActorTags = TagFilterQueries.OwnersWith(db, rows, actorTagIds, filter.MatchAllActorTags);
+                query = query.Where(m => withActorTags.Contains(m.Id));
+            }
+            if (filter.ExcludedActorTagIds is { Count: > 0 } excludedActorTagIds)
+            {
+                var withExcludedTags = TagFilterQueries.OwnersWith(db, rows, excludedActorTagIds, matchAll: false);
+                query = query.Where(m => !withExcludedTags.Contains(m.Id));
+            }
         }
         query = MovieFilterPredicates.WhereActorAttributes(query, filter.ActorAttributes ?? ActorAttributeSelection.Empty, DateOnly.FromDateTime(DateTime.UtcNow));
         if (!string.IsNullOrWhiteSpace(filter.Text))
@@ -431,46 +481,6 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         return query;
     }
 
-    private static IQueryable<Movie> BuildOrderedQuery(AppDbContext db, MovieGridFilter filter, MovieGridSort sort)
-    {
-        var query = BuildFilterQuery(db, filter);
-        var descending = sort.Descending;
-
-        return sort.Field switch
-        {
-            "title" => descending
-                ? query.OrderByDescending(m => m.Code)
-                : query.OrderBy(m => m.Code),
-            "size" => descending
-                ? query.OrderBy(m => m.LocalFileSizeBytes == null).ThenByDescending(m => m.LocalFileSizeBytes)
-                : query.OrderBy(m => m.LocalFileSizeBytes == null).ThenBy(m => m.LocalFileSizeBytes),
-            // Status is persisted as a string (see AppDbContext), so sorting the column directly
-            // would order alphabetically ("Got" < "Missing") rather than Missing-before-Got — order
-            // by a rank instead so ascending always means Missing first, Got last.
-            "status" => descending
-                ? query.OrderBy(m => m.Status == MovieStatus.Missing)
-                : query.OrderByDescending(m => m.Status == MovieStatus.Missing),
-            "release" => descending
-                ? query.OrderBy(m => m.MetaReleaseDate == null).ThenByDescending(m => m.MetaReleaseDate)
-                : query.OrderBy(m => m.MetaReleaseDate == null).ThenBy(m => m.MetaReleaseDate),
-            "runtime" => descending
-                ? query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenByDescending(m => m.MetaRuntimeMinutes)
-                : query.OrderBy(m => m.MetaRuntimeMinutes == null).ThenBy(m => m.MetaRuntimeMinutes),
-            // Favorites first when descending (the default — see MovieFilterOptions.DefaultSortDescending),
-            // then by code within each group, matching the Actors page's "Favorites" sort.
-            "favorites" => descending
-                ? query.OrderByDescending(m => m.IsFavorite).ThenBy(m => m.Code)
-                : query.OrderBy(m => m.IsFavorite).ThenBy(m => m.Code),
-            // A fixed pseudo-random order, not ORDER BY RANDOM(): multiplying by a seed coprime
-            // with the modulus (any nonzero seed, since the modulus is prime) and reducing mod that
-            // modulus is a bijection over ids in range, i.e. a full shuffle — and unlike RANDOM(),
-            // it gives the same order across every Skip/Take call until the seed changes.
-            "random" => query.OrderBy(m => (long)m.Id * sort.RandomSeed % RandomSortModulus),
-            // DateAdded is FileAddedAt, falling back to CreatedAt (DB-insert time) for a movie with no resolved
-            // local file yet (manually-added, still Missing, or not yet probed since import) — see Movie.FileAddedAt.
-            _ => descending
-                ? query.OrderByDescending(m => EF.Property<DateTime>(m, Movie.DateAddedColumn))
-                : query.OrderBy(m => EF.Property<DateTime>(m, Movie.DateAddedColumn)),
-        };
-    }
+    private static IQueryable<Movie> BuildOrderedQuery(AppDbContext db, MovieGridFilter filter, MovieGridSort sort) =>
+        MovieSortOrders.Apply(BuildFilterQuery(db, filter), sort, m => EF.Property<DateTime>(m, Movie.DateAddedColumn));
 }

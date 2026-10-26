@@ -46,6 +46,9 @@ public enum MovieFeatureFilterOption
     HasScenes,
     //; appended for the same cookie reason. A movie with any VR / 3D format (Movie.IsVr).
     Vr,
+    //; appended for the same cookie reason. A linked actor who is a favorite / retired.
+    HasFavoriteActor,
+    HasRetiredActor,
 }
 
 public readonly record struct MovieSortChange(string Field, bool Descending, int? RandomSortSeed = null);
@@ -93,6 +96,27 @@ public static class MovieFilterOptions
         Scenes = MergeRange(current.Scenes, edited.Scenes, options.Scenes),
         Highlights = MergeRange(current.Highlights, edited.Highlights, options.Highlights),
         Apexes = MergeRange(current.Apexes, edited.Apexes, options.Apexes),
+    };
+
+    /// <summary>Reconciles a saved release year / runtime / bitrate / file size / cast size selection with what the
+    /// movies offered span, as <see cref="NormalizeActorAttributes"/> does for its ranges.</summary>
+    public static MovieRangeSelection NormalizeRanges(MovieRangeSelection selection, MovieRangeOptions options) => new()
+    {
+        ReleaseYear = NormalizeRange(selection.ReleaseYear, options.ReleaseYear),
+        RuntimeMinutes = NormalizeRange(selection.RuntimeMinutes, options.RuntimeMinutes),
+        BitrateMbps = NormalizeRange(selection.BitrateMbps, options.BitrateMbps),
+        FileSizeGb = NormalizeRange(selection.FileSizeGb, options.FileSizeGb),
+        CastSize = NormalizeRange(selection.CastSize, options.CastSize),
+    };
+
+    /// <summary>Folds the edits made in the filter back into the remembered selection, as <see cref="MergeCounts"/>.</summary>
+    public static MovieRangeSelection MergeRanges(MovieRangeSelection current, MovieRangeSelection edited, MovieRangeOptions options) => new()
+    {
+        ReleaseYear = MergeRange(current.ReleaseYear, edited.ReleaseYear, options.ReleaseYear),
+        RuntimeMinutes = MergeRange(current.RuntimeMinutes, edited.RuntimeMinutes, options.RuntimeMinutes),
+        BitrateMbps = MergeRange(current.BitrateMbps, edited.BitrateMbps, options.BitrateMbps),
+        FileSizeGb = MergeRange(current.FileSizeGb, edited.FileSizeGb, options.FileSizeGb),
+        CastSize = MergeRange(current.CastSize, edited.CastSize, options.CastSize),
     };
 
     private static IntRange NormalizeRange(IntRange range, RangeBounds? bounds)
@@ -185,22 +209,31 @@ public static class MovieFilterOptions
         MovieFeatureFilterOption.Favorites => "Favorites",
         MovieFeatureFilterOption.HasFavoriteScene => "Has favorite scene",
         MovieFeatureFilterOption.Vr => "VR",
+        MovieFeatureFilterOption.HasFavoriteActor => "Has favorite actor",
+        MovieFeatureFilterOption.HasRetiredActor => "Has retired actor",
         _ => option.ToString(),
     };
 
-    public static readonly string[] SortFields = ["added", "title", "size", "status", "release", "runtime", "favorites", "random"];
+    public static readonly string[] SortFields =
+        ["added", "title", "code", "size", "bitrate", "status", "release", "runtime", "favorites", "scenes", "highlights", "apexes", "cast", "random"];
 
     public static string SortFieldLabel(string field) => field switch
     {
         "title" => "Title",
+        "code" => "Code",
         "size" => "Size on disk",
+        "bitrate" => "Bitrate",
         "status" => "Status",
         "release" => "Release date",
         "runtime" => "Runtime",
-        "favorites" => "Favorites",
+        "favorites" => "Date favorited",
+        "scenes" => "Scenes",
+        "highlights" => "Highlights",
+        "apexes" => "Apexes",
+        "cast" => "Cast size",
         "random" => "Random",
         _ => "Added",
     };
 
-    public static bool DefaultSortDescending(string field) => field != "title" && field != "status";
+    public static bool DefaultSortDescending(string field) => field is not ("title" or "code" or "status");
 }

@@ -57,6 +57,7 @@
             @if (AvailableStudios.Count > 0)
             {
                 <MultiSelectFilterGroup GroupLabel="Studio" Options="@StudioFilterOptions" Searchable="true"
+                                         Excludable="@(Excludable && !ReleasesBrowseMode)"
                                          OnSelectAll="OnSelectAllStudios"
                                          OnSelectNone="OnSelectNoneStudios" />
             }
@@ -69,6 +70,7 @@
                 @if (AvailableGenres.Count > 0)
                 {
                     <MultiSelectFilterGroup GroupLabel="Genre" Options="@GenreFilterOptions" Searchable="true"
+                                             Excludable="Excludable"
                                              OnSelectAll="OnSelectAllGenres"
                                              OnSelectNone="OnSelectNoneGenres"
                                              MatchAll="MatchAllGenres" OnMatchAllChanged="OnMatchAllGenresChanged" />
@@ -80,12 +82,19 @@
                         <MovieCountFilters Options="CountOptions" Selection="CountSelection" SelectionChanged="OnCountsChanged" />
                     </FilterSection>
                 }
-                @if (AvailableActors.Count > 0 || AvailableActorTags.Count > 0 || (ShowActorAttributes && ActorAttributeOptions.HasAny))
+                @if (RangeOptions.HasMedia)
                 {
-                    <FilterSection Label="Actor" ActiveCount="@(ActorFilter.Count + ActorTagFilter.Count + (ShowActorAttributes ? ActorAttributeSelection.Count : 0))">
+                    <FilterSection Label="Ranges" ActiveCount="@RangeSelection.MediaCount">
+                        <MovieRangeFilters Options="RangeOptions" Selection="RangeSelection" SelectionChanged="OnRangesChanged" />
+                    </FilterSection>
+                }
+                @if (AvailableActors.Count > 0 || AvailableActorTags.Count > 0 || (ShowActorAttributes && ActorAttributeOptions.HasAny) || RangeOptions.CastSize is not null)
+                {
+                    <FilterSection Label="Actor" ActiveCount="@(ActorFilter.Count + ExcludedActorFilter.Count + ActorTagFilter.Count + ExcludedActorTagFilter.Count + (ShowActorAttributes ? ActorAttributeSelection.Count : 0) + (RangeSelection.CastSize.IsSet ? 1 : 0))">
                         @if (AvailableActors.Count > 0)
                         {
                             <MultiSelectFilterGroup GroupLabel="Name" Options="@ActorFilterOptions" Searchable="true"
+                                                     Excludable="Excludable"
                                                      OnSelectAll="SelectAllActors"
                                                      OnSelectNone="OnSelectNoneActors" />
                         }
@@ -93,6 +102,7 @@
                         {
                             @* With Name selected, it is those actors who must have the tag. *@
                             <MultiSelectFilterGroup GroupLabel="Actor tag" Options="@ActorTagFilterOptions" Searchable="true"
+                                                     Excludable="Excludable"
                                                      OnSelectAll="SelectAllActorTags"
                                                      OnSelectNone="OnSelectNoneActorTags"
                                                      MatchAll="MatchAllActorTags" OnMatchAllChanged="OnMatchAllActorTagsChanged" />
@@ -101,6 +111,7 @@
                         {
                             <ActorAttributeFilters Options="ActorAttributeOptions" Selection="ActorAttributeSelection" SelectionChanged="OnActorAttributesChanged" />
                         }
+                        <MovieRangeFilters Options="RangeOptions" Selection="RangeSelection" SelectionChanged="OnRangesChanged" Cast="true" />
                     </FilterSection>
                 }
             }
@@ -196,6 +207,23 @@
     [Parameter] public MovieCountSelection CountSelection { get; set; } = MovieCountSelection.Empty;
     [Parameter] public EventCallback<MovieCountSelection> OnCountsChanged { get; set; }
 
+    /// <summary>The release year / runtime / bitrate / file size ranges ("Ranges") and the cast size range (under "Actor").
+    /// Each slider shows once the movies offered span some values; selection is the applied one and edits come back as a
+    /// modified copy.</summary>
+    [Parameter] public MovieRangeOptions RangeOptions { get; set; } = MovieRangeOptions.None;
+    [Parameter] public MovieRangeSelection RangeSelection { get; set; } = MovieRangeSelection.Empty;
+    [Parameter] public EventCallback<MovieRangeSelection> OnRangesChanged { get; set; }
+
+    /// <summary>Turns the Studio, Genre, actor Name and Actor tag groups into include/exclude ones: the host's OnToggle
+    /// callback for each steps a value through neither → included → excluded (SetExtensions.CycleInclusion), and the
+    /// Excluded* sets are what it excludes. Not for Studio while <see cref="ReleasesBrowseMode"/> is on, which the
+    /// r18.dev catalog can't exclude by.</summary>
+    [Parameter] public bool Excludable { get; set; }
+    [Parameter] public IReadOnlySet<string> ExcludedStudioFilter { get; set; } = new HashSet<string>();
+    [Parameter] public IReadOnlySet<string> ExcludedGenreFilter { get; set; } = new HashSet<string>();
+    [Parameter] public IReadOnlySet<int> ExcludedActorFilter { get; set; } = new HashSet<int>();
+    [Parameter] public IReadOnlySet<int> ExcludedActorTagFilter { get; set; } = new HashSet<int>();
+
     /// <summary>The actor-name filter, like the Scenes wall's (a movie matches any selected actor). Shown
     /// only when the host offers actors.</summary>
     [Parameter] public IReadOnlyList<MovieActorOption> AvailableActors { get; set; } = Array.Empty<MovieActorOption>();
@@ -265,11 +293,16 @@
             + NfoDriftFilter.Count
             + CodecFilter.Count
             + StudioFilter.Count
+            + ExcludedStudioFilter.Count
             + GenreFilter.Count
+            + ExcludedGenreFilter.Count
             + FeatureFilter.Count
             + CountSelection.Count
+            + RangeSelection.Count
             + ActorFilter.Count
+            + ExcludedActorFilter.Count
             + ActorTagFilter.Count
+            + ExcludedActorTagFilter.Count
             + (ShowActorAttributes ? ActorAttributeSelection.Count : 0);
 
     private bool ComputedHasActiveFilters => HasActiveFilters ?? (
@@ -381,7 +414,8 @@
         .Select(studio => new MultiSelectOption(
             studio,
             StudioFilter.Contains(studio),
-            EventCallback.Factory.Create(this, () => OnToggleStudio.InvokeAsync(studio))))
+            EventCallback.Factory.Create(this, () => OnToggleStudio.InvokeAsync(studio)),
+            IsExcluded: !ReleasesBrowseMode && ExcludedStudioFilter.Contains(studio)))
         .ToList();
 
     private IReadOnlyList<MultiSelectOption> GenreFilterOptions => AvailableGenres
@@ -389,14 +423,16 @@
             genre.Contains(Tag.HierarchyDelimiter) ? genre.Replace(Tag.HierarchyDelimiter, MultiSelectOption.Separator) : genre,
             GenreFilter.Contains(genre),
             EventCallback.Factory.Create(this, () => OnToggleGenre.InvokeAsync(genre)),
-            genre.Contains(Tag.HierarchyDelimiter)))
+            genre.Contains(Tag.HierarchyDelimiter),
+            ExcludedGenreFilter.Contains(genre)))
         .ToList();
 
     private IReadOnlyList<MultiSelectOption> ActorFilterOptions => AvailableActors
         .Select(actor => new MultiSelectOption(
             actor.Name,
             ActorFilter.Contains(actor.Id),
-            EventCallback.Factory.Create(this, () => OnToggleActor.InvokeAsync(actor.Id))))
+            EventCallback.Factory.Create(this, () => OnToggleActor.InvokeAsync(actor.Id)),
+            IsExcluded: ExcludedActorFilter.Contains(actor.Id)))
         .ToList();
 
     private IReadOnlyList<MultiSelectOption> ActorTagFilterOptions => AvailableActorTags
@@ -404,7 +440,8 @@
             tag.Name,
             ActorTagFilter.Contains(tag.Id),
             EventCallback.Factory.Create(this, () => OnToggleActorTag.InvokeAsync(tag.Id)),
-            tag.Name.Contains(MultiSelectOption.Separator)))
+            tag.Name.Contains(MultiSelectOption.Separator),
+            ExcludedActorTagFilter.Contains(tag.Id)))
         .ToList();
 
     private Task SelectAllActorTags(IReadOnlyList<string> labels)

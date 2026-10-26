@@ -103,6 +103,49 @@ public class MovieFilterOptionsTests
         Assert.False(MovieCountOptions.FromMaximums(0, 0, 0).HasAny);
     }
 
+    [Fact]
+    public void NormalizeAndMergeRanges_WorkLikeTheCountRanges()
+    {
+        var options = new MovieRangeOptions { ReleaseYear = new RangeBounds(2010, 2024), BitrateMbps = new RangeBounds(1, 30) };
+        var saved = new MovieRangeSelection { ReleaseYear = new IntRange(2010, 2020), BitrateMbps = new IntRange(5, 40), FileSizeGb = new IntRange(2, 3) };
+
+        var normalized = MovieFilterOptions.NormalizeRanges(saved, options);
+        Assert.Equal(new IntRange(null, 2020), normalized.ReleaseYear);
+        Assert.Equal(new IntRange(5, null), normalized.BitrateMbps);
+        Assert.Equal(IntRange.None, normalized.FileSizeGb);
+
+        // An edit made in a view showing the normalised selection keeps the untouched ranges as remembered.
+        var merged = MovieFilterOptions.MergeRanges(saved, normalized with { ReleaseYear = new IntRange(2015, null) }, options);
+        Assert.Equal(new IntRange(2015, null), merged.ReleaseYear);
+        Assert.Equal(new IntRange(5, 40), merged.BitrateMbps);
+        Assert.Equal(new IntRange(2, 3), merged.FileSizeGb);
+    }
+
+    [Fact]
+    public void RangeOptions_FromMovies_UseWholeUnits_AndSkipRangesWithNothingToSlide()
+    {
+        var withCast = new Movie { MetaReleaseDate = new DateTime(2015, 3, 1), MediaVideoBitRateKbps = 2999, LocalFileSizeBytes = MovieRangeOptions.BytesPerGb * 3 };
+        withCast.MovieActors.Add(new MovieActor());
+        var options = MovieRangeOptions.FromMovies([withCast, new Movie { MetaReleaseDate = new DateTime(2019, 1, 1), MediaOverallBitRateKbps = 12_000, MetaRuntimeMinutes = 100 }]);
+
+        Assert.Equal(new RangeBounds(2015, 2019), options.ReleaseYear);
+        Assert.Equal(new RangeBounds(2, 12), options.BitrateMbps);
+        Assert.Null(options.RuntimeMinutes);
+        Assert.Null(options.FileSizeGb);
+        Assert.Equal(new RangeBounds(0, 1), options.CastSize);
+        Assert.False(MovieRangeOptions.FromMovies([]).HasMedia);
+    }
+
+    [Theory]
+    [InlineData("code", false)]
+    [InlineData("title", false)]
+    [InlineData("status", false)]
+    [InlineData("favorites", true)]
+    [InlineData("bitrate", true)]
+    [InlineData("cast", true)]
+    public void DefaultSortDescending_IsAscendingOnlyForTextLikeFields(string field, bool expected) =>
+        Assert.Equal(expected, MovieFilterOptions.DefaultSortDescending(field));
+
     private static ActorAttributeOptions Offered(string[]? cups = null, RangeBounds? height = null, RangeBounds? age = null) =>
         new() { CupSizes = cups ?? [], Height = height, Age = age };
 
