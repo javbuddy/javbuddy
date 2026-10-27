@@ -3,7 +3,7 @@
 ## Current state
 
 - SQLite only, via EF Core. Always inject `IDbContextFactory<AppDbContext>`, never a scoped `DbContext` — see `docs/architecture.md` for why.
-- No migrate-the-live-DB guarantee: recreating the SQLite database from scratch is an acceptable, expected fallback. Don't build workarounds to preserve data across a schema change unless specifically asked.
+- Existing databases must upgrade in place: every schema change ships an EF Core migration that preserves user data. Recreating the SQLite database from scratch is no longer an acceptable fallback.
 - A second, independent SQLite database (`Javbuddy.r18dev.db`) holds an imported r18.dev reference dump, queried directly with raw SQL rather than through EF Core — see `docs/architecture.md`'s Data layer section. This is a separate concern from the app's own schema below.
 
 ## EF Core migrations
@@ -19,5 +19,5 @@ Not scheduled. Don't start this without an explicit request; the notes below exi
 - Provider swap: `Microsoft.EntityFrameworkCore.Sqlite` → `Npgsql.EntityFrameworkCore.PostgreSQL`, plus a connection-string/env-var convention change (settings-via-ENV is the established pattern to extend).
 - SQLite-specific type/constraint behavior to re-check: SQLite's dynamic typing is more permissive than Postgres — columns relying on SQLite's type affinity rather than an explicit EF Core column type would need auditing.
 - The `Javbuddy.r18dev.db` raw-SQL reader (`R18DevDumpStore.cs`) is SQLite-specific (imports a SQLite dump) — it would either need to stay SQLite-only (a small embedded side database, independent of the app's main provider) or be redesigned; not a reason to block a Postgres migration on its own.
-- Whether the "recreate rather than migrate" policy still holds: it's a reasonable default for a self-hosted single-user app on SQLite; worth re-confirming intentionally rather than assuming it carries over once a real production dataset exists on Postgres.
+- Moving existing SQLite data to Postgres would need a data-migration path, since in-place upgrades (not recreation) are the policy.
 - Local dev ergonomics: SQLite's zero-setup, single-file nature is presumably part of why it was chosen — a Postgres move likely means adding a docker-compose dependency for local development.

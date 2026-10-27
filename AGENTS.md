@@ -16,7 +16,7 @@ A .NET Blazor Server app for tracking wanted/owned JAV movies, modeled on Sonarr
 - .NET Blazor Server, EF Core + SQLite.
 - Always inject and use `IDbContextFactory<AppDbContext>`, never a scoped `DbContext` — Blazor Server circuits are long-lived, and a scoped context goes stale/thread-unsafe across renders and background tasks.
 - Settings are configured via environment variables.
-- Don't try to preserve or migrate the SQLite DB with workarounds — recreating it from scratch is an acceptable, expected fallback.
+- Schema changes must preserve existing user data: ship an EF Core migration that upgrades an existing SQLite DB in place. Recreating the DB from scratch is no longer an acceptable fallback.
 - Blazor CSS isolation: `.razor.css` files are scoped per component. Identical class names in two different `.razor.css` files do **not** share styles — copy the needed rules into the new component's own `.razor.css` rather than assuming reuse across components.
 - EF Core migrations: always inspect a freshly generated migration for spurious column renames before applying it.
 - Verify against the real thing, not assumptions: when a change touches an external API (javinizer-go, Prowlarr, Jellyfin) or the UI, check the real contract (read the actual source, or run the app and exercise the feature) rather than guessing field names or claiming a UI works from reading the code alone.
