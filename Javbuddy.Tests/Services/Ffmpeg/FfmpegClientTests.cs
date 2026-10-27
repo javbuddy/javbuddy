@@ -252,4 +252,48 @@ public class FfmpegClientTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    private static FfmpegClient ClientWithoutBinaries()
+    {
+        var resolver = Substitute.For<IFfmpegBinaryResolver>();
+        resolver.FfmpegPath.Returns((string?)null);
+        resolver.FfprobePath.Returns((string?)null);
+        return new FfmpegClient(resolver);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_ReturnsNull_WhenFfprobeIsUnavailable()
+    {
+        Assert.Null(await ClientWithoutBinaries().ProbeAsync("in.mp4"));
+    }
+
+    [Fact]
+    public async Task DetectSceneSignalsAsync_ReturnsNull_WhenFfmpegIsUnavailable()
+    {
+        Assert.Null(await ClientWithoutBinaries().DetectSceneSignalsAsync("in.mp4", TimeSpan.FromMinutes(1), progress: null));
+    }
+
+    [Fact]
+    public async Task FfmpegRunners_ReturnFailedResult_WhenFfmpegIsUnavailable()
+    {
+        var client = ClientWithoutBinaries();
+        var concat = new FfmpegConcatRequest([new FfmpegConcatPart("/a.mp4", "A", 1_000_000)], "/out.mp4");
+        var trickplay = new FfmpegTrickplayRequest(10, 320, 180, 10, 10, LeftEyeOnly: false, KeyframeOnly: false);
+
+        var results = new[]
+        {
+            await client.ConcatWithChaptersAsync(concat, progress: null),
+            await client.RemuxWithChaptersAsync("in.mp4", ";FFMETADATA1", "out.mp4", TimeSpan.FromMinutes(1), progress: null),
+            await client.RemuxDts2PtsAsync("in.mp4", "out.mp4", TimeSpan.FromMinutes(1), progress: null),
+            await client.GenerateTrickplayAsync("in.mp4", trickplay, "/tmp/out", TimeSpan.FromMinutes(1), progress: null),
+            await client.ExtractStillWebpAsync("in.mp4", 0, leftEyeOnly: false, "out.webp"),
+            await client.ExtractPreviewVideoAsync("in.mp4", 0, 3, leftEyeOnly: false, "out.webm"),
+        };
+
+        Assert.All(results, r =>
+        {
+            Assert.False(r.Success);
+            Assert.Contains("ffmpeg is not available", r.ErrorMessage);
+        });
+    }
 }
