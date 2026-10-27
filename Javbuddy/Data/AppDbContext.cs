@@ -117,6 +117,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 urls => urls.Aggregate(0, (hash, url) => HashCode.Combine(hash, StringComparer.Ordinal.GetHashCode(url))),
                 urls => urls.ToList());
 
+            entity.Property(c => c.Code).UseCollation("NOCASE");
             entity.HasIndex(c => c.Code).IsUnique();
             entity.Property(c => c.Status).HasConversion<string>().HasMaxLength(20);
             entity.Property(c => c.GalleryImageUrls)
@@ -183,9 +184,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
-        modelBuilder.Entity<CachedImage>(entity => entity.HasIndex(c => new { c.Code, c.Role, c.Index, c.Variant }).IsUnique());
+        // Every column holding a movie code is NOCASE like Movie.Code, so a code written in one case is found and upserted
+        // in another (the cache upsert's ON CONFLICT uses this unique index).
+        modelBuilder.Entity<CachedImage>(entity =>
+        {
+            entity.Property(c => c.Code).UseCollation("NOCASE");
+            entity.HasIndex(c => new { c.Code, c.Role, c.Index, c.Variant }).IsUnique();
+        });
 
-        modelBuilder.Entity<ActorImage>(entity => entity.HasIndex(a => new { a.ActorId, a.Variant }).IsUnique());
+        modelBuilder.Entity<ActorImage>(entity =>
+        {
+            entity.Property(a => a.SourceMovieCode).UseCollation("NOCASE");
+            entity.HasIndex(a => new { a.ActorId, a.Variant }).IsUnique();
+        });
 
         modelBuilder.Entity<ActorAlbum>(entity =>
         {
@@ -211,6 +222,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<TorrentDownload>(entity =>
         {
+            entity.Property(t => t.MovieCode).UseCollation("NOCASE");
             entity.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
             entity.HasIndex(t => t.Hash);
         });

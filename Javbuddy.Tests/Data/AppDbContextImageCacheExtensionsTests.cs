@@ -242,4 +242,20 @@ public class AppDbContextImageCacheExtensionsTests
         var rows = await verifyDb.CachedImages.Where(c => c.Code == code && c.Role == "poster" && c.Index == 0).ToListAsync();
         Assert.Equal(2, rows.Count);
     }
+
+    [Fact]
+    public async Task UpsertCachedImagePairAsync_ACodeInAnotherCase_UpdatesTheSameRowsInsteadOfAddingMore()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var newStorageId = Guid.NewGuid();
+
+        await db.UpsertCachedImagePairAsync("abc-123", "poster", 0, Guid.NewGuid(), Guid.NewGuid());
+        await db.UpsertCachedImagePairAsync("ABC-123", "poster", 0, newStorageId, newStorageId);
+
+        var rows = await db.CachedImages.AsNoTracking().ToListAsync();
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, r => Assert.Equal(newStorageId, r.StorageId));
+        Assert.Equal(2, await db.CachedImages.CountAsync(c => c.Code == "Abc-123" && c.Role == "poster" && c.Index == 0));
+    }
 }
