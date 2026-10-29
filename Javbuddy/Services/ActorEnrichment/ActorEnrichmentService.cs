@@ -256,6 +256,8 @@ public class ActorEnrichmentService(
         if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKanji)) knownNames.Add(actor.JapaneseNameKanji);
         if (!string.IsNullOrWhiteSpace(actor.JapaneseNameKana)) knownNames.Add(actor.JapaneseNameKana);
         foreach (var a in actor.Aliases) knownNames.Add(a.Name);
+        // An alias belongs to one actor only: one another actor already has is skipped like a known name.
+        knownNames.UnionWith(await ActorImportApplier.GetAliasesTakenByOtherActorsAsync(db, actor.Id, result.Aliases, ct));
 
         foreach (var alias in result.Aliases)
         {

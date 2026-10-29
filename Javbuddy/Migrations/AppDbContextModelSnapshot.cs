@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261026175136_CodeColumnsNoCase";
+    public override string LastMigrationId => "20261029080602_NameCollationsAndIndexCleanup";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -47,7 +47,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<string>("FirstName")
                     .IsRequired()
                     .HasMaxLength(200)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("TEXT")
+                    .UseCollation("NOCASE");
 
                 b.Property<int?>("HeightCm")
                     .HasColumnType("INTEGER");
@@ -78,7 +79,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.Property<string>("LastName")
                     .HasMaxLength(200)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("TEXT")
+                    .UseCollation("NOCASE");
 
                 b.Property<int?>("R18DevId")
                     .HasColumnType("INTEGER");
@@ -96,12 +98,18 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.HasIndex("HeightCm");
 
-                b.HasIndex("IsFavorite");
+                b.HasIndex("IsFavorite")
+                    .HasFilter("\"IsFavorite\"");
 
-                b.HasIndex("IsRetired");
+                b.HasIndex("IsRetired")
+                    .HasFilter("\"IsRetired\"");
 
                 b.HasIndex("FirstName", "LastName")
                     .IsUnique();
+
+                b.HasIndex(new[] { "FirstName" }, "IX_Actors_FirstName_SingleName")
+                    .IsUnique()
+                    .HasFilter("\"LastName\" IS NULL");
 
                 b.ToTable("Actors");
             });
@@ -146,7 +154,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(200)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("TEXT")
+                    .UseCollation("NOCASE");
 
                 b.HasKey("Id");
 
@@ -496,8 +505,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("TEXT");
 
                 b.HasKey("Id");
-
-                b.HasIndex("CanonicalKey");
 
                 b.HasIndex("DeletedAt");
 
@@ -1251,7 +1258,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.HasIndex("DateAdded");
 
-                b.HasIndex("IsFavorite");
+                b.HasIndex("IsFavorite")
+                    .HasFilter("\"IsFavorite\"");
 
                 b.HasIndex("JellyfinLibraryName");
 
@@ -1765,7 +1773,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.HasKey("Id");
 
-                b.HasIndex("IsFavorite");
+                b.HasIndex("IsFavorite")
+                    .HasFilter("\"IsFavorite\"");
 
                 b.HasIndex("MovieId", "StartSeconds");
 
@@ -1972,7 +1981,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<string>("Name")
                     .IsRequired()
                     .HasMaxLength(200)
-                    .HasColumnType("TEXT");
+                    .HasColumnType("TEXT")
+                    .UseCollation("NOCASE");
 
                 b.Property<bool>("NeedsReview")
                     .HasColumnType("INTEGER");
@@ -2113,8 +2123,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("TEXT");
 
                 b.HasKey("Id");
-
-                b.HasIndex("Hash");
 
                 b.HasIndex("MovieId");
 

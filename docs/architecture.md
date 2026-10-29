@@ -45,7 +45,7 @@ EF Core + SQLite, via `AppDbContext` and `IDbContextFactory<AppDbContext>` (see 
 
 Always inspect a freshly generated EF Core migration for spurious column renames before applying it — see `docs/database-workflow.md` for the full migration workflow and current-vs-future (Postgres) notes.
 
-There's also a second, independent SQLite database — `Javbuddy.r18dev.db` — imported from a downloaded r18.dev SQL dump (`Services/R18Dev/R18DevDumpImporter.cs`). It's a read-only reference dataset queried directly with raw SQL (`R18DevDumpStore.cs`), not through `AppDbContext`. Aside from encapsulated image-cache atomic upsert helpers (`Data/AppDbContextImageCacheExtensions.cs`), raw SQL is not used against `AppDbContext` (see `AGENTS.md`'s Do's and Don'ts).
+There's also a second, independent SQLite database — `Javbuddy.r18dev.db` — imported from a downloaded r18.dev SQL dump (`Services/R18Dev/R18DevDumpImporter.cs`). It's a read-only reference dataset queried directly with raw SQL (`R18DevDumpStore.cs`), not through `AppDbContext`. Aside from encapsulated image-cache atomic upsert helpers (`Data/AppDbContextImageCacheExtensions.cs`), the connection PRAGMAs (`Data/SqlitePragmaInterceptor.cs`) and the database upkeep the Database Maintenance task runs (`Data/SqliteMaintenance.cs`), raw SQL is not used against `AppDbContext` (see `AGENTS.md`'s Do's and Don'ts).
 
 ## Search/tooling note
 

@@ -261,6 +261,7 @@ public static class ServiceRegistration
         services.AddScoped<IScheduledTask, MovieDiscoveryScanTask>();
         services.AddScoped<IScheduledTask, TrickplayBackfillTask>();
         services.AddScoped<IScheduledTask, LibraryMaintenanceTask>();
+        services.AddScoped<IScheduledTask, DatabaseMaintenanceTask>();
         services.AddSingleton<ScheduledTaskCancellationRegistry>();
         services.AddScoped<ScheduledTaskRunner>();
         services.AddScoped<IScheduledTaskOverviewService, ScheduledTaskOverviewService>();

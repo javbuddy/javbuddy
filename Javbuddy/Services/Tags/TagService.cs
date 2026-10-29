@@ -216,7 +216,7 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var duplicate = await db.Tags.AnyAsync(t => t.Name.ToUpper() == trimmed.ToUpper(), ct);
+        var duplicate = await db.Tags.AnyAsync(t => t.Name == trimmed, ct);
         if (duplicate)
         {
             return TagOperationResult.Fail($"A tag named \"{trimmed}\" already exists.");
@@ -340,7 +340,7 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var duplicate = await db.Tags.AnyAsync(t => t.Id != tagId && t.Name.ToUpper() == trimmed.ToUpper(), ct);
+        var duplicate = await db.Tags.AnyAsync(t => t.Id != tagId && t.Name == trimmed, ct);
         if (duplicate)
         {
             return TagOperationResult.Fail($"A tag named \"{trimmed}\" already exists.");
@@ -435,7 +435,7 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
 
         if (createReplacementRule)
         {
-            var ruleExists = await db.TagReplacementRules.AnyAsync(r => r.SourceValue.ToUpper() == source.Name.ToUpper(), ct);
+            var ruleExists = await db.TagReplacementRules.AnyAsync(r => EF.Functions.Collate(r.SourceValue, "NOCASE") == source.Name, ct);
             if (!ruleExists)
             {
                 db.TagReplacementRules.Add(new TagReplacementRule
@@ -467,7 +467,7 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         foreach (var rule in rulesTargetingSource)
         {
             var alreadyCoveredByTarget = await db.TagReplacementRules.AnyAsync(r =>
-                r.Id != rule.Id && r.TargetTagId == target.Id && r.MatchMode == rule.MatchMode && r.SourceValue.ToUpper() == rule.SourceValue.ToUpper(), ct);
+                r.Id != rule.Id && r.TargetTagId == target.Id && r.MatchMode == rule.MatchMode && EF.Functions.Collate(r.SourceValue, "NOCASE") == rule.SourceValue, ct);
             if (alreadyCoveredByTarget)
             {
                 db.TagReplacementRules.Remove(rule);
@@ -525,7 +525,7 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
             return TagOperationResult.Fail("Cannot ignore a category that has subtags. Reparent or delete the subtags first.");
         }
 
-        var alreadyIgnored = await db.IgnoredTags.AnyAsync(i => i.Value.ToUpper() == tag.Name.ToUpper(), ct);
+        var alreadyIgnored = await db.IgnoredTags.AnyAsync(i => EF.Functions.Collate(i.Value, "NOCASE") == tag.Name, ct);
         if (!alreadyIgnored)
         {
             db.IgnoredTags.Add(new IgnoredTag { Value = tag.Name, MatchMode = TagMatchMode.CaseInsensitive });

@@ -4,12 +4,20 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- A weekly **Database Maintenance** task (System → Tasks) refreshes the database's query planner statistics and vacuums it, returning the space deleted rows leave behind to the disk (on a large library this can shrink the database file by about a quarter).
+
 ### Changed
 
 - The FFmpeg bundled in the Docker image is upgraded from 9.0.1 to 9.0.2.
+- Filtering for favorite movies, scenes and actors, or retired actors, uses smaller indexes covering only those rows, and two unused indexes are dropped.
+- Importing or enriching an actor no longer adds an alias another actor already has, matching what adding an alias by hand already enforced.
 
 ### Fixed
 
+- Tag names, actor names and actor aliases are now unique ignoring case in the database itself, not only in the app's checks, and two actors with the same single name (no last name) can no longer both be saved. Any such duplicates in an existing database are kept but renamed with a " (2)" suffix during the upgrade, so they can be merged with the Merge tools; an alias an actor has twice in different case is removed.
+- Duplicate checks for tag and actor names, aliases, ignored tags and replacement rules no longer miss a name with non-ASCII letters (e.g. "ū") that matches only in different case.
 - Movie codes are now case-insensitive in the image cache, the torrent history and actor photos too, as they already were for movies, so an image cached under `abc-123` is found and replaced for `ABC-123` instead of being duplicated. The upgrade fails on a database that already holds the same code twice in different case in the image cache or the candidate list; delete the database file to recreate it.
 
 ## [0.3.8] - 2026-10-26
