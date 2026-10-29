@@ -80,7 +80,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // NOCASE so a case-insensitive code lookup is a plain equality the unique index can seek.
             entity.Property(m => m.Code).UseCollation("NOCASE");
             entity.HasIndex(m => m.Code).IsUnique();
-            entity.HasIndex(m => m.IsFavorite);
+            // Partial: favorites are a small minority, so the filter reads only those rows.
+            entity.HasIndex(m => m.IsFavorite).HasFilter("\"IsFavorite\"");
             // Query-only: never written, and never read back after a save (which would add RETURNING to every Movies write).
             var dateAdded = entity.Property<DateTime>(Movie.DateAddedColumn)
                 .HasComputedColumnSql("COALESCE(\"FileAddedAt\", \"CreatedAt\")", stored: false)
@@ -136,15 +137,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<Actor>(entity =>
         {
+            // NOCASE like the C# duplicate checks. SQLite treats NULLs as distinct in a unique index, so a
+            // single-name actor (no LastName) gets its own partial unique index on FirstName.
+            entity.Property(a => a.FirstName).UseCollation("NOCASE");
+            entity.Property(a => a.LastName).UseCollation("NOCASE");
             entity.HasIndex(a => new { a.FirstName, a.LastName }).IsUnique();
-            entity.HasIndex(a => a.IsFavorite);
+            entity.HasIndex(a => a.FirstName, "IX_Actors_FirstName_SingleName").IsUnique().HasFilter("\"LastName\" IS NULL");
+            entity.HasIndex(a => a.IsFavorite).HasFilter("\"IsFavorite\"");
             entity.HasIndex(a => a.CupSize);
             entity.HasIndex(a => a.HeightCm);
-            entity.HasIndex(a => a.IsRetired);
+            entity.HasIndex(a => a.IsRetired).HasFilter("\"IsRetired\"");
         });
 
         modelBuilder.Entity<ActorAlias>(entity =>
         {
+            entity.Property(a => a.Name).UseCollation("NOCASE");
             entity.HasIndex(a => new { a.ActorId, a.Name }).IsUnique();
             entity.HasOne(a => a.Actor)
                 .WithMany(actor => actor.Aliases)
@@ -224,13 +231,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.Property(t => t.MovieCode).UseCollation("NOCASE");
             entity.Property(t => t.Status).HasConversion<string>().HasMaxLength(20);
-            entity.HasIndex(t => t.Hash);
         });
 
         modelBuilder.Entity<PathMapping>(entity => entity.HasIndex(p => p.QBittorrentPrefix).IsUnique());
 
+        // Tag names and aliases are NOCASE too, so their unique indexes reject a case-only duplicate and an equality lookup can
+        // seek them. Ignore-list values and rule sources stay case-sensitive: an Exact-mode entry is distinct per casing.
         modelBuilder.Entity<Tag>(entity =>
         {
+            entity.Property(t => t.Name).UseCollation("NOCASE");
             entity.HasIndex(t => t.Name).IsUnique();
             entity.HasIndex(t => t.ParentTagId);
             entity.HasOne(t => t.ParentTag)
@@ -256,7 +265,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Scene>(entity =>
         {
             entity.HasIndex(scene => new { scene.MovieId, scene.StartSeconds });
-            entity.HasIndex(scene => scene.IsFavorite);
+            entity.HasIndex(scene => scene.IsFavorite).HasFilter("\"IsFavorite\"");
             entity.HasOne(scene => scene.Movie)
                 .WithMany(movie => movie.Scenes)
                 .HasForeignKey(scene => scene.MovieId)

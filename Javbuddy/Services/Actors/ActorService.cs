@@ -142,15 +142,16 @@ public class ActorService(
 
         // NOCASE rather than ToUpper() on both sides: SQLite's UPPER() only folds ASCII, while C#'s
         // ToUpper() also folds "ū" to "Ū", so a name like "Ichiiyūka" could never match.
-        // NOCASE still ignores ASCII case and compares every other character exactly.
+        // NOCASE still ignores ASCII case and compares every other character exactly. The name columns
+        // are NOCASE already; a concatenation loses the column's collation, so it needs it explicitly.
         return await db.Actors
             .AsNoTracking()
             .Include(a => a.Aliases)
             .Include(a => a.CupSizePeriods)
             .FirstOrDefaultAsync(a => a.FirstName != null
-                && ((a.LastName == null && EF.Functions.Collate(a.FirstName, "NOCASE") == route)
+                && ((a.LastName == null && a.FirstName == route)
                     || (a.LastName != null && EF.Functions.Collate(a.LastName + " " + a.FirstName, "NOCASE") == route)
-                    || a.Aliases.Any(al => EF.Functions.Collate(al.Name, "NOCASE") == route)), ct);
+                    || a.Aliases.Any(al => al.Name == route)), ct);
     }
 
     public async Task<Actor?> GetByIdAsync(int id, CancellationToken ct = default)
@@ -182,12 +183,8 @@ public class ActorService(
 
         var duplicate = await db.Actors.AnyAsync(a =>
             a.Id != model.Id
-            && a.FirstName != null
-            && a.FirstName.ToLower() == firstName.ToLower()
-            && (
-                (a.LastName == null && lastName == null)
-                || (a.LastName != null && lastName != null && a.LastName.ToLower() == lastName.ToLower())
-            ), ct);
+            && a.FirstName == firstName
+            && a.LastName == lastName, ct);
 
         if (duplicate)
         {
@@ -388,9 +385,7 @@ public class ActorService(
         var actor = new Actor { FirstName = first, LastName = last };
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var exists = await db.Actors.AnyAsync(a => a.FirstName != null
-            && a.FirstName.ToLower() == first.ToLower()
-            && a.LastName == last, ct);
+        var exists = await db.Actors.AnyAsync(a => a.FirstName == first && a.LastName == last, ct);
         if (exists)
         {
             return ActorOperationResult.Fail($"An actor named \"{actor.DisplayName}\" already exists.");
@@ -466,18 +461,18 @@ public class ActorService(
             return ActorOperationResult.Fail($"Alias \"{trimmed}\" matches the actor's current Japanese kana.");
         }
 
-        // 3. Check if alias collides with another actor's primary/canonical names
-        var trimmedUpper = trimmed.ToUpper();
+        // 3. Check if alias collides with another actor's primary/canonical names. NOCASE rather than ToUpper(), for the
+        // reason in GetByRouteNameAsync; the name columns are NOCASE already, the concatenations and the rest need it.
         var otherActorPrimary = await db.Actors
             .AsNoTracking()
             .Where(a => a.Id != actorId && a.FirstName != null)
             .FirstOrDefaultAsync(a =>
-                (a.LastName == null && a.FirstName != null && a.FirstName.ToUpper() == trimmedUpper)
-                || (a.LastName != null && (a.LastName + " " + a.FirstName).ToUpper() == trimmedUpper)
-                || (a.LastName != null && (a.FirstName + " " + a.LastName).ToUpper() == trimmedUpper)
-                || (a.JapaneseNameKanji != null && a.JapaneseNameKanji.ToUpper() == trimmedUpper)
-                || (a.JapaneseNameKana != null && a.JapaneseNameKana.ToUpper() == trimmedUpper)
-                || (a.R18DevName != null && a.R18DevName.ToUpper() == trimmedUpper), ct);
+                (a.LastName == null && a.FirstName == trimmed)
+                || (a.LastName != null && EF.Functions.Collate(a.LastName + " " + a.FirstName, "NOCASE") == trimmed)
+                || (a.LastName != null && EF.Functions.Collate(a.FirstName + " " + a.LastName, "NOCASE") == trimmed)
+                || (a.JapaneseNameKanji != null && EF.Functions.Collate(a.JapaneseNameKanji, "NOCASE") == trimmed)
+                || (a.JapaneseNameKana != null && EF.Functions.Collate(a.JapaneseNameKana, "NOCASE") == trimmed)
+                || (a.R18DevName != null && EF.Functions.Collate(a.R18DevName, "NOCASE") == trimmed), ct);
 
         if (otherActorPrimary is not null)
         {
@@ -488,7 +483,7 @@ public class ActorService(
         var otherAlias = await db.ActorAliases
             .Include(al => al.Actor)
             .AsNoTracking()
-            .FirstOrDefaultAsync(al => al.ActorId != actorId && al.Name.ToUpper() == trimmedUpper, ct);
+            .FirstOrDefaultAsync(al => al.ActorId != actorId && al.Name == trimmed, ct);
 
         if (otherAlias is not null)
         {
@@ -1102,14 +1097,17 @@ public class ActorService(
             }
         }
 
+        var takenAliases = selection.Aliases
+            ? await ActorImportApplier.GetAliasesTakenByOtherActorsAsync(db, actor?.Id, data.Aliases, ct)
+            : new HashSet<string>();
         if (actor is not null)
         {
-            ActorImportApplier.ApplyToExisting(db, actor, data, selection);
+            ActorImportApplier.ApplyToExisting(db, actor, data, selection, takenAliases);
         }
         else
         {
             var (firstName, lastName) = deriveNewActorNames();
-            actor = ActorImportApplier.CreateNew(firstName, lastName, data, selection);
+            actor = ActorImportApplier.CreateNew(firstName, lastName, data, selection, takenAliases);
             db.Actors.Add(actor);
         }
 

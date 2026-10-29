@@ -295,7 +295,7 @@ public static class MovieFilterPredicates
 
     /// <summary>Genre filter options from linked (tag, parent) name pairs. A subtag contributes
     /// its parent (for rollup filtering) and its compound "Parent##Subtag" path. The dedupe is
-    /// case-insensitive because Tags.Name's unique index is case-sensitive at the SQLite level.</summary>
+    /// case-insensitive because Tags.Name's NOCASE unique index only folds ASCII case.</summary>
     public static List<string> BuildGenreOptions(IEnumerable<(string Name, string? ParentName)> linkedTags)
     {
         var genreNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

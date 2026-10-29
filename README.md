@@ -47,7 +47,7 @@ Javbuddy is a self-hosted manager for JAV collections, modeled on Sonarr/Radarr:
 
 ### System
 - **Status**: integration health checks and disk space.
-- **Tasks**: scheduled background jobs (library rescan, image cache, Jellyfin link sync, qBittorrent sync, movie discovery, r18.dev import, trickplay backfill) with run-now and history.
+- **Tasks**: scheduled background jobs (library rescan, image cache, Jellyfin link sync, qBittorrent sync, movie discovery, r18.dev import, trickplay backfill, database maintenance) with run-now and history.
 
 ## Integrations
 

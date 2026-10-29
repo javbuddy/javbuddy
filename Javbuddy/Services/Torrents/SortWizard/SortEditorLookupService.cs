@@ -47,12 +47,12 @@ public class SortEditorLookupService(IDbContextFactory<AppDbContext> dbFactory, 
         if (actresses.Count == 0) return [];
 
         var kanji = actresses.Select(a => Compact(a.JapaneseName)).OfType<string>().Distinct().ToList();
-        var firstNames = actresses.Select(a => a.FirstName?.Trim().ToUpper()).OfType<string>().Where(s => s.Length > 0).Distinct().ToList();
+        var firstNames = actresses.Select(a => a.FirstName?.Trim()).OfType<string>().Where(s => s.Length > 0).Distinct().ToList();
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var candidates = await db.Actors.AsNoTracking()
             .Where(a => (a.JapaneseNameKanji != null && kanji.Contains(a.JapaneseNameKanji.Replace(" ", "").Replace("　", "")))
-                || (a.FirstName != null && firstNames.Contains(a.FirstName.ToUpper())))
+                || (a.FirstName != null && firstNames.Contains(a.FirstName)))
             .Select(a => new
             {
                 a.Id,

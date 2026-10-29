@@ -260,22 +260,31 @@ public static class TagNormalization
                         // An actor tag's subtag ("Hair/Long" from a .nfo this app wrote) is never a genre, and a plain
                         // tag never nests under an actor tag.
                         if (parentTag is { IsActorTag: true }) continue;
-                        if (parentTag is null)
-                        {
-                            parentTag = new Tag { Name = parentName, NeedsReview = true };
-                            db.Tags.Add(parentTag);
-                            context.KnownTags.Add(parentTag);
-                        }
 
-                        tag = context.KnownTags.FirstOrDefault(t =>
-                            string.Equals(t.Name, childName, StringComparison.OrdinalIgnoreCase) &&
-                            (t.ParentTagId == parentTag.Id || t.ParentTag == parentTag));
+                        // Tag names are unique across all parents (ignoring case), so a child named like a tag elsewhere
+                        // reuses that tag rather than inserting one the unique index would reject.
+                        tag = context.KnownTags.FirstOrDefault(t => string.Equals(t.Name, childName, StringComparison.OrdinalIgnoreCase));
 
                         if (tag is null)
                         {
-                            tag = new Tag { Name = childName, ParentTag = parentTag, NeedsReview = true };
-                            db.Tags.Add(tag);
-                            context.KnownTags.Add(tag);
+                            if (parentTag is null)
+                            {
+                                parentTag = new Tag { Name = parentName, NeedsReview = true };
+                                db.Tags.Add(parentTag);
+                                context.KnownTags.Add(parentTag);
+                            }
+
+                            // "Foo##foo": the parent just created already has the child's name.
+                            if (string.Equals(childName, parentName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                tag = parentTag;
+                            }
+                            else
+                            {
+                                tag = new Tag { Name = childName, ParentTag = parentTag, NeedsReview = true };
+                                db.Tags.Add(tag);
+                                context.KnownTags.Add(tag);
+                            }
                         }
                     }
                 }

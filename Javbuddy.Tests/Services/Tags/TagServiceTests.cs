@@ -436,9 +436,9 @@ public class TagServiceTests
         int sourceOneId, sourceTwoId, sourceThreeId, targetId;
         await using (var db = await factory.CreateDbContextAsync())
         {
-            // Tag.Name's unique index is case-sensitive, so case-variant source tags can coexist.
-            var sourceOne = new Tag { Name = "Uncensored" };
-            var sourceTwo = new Tag { Name = "UNCENSORED" };
+            // Tag.Name's NOCASE unique index only folds ASCII, so non-ASCII case-variant source tags can coexist.
+            var sourceOne = new Tag { Name = "Ūncensored" };
+            var sourceTwo = new Tag { Name = "ūNCENSORED" };
             var sourceThree = new Tag { Name = "Leaked" };
             var target = new Tag { Name = "Uncut" };
             db.Tags.AddRange(sourceOne, sourceTwo, sourceThree, target);
@@ -462,7 +462,7 @@ public class TagServiceTests
         var rules = await verifyDb.TagReplacementRules.OrderBy(r => r.Id).ToListAsync();
         Assert.Equal(2, rules.Count);
         Assert.Equal("leaked", rules[0].SourceValue);
-        Assert.Equal("UNCENSORED", rules[1].SourceValue.ToUpperInvariant());
+        Assert.Equal("ŪNCENSORED", rules[1].SourceValue.ToUpperInvariant());
         Assert.All(rules, r => Assert.Equal(targetId, r.TargetTagId));
     }
 

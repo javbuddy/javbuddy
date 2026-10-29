@@ -96,7 +96,7 @@ public class ActorTagService(IDbContextFactory<AppDbContext> dbFactory, IClipTag
         if (trimmed.Length > 200) return TagOperationResult.Fail("Tag name cannot exceed 200 characters.");
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        if (await db.Tags.AnyAsync(t => t.Name.ToUpper() == trimmed.ToUpper(), ct))
+        if (await db.Tags.AnyAsync(t => t.Name == trimmed, ct))
         {
             return TagOperationResult.Fail($"A tag named \"{trimmed}\" already exists.");
         }

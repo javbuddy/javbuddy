@@ -63,8 +63,8 @@ public class TagRuleService(IDbContextFactory<AppDbContext> dbFactory, ClipActor
         // The DB unique index on (SourceValue, MatchMode) only catches exact literal duplicates
         // (SQLite's default collation is case-sensitive) — check case-insensitively here too so a
         // CaseInsensitive-mode rule can't be duplicated by casing alone, mirroring ActorService's
-        // AddAliasAsync collision checks.
-        var duplicate = await db.TagReplacementRules.AnyAsync(r => r.MatchMode == matchMode && r.SourceValue.ToUpper() == trimmed.ToUpper(), ct);
+        // AddAliasAsync collision checks. NOCASE rather than ToUpper(), which SQLite only applies to ASCII.
+        var duplicate = await db.TagReplacementRules.AnyAsync(r => r.MatchMode == matchMode && EF.Functions.Collate(r.SourceValue, "NOCASE") == trimmed, ct);
         if (duplicate)
         {
             return TagOperationResult.Fail($"A rule for \"{trimmed}\" already exists.");
@@ -120,7 +120,7 @@ public class TagRuleService(IDbContextFactory<AppDbContext> dbFactory, ClipActor
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var duplicate = await db.IgnoredTags.AnyAsync(i => i.MatchMode == matchMode && i.Value.ToUpper() == trimmed.ToUpper(), ct);
+        var duplicate = await db.IgnoredTags.AnyAsync(i => i.MatchMode == matchMode && EF.Functions.Collate(i.Value, "NOCASE") == trimmed, ct);
         if (duplicate)
         {
             return OperationResult.Fail($"\"{trimmed}\" is already on the ignore list.");

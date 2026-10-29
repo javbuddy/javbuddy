@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Actors;
 
@@ -33,8 +34,9 @@ public sealed record ImportSelection(
 public static class ActorImportApplier
 {
     /// <summary>Overwrites the ticked fields that the source has a value for and adds any aliases the
-    /// actor doesn't already have (nor as its display name). The caller saves.</summary>
-    public static void ApplyToExisting(AppDbContext db, Actor actor, ImportedActorData data, ImportSelection selection)
+    /// actor doesn't already have (nor as its display name), skipping <paramref name="takenAliases"/>. The caller saves.</summary>
+    public static void ApplyToExisting(AppDbContext db, Actor actor, ImportedActorData data, ImportSelection selection,
+        IReadOnlySet<string> takenAliases)
     {
         if (selection.Height && data.HeightCm.HasValue) actor.HeightCm = data.HeightCm;
         if (selection.CupSize && ActorPhysicalAttributesHelper.StandardCupSizeOrNull(data.CupSize) is { } cupSize) actor.CupSize = cupSize;
@@ -57,6 +59,7 @@ public static class ActorImportApplier
         {
             var trimmed = alias.Trim();
             if (!string.IsNullOrWhiteSpace(trimmed) &&
+                !takenAliases.Contains(trimmed) &&
                 !actor.Aliases.Any(a => string.Equals(a.Name, trimmed, StringComparison.OrdinalIgnoreCase)) &&
                 !string.Equals(actor.DisplayName, trimmed, StringComparison.OrdinalIgnoreCase))
             {
@@ -67,8 +70,26 @@ public static class ActorImportApplier
         }
     }
 
-    /// <summary>A new, unsaved actor with the given names and only the ticked fields the source has.</summary>
-    public static Actor CreateNew(string firstName, string? lastName, ImportedActorData data, ImportSelection selection)
+    /// <summary>The names among <paramref name="aliases"/> that are already an alias of an actor other than
+    /// <paramref name="actorId"/> (null for a new actor). An alias belongs to one actor only, so an import skips these.</summary>
+    public static async Task<IReadOnlySet<string>> GetAliasesTakenByOtherActorsAsync(
+        AppDbContext db, int? actorId, IEnumerable<string> aliases, CancellationToken ct)
+    {
+        var names = aliases.Select(a => a.Trim()).Where(a => a.Length > 0).Distinct().ToList();
+        if (names.Count == 0) return new HashSet<string>();
+
+        // ActorAliases.Name is NOCASE, so a match may differ in ASCII case from the imported name: the set ignores case too.
+        return (await db.ActorAliases
+                .Where(al => al.ActorId != actorId && names.Contains(al.Name))
+                .Select(al => al.Name)
+                .ToListAsync(ct))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A new, unsaved actor with the given names and only the ticked fields the source has, skipping
+    /// <paramref name="takenAliases"/>.</summary>
+    public static Actor CreateNew(string firstName, string? lastName, ImportedActorData data, ImportSelection selection,
+        IReadOnlySet<string> takenAliases)
     {
         var actor = new Actor
         {
@@ -91,7 +112,8 @@ public static class ActorImportApplier
             foreach (var alias in data.Aliases)
             {
                 var trimmed = alias.Trim();
-                if (!string.IsNullOrWhiteSpace(trimmed))
+                if (!string.IsNullOrWhiteSpace(trimmed) && !takenAliases.Contains(trimmed)
+                    && !actor.Aliases.Any(a => string.Equals(a.Name, trimmed, StringComparison.OrdinalIgnoreCase)))
                 {
                     actor.Aliases.Add(new ActorAlias { Name = trimmed, CreatedAt = DateTime.UtcNow });
                 }
