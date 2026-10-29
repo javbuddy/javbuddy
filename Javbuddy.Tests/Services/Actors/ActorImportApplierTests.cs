@@ -105,7 +105,8 @@ public class ActorImportApplierTests
 
         var taken = await ActorImportApplier.GetAliasesTakenByOtherActorsAsync(
             db, self.Id, ["あい", " shared ", "Own", "Free"], CancellationToken.None);
-        Assert.Equal(["shared", "あい"], taken.Order(StringComparer.Ordinal));
+        Assert.Equal(["Shared", "あい"], taken.Order(StringComparer.Ordinal));
+        Assert.Contains("SHARED", taken);
 
         var takenForNew = await ActorImportApplier.GetAliasesTakenByOtherActorsAsync(db, null, ["Own"], CancellationToken.None);
         Assert.Equal(["Own"], takenForNew);

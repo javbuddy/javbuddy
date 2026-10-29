@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Javbuddy.Migrations;
 
 [DbContext(typeof(AppDbContext))]
-[Migration("20261029080602_NameCollationsAndIndexCleanup")]
-partial class _20261029080602_NameCollationsAndIndexCleanup
+[Migration("20261029085107_NameCollationsAndIndexCleanup")]
+partial class _20261029085107_NameCollationsAndIndexCleanup
 {
     /// <inheritdoc />
     protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -503,6 +503,8 @@ partial class _20261029080602_NameCollationsAndIndexCleanup
                     .HasColumnType("TEXT");
 
                 b.HasKey("Id");
+
+                b.HasIndex("CanonicalKey");
 
                 b.HasIndex("DeletedAt");
 

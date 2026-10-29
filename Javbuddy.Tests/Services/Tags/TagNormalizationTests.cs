@@ -349,6 +349,35 @@ public class TagNormalizationTests
     }
 
     [Fact]
+    public async Task ApplyToMovieAsync_HierarchicalString_ChildNamedLikeATagElsewhere_ReusesThatTag()
+    {
+        // Tag names are unique across all parents ignoring case, so inserting a second "big tits" would fail the save.
+        using var factory = new TestDbContextFactory();
+        var movie = new Movie { Code = "ABC-011", MetaGenres = "Body##big tits" };
+        int existingId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var existing = new Tag { Name = "Big Tits" };
+            db.Tags.Add(existing);
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+            existingId = existing.Id;
+        }
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var tracked = await db.Movies.FindAsync(movie.Id);
+            await TagNormalization.ApplyToMovieAsync(db, tracked!);
+            await db.SaveChangesAsync();
+        }
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.Equal(1, await verifyDb.Tags.CountAsync(t => t.Name == "big tits"));
+        Assert.False(await verifyDb.Tags.AnyAsync(t => t.Name == "Body"), "no parent is needed when the child already exists");
+        Assert.Equal([existingId], await verifyDb.MovieTags.Where(mt => mt.MovieId == movie.Id).Select(mt => mt.TagId).ToListAsync());
+    }
+
+    [Fact]
     public async Task ApplyToMovieAsync_HierarchicalString_UnderAnActorTag_CreatesNoPlainSubtag()
     {
         using var factory = new TestDbContextFactory();

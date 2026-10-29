@@ -5,20 +5,32 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Javbuddy.Migrations;
 
 /// <inheritdoc />
-public partial class _20261029080602_NameCollationsAndIndexCleanup : Migration
+public partial class _20261029085107_NameCollationsAndIndexCleanup : Migration
 {
     /// <inheritdoc />
     protected override void Up(MigrationBuilder migrationBuilder)
     {
-        // The NOCASE unique indexes below would fail to build on a case-only duplicate. Tags and actors keep every row,
-        // renamed with a " (2)" suffix for the user to merge; a duplicate alias of the same actor says nothing new.
+        // The NOCASE unique indexes below would fail to build on a case-only duplicate. Tags and actors keep every row:
+        // each later duplicate gets the first " (n)" suffix no other name has, ignoring case (each pick sees the renames
+        // before it), for the user to merge. A duplicate alias of the same actor says nothing new.
         migrationBuilder.Sql("""
-            WITH ranked AS (SELECT "Id", ROW_NUMBER() OVER (PARTITION BY "Name" COLLATE NOCASE ORDER BY "Id") AS rn FROM "Tags")
-            UPDATE "Tags" SET "Name" = "Name" || ' (' || ranked.rn || ')' FROM ranked WHERE ranked."Id" = "Tags"."Id" AND ranked.rn > 1;
+            UPDATE "Tags" SET "Name" = (
+                WITH RECURSIVE n(i) AS (SELECT 2 UNION ALL SELECT i + 1 FROM n)
+                SELECT "Tags"."Name" || ' (' || i || ')' FROM n
+                WHERE NOT EXISTS (SELECT 1 FROM "Tags" AS t WHERE t."Name" = "Tags"."Name" || ' (' || i || ')' COLLATE NOCASE)
+                LIMIT 1)
+            WHERE EXISTS (SELECT 1 FROM "Tags" AS o WHERE o."Name" = "Tags"."Name" COLLATE NOCASE AND o."Id" < "Tags"."Id");
             """);
         migrationBuilder.Sql("""
-            WITH ranked AS (SELECT "Id", ROW_NUMBER() OVER (PARTITION BY "FirstName" COLLATE NOCASE, "LastName" COLLATE NOCASE ORDER BY "Id") AS rn FROM "Actors")
-            UPDATE "Actors" SET "FirstName" = "FirstName" || ' (' || ranked.rn || ')' FROM ranked WHERE ranked."Id" = "Actors"."Id" AND ranked.rn > 1;
+            UPDATE "Actors" SET "FirstName" = (
+                WITH RECURSIVE n(i) AS (SELECT 2 UNION ALL SELECT i + 1 FROM n)
+                SELECT "Actors"."FirstName" || ' (' || i || ')' FROM n
+                WHERE NOT EXISTS (SELECT 1 FROM "Actors" AS a WHERE a."FirstName" = "Actors"."FirstName" || ' (' || i || ')' COLLATE NOCASE
+                    AND (a."LastName" = "Actors"."LastName" COLLATE NOCASE OR (a."LastName" IS NULL AND "Actors"."LastName" IS NULL)))
+                LIMIT 1)
+            WHERE EXISTS (SELECT 1 FROM "Actors" AS o WHERE o."FirstName" = "Actors"."FirstName" COLLATE NOCASE
+                AND (o."LastName" = "Actors"."LastName" COLLATE NOCASE OR (o."LastName" IS NULL AND "Actors"."LastName" IS NULL))
+                AND o."Id" < "Actors"."Id");
             """);
         migrationBuilder.Sql("""
             DELETE FROM "ActorAliases" WHERE EXISTS (SELECT 1 FROM "ActorAliases" AS o
@@ -36,10 +48,6 @@ public partial class _20261029080602_NameCollationsAndIndexCleanup : Migration
         migrationBuilder.DropIndex(
             name: "IX_Movies_IsFavorite",
             table: "Movies");
-
-        migrationBuilder.DropIndex(
-            name: "IX_DeletedMovies_CanonicalKey",
-            table: "DeletedMovies");
 
         migrationBuilder.DropIndex(
             name: "IX_Actors_IsFavorite",
@@ -208,11 +216,6 @@ public partial class _20261029080602_NameCollationsAndIndexCleanup : Migration
             name: "IX_Movies_IsFavorite",
             table: "Movies",
             column: "IsFavorite");
-
-        migrationBuilder.CreateIndex(
-            name: "IX_DeletedMovies_CanonicalKey",
-            table: "DeletedMovies",
-            column: "CanonicalKey");
 
         migrationBuilder.CreateIndex(
             name: "IX_Actors_IsFavorite",

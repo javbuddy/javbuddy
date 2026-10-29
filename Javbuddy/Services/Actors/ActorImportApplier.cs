@@ -78,12 +78,12 @@ public static class ActorImportApplier
         var names = aliases.Select(a => a.Trim()).Where(a => a.Length > 0).Distinct().ToList();
         if (names.Count == 0) return new HashSet<string>();
 
-        var taken = await db.ActorAliases
-            .Where(al => al.ActorId != actorId && names.Contains(al.Name))
-            .Select(al => al.Name)
-            .ToListAsync(ct);
-        // ActorAliases.Name is NOCASE, so a match may differ in ASCII case from the imported name.
-        return names.Where(n => taken.Contains(n, StringComparer.OrdinalIgnoreCase)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // ActorAliases.Name is NOCASE, so a match may differ in ASCII case from the imported name: the set ignores case too.
+        return (await db.ActorAliases
+                .Where(al => al.ActorId != actorId && names.Contains(al.Name))
+                .Select(al => al.Name)
+                .ToListAsync(ct))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>A new, unsaved actor with the given names and only the ticked fields the source has, skipping

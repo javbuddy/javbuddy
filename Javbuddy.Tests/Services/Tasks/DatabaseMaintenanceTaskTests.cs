@@ -51,6 +51,29 @@ public sealed class DatabaseMaintenanceTaskTests : IDisposable
         Assert.StartsWith("optimized statistics, vacuumed ", summary);
     }
 
+    [Fact]
+    public async Task RunAsync_WithFewFreePages_SkipsTheVacuum()
+    {
+        var dbPath = Path.Combine(dir.FullName, "small.db");
+        var factory = new Factory(new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={dbPath};Pooling=False")
+            .AddInterceptors(new SqlitePragmaInterceptor())
+            .Options);
+        await using (var db = factory.CreateDbContext())
+        {
+            await db.Database.EnsureCreatedAsync();
+            db.Tags.AddRange(Enumerable.Range(0, 2000).Select(i => new Tag { Name = $"Tag {i} {new string('x', 150)}" }));
+            await db.SaveChangesAsync();
+            await db.Tags.Where(t => t.Id <= 100).ExecuteDeleteAsync();
+        }
+
+        var summary = await new DatabaseMaintenanceTask(factory).RunAsync(CancellationToken.None, new Progress<TaskProgress>());
+
+        Assert.StartsWith("optimized statistics, skipped vacuum (", summary);
+        await using (var db = factory.CreateDbContext())
+            Assert.True(await SqliteMaintenance.GetFreeBytesAsync(db.Database, CancellationToken.None) > 0, "the free pages should be left alone");
+    }
+
     private sealed class Factory(DbContextOptions<AppDbContext> options) : IDbContextFactory<AppDbContext>
     {
         public AppDbContext CreateDbContext() => new(options);

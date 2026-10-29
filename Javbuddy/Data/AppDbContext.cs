@@ -70,6 +70,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<DeletedMovie>(entity =>
         {
             entity.HasIndex(m => m.NormalizedCode).IsUnique();
+            entity.HasIndex(m => m.CanonicalKey);
             entity.HasIndex(m => m.DeletedAt);
             entity.Property(m => m.PreviousStatus).HasConversion<string>().HasMaxLength(20);
         });
