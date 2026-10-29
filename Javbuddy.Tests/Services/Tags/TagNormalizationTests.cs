@@ -378,6 +378,30 @@ public class TagNormalizationTests
     }
 
     [Fact]
+    public async Task ApplyToMovieAsync_HierarchicalString_ChildNamedLikeItsNewParent_CreatesOneTag()
+    {
+        using var factory = new TestDbContextFactory();
+        var movie = new Movie { Code = "ABC-012", MetaGenres = "Foo##foo" };
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var tracked = await db.Movies.FindAsync(movie.Id);
+            await TagNormalization.ApplyToMovieAsync(db, tracked!);
+            await db.SaveChangesAsync();
+        }
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        var tag = Assert.Single(await verifyDb.Tags.ToListAsync());
+        Assert.Equal("Foo", tag.Name);
+        Assert.Equal([tag.Id], await verifyDb.MovieTags.Where(mt => mt.MovieId == movie.Id).Select(mt => mt.TagId).ToListAsync());
+    }
+
+    [Fact]
     public async Task ApplyToMovieAsync_HierarchicalString_UnderAnActorTag_CreatesNoPlainSubtag()
     {
         using var factory = new TestDbContextFactory();

@@ -52,8 +52,10 @@ public sealed class NameCollationsMigrationTests : IDisposable
             Assert.Equal(["Creampie", "creampie (3)", "CREAMPIE (4)", "Solo", "CREAMPIE (2)"],
                 await db.Tags.OrderBy(t => t.Id).Select(t => t.Name).ToListAsync());
             Assert.Equal(["Yua", "yua (3)", "Yua", "YUA (2)", "Yua (2)"], await db.Actors.OrderBy(a => a.Id).Select(a => a.FirstName).ToListAsync());
-            Assert.Equal([(1, "Alias"), (2, "Alias")],
-                (await db.ActorAliases.OrderBy(a => a.Id).Select(a => new { a.ActorId, a.Name }).ToListAsync()).Select(a => (a.ActorId, a.Name)));
+            // A renamed actor keeps its old name as an alias, so cast linking still finds it until it's merged.
+            Assert.Equal([(1, "Alias"), (2, "Alias"), (2, "yua"), (4, "YUA mikami"), (4, "mikami YUA")],
+                (await db.ActorAliases.Select(a => new { a.ActorId, a.Name }).ToListAsync())
+                    .OrderBy(a => a.ActorId).ThenBy(a => a.Name, StringComparer.Ordinal).Select(a => (a.ActorId, a.Name)));
             // Exact-mode rules are distinct per casing, so they're left alone.
             Assert.Equal(["bar", "BAR"], await db.TagReplacementRules.OrderBy(r => r.Id).Select(r => r.SourceValue).ToListAsync());
         }

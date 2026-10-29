@@ -274,9 +274,17 @@ public static class TagNormalization
                                 context.KnownTags.Add(parentTag);
                             }
 
-                            tag = new Tag { Name = childName, ParentTag = parentTag, NeedsReview = true };
-                            db.Tags.Add(tag);
-                            context.KnownTags.Add(tag);
+                            // "Foo##foo": the parent just created already has the child's name.
+                            if (string.Equals(childName, parentName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                tag = parentTag;
+                            }
+                            else
+                            {
+                                tag = new Tag { Name = childName, ParentTag = parentTag, NeedsReview = true };
+                                db.Tags.Add(tag);
+                                context.KnownTags.Add(tag);
+                            }
                         }
                     }
                 }

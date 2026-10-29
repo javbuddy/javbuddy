@@ -632,11 +632,12 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         // Every rule this merge can read or re-point, loaded once: rules targeting a source or the
         // target (for re-pointing and dedup), plus any rule whose value matches a source name (for
         // the createReplacementRule existence check). Mutations stay tracked on these entities.
-        var sourceNamesUpper = sources.Select(s => s.Name.ToUpper()).ToList();
+        // NOCASE rather than ToUpper() on both sides, which SQLite's UPPER() only applies to ASCII.
+        var sourceNames = sources.Select(s => s.Name).ToList();
         var relevantRules = await db.TagReplacementRules
             .Where(r => r.TargetTagId == target.Id
                 || loadedSourceIds.Contains(r.TargetTagId)
-                || (createReplacementRule && sourceNamesUpper.Contains(r.SourceValue.ToUpper())))
+                || (createReplacementRule && sourceNames.Contains(EF.Functions.Collate(r.SourceValue, "NOCASE"))))
             .ToListAsync(ct);
         var rulesBySourceTag = relevantRules.Where(r => r.TargetTagId != target.Id).ToLookup(r => r.TargetTagId);
 

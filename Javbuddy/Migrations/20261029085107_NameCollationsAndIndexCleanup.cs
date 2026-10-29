@@ -21,6 +21,20 @@ public partial class _20261029085107_NameCollationsAndIndexCleanup : Migration
                 LIMIT 1)
             WHERE EXISTS (SELECT 1 FROM "Tags" AS o WHERE o."Name" = "Tags"."Name" COLLATE NOCASE AND o."Id" < "Tags"."Id");
             """);
+        // Cast linking matches names and aliases, so a renamed actor first keeps its old name ("Last First" and "First
+        // Last") as an alias: otherwise the next cast sync would drop its movie links, and everything on them, before
+        // the user gets to merge it.
+        migrationBuilder.Sql("""
+            INSERT INTO "ActorAliases" ("ActorId", "Name", "CreatedAt")
+            SELECT n."Id", n."Name", datetime('now') FROM (
+                SELECT "Id", CASE WHEN "LastName" IS NULL THEN "FirstName" ELSE "LastName" || ' ' || "FirstName" END AS "Name" FROM "Actors"
+                UNION SELECT "Id", "FirstName" || ' ' || "LastName" FROM "Actors" WHERE "LastName" IS NOT NULL) AS n
+            JOIN "Actors" AS a ON a."Id" = n."Id"
+            WHERE EXISTS (SELECT 1 FROM "Actors" AS o WHERE o."FirstName" = a."FirstName" COLLATE NOCASE
+                    AND (o."LastName" = a."LastName" COLLATE NOCASE OR (o."LastName" IS NULL AND a."LastName" IS NULL))
+                    AND o."Id" < a."Id")
+                AND NOT EXISTS (SELECT 1 FROM "ActorAliases" AS al WHERE al."ActorId" = n."Id" AND al."Name" = n."Name" COLLATE NOCASE);
+            """);
         migrationBuilder.Sql("""
             UPDATE "Actors" SET "FirstName" = (
                 WITH RECURSIVE n(i) AS (SELECT 2 UNION ALL SELECT i + 1 FROM n)

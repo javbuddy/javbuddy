@@ -74,6 +74,22 @@ public sealed class DatabaseMaintenanceTaskTests : IDisposable
             Assert.True(await SqliteMaintenance.GetFreeBytesAsync(db.Database, CancellationToken.None) > 0, "the free pages should be left alone");
     }
 
+    [Theory]
+    // Database and temp dir on one volume: the temp copy and the log both land there, so it needs the live size twice.
+    [InlineData("/data", "/data", 250, null)]
+    [InlineData("/data", "/data", 150, "/data")]
+    // On separate volumes, each needs it once.
+    [InlineData("/data", "/tmp", 150, null)]
+    [InlineData("/data", "/tmp", 50, "/data")]
+    public void FindDiskSpaceShortfall_NeedsTheLiveSizeOncePerUseOfEachVolume(string dbRoot, string tempRoot, long available, string? expected)
+    {
+        (string, long) Space(string path) => (path.StartsWith("/data/", StringComparison.Ordinal) ? dbRoot : tempRoot, available);
+
+        var shortfall = DatabaseMaintenanceTask.FindDiskSpaceShortfall(100, "/data/javbuddy.db", "/tmp/", Space);
+
+        Assert.Equal(expected, shortfall?.Root);
+    }
+
     private sealed class Factory(DbContextOptions<AppDbContext> options) : IDbContextFactory<AppDbContext>
     {
         public AppDbContext CreateDbContext() => new(options);
