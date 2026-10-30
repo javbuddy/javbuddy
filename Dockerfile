@@ -5,6 +5,8 @@
 # full-featured static build. libwebp/libvpx/libdav1d are linked dynamically against the distro's
 # libraries, which the final stage installs (so their security fixes arrive via apt). Bump by
 # updating FFMPEG_VERSION and FFMPEG_SHA256 (the sha256 of ffmpeg-<version>.tar.xz).
+# CI (.github/workflows/ci.yml, "test" job) builds this same pinned version with the configure flags below
+# for the real-binary FFmpeg tests: keep the two in sync.
 FROM mcr.microsoft.com/dotnet/sdk:11.0-resolute AS ffmpeg
 ARG FFMPEG_VERSION=9.0.2
 ARG FFMPEG_SHA256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e

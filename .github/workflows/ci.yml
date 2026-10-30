@@ -35,7 +35,40 @@ jobs:
           dotnet-version: 11.0.x
           dotnet-quality: preview
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg fontconfig
+      # The real-binary FFmpeg tests run against the same pinned FFmpeg as the Docker image (apt's is
+      # older and lacks e.g. the dts2pts filter). Keep the configure flags in sync with the Dockerfile.
+      # The test clips are still made with apt's ffmpeg: this stripped build can't encode H.264/AAC.
+      - id: ffmpeg-pin
+        run: |
+          echo "version=$(sed -n 's/^ARG FFMPEG_VERSION=//p' Dockerfile)" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sed -n 's/^ARG FFMPEG_SHA256=//p' Dockerfile)" >> "$GITHUB_OUTPUT"
+      - id: ffmpeg-cache
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/ffmpeg-docker
+          key: ffmpeg-${{ runner.os }}-${{ runner.arch }}-${{ steps.ffmpeg-pin.outputs.version }}-${{ hashFiles('Dockerfile') }}
+      - if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ runner.temp }}
+        run: |
+          sudo apt-get install -y --no-install-recommends nasm libwebp-dev libvpx-dev libdav1d-dev
+          curl -fsSL -o ffmpeg.tar.xz "https://ffmpeg.org/releases/ffmpeg-${{ steps.ffmpeg-pin.outputs.version }}.tar.xz"
+          echo "${{ steps.ffmpeg-pin.outputs.sha256 }}  ffmpeg.tar.xz" | sha256sum -c
+          mkdir ffmpeg-src && tar -xJf ffmpeg.tar.xz -C ffmpeg-src --strip-components=1
+          cd ffmpeg-src
+          ./configure --prefix="${{ runner.temp }}/ffmpeg-docker" --disable-doc --disable-debug --disable-ffplay --disable-network \
+            --disable-autodetect --disable-hwaccels --disable-devices \
+            --disable-encoders --enable-encoder=libwebp,libvpx_vp9,wrapped_avframe,pcm_s16le \
+            --disable-muxers --enable-muxer=mp4,mov,matroska,webm,avi,mpegts,asf,null,image2,webp \
+            --disable-protocols --enable-protocol=file,pipe \
+            --enable-libwebp --enable-libvpx --enable-libdav1d \
+            --disable-shared --enable-static
+          make -j"$(nproc)"
+          make install
+      - run: ${{ runner.temp }}/ffmpeg-docker/bin/ffmpeg -version | head -1
       - run: dotnet test Javbuddy.Tests/Javbuddy.Tests.csproj --logger "trx;LogFileName=unit.trx" --results-directory TestResults/unit
+        env:
+          Ffmpeg__Path: ${{ runner.temp }}/ffmpeg-docker/bin/ffmpeg
+          Ffmpeg__ProbePath: ${{ runner.temp }}/ffmpeg-docker/bin/ffprobe
       - if: always()
         uses: actions/upload-artifact@v7
         with:
