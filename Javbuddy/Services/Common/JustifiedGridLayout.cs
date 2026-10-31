@@ -9,7 +9,7 @@ public static class JustifiedGridLayout
     public const double TileHeight = 220;
     public const double TileGap = 4;
 
-    public static int CountRows(IEnumerable<double> aspectRatios, double containerWidth)
+    public static int CountRows(IEnumerable<double> aspectRatios, double containerWidth, double tileHeight = TileHeight)
     {
         if (containerWidth <= 0) return 0;
 
@@ -17,7 +17,7 @@ public static class JustifiedGridLayout
         var rowWidth = 0.0;
         foreach (var aspectRatio in aspectRatios)
         {
-            var tileWidth = Math.Min(aspectRatio * TileHeight, containerWidth);
+            var tileWidth = Math.Min(aspectRatio * tileHeight, containerWidth);
             var needed = rowWidth == 0 ? tileWidth : rowWidth + TileGap + tileWidth;
             if (needed > containerWidth && rowWidth > 0)
             {
@@ -34,6 +34,6 @@ public static class JustifiedGridLayout
         return rows;
     }
 
-    public static double CalculateHeight(IEnumerable<double> aspectRatios, double containerWidth) =>
-        CountRows(aspectRatios, containerWidth) * (TileHeight + TileGap);
+    public static double CalculateHeight(IEnumerable<double> aspectRatios, double containerWidth, double tileHeight = TileHeight) =>
+        CountRows(aspectRatios, containerWidth, tileHeight) * (tileHeight + TileGap);
 }
