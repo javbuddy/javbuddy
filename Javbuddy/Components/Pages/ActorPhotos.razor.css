@@ -1,3 +1,7 @@
+.actor-photos-timeline.density-small { --tile-h: 150px; }
+.actor-photos-timeline.density-medium { --tile-h: 220px; }
+.actor-photos-timeline.density-large { --tile-h: 320px; }
+
 .actor-photos-timeline-section {
     margin-bottom: 2rem;
 }
@@ -35,9 +39,9 @@
 
 .actor-photo-tile {
     position: relative;
-    height: 220px;
+    height: var(--tile-h, 220px);
     flex-grow: calc(var(--ar, 1) * 100);
-    flex-basis: calc(var(--ar, 1) * 220px);
+    flex-basis: calc(var(--ar, 1) * var(--tile-h, 220px));
     max-width: 100%;
     border-radius: 2px;
     overflow: hidden;
@@ -159,8 +163,7 @@
 }
 
 @media (max-width: 576px) {
-    .actor-photo-tile {
-        height: 160px;
-        flex-basis: calc(var(--ar, 1) * 160px);
-    }
+    .actor-photos-timeline.density-small { --tile-h: 110px; }
+    .actor-photos-timeline.density-medium { --tile-h: 160px; }
+    .actor-photos-timeline.density-large { --tile-h: 220px; }
 }

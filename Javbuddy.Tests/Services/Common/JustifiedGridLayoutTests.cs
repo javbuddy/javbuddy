@@ -61,4 +61,13 @@ public class JustifiedGridLayoutTests
 
         Assert.Equal(33, rows); // ceil(130 / 4)
     }
+
+    [Fact]
+    public void CalculateHeight_UsesGivenTileHeight()
+    {
+        // 450px fits two 150px-tall square tiles (150+4+150) per row -> 2 rows for 3 tiles.
+        var height = JustifiedGridLayout.CalculateHeight([1.0, 1.0, 1.0], 450, 150);
+
+        Assert.Equal(2 * (150 + JustifiedGridLayout.TileGap), height);
+    }
 }

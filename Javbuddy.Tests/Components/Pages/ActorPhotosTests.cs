@@ -494,6 +494,19 @@ public class ActorPhotosTests : BunitContext
     }
 
     [Fact]
+    public void SizeOption_ChangesTimelineDensityClass()
+    {
+        SetUpLargeCollection();
+        var cut = Render<ActorPhotos>();
+        Assert.Contains("density-medium", cut.Find(".actor-photos-timeline").ClassList);
+
+        cut.FindAll("button").First(b => b.TextContent.Contains("Size: Medium")).Click();
+        cut.FindAll(".sort-dropdown-item").First(b => b.TextContent.Trim().StartsWith("Large")).Click();
+
+        Assert.Contains("density-large", cut.Find(".actor-photos-timeline").ClassList);
+    }
+
+    [Fact]
     public async Task LayoutMetricsChanged_RendersPlaceholder_SizedForUnrenderedTail()
     {
         SetUpLargeCollection();
