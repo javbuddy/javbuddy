@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-10-31
+
 ### Added
 
 - A weekly **Database Maintenance** task (System → Tasks) refreshes the database's query planner statistics and, once free pages reach 10% of the file and the disk has room for the rebuild, vacuums it, returning the space deleted rows leave behind to the disk.
