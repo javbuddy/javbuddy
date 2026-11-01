@@ -36,6 +36,9 @@ public interface IChallengeSolverClient
     Task<SolverResult> PostFormAsync(Uri url, IReadOnlyList<KeyValuePair<string, string>> form, string? sessionKey, CancellationToken ct = default);
 
     Task<SolverTestResult> TestConnectionAsync(CancellationToken ct = default);
+
+    /// <summary>The solver's address, for linking to it from System &gt; Status.</summary>
+    Task<string?> GetExternalUrlAsync(CancellationToken ct = default);
 }
 
 /// <summary>Reads the challenge solver address from environment variables / appsettings

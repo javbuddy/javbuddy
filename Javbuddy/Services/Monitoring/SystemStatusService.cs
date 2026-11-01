@@ -1,4 +1,5 @@
 using Javbuddy.Data;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.Prowlarr;
@@ -8,9 +9,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Monitoring;
 
-public sealed record ConfiguredIntegrations(bool Javinizer, bool Prowlarr, bool QBittorrent, bool Jellyfin)
+public sealed record ConfiguredIntegrations(bool Javinizer, bool Prowlarr, bool QBittorrent, bool Jellyfin, bool ChallengeSolver)
 {
-    public static ConfiguredIntegrations None { get; } = new(false, false, false, false);
+    public static ConfiguredIntegrations None { get; } = new(false, false, false, false, false);
 }
 
 public sealed record SubServiceHealth(string Name, bool Configured, bool Success, string Message, string? Url, string? Version = null);
@@ -33,7 +34,8 @@ public class SystemStatusService(
     IJavinizerClient javinizerClient,
     IProwlarrClient prowlarrClient,
     IQBittorrentClient qBittorrentClient,
-    IJellyfinClient jellyfinClient) : ISystemStatusService
+    IJellyfinClient jellyfinClient,
+    IChallengeSolverClient challengeSolverClient) : ISystemStatusService
 {
     public async Task<SystemHealthReport> GetHealthReportAsync(CancellationToken ct = default)
     {
@@ -85,7 +87,8 @@ public class SystemStatusService(
         bool IsConfigured(string key) => statuses.Any(s => s.Key == key && s.Configured);
 
         return new ConfiguredIntegrations(
-            IsConfigured("javinizer"), IsConfigured("prowlarr"), IsConfigured("qbittorrent"), IsConfigured("jellyfin"));
+            IsConfigured("javinizer"), IsConfigured("prowlarr"), IsConfigured("qbittorrent"), IsConfigured("jellyfin"),
+            IsConfigured("flaresolverr"));
     }
 
     public async Task<List<SubServiceHealth>> GetSubServiceHealthAsync(ConfiguredIntegrations configured, CancellationToken ct = default)
@@ -118,6 +121,13 @@ public class SystemStatusService(
                 var url = jellyfinClient.GetExternalUrlAsync(ct);
                 await Task.WhenAll(result, url);
                 return new SubServiceHealth("Jellyfin", true, result.Result.Success, result.Result.Message, url.Result, result.Result.Version);
+            }),
+            CheckAsync("Challenge solver", configured.ChallengeSolver, async () =>
+            {
+                var result = challengeSolverClient.TestConnectionAsync(ct);
+                var url = challengeSolverClient.GetExternalUrlAsync(ct);
+                await Task.WhenAll(result, url);
+                return new SubServiceHealth("Challenge solver", true, result.Result.Success, result.Result.Message, url.Result, result.Result.Version);
             }));
 
         return [.. results];

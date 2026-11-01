@@ -3,6 +3,7 @@ using Javbuddy.Components.Pages;
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.Monitoring;
@@ -55,6 +56,7 @@ public class SystemStatusTests : BunitContext
         Services.AddSingleton(prowlarr);
         Services.AddSingleton(qbittorrent);
         Services.AddSingleton(jellyfin);
+        Services.AddSingleton(Substitute.For<IChallengeSolverClient>());
         Services.AddSingleton(imageCacheMaintenance);
         Services.AddSingleton(diskSpace);
 

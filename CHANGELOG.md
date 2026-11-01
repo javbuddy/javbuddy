@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- System → Status lists the **Challenge solver** under Sub-services once one is configured, with a live connection check, its version and a link to it.
+
 ## [0.3.10] - 2026-11-01
 
 ### Added

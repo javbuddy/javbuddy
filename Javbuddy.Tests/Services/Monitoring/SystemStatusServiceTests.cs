@@ -1,4 +1,5 @@
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.Monitoring;
@@ -19,6 +20,7 @@ public class SystemStatusServiceTests
     private readonly IProwlarrClient prowlarr = Substitute.For<IProwlarrClient>();
     private readonly IQBittorrentClient qbittorrent = Substitute.For<IQBittorrentClient>();
     private readonly IJellyfinClient jellyfin = Substitute.For<IJellyfinClient>();
+    private readonly IChallengeSolverClient challengeSolver = Substitute.For<IChallengeSolverClient>();
 
     private SystemStatusService CreateService()
     {
@@ -26,7 +28,7 @@ public class SystemStatusServiceTests
         pathMappings.GetAllAsync(Arg.Any<CancellationToken>()).Returns([]);
         var connectionStatus = new ConnectionStatusService(factory, new ConfigurationBuilder().Build(), pathMappings);
         jellyfin.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>()).Returns([]);
-        return new SystemStatusService(factory, connectionStatus, javinizer, prowlarr, qbittorrent, jellyfin);
+        return new SystemStatusService(factory, connectionStatus, javinizer, prowlarr, qbittorrent, jellyfin, challengeSolver);
     }
 
     [Fact]
@@ -87,7 +89,7 @@ public class SystemStatusServiceTests
     {
         var rows = await CreateService().GetSubServiceHealthAsync(ConfiguredIntegrations.None);
 
-        Assert.Equal(["javinizer-go", "Prowlarr", "qBittorrent", "Jellyfin"], rows.Select(r => r.Name));
+        Assert.Equal(["javinizer-go", "Prowlarr", "qBittorrent", "Jellyfin", "Challenge solver"], rows.Select(r => r.Name));
         Assert.All(rows, r =>
         {
             Assert.False(r.Configured);
@@ -95,6 +97,7 @@ public class SystemStatusServiceTests
         });
         await javinizer.DidNotReceiveWithAnyArgs().TestConnectionAsync(default);
         await prowlarr.DidNotReceiveWithAnyArgs().TestConnectionAsync(default);
+        await challengeSolver.DidNotReceiveWithAnyArgs().TestConnectionAsync(default);
     }
 
     [Fact]
@@ -112,5 +115,44 @@ public class SystemStatusServiceTests
         Assert.Equal("https://prowlarr.example", row.Url);
         Assert.Equal("1.2.3", row.Version);
         await qbittorrent.DidNotReceiveWithAnyArgs().TestConnectionAsync(default);
+    }
+
+    [Fact]
+    public async Task GetSubServiceHealthAsync_ConfiguredChallengeSolverIsPingedAndItsResultAndUrlReturned()
+    {
+        challengeSolver.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new SolverTestResult(true, "Connected to the challenge solver.", "3.4.5"));
+        challengeSolver.GetExternalUrlAsync(Arg.Any<CancellationToken>()).Returns("http://solver:8191");
+
+        var rows = await CreateService().GetSubServiceHealthAsync(ConfiguredIntegrations.None with { ChallengeSolver = true });
+
+        var row = rows.Single(r => r.Name == "Challenge solver");
+        Assert.True(row.Configured);
+        Assert.True(row.Success);
+        Assert.Equal("http://solver:8191", row.Url);
+        Assert.Equal("3.4.5", row.Version);
+        await prowlarr.DidNotReceiveWithAnyArgs().TestConnectionAsync(default);
+    }
+
+    [Fact]
+    public async Task GetConfiguredAsync_ReadsTheSavedChallengeSolverAddress()
+    {
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.FlareSolverrSettings.Add(new FlareSolverrSettings { BaseUrl = "http://solver:8191" });
+            await db.SaveChangesAsync();
+        }
+
+        var configured = await CreateService().GetConfiguredAsync();
+
+        Assert.True(configured.ChallengeSolver);
+        Assert.False(configured.Javinizer);
+    }
+
+    [Fact]
+    public async Task GetHealthReportAsync_NoChallengeSolver_DoesNotWarn()
+    {
+        var report = await CreateService().GetHealthReportAsync();
+
+        Assert.DoesNotContain(report.Messages, m => m.StartsWith("The challenge solver", StringComparison.OrdinalIgnoreCase) || m.StartsWith("Challenge solver", StringComparison.OrdinalIgnoreCase));
     }
 }
