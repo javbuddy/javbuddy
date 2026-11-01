@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-11-01
+
 ### Added
 
 - The Actor Photos wall has a **Size** option (Small, Medium, Large) that changes the photo row height.
