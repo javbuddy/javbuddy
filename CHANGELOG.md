@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **System → Backups** backs up the database (not the image cache, the actor photos and trickplay in the object store, or the r18.dev data). Automatic backups run on a schedule (every day by default) and are deleted after a retention period (10 days by default; manual backups are kept); **Backup Now** makes one on demand. Each backup is a zip with a consistent snapshot of the database and a small manifest, listed with its Javbuddy version, size and movie, actor, tag and scene counts. **Restore** stages a backup and applies it on the next start (after **Restart now**, which needs a restart policy such as Docker's `restart: unless-stopped`), keeping the replaced database as a pre-restore backup; **Export** downloads a backup and **Import** adds one from another installation. Backups live in a `backups` folder next to the database (`Backup__Path` moves it), and `Backup__Enabled`, `Backup__FrequencyDays` and `Backup__RetentionDays` override the settings.
+
 ## [0.3.9] - 2026-10-31
 
 ### Added

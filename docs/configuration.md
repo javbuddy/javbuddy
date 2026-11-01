@@ -37,6 +37,17 @@ In Linux, Docker, and shell environments, nested JSON configuration keys use dou
 | `ConnectionStrings:Default` | `ConnectionStrings__Default` | `Data Source=Javbuddy.db` | SQLite connection string or database file path. |
 | `DataProtection:KeysPath` | `DataProtection__KeysPath` | *(system default)* | Directory for ASP.NET Data Protection XML keyring (persists auth cookies across container restarts). |
 
+### Database Backups
+
+Set on **System → Backups**; each setting here overrides its field there and locks it. A backup holds the database only. A restore applies at the next start, so *Restart now* only brings Javbuddy back up under a restart policy (such as Docker's `restart: unless-stopped`).
+
+| Key | Environment Variable | Default | Description |
+|---|---|---|---|
+| `Backup:Path` | `Backup__Path` | `backups` next to the database file (`/data/backups` in Docker) | Directory holding the backup archives. |
+| `Backup:Enabled` | `Backup__Enabled` | `true` | Create automatic backups. |
+| `Backup:FrequencyDays` | `Backup__FrequencyDays` | `1` | Days between automatic backups. |
+| `Backup:RetentionDays` | `Backup__RetentionDays` | `10` | Days to keep automatic backups; manual and pre-restore backups are never removed automatically. |
+
 ### Integrations
 
 #### Javinizer (Metadata Scraper)

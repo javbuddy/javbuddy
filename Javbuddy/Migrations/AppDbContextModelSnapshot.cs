@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261029085107_NameCollationsAndIndexCleanup";
+    public override string LastMigrationId => "20261101092153_AddBackupSettings";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -407,6 +407,26 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.HasIndex("TagId");
 
                 b.ToTable("ApexTags");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.BackupSettings", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("Enabled")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("FrequencyDays")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("RetentionDays")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("Id");
+
+                b.ToTable("BackupSettings");
             });
 
         modelBuilder.Entity("Javbuddy.Models.CachedImage", b =>

@@ -1,5 +1,6 @@
 using Javbuddy.Components;
 using Javbuddy.Data;
+using Javbuddy.Services.Backups;
 using Javbuddy.Services.Scenes;
 using Javbuddy.Services.Tasks;
 using Javbuddy.Startup;
@@ -121,6 +122,14 @@ var app = builder.Build();
 // Apply pending migrations and clean up any orphaned task runs from prior shutdowns/crashes at startup.
 using (var scope = app.Services.CreateScope())
 {
+    // A restore staged on System > Backups replaces the database file here, before anything opens it, and the
+    // migrations below then bring an older backup up to date.
+    if (provider == "Sqlite")
+    {
+        await BackupRestoreApplier.ApplyPendingAsync(
+            BackupLocation.Resolve(app.Configuration), TimeProvider.System, app.Logger);
+    }
+
     var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
     using var db = factory.CreateDbContext();
     db.Database.Migrate();
@@ -159,5 +168,6 @@ app.MapRazorComponents<App>()
 
 app.MapMediaEndpoints();
 app.MapDeoVrEndpoints();
+app.MapBackupEndpoints();
 
 app.Run();
