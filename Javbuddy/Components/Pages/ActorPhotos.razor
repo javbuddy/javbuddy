@@ -98,6 +98,25 @@ else
             </DropdownMenuButton>
         </div>
 
+        @if (showDensityDropdown)
+        {
+            <div class="dropdown-backdrop" @onclick="CloseDensityDropdown"></div>
+        }
+        <div class="sort-dropdown-wrapper">
+            <DropdownMenuButton Label="@($"Size: {density}")"
+                                ShowMenu="showDensityDropdown"
+                                OnToggle="ToggleDensityDropdown">
+                @foreach (var option in Enum.GetValues<PhotoDensity>())
+                {
+                    var current = option;
+                    <button type="button" class="sort-dropdown-item @(density == current ? "active" : "")" @onclick="() => SetDensity(current)">
+                        <span>@current</span>
+                        @if (density == current) { <span class="ms-2">✓</span> }
+                    </button>
+                }
+            </DropdownMenuButton>
+        </div>
+
         @if (showSortDropdown)
         {
             <div class="dropdown-backdrop" @onclick="CloseSortDropdown"></div>
@@ -133,7 +152,7 @@ else
     }
     else
     {
-        <div class="actor-photos-timeline" @ref="gridContainerRef" data-generation="@gridGeneration">
+        <div class="actor-photos-timeline density-@(density.ToString().ToLowerInvariant())" @ref="gridContainerRef" data-generation="@gridGeneration">
             @foreach (var group in TimelineGroups)
             {
                 <section class="actor-photos-timeline-section">
@@ -222,6 +241,8 @@ else
     private string sort = "newest";
     private bool showFilterDropdown;
     private bool showSortDropdown;
+    private bool showDensityDropdown;
+    private PhotoDensity density = PhotoDensity.Medium;
     private int activeLightboxIndex = -1;
     private ElementReference gridContainerRef;
     private IJSObjectReference? jsModule;
@@ -239,6 +260,15 @@ else
     private List<GlobalActorPhotoItem> FilteredPhotos { get; set; } = [];
     private IReadOnlyList<TimelineGroup> allTimelineGroups = [];
     private IReadOnlyList<TimelineGroup> TimelineGroups { get; set; } = [];
+
+    private enum PhotoDensity { Small, Medium, Large }
+
+    private static double TileHeightFor(PhotoDensity d) => d switch
+    {
+        PhotoDensity.Small => 150,
+        PhotoDensity.Large => 320,
+        _ => JustifiedGridLayout.TileHeight
+    };
 
     private enum AlbumFilterOption { All, InAlbum, Uncategorized }
 
@@ -266,6 +296,7 @@ else
     {
         showFilterDropdown = !showFilterDropdown;
         showSortDropdown = false;
+        showDensityDropdown = false;
     }
 
     private void CloseFilterDropdown() => showFilterDropdown = false;
@@ -274,6 +305,24 @@ else
     {
         showSortDropdown = !showSortDropdown;
         showFilterDropdown = false;
+        showDensityDropdown = false;
+    }
+
+    private void ToggleDensityDropdown()
+    {
+        showDensityDropdown = !showDensityDropdown;
+        showFilterDropdown = false;
+        showSortDropdown = false;
+    }
+
+    private void CloseDensityDropdown() => showDensityDropdown = false;
+
+    private void SetDensity(PhotoDensity value)
+    {
+        density = value;
+        showDensityDropdown = false;
+        // Row height changes the placeholder's reserved height; the DOM grid itself is CSS-driven.
+        StateHasChanged();
     }
 
     private void CloseSortDropdown() => showSortDropdown = false;
@@ -399,6 +448,7 @@ else
         {
             if (containerWidth <= 0) return 0;
 
+            var tileHeight = TileHeightFor(density);
             var remaining = visiblePhotoCount;
             var height = 0.0;
             foreach (var group in allTimelineGroups)
@@ -407,7 +457,7 @@ else
                 {
                     // Entire group unrendered - its heading isn't in the DOM either.
                     height += sectionOverheadPx;
-                    height += JustifiedGridLayout.CalculateHeight(group.Photos.Select(p => p.AspectRatio), containerWidth);
+                    height += JustifiedGridLayout.CalculateHeight(group.Photos.Select(p => p.AspectRatio), containerWidth, tileHeight);
                     continue;
                 }
 
@@ -417,7 +467,7 @@ else
                 {
                     // Group is rendered but truncated - its heading is already in the DOM.
                     height += JustifiedGridLayout.CalculateHeight(
-                        group.Photos.Skip(count).Select(p => p.AspectRatio), containerWidth);
+                        group.Photos.Skip(count).Select(p => p.AspectRatio), containerWidth, tileHeight);
                 }
             }
 
