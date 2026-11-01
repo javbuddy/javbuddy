@@ -519,4 +519,64 @@ public class ActorEnrichmentServiceTests
         Assert.Equal(new DateTime(1993, 8, 16), enriched.BirthDate);
         Assert.Equal(159, enriched.HeightCm);
     }
+
+    [Fact]
+    public async Task EnrichAllAsync_CountsActorsWhoseSourceWasBlockedByAChallenge()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Actors.AddRange(new Actor { FirstName = "A", LastName = "One" }, new Actor { FirstName = "B", LastName = "Two" });
+            await db.SaveChangesAsync();
+        }
+
+        var source = Substitute.For<IActorMetadataSource>();
+        source.SourceName.Returns("MinnanoAv");
+        source.Priority.Returns(10);
+        source.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        source.LookupAsync(Arg.Any<ActorEnrichmentContext>(), Arg.Any<CancellationToken>())
+            .Returns<ActorMetadataResult?>(_ => throw new ScrapeBlockedException("minnano-av.com is protected by a bot challenge"));
+        var service = new ActorEnrichmentService([source], factory);
+
+        var result = await service.EnrichAllAsync(new ActorEnrichmentOptions { Source = "MinnanoAv" });
+
+        Assert.Equal(2, result.Failed);
+        Assert.Equal(2, result.Blocked);
+        Assert.Contains("2 blocked by Cloudflare", result.Summary);
+    }
+
+    [Fact]
+    public async Task EnrichActorAsync_WhenTheSourceIsBlocked_ReturnsItsMessage()
+    {
+        using var factory = new TestDbContextFactory();
+        int actorId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "A", LastName = "One" };
+            db.Actors.Add(actor);
+            await db.SaveChangesAsync();
+            actorId = actor.Id;
+        }
+
+        var source = Substitute.For<IActorMetadataSource>();
+        source.SourceName.Returns("MinnanoAv");
+        source.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        source.LookupAsync(Arg.Any<ActorEnrichmentContext>(), Arg.Any<CancellationToken>())
+            .Returns<ActorMetadataResult?>(_ => throw new ScrapeBlockedException("blocked by a bot challenge"));
+        var service = new ActorEnrichmentService([source], factory);
+
+        var result = await service.EnrichActorAsync(actorId, new ActorEnrichmentOptions { Source = "MinnanoAv" });
+
+        Assert.False(result.Success);
+        Assert.True(result.Blocked);
+        Assert.Equal("blocked by a bot challenge", result.ErrorMessage);
+    }
+
+    [Fact]
+    public void BatchSummary_OmitsTheBlockedNoteWhenNothingWasBlocked()
+    {
+        var summary = new ActorBatchEnrichmentResult(10, 9, 1, 30).Summary;
+
+        Assert.Equal("Enriched 9 of 10 actors (30 fields updated).", summary);
+    }
 }

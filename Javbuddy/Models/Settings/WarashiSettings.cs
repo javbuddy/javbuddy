@@ -21,6 +21,10 @@ public class WarashiSettings : IEnrichmentSourceSettings
     /// <summary>Whether enriching an actor should overwrite existing non-empty physical attributes.</summary>
     public bool OverwriteExisting { get; set; }
 
+    /// <summary>Whether a Cloudflare challenge may be solved through the configured challenge solver
+    /// (on by default; it only matters once a solver is configured, and only on an actual challenge).</summary>
+    public bool UseChallengeSolver { get; set; } = true;
+
     public DateTime? LastEnrichedAt { get; set; }
 
     [StringLength(300)]

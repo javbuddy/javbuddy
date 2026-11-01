@@ -16,7 +16,10 @@ public abstract class ThrottledScrapeClientBase<TSettings>(
     string defaultBaseUrl,
     int defaultRequestDelayMs,
     string sourceName,
-    ILogger logger) where TSettings : class, IEnrichmentSourceSettings
+    string configSection,
+    ILogger logger,
+    IChallengeSolverClient? challengeSolver = null,
+    IConfiguration? configuration = null) where TSettings : class, IEnrichmentSourceSettings
 {
     private readonly SemaphoreSlim throttleLock = new(1, 1);
     private DateTime? lastRequestAtUtc;
@@ -29,14 +32,16 @@ public abstract class ThrottledScrapeClientBase<TSettings>(
     /// <summary>The Accept-Language values the site is requested with, in preference order.</summary>
     protected abstract IReadOnlyList<StringWithQualityHeaderValue> AcceptLanguages { get; }
 
-    protected async Task<(string BaseUrl, int RequestDelayMs)> GetEffectiveSettingsAsync(CancellationToken ct)
+    protected async Task<(string BaseUrl, int RequestDelayMs, bool UseChallengeSolver)> GetEffectiveSettingsAsync(CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var settings = await selectSettings(db).ReadSingleRowAsync(ct);
         var baseUrl = !string.IsNullOrWhiteSpace(settings?.BaseUrl)
             ? settings.BaseUrl.TrimEnd('/')
             : defaultBaseUrl;
-        return (baseUrl, settings?.RequestDelayMs ?? defaultRequestDelayMs);
+        return (baseUrl, settings?.RequestDelayMs ?? defaultRequestDelayMs, // "<Section>__UseChallengeSolver" overrides the saved checkbox; unset, a source uses the
+        // solver (when one is configured) unless its saved setting says otherwise.
+        ScrapeSourceEnvConfig.GetUseChallengeSolver(configuration, configSection) ?? settings?.UseChallengeSolver ?? true);
     }
 
     /// <summary>Waits out the configured throttling delay since the previous request made through
@@ -80,14 +85,71 @@ public abstract class ThrottledScrapeClientBase<TSettings>(
         return client;
     }
 
+    /// <summary>One page fetched by <see cref="FetchHtmlAsync"/>: <see cref="Html"/> is null when the
+    /// site answered with a non-success status (<see cref="StatusCode"/>); <see cref="FinalUrl"/> is the
+    /// address after redirects, whichever path fetched it.</summary>
+    protected sealed record FetchedPage(string? Html, string FinalUrl, int StatusCode);
+
+    /// <summary>GETs (or, with <paramref name="form"/>, POSTs) a page behind the request throttle. A plain
+    /// request goes first; only when the response is a bot challenge, a challenge solver is configured and
+    /// this source has not switched it off is the same request repeated through it. A challenge that cannot be passed
+    /// throws <see cref="ScrapeBlockedException"/> rather than looking like "no results".</summary>
+    protected async Task<FetchedPage> FetchHtmlAsync(
+        string url,
+        int delayMs,
+        bool useChallengeSolver,
+        IReadOnlyList<KeyValuePair<string, string>>? form,
+        CancellationToken ct)
+    {
+        await ThrottleAsync(delayMs, ct);
+
+        var client = CreateConfiguredClient();
+        using var response = form is null
+            ? await client.GetAsync(url, ct)
+            : await client.PostAsync(url, new FormUrlEncodedContent(form), ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+
+        if (!ScrapeChallenge.IsChallenge(response, body))
+        {
+            return new FetchedPage(response.IsSuccessStatusCode ? body : null, response.RequestMessage?.RequestUri?.ToString() ?? url, (int)response.StatusCode);
+        }
+
+        if (challengeSolver is null || !await challengeSolver.IsConfiguredAsync(ct))
+        {
+            throw new ScrapeBlockedException($"{SourceName} is protected by a bot challenge (Cloudflare). Configure a challenge solver (FlareSolverr or Trawl) under Settings → Connections.");
+        }
+
+        if (!useChallengeSolver)
+        {
+            throw new ScrapeBlockedException($"{SourceName} is protected by a bot challenge (Cloudflare), and the challenge solver is switched off for this source. Turn it on under Settings → Metadata.");
+        }
+
+        var uri = new Uri(url);
+        var solved = form is null
+            ? await challengeSolver.GetAsync(uri, SourceName, ct)
+            : await challengeSolver.PostFormAsync(uri, form, SourceName, ct);
+
+        if (solved.Response is not { } page)
+        {
+            throw new ScrapeBlockedException($"{SourceName} is protected by a bot challenge (Cloudflare) and the challenge solver failed: {solved.Error}");
+        }
+
+        if (ScrapeChallenge.IsChallenge((System.Net.HttpStatusCode)page.StatusCode, false, false, page.Html))
+        {
+            throw new ScrapeBlockedException($"{SourceName} is protected by a bot challenge (Cloudflare) that the challenge solver could not pass.");
+        }
+
+        var success = page.StatusCode is >= 200 and < 300;
+        return new FetchedPage(success ? page.Html : null, string.IsNullOrEmpty(page.FinalUrl) ? url : page.FinalUrl, page.StatusCode);
+    }
+
     public async Task<bool> TestConnectionAsync(CancellationToken ct = default)
     {
         try
         {
-            var (baseUrl, _) = await GetEffectiveSettingsAsync(ct);
-            var client = CreateConfiguredClient();
-            var response = await client.GetAsync(baseUrl, ct);
-            return response.IsSuccessStatusCode;
+            var (baseUrl, _, useChallengeSolver) = await GetEffectiveSettingsAsync(ct);
+            var page = await FetchHtmlAsync(baseUrl, 0, useChallengeSolver, null, ct);
+            return page.Html is not null;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

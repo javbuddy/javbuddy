@@ -1,6 +1,7 @@
 using Javbuddy.Services.ActorEnrichment;
 using Javbuddy.Services.ActorEnrichment.Sources;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Backups;
 using Javbuddy.Services.DeoVr;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.HealthChecks;
@@ -90,6 +91,7 @@ public static class ServiceRegistration
     {
         services.AddScoped<IJavinizerClient, JavinizerClient>();
         services.AddScoped<IProwlarrClient, ProwlarrClient>();
+        services.AddScoped<IChallengeSolverClient, FlareSolverrClient>();
         services.AddScoped<IJellyfinClient, JellyfinClient>();
         services.AddScoped<IMediaServerClient>(sp => sp.GetRequiredService<IJellyfinClient>());
         services.AddScoped<ILocalLibraryClient, LocalLibraryClient>();
@@ -262,6 +264,12 @@ public static class ServiceRegistration
         services.AddScoped<IScheduledTask, TrickplayBackfillTask>();
         services.AddScoped<IScheduledTask, LibraryMaintenanceTask>();
         services.AddScoped<IScheduledTask, DatabaseMaintenanceTask>();
+        services.AddScoped<IScheduledTask, DatabaseBackupTask>();
+        // Singletons: the backup lock must be shared by every circuit and the scheduler, and the scheduler asks
+        // for the backup frequency every minute.
+        services.AddSingleton(sp => BackupLocation.Resolve(sp.GetRequiredService<IConfiguration>()));
+        services.AddSingleton<IBackupSettingsService, BackupSettingsService>();
+        services.AddSingleton<IBackupService, BackupService>();
         services.AddSingleton<ScheduledTaskCancellationRegistry>();
         services.AddScoped<ScheduledTaskRunner>();
         services.AddScoped<IScheduledTaskOverviewService, ScheduledTaskOverviewService>();

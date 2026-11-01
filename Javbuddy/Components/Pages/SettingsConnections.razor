@@ -39,6 +39,9 @@ else
         case "qbittorrent":
             <QBittorrentConnectionSection />
             break;
+        case "flaresolverr":
+            <FlareSolverrConnectionSection />
+            break;
         case "pathmappings":
             <PathMappingsSection />
             break;
@@ -54,6 +57,7 @@ else
         new("prowlarr", "Prowlarr", "Searches indexers for a release code."),
         new("jellyfin", "Jellyfin", "Checks whether a movie is already in your library."),
         new("qbittorrent", "qBittorrent", "Download client for grabbed releases."),
+        new("flaresolverr", "Challenge solver", "Optional FlareSolverr or Trawl service that gets metadata sources past Cloudflare."),
         new("pathmappings", "Path Mappings", "Maps a download folder between qBittorrent, javinizer-go and Javbuddy paths.")
     ];
 

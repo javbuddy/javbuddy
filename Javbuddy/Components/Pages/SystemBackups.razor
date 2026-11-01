@@ -1,0 +1,345 @@
+@page "/system/backups"
+@using Javbuddy.Models
+@using Javbuddy.Services.Backups
+@using Javbuddy.Services.Common
+@inject IBackupService Backups
+@inject IBackupSettingsService BackupSettingsService
+@inject IHostApplicationLifetime Lifetime
+@inject ILogger<SystemBackups> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Backups · Javbuddy</PageTitle>
+
+<p class="backups-intro">
+    Back up the database, restore a previous backup, or import one from another Javbuddy installation. A backup holds
+    the database only: not the image cache, the actor photos and trickplay in the object store, or the r18.dev data.
+</p>
+
+@if (restorePending)
+{
+    <div class="alert alert-warning backups-banner" role="status">
+        A restore is staged and applies when Javbuddy next starts. The current database is kept as a pre-restore backup.
+        <button type="button" class="btn btn-warning btn-sm ms-2" @onclick="RestartAsync">Restart now</button>
+        <div class="form-text">Restart now stops Javbuddy; it only comes back up if it runs under a restart policy (for example Docker's <code>restart: unless-stopped</code>).</div>
+    </div>
+}
+
+@if (form is null || effective is null || entries is null)
+{
+    <LoadingIndicator />
+}
+else
+{
+    <div class="backups-card">
+        <div class="backups-card-text">
+            <h2>Automatic Backups</h2>
+            <p>Toggle automatic backups on or off. When enabled, backups are created automatically at the interval specified below.</p>
+            @if (BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.Enabled)))
+            {
+                <p class="form-text">Set by the <code>Backup__Enabled</code> environment variable.</p>
+            }
+        </div>
+        <div class="form-check form-switch backups-card-control">
+            <input class="form-check-input" type="checkbox" role="switch" id="backup-enabled" aria-label="Automatic backups"
+                   checked="@(BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.Enabled)) ? effective.Enabled : form.Enabled)"
+                   disabled="@BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.Enabled))"
+                   @onchange="e => form.Enabled = (bool)e.Value!" />
+        </div>
+    </div>
+
+    <div class="backups-card">
+        <div class="backups-card-text">
+            <h2>Retention</h2>
+            <p>How many days to keep automatic backups. Older ones are removed automatically after each backup; the newest is always kept, and backups made by hand are never removed.</p>
+            @if (BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.RetentionDays)))
+            {
+                <p class="form-text">Set by the <code>Backup__RetentionDays</code> environment variable.</p>
+            }
+        </div>
+        <div class="input-group backups-card-control">
+            <input class="form-control" type="number" min="1" max="@BackupSettings.MaxDays" id="backup-retention" aria-label="Retention in days"
+                   value="@(BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.RetentionDays)) ? effective.RetentionDays : form.RetentionDays)"
+                   disabled="@BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.RetentionDays))"
+                   @onchange="e => form.RetentionDays = ParseDays(e.Value)" />
+            <span class="input-group-text">days</span>
+        </div>
+    </div>
+
+    <div class="backups-card">
+        <div class="backups-card-text">
+            <h2>Frequency</h2>
+            <p>How often to create a backup (in days).</p>
+            @if (BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.FrequencyDays)))
+            {
+                <p class="form-text">Set by the <code>Backup__FrequencyDays</code> environment variable.</p>
+            }
+        </div>
+        <div class="input-group backups-card-control">
+            <input class="form-control" type="number" min="1" max="@BackupSettings.MaxDays" id="backup-frequency" aria-label="Frequency in days"
+                   value="@(BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.FrequencyDays)) ? effective.FrequencyDays : form.FrequencyDays)"
+                   disabled="@BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.FrequencyDays))"
+                   @onchange="e => form.FrequencyDays = ParseDays(e.Value)" />
+            <span class="input-group-text">days</span>
+        </div>
+    </div>
+
+    <div class="backups-save">
+        <button type="button" class="btn btn-secondary" id="backup-save" @onclick="SaveAsync" disabled="@busy">Save</button>
+    </div>
+
+    @if (error is not null)
+    {
+        <div class="alert alert-danger backups-banner" role="alert">@error</div>
+    }
+    @if (notice is not null)
+    {
+        <div class="alert alert-success backups-banner" role="status">@notice</div>
+    }
+
+    <div class="backups-toolbar">
+        <div class="backups-buttons">
+            <label class="backups-count" title="Select all">
+                <input type="checkbox" aria-label="Select all backups" checked="@selected.AllSelected(visibleNames)"
+                       @onchange="e => selected.SetAll(visibleNames, (bool)e.Value!)" />
+                <span>@selected.Count / @entries.Count</span>
+            </label>
+            <button type="button" class="backups-btn" id="backup-now" @onclick="BackupNowAsync" disabled="@busy">Backup Now</button>
+            <button type="button" class="backups-btn" id="backup-restore" @onclick="() => confirmRestore = SelectedEntry" disabled="@(busy || SelectedEntry is null)">Restore</button>
+            <button type="button" class="backups-btn" id="backup-delete" @onclick="() => confirmDelete = true" disabled="@(busy || selected.Count == 0)">Delete</button>
+            <label class="backups-btn backups-import @(busy ? "disabled" : "")">
+                Import
+                <InputFile OnChange="ImportAsync" accept=".zip,application/zip" disabled="@busy" />
+            </label>
+            @if (SelectedEntry is { } single)
+            {
+                <a class="backups-btn" id="backup-export" href="api/backups/@Uri.EscapeDataString(single.FileName)/download" download="@single.FileName">Export</a>
+            }
+            else
+            {
+                <span class="backups-btn disabled" aria-disabled="true">Export</span>
+            }
+        </div>
+        <input class="form-control backups-filter" type="search" placeholder="Filter" aria-label="Filter backups" @bind="Filter" @bind:event="oninput" />
+    </div>
+
+    @if (entries.Count == 0)
+    {
+        <p class="text-muted">No backups yet.</p>
+    }
+    else if (visible.Count == 0)
+    {
+        <p class="text-muted">No backups match the filter.</p>
+    }
+    else
+    {
+        <div class="backups-list">
+            @foreach (var entry in visible)
+            {
+                <div class="backups-row @(selected.Contains(entry.FileName) ? "selected" : "")" @key="entry.FileName">
+                    <input type="checkbox" aria-label="Select @entry.FileName" checked="@selected.Contains(entry.FileName)"
+                           @onchange="e => selected.Set(entry.FileName, (bool)e.Value!)" />
+                    <svg class="backups-row-icon" viewBox="0 0 16 16" width="34" height="34" fill="currentColor" aria-hidden="true">
+                        <path d="M0 2a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 12.5V5a1 1 0 0 1-1-1V2zm2 3v7.5A1.5 1.5 0 0 0 3.5 14h9a1.5 1.5 0 0 0 1.5-1.5V5H2zm13-3H1v2h14V2zM5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z" />
+                    </svg>
+                    <div class="backups-row-main">
+                        <div class="backups-row-title">@entry.Manifest.CreatedUtc.ToLocalTime().ToString("G")</div>
+                        <div class="backups-row-sub">@entry.Manifest.AppVersion</div>
+                        <div class="backups-badges">
+                            <span class="backups-badge backups-badge-kind">@KindLabel(entry.Kind)</span>
+                            <span class="backups-badge">@entry.Manifest.Movies.ToString("N0") Movies</span>
+                            <span class="backups-badge">@entry.Manifest.Actors.ToString("N0") Actors</span>
+                            <span class="backups-badge">@entry.Manifest.Tags.ToString("N0") Tags</span>
+                            <span class="backups-badge">@entry.Manifest.Scenes.ToString("N0") Scenes</span>
+                        </div>
+                    </div>
+                    <div class="backups-row-size">@ByteSizeFormatter.Format(entry.SizeBytes)</div>
+                </div>
+            }
+        </div>
+    }
+}
+
+@if (confirmRestore is { } restoring)
+{
+    <ModalShell Title="Restore backup?" OnClose="() => confirmRestore = null" Busy="busy">
+        <ChildContent>
+            <p>
+                Restore the database from the backup made @restoring.Manifest.CreatedUtc.ToLocalTime().ToString("G")
+                (@restoring.Manifest.Movies.ToString("N0") movies)? Everything changed since then is lost. The current
+                database is first kept as a pre-restore backup, and the restore applies when Javbuddy restarts.
+            </p>
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-secondary" @onclick="() => confirmRestore = null" disabled="@busy">Cancel</button>
+            <button type="button" class="btn btn-danger" id="backup-restore-confirm" @onclick="RestoreAsync" disabled="@busy">Restore</button>
+        </FooterContent>
+    </ModalShell>
+}
+
+@if (confirmDelete)
+{
+    <DeleteConfirmDialog ItemName="@DeleteItemName" Message="This permanently deletes the backup file."
+                         Busy="busy" OnConfirm="DeleteAsync" OnCancel="() => confirmDelete = false" />
+}
+
+@code {
+    private BackupSettings? form;
+    private BackupSettings? effective;
+    private List<BackupEntry>? entries;
+    private readonly SelectionSet<string> selected = new();
+    private string filter = "";
+
+    // Narrowing the list drops selected backups it hides, so Delete never removes ones that are out of view.
+    private string Filter
+    {
+        get => filter;
+        set
+        {
+            filter = value;
+            selected.RetainOnly(visibleNames);
+        }
+    }
+    private bool busy;
+    private bool restorePending;
+    private bool confirmDelete;
+    private BackupEntry? confirmRestore;
+    private string? error;
+    private string? notice;
+
+    private List<BackupEntry> visible => entries is null ? []
+        : string.IsNullOrWhiteSpace(filter) ? entries
+        : entries.Where(e => Matches(e, filter.Trim())).ToList();
+
+    private List<string> visibleNames => visible.Select(e => e.FileName).ToList();
+
+    private BackupEntry? SelectedEntry => selected.Count == 1 ? entries?.FirstOrDefault(e => selected.Contains(e.FileName)) : null;
+
+    private string DeleteItemName => selected.Count == 1 ? selected.ToList()[0] : $"{selected.Count} backups";
+
+    protected override async Task OnInitializedAsync()
+    {
+        restorePending = Backups.RestorePending;
+        await LoadSettingsAsync();
+        await ReloadAsync();
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        form = await BackupSettingsService.GetStoredAsync();
+        effective = await BackupSettingsService.GetEffectiveAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        entries = [.. await Backups.ListAsync()];
+        selected.RetainOnly(entries.Select(e => e.FileName));
+    }
+
+    private static bool Matches(BackupEntry entry, string text) =>
+        entry.FileName.Contains(text, StringComparison.OrdinalIgnoreCase)
+        || entry.Manifest.AppVersion.Contains(text, StringComparison.OrdinalIgnoreCase)
+        || entry.Manifest.CreatedUtc.ToLocalTime().ToString("G").Contains(text, StringComparison.OrdinalIgnoreCase);
+
+    private static string KindLabel(BackupKind kind) => kind switch
+    {
+        BackupKind.Auto => "Automatic",
+        BackupKind.PreRestore => "Pre-restore",
+        _ => "Manual",
+    };
+
+    private static int ParseDays(object? value) => int.TryParse(value?.ToString(), out var days) ? days : 0;
+
+    private async Task SaveAsync() => await RunAsync(async () =>
+    {
+        if (form!.RetentionDays is < 1 or > BackupSettings.MaxDays || form.FrequencyDays is < 1 or > BackupSettings.MaxDays)
+        {
+            error = $"Retention and frequency must be between 1 and {BackupSettings.MaxDays} days.";
+            return;
+        }
+
+        await BackupSettingsService.SaveAsync(form);
+        await LoadSettingsAsync();
+        notice = "Backup settings saved.";
+    });
+
+    private async Task BackupNowAsync() => await RunAsync(async () =>
+    {
+        var entry = await Backups.CreateAsync(BackupKind.Manual);
+        notice = $"Backup created ({ByteSizeFormatter.Format(entry.SizeBytes)}).";
+    });
+
+    private async Task ImportAsync(InputFileChangeEventArgs e) => await RunAsync(async () =>
+    {
+        await using var stream = e.File.OpenReadStream(BackupService.MaxArchiveBytes);
+        var result = await Backups.ImportAsync(stream);
+        if (result.Success)
+        {
+            notice = $"Imported {e.File.Name}.";
+        }
+        else
+        {
+            error = result.ErrorMessage;
+        }
+    });
+
+    private async Task RestoreAsync()
+    {
+        confirmRestore = null;
+        await RunAsync(async () =>
+        {
+            var entry = SelectedEntry;
+            var result = entry is null ? OperationResult.Fail("Select one backup to restore.") : await Backups.StageRestoreAsync(entry.FileName);
+            if (result.Success)
+            {
+                restorePending = true;
+            }
+            else
+            {
+                error = result.ErrorMessage;
+            }
+        });
+    }
+
+    private async Task DeleteAsync()
+    {
+        confirmDelete = false;
+        await RunAsync(async () =>
+        {
+            foreach (var name in selected.ToList())
+            {
+                var result = await Backups.DeleteAsync(name);
+                if (!result.Success)
+                {
+                    error = result.ErrorMessage;
+                }
+            }
+            selected.Clear();
+        });
+    }
+
+    private Task RestartAsync()
+    {
+        Lifetime.StopApplication();
+        return Task.CompletedTask;
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        error = notice = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogError(ex, "A database backup operation failed.");
+            error = $"The operation failed: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+        await ReloadAsync();
+    }
+}

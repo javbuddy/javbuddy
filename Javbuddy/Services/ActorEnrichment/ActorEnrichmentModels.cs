@@ -62,7 +62,8 @@ public record ActorEnrichmentResult(
     int FieldsUpdated = 0,
     IReadOnlyList<string>? UpdatedFieldNames = null,
     IReadOnlyList<string>? AddedAliases = null,
-    bool ImageRefreshed = false)
+    bool ImageRefreshed = false,
+    bool Blocked = false)
 {
     public static ActorEnrichmentResult Ok(
         string sourceName,
@@ -74,10 +75,28 @@ public record ActorEnrichmentResult(
 
     public static ActorEnrichmentResult Fail(string error) =>
         new(false, error);
+
+    /// <summary>A source could not be reached because the site served a bot challenge.</summary>
+    public static ActorEnrichmentResult BlockedBy(string error) =>
+        new(false, error, Blocked: true);
 }
 
 public record ActorBatchEnrichmentResult(
     int TotalProcessed,
     int Succeeded,
     int Failed,
-    int TotalFieldsUpdated);
+    int TotalFieldsUpdated,
+    int Blocked = 0)
+{
+    /// <summary>The one-line outcome shown in the activity feed and a source's last-batch summary.</summary>
+    public string Summary
+    {
+        get
+        {
+            var text = $"Enriched {Succeeded} of {TotalProcessed} actors ({TotalFieldsUpdated} fields updated).";
+            return Blocked > 0
+                ? $"{text} {Blocked} blocked by Cloudflare — configure a challenge solver."
+                : text;
+        }
+    }
+}

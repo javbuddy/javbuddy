@@ -21,10 +21,12 @@ public interface IMinnanoAvClient
 public partial class MinnanoAvClient(
     IHttpClientFactory httpClientFactory,
     IDbContextFactory<AppDbContext> dbFactory,
-    ILogger<MinnanoAvClient>? logger = null)
+    ILogger<MinnanoAvClient>? logger = null,
+    IChallengeSolverClient? challengeSolver = null,
+    IConfiguration? configuration = null)
     : ThrottledScrapeClientBase<MinnanoAvSettings>(
         httpClientFactory, dbFactory, db => db.MinnanoAvSettings, DefaultBaseUrl, DefaultRequestDelayMs,
-        "minnano-av.com", logger ?? NullLogger<MinnanoAvClient>.Instance), IMinnanoAvClient
+        "minnano-av.com", "MinnanoAv", logger ?? NullLogger<MinnanoAvClient>.Instance, challengeSolver, configuration), IMinnanoAvClient
 {
     public const string DefaultBaseUrl = "https://www.minnano-av.com";
     private const int DefaultRequestDelayMs = 750;
@@ -44,20 +46,17 @@ public partial class MinnanoAvClient(
 
         try
         {
-            var (baseUrl, delayMs) = await GetEffectiveSettingsAsync(ct);
+            var (baseUrl, delayMs, useSolver) = await GetEffectiveSettingsAsync(ct);
             var searchUrl = $"{baseUrl}/search_result.php?search_scope=actress&search_word={Uri.EscapeDataString(query.Trim())}";
-            var client = CreateConfiguredClient();
 
-            await ThrottleAsync(delayMs, ct);
-            var response = await client.GetAsync(searchUrl, ct);
-            if (!response.IsSuccessStatusCode)
+            var page = await FetchHtmlAsync(searchUrl, delayMs, useSolver, null, ct);
+            if (page.Html is not { } html)
             {
-                Logger.LogWarning("minnano-av.com search for '{Query}' returned HTTP status {StatusCode}", query, response.StatusCode);
+                Logger.LogWarning("minnano-av.com search for '{Query}' returned HTTP status {StatusCode}", query, page.StatusCode);
                 return Array.Empty<MinnanoAvSearchResult>();
             }
 
-            var html = await response.Content.ReadAsStringAsync(ct);
-            var finalAbsolutePath = response.RequestMessage?.RequestUri?.AbsolutePath ?? string.Empty;
+            var finalAbsolutePath = Uri.TryCreate(page.FinalUrl, UriKind.Absolute, out var finalUri) ? finalUri.AbsolutePath : string.Empty;
 
             // A single exact match redirects straight from search_result.php to the actress's own
             // detail page — the response we already have IS the detail page, so parse it as one
@@ -84,6 +83,10 @@ public partial class MinnanoAvClient(
 
             return MinnanoAvHtmlParser.ParseSearchResults(html, baseUrl);
         }
+        catch (ScrapeBlockedException)
+        {
+            throw;
+        }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             Logger.LogWarning(ex, "Error occurred during minnano-av.com performer search for '{Query}'", query);
@@ -97,20 +100,21 @@ public partial class MinnanoAvClient(
 
         try
         {
-            var (baseUrl, delayMs) = await GetEffectiveSettingsAsync(ct);
+            var (baseUrl, delayMs, useSolver) = await GetEffectiveSettingsAsync(ct);
             var url = HtmlTextHelper.ResolveUrl(performerPathOrUrl, baseUrl)!;
 
-            var client = CreateConfiguredClient();
-            await ThrottleAsync(delayMs, ct);
-            var response = await client.GetAsync(url, ct);
-            if (!response.IsSuccessStatusCode)
+            var page = await FetchHtmlAsync(url, delayMs, useSolver, null, ct);
+            if (page.Html is not { } html)
             {
-                Logger.LogWarning("minnano-av.com detail request for '{Url}' returned HTTP status {StatusCode}", url, response.StatusCode);
+                Logger.LogWarning("minnano-av.com detail request for '{Url}' returned HTTP status {StatusCode}", url, page.StatusCode);
                 return null;
             }
 
-            var html = await response.Content.ReadAsStringAsync(ct);
             return MinnanoAvHtmlParser.ParsePerformerDetail(html, performerPathOrUrl, baseUrl);
+        }
+        catch (ScrapeBlockedException)
+        {
+            throw;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

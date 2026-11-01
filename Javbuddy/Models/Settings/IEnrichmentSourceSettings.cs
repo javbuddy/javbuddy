@@ -15,6 +15,10 @@ public interface IEnrichmentSourceSettings
 
     bool OverwriteExisting { get; set; }
 
+    /// <summary>Whether a Cloudflare challenge on this source may be solved through the configured
+    /// challenge solver (FlareSolverr/Trawl); off means a challenge is reported as blocked instead.</summary>
+    bool UseChallengeSolver { get; set; }
+
     DateTime? LastEnrichedAt { get; set; }
 
     string? LastEnrichSummary { get; set; }

@@ -2,6 +2,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -101,6 +102,7 @@ public class ActorEnrichmentService(
 
         ActorMetadataResult? result = null;
         IActorMetadataSource? activeSource = null;
+        ScrapeBlockedException? blocked = null;
 
         foreach (var source in candidateSources)
         {
@@ -117,6 +119,11 @@ public class ActorEnrichmentService(
                     break;
                 }
             }
+            catch (ScrapeBlockedException ex)
+            {
+                blocked = ex;
+                logger.LogWarning("Source {Source} is blocked for actor {ActorId}: {Message}", source.SourceName, actorId, ex.Message);
+            }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 logger.LogWarning(ex, "Source {Source} failed lookup for actor {ActorId}", source.SourceName, actorId);
@@ -125,6 +132,7 @@ public class ActorEnrichmentService(
 
         if (result is null || activeSource is null)
         {
+            if (blocked is not null) return ActorEnrichmentResult.BlockedBy(blocked.Message);
             return ActorEnrichmentResult.Fail("No metadata found from available sources.");
         }
 
@@ -317,6 +325,7 @@ public class ActorEnrichmentService(
 
         var succeeded = 0;
         var failed = 0;
+        var blocked = 0;
         var totalFieldsUpdated = 0;
         var runCache = new ActorEnrichmentRunCache();
 
@@ -338,6 +347,7 @@ public class ActorEnrichmentService(
                 else
                 {
                     failed++;
+                    if (res.Blocked) blocked++;
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -347,6 +357,6 @@ public class ActorEnrichmentService(
             }
         }
 
-        return new ActorBatchEnrichmentResult(total, succeeded, failed, totalFieldsUpdated);
+        return new ActorBatchEnrichmentResult(total, succeeded, failed, totalFieldsUpdated, blocked);
     }
 }

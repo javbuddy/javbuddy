@@ -1,0 +1,205 @@
+.backups-intro {
+    max-width: 1100px;
+    margin: 0.5rem 0 1rem;
+}
+
+.backups-banner {
+    max-width: 1100px;
+}
+
+.backups-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    max-width: 1100px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.75rem;
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    border-radius: 4px;
+}
+
+.backups-card-text h2 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+}
+
+.backups-card-text p {
+    margin: 0;
+    font-size: 0.85rem;
+    font-style: italic;
+    color: #6c757d;
+}
+
+.backups-card-control {
+    flex: 0 0 auto;
+    width: 16rem;
+}
+
+.backups-card-control.form-switch {
+    width: auto;
+    font-size: 1.4rem;
+}
+
+.backups-save {
+    max-width: 1100px;
+    display: flex;
+    justify-content: center;
+    margin: 1rem 0;
+}
+
+.backups-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 1100px;
+    padding-top: 1rem;
+    margin-top: 0.5rem;
+    border-top: 1px solid rgba(127, 127, 127, 0.3);
+}
+
+.backups-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.backups-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.7rem;
+    margin: 0 0.4rem 0 0;
+    border-radius: 999px;
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    font-size: 0.85rem;
+}
+
+.backups-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.8rem;
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.85rem;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.backups-btn:hover:not(:disabled):not(.disabled) {
+    background: rgba(127, 127, 127, 0.15);
+}
+
+.backups-btn:disabled,
+.backups-btn.disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.backups-import {
+    position: relative;
+    overflow: hidden;
+}
+
+.backups-import ::deep input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.backups-filter {
+    max-width: 16rem;
+}
+
+.backups-list {
+    max-width: 1100px;
+    margin-top: 0.75rem;
+}
+
+.backups-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.4rem;
+    border: 1px solid rgba(127, 127, 127, 0.25);
+    border-radius: 4px;
+}
+
+.backups-row.selected {
+    border-color: #2f8fd6;
+    background: rgba(47, 143, 214, 0.08);
+}
+
+.backups-row-icon {
+    color: #2f8fd6;
+    flex: 0 0 auto;
+}
+
+.backups-row-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.backups-row-title {
+    font-weight: 600;
+}
+
+.backups-row-sub {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.backups-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+}
+
+.backups-badge {
+    padding: 0.1rem 0.55rem;
+    border: 1px solid rgba(127, 127, 127, 0.4);
+    border-radius: 999px;
+    font-size: 0.72rem;
+}
+
+.backups-badge-kind {
+    border-color: #e6b800;
+    color: #b38f00;
+}
+
+.backups-row-size {
+    flex: 0 0 auto;
+    font-weight: 600;
+}
+
+:root[data-theme="dark"] .backups-badge-kind {
+    color: #e6b800;
+}
+
+@media (max-width: 700px) {
+    .backups-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .backups-card-control {
+        width: 100%;
+    }
+
+    .backups-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .backups-filter {
+        max-width: none;
+    }
+}

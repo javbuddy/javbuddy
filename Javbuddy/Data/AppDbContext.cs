@@ -31,6 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MediaInfoSettings> MediaInfoSettings => Set<MediaInfoSettings>();
     public DbSet<WarashiSettings> WarashiSettings => Set<WarashiSettings>();
     public DbSet<MinnanoAvSettings> MinnanoAvSettings => Set<MinnanoAvSettings>();
+    public DbSet<FlareSolverrSettings> FlareSolverrSettings => Set<FlareSolverrSettings>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<MovieTag> MovieTags => Set<MovieTag>();
     public DbSet<Scene> Scenes => Set<Scene>();
@@ -57,6 +58,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<IgnoredTag> IgnoredTags => Set<IgnoredTag>();
     public DbSet<TagSettings> TagSettings => Set<TagSettings>();
     public DbSet<TrickplaySettings> TrickplaySettings => Set<TrickplaySettings>();
+    public DbSet<BackupSettings> BackupSettings => Set<BackupSettings>();
     public DbSet<ApexPlaybackSettings> ApexPlaybackSettings => Set<ApexPlaybackSettings>();
     public DbSet<DeoVrSettings> DeoVrSettings => Set<DeoVrSettings>();
     public DbSet<DeoVrGroup> DeoVrGroups => Set<DeoVrGroup>();

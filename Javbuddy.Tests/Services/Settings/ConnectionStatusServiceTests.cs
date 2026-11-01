@@ -30,9 +30,39 @@ public class ConnectionStatusServiceTests
 
             var statuses = await service.GetStatusesAsync();
 
-            Assert.Equal(5, statuses.Count);
+            Assert.Equal(6, statuses.Count);
             Assert.All(statuses, s => Assert.False(s.Configured));
             Assert.All(statuses, s => Assert.False(s.EnvConfigured));
+        }
+    }
+
+    [Fact]
+    public async Task ChallengeSolver_IsConfiguredByEnvVarOrSavedAddress()
+    {
+        var (db, config, pathMappings) = SetUp(new() { ["FlareSolverr:BaseUrl"] = "http://env:8191" });
+        using (db)
+        {
+            var status = (await new ConnectionStatusService(db, config, pathMappings).GetStatusesAsync()).Single(s => s.Key == "flaresolverr");
+
+            Assert.True(status.Configured);
+            Assert.True(status.EnvConfigured);
+            Assert.Equal("http://env:8191", status.Summary);
+        }
+
+        var (db2, config2, pathMappings2) = SetUp();
+        using (db2)
+        {
+            await using (var ctx = await db2.CreateDbContextAsync())
+            {
+                ctx.FlareSolverrSettings.Add(new FlareSolverrSettings { BaseUrl = "http://trawl:8191" });
+                await ctx.SaveChangesAsync();
+            }
+
+            var status = (await new ConnectionStatusService(db2, config2, pathMappings2).GetStatusesAsync()).Single(s => s.Key == "flaresolverr");
+
+            Assert.True(status.Configured);
+            Assert.False(status.EnvConfigured);
+            Assert.Equal("http://trawl:8191", status.Summary);
         }
     }
 
