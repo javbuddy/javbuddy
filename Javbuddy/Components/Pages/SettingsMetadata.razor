@@ -10,6 +10,7 @@
 @using Javbuddy.Services.Tasks
 @using Javbuddy.Services.Trickplay
 @using Javbuddy.Services.Warashi
+@using Javbuddy.Services.Infrastructure
 @using Javbuddy.Services.MinnanoAv
 @using Javbuddy.Components.Pages.SettingsMetadataSections
 @inject IR18DevSettingsService R18DevSettingsService
@@ -217,6 +218,18 @@ else
                 <label class="form-check-label" for="warashi-overwrite">Overwrite existing physical attributes when enriching</label>
             </div>
 
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="warashi-challenge-solver" @bind="warashiSettings.UseChallengeSolver" disabled="@(WarashiSolverEnv is not null)" />
+                <label class="form-check-label" for="warashi-challenge-solver">Use the challenge solver when WAPdB serves a Cloudflare challenge</label>
+                <div class="form-text">
+                    Needs a FlareSolverr or Trawl service under Settings → Connections; plain requests are still tried first.
+                    @if (WarashiSolverEnv is not null)
+                    {
+                        <span>Set by <code>Warashi__UseChallengeSolver</code>.</span>
+                    }
+                </div>
+            </div>
+
             <div class="mb-3">
                 <label class="form-label" for="warashi-delay">Request throttling delay (ms)</label>
                 <InputNumber id="warashi-delay" class="form-control" @bind-Value="warashiSettings.RequestDelayMs" min="200" max="5000" />
@@ -277,6 +290,18 @@ else
             <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" id="minnano-av-overwrite" @bind="minnanoAvSettings.OverwriteExisting" />
                 <label class="form-check-label" for="minnano-av-overwrite">Overwrite existing physical attributes when enriching</label>
+            </div>
+
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="minnano-av-challenge-solver" @bind="minnanoAvSettings.UseChallengeSolver" disabled="@(MinnanoAvSolverEnv is not null)" />
+                <label class="form-check-label" for="minnano-av-challenge-solver">Use the challenge solver when minnano-av.com serves a Cloudflare challenge</label>
+                <div class="form-text">
+                    Needs a FlareSolverr or Trawl service under Settings → Connections; plain requests are still tried first.
+                    @if (MinnanoAvSolverEnv is not null)
+                    {
+                        <span>Set by <code>MinnanoAv__UseChallengeSolver</code>.</span>
+                    }
+                </div>
             </div>
 
             <div class="mb-3">
@@ -350,6 +375,10 @@ else
     private string? batchEnrichMessage;
 
     private MinnanoAvSettings? minnanoAvSettings;
+
+    // <Source>__UseChallengeSolver overrides (and locks) the checkbox.
+    private bool? WarashiSolverEnv => ScrapeSourceEnvConfig.GetUseChallengeSolver(Configuration, "Warashi");
+    private bool? MinnanoAvSolverEnv => ScrapeSourceEnvConfig.GetUseChallengeSolver(Configuration, "MinnanoAv");
     private bool showMinnanoAvModal;
     private bool minnanoAvSaved;
     private bool minnanoAvBatchEnriching;
@@ -370,7 +399,9 @@ else
         settings = await R18DevSettingsService.GetAsync();
         mediaInfoSettings = await MediaInfoSettingsService.GetAsync();
         warashiSettings = await WarashiSettingsService.GetAsync();
+        if (WarashiSolverEnv is { } warashiSolver) warashiSettings.UseChallengeSolver = warashiSolver;
         minnanoAvSettings = await MinnanoAvSettingsService.GetAsync();
+        if (MinnanoAvSolverEnv is { } minnanoAvSolver) minnanoAvSettings.UseChallengeSolver = minnanoAvSolver;
         discoverySources = await DiscoverySettingsService.GetSourcesAsync();
         await LoadTrickplayTileAsync();
     }

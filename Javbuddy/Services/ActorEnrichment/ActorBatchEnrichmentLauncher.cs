@@ -57,7 +57,7 @@ public sealed class ActorBatchEnrichmentLauncher(BackgroundJobRunner jobs, TaskA
             try
             {
                 var res = await services.GetRequiredService<IActorEnrichmentService>().EnrichAllAsync(options, progress, ct);
-                var summary = $"Enriched {res.Succeeded} of {res.TotalProcessed} actors ({res.TotalFieldsUpdated} fields updated).";
+                var summary = res.Summary;
 
                 await saveOutcome(services, DateTime.UtcNow, summary, ct);
                 activities.Complete(activityId, summary);

@@ -31,6 +31,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MediaInfoSettings> MediaInfoSettings => Set<MediaInfoSettings>();
     public DbSet<WarashiSettings> WarashiSettings => Set<WarashiSettings>();
     public DbSet<MinnanoAvSettings> MinnanoAvSettings => Set<MinnanoAvSettings>();
+    public DbSet<FlareSolverrSettings> FlareSolverrSettings => Set<FlareSolverrSettings>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<MovieTag> MovieTags => Set<MovieTag>();
     public DbSet<Scene> Scenes => Set<Scene>();

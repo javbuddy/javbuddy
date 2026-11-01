@@ -1,0 +1,100 @@
+@using Javbuddy.Models
+@using Javbuddy.Services
+@using Javbuddy.Services.Infrastructure
+@inject IChallengeSolverClient ChallengeSolver
+@inject IConnectionSettingsSaveService ConnectionSettingsSaveService
+@inject IConfiguration Configuration
+
+<ConnectionSettingsCard TSettings="FlareSolverrSettings"
+                         Title="Challenge solver"
+                         EnvConfigured="envConfigured"
+                         Settings="settings"
+                         FormName="flaresolverr-settings"
+                         OnSave="Save"
+                         OnTest="TestConnection"
+                         Testing="testing"
+                         TestResult="TestResultTuple"
+                         Saved="saved">
+    <TestResultDetails>
+        @if (!string.IsNullOrWhiteSpace(testResult?.Version))
+        {
+            <div class="mt-2 pt-2 border-top border-success-subtle small">
+                <div><strong>Server version:</strong> @testResult.Version</div>
+            </div>
+        }
+    </TestResultDetails>
+    <Description>
+        Optional. A <a href="https://github.com/FlareSolverr/FlareSolverr" target="_blank" rel="noopener">FlareSolverr</a>
+        or compatible service (such as Trawl) that opens a real browser to pass a Cloudflare challenge. Metadata sources
+        (minnano-av.com, WAPdB) use it only when the site actually serves a challenge, and can be switched off per
+        source under Settings → Metadata. Keep it on your private network; never expose it to the internet.
+    </Description>
+    <EnvBanner>
+        Configured via environment variables (<code>FlareSolverr__BaseUrl</code> / <code>FlareSolverr__MaxTimeoutMs</code>).
+        These take precedence over the form below.
+    </EnvBanner>
+    <FormFields>
+        <div class="mb-3">
+            <label class="form-label">Base URL</label>
+            <InputText class="form-control" @bind-Value="settings!.BaseUrl" placeholder="http://flaresolverr:8191" disabled="@envConfigured" />
+            <div class="form-text">Address of the solver's <code>/v1</code> API.</div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Timeout per request (ms)</label>
+            <InputNumber class="form-control" @bind-Value="settings!.MaxTimeoutMs" min="5000" max="300000" disabled="@(envConfigured || envTimeout)" />
+            <div class="form-text">How long the solver may spend on one page, solving the challenge included (default: 60000).</div>
+        </div>
+    </FormFields>
+</ConnectionSettingsCard>
+
+@code {
+    private FlareSolverrSettings? settings;
+    private SolverTestResult? testResult;
+    private bool testing;
+    private bool saved;
+    private bool envConfigured;
+    private bool envTimeout;
+
+    private (bool Success, string Message)? TestResultTuple => testResult is null ? null : (testResult.Success, testResult.Message);
+
+    protected override async Task OnInitializedAsync()
+    {
+        envConfigured = FlareSolverrEnvConfig.IsSet(Configuration);
+        if (envConfigured)
+        {
+            settings = new FlareSolverrSettings
+            {
+                BaseUrl = FlareSolverrEnvConfig.GetBaseUrl(Configuration),
+                MaxTimeoutMs = FlareSolverrEnvConfig.GetMaxTimeoutMs(Configuration) ?? FlareSolverrSettings.DefaultMaxTimeoutMs
+            };
+        }
+        else
+        {
+            settings = await ConnectionSettingsSaveService.GetFlareSolverrAsync();
+        }
+
+        // FlareSolverr__MaxTimeoutMs overrides the timeout even when the address is saved in the form.
+        if (FlareSolverrEnvConfig.GetMaxTimeoutMs(Configuration) is { } timeout)
+        {
+            envTimeout = true;
+            settings.MaxTimeoutMs = timeout;
+        }
+    }
+
+    private async Task Save()
+    {
+        saved = false;
+        testResult = null;
+        await ConnectionSettingsSaveService.SaveFlareSolverrAsync(settings!);
+        saved = true;
+    }
+
+    private async Task TestConnection()
+    {
+        testing = true;
+        testResult = null;
+        await Save();
+        testResult = await ChallengeSolver.TestConnectionAsync();
+        testing = false;
+    }
+}

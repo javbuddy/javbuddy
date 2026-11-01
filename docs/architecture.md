@@ -27,6 +27,7 @@ The same long-lived-circuit reasoning is why Blazor CSS isolation (`.razor.css`)
 - `SingleRowSettingsRepository<TSettings>` — persistence for the single-row settings pattern.
 - `IHasConnectionUrls` — a small contract those settings types implement.
 - `ThrottledScrapeClientBase<TSettings>` / `EnrichmentSourceSettingsService<TSettings>` — the shared client plumbing (settings, per-instance request throttle, configured `HttpClient`, connection test) and settings persistence for the scraped actor-metadata sources (Warashi, minnano-av.com); `TSettings` implements `IEnrichmentSourceSettings`.
+- `IChallengeSolverClient` / `FlareSolverrClient` (`ChallengeSolverClient.cs`) and `ScrapeChallenge` — the optional FlareSolverr-compatible `/v1` client (`ApiClientBase`, own single-row settings) and the challenge detection / `ScrapeBlockedException` `ThrottledScrapeClientBase.FetchHtmlAsync` uses: plain request first, repeated through the solver only on a challenge and unless the source's `UseChallengeSolver` (default on, `<Source>__UseChallengeSolver` overrides) is off.
 - `BestEffortFile`, `DiskSpaceGuard`, `ScraperDefaults` — small shared helpers: cleanup-only deletes that never throw for routine IO failures, a free-space preflight, and the browser user agent the scrapers send.
 - `LinkRepointer` — moves a merged-away entity's join rows onto the survivor without duplicating links the target already has (tag and actor merges).
 - `EnvConfig` — the typed reads (`GetBool`, `GetList`, `AllSet`) behind every integration's `*EnvConfig` class.

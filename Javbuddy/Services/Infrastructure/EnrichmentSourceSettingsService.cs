@@ -20,6 +20,7 @@ public abstract class EnrichmentSourceSettingsService<TSettings>(
             existing.BaseUrl = form.BaseUrl;
             existing.RequestDelayMs = form.RequestDelayMs;
             existing.OverwriteExisting = form.OverwriteExisting;
+            existing.UseChallengeSolver = form.UseChallengeSolver;
         });
 
     public Task<TSettings> GetAsync(CancellationToken ct = default) => repository.GetAsync(() => new TSettings(), ct);

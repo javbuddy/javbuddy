@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
@@ -38,6 +39,7 @@ public class ConnectionStatusService(IDbContextFactory<AppDbContext> dbFactory, 
         var prowlarr = await db.ProwlarrSettings.ReadSingleRowAsync(ct);
         var jellyfin = await db.JellyfinSettings.ReadSingleRowAsync(ct);
         var qbittorrent = await db.QBittorrentSettings.ReadSingleRowAsync(ct);
+        var flareSolverr = await db.FlareSolverrSettings.ReadSingleRowAsync(ct);
         var pathMappings = await pathMappingService.GetAllAsync(ct);
 
         return
@@ -46,6 +48,7 @@ public class ConnectionStatusService(IDbContextFactory<AppDbContext> dbFactory, 
             BuildProwlarrStatus(prowlarr),
             BuildJellyfinStatus(jellyfin),
             BuildQBittorrentStatus(qbittorrent),
+            BuildFlareSolverrStatus(flareSolverr),
             BuildPathMappingsStatus(pathMappings)
         ];
     }
@@ -125,6 +128,14 @@ public class ConnectionStatusService(IDbContextFactory<AppDbContext> dbFactory, 
         var baseUrl = envConfigured ? QBittorrentEnvConfig.GetBaseUrl(configuration) : db?.BaseUrl;
         var configured = envConfigured || !string.IsNullOrWhiteSpace(db?.BaseUrl) && !string.IsNullOrWhiteSpace(db?.Username) && !string.IsNullOrWhiteSpace(db?.Password);
         return new ConnectionStatus("qbittorrent", configured, envConfigured, configured ? baseUrl ?? "Configured" : "Not configured");
+    }
+
+    private ConnectionStatus BuildFlareSolverrStatus(FlareSolverrSettings? db)
+    {
+        var envConfigured = FlareSolverrEnvConfig.IsSet(configuration);
+        var baseUrl = envConfigured ? FlareSolverrEnvConfig.GetBaseUrl(configuration) : db?.BaseUrl;
+        var configured = !string.IsNullOrWhiteSpace(baseUrl);
+        return new ConnectionStatus("flaresolverr", configured, envConfigured, configured ? baseUrl! : "Not configured");
     }
 
     private static ConnectionStatus BuildPathMappingsStatus(List<PathMapping> pathMappings)

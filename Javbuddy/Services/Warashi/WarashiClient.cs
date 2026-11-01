@@ -22,10 +22,12 @@ public interface IWarashiClient
 public class WarashiClient(
     IHttpClientFactory httpClientFactory,
     IDbContextFactory<AppDbContext> dbFactory,
-    ILogger<WarashiClient>? logger = null)
+    ILogger<WarashiClient>? logger = null,
+    IChallengeSolverClient? challengeSolver = null,
+    IConfiguration? configuration = null)
     : ThrottledScrapeClientBase<WarashiSettings>(
         httpClientFactory, dbFactory, db => db.WarashiSettings, DefaultBaseUrl, DefaultRequestDelayMs,
-        "Warashi Asian Pornstars Database", logger ?? NullLogger<WarashiClient>.Instance), IWarashiClient
+        "Warashi Asian Pornstars Database", "Warashi", logger ?? NullLogger<WarashiClient>.Instance, challengeSolver, configuration), IWarashiClient
 {
     public const string DefaultBaseUrl = "https://warashi-asian-pornstars.fr";
     private const int DefaultRequestDelayMs = 750;
@@ -42,26 +44,27 @@ public class WarashiClient(
 
         try
         {
-            var (baseUrl, delayMs) = await GetEffectiveSettingsAsync(ct);
+            var (baseUrl, delayMs, useSolver) = await GetEffectiveSettingsAsync(ct);
             var searchUrl = $"{baseUrl}/en/s-12/search";
-            var client = CreateConfiguredClient();
 
-            var formContent = new FormUrlEncodedContent(new[]
+            var form = new[]
             {
                 new KeyValuePair<string, string>("recherche_critere", "f"),
                 new KeyValuePair<string, string>("recherche_valeur", query.Trim())
-            });
+            };
 
-            await ThrottleAsync(delayMs, ct);
-            var response = await client.PostAsync(searchUrl, formContent, ct);
-            if (!response.IsSuccessStatusCode)
+            var page = await FetchHtmlAsync(searchUrl, delayMs, useSolver, form, ct);
+            if (page.Html is not { } html)
             {
-                Logger.LogWarning("Warashi search for '{Query}' returned HTTP status {StatusCode}", query, response.StatusCode);
+                Logger.LogWarning("Warashi search for '{Query}' returned HTTP status {StatusCode}", query, page.StatusCode);
                 return Array.Empty<WarashiSearchResult>();
             }
 
-            var html = await response.Content.ReadAsStringAsync(ct);
             return WarashiHtmlParser.ParseSearchResults(html, baseUrl);
+        }
+        catch (ScrapeBlockedException)
+        {
+            throw;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -76,20 +79,21 @@ public class WarashiClient(
 
         try
         {
-            var (baseUrl, delayMs) = await GetEffectiveSettingsAsync(ct);
+            var (baseUrl, delayMs, useSolver) = await GetEffectiveSettingsAsync(ct);
             var url = HtmlTextHelper.ResolveUrl(performerPathOrUrl, baseUrl)!;
 
-            var client = CreateConfiguredClient();
-            await ThrottleAsync(delayMs, ct);
-            var response = await client.GetAsync(url, ct);
-            if (!response.IsSuccessStatusCode)
+            var page = await FetchHtmlAsync(url, delayMs, useSolver, null, ct);
+            if (page.Html is not { } html)
             {
-                Logger.LogWarning("Warashi detail request for '{Url}' returned HTTP status {StatusCode}", url, response.StatusCode);
+                Logger.LogWarning("Warashi detail request for '{Url}' returned HTTP status {StatusCode}", url, page.StatusCode);
                 return null;
             }
 
-            var html = await response.Content.ReadAsStringAsync(ct);
             return WarashiHtmlParser.ParsePerformerDetail(html, performerPathOrUrl, baseUrl);
+        }
+        catch (ScrapeBlockedException)
+        {
+            throw;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -104,7 +108,7 @@ public class WarashiClient(
 
         try
         {
-            var (baseUrl, delayMs) = await GetEffectiveSettingsAsync(ct);
+            var (baseUrl, delayMs, _) = await GetEffectiveSettingsAsync(ct);
             var fullUrl = HtmlTextHelper.ResolveUrl(url, baseUrl)!;
 
             var client = CreateConfiguredClient();

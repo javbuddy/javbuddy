@@ -222,6 +222,32 @@ public class SettingsMetadataTests : BunitContext
         Assert.Contains("Enable the minnano-av.com metadata provider", cut.Markup);
     }
 
+    [Theory]
+    [InlineData(null, true, false)]
+    [InlineData("false", false, true)]
+    [InlineData("true", true, true)]
+    public void MinnanoAvDrawer_ChallengeSolverCheckbox_DefaultsOnAndIsLockedByEnv(string? env, bool expectedChecked, bool expectedLocked)
+    {
+        var factory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        Services.AddSingleton(Substitute.For<IR18DevDumpStore>());
+        Services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+            .AddInMemoryCollection(env is null ? [] : new Dictionary<string, string?> { ["MinnanoAv:UseChallengeSolver"] = env }).Build());
+        Services.AddSingleton<IWarashiSettingsService>(new WarashiSettingsService(factory));
+        Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
+        Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
+        Services.AddSingleton(NewTaskActivityTracker());
+
+        var cut = Render<SettingsMetadata>();
+        cut.FindAll(".status-tile").First(t => t.TextContent.Contains("minnano-av.com")).Click();
+
+        var checkbox = cut.Find("#minnano-av-challenge-solver");
+        Assert.Equal(expectedChecked, checkbox.HasAttribute("checked"));
+        Assert.Equal(expectedLocked, checkbox.HasAttribute("disabled"));
+    }
+
     [Fact]
     public async Task MinnanoAvBatchEnrichNow_RunsDetachedAndReportsProgressViaTaskActivityTracker_EvenAfterPageIsDisposed()
     {

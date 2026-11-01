@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261101092153_AddBackupSettings";
+    public override string LastMigrationId => "20261101102159_AddChallengeSolver";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -679,6 +679,24 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("DiscoverySourceSettings");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.FlareSolverrSettings", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<string>("BaseUrl")
+                    .HasMaxLength(500)
+                    .HasColumnType("TEXT");
+
+                b.Property<int>("MaxTimeoutMs")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("Id");
+
+                b.ToTable("FlareSolverrSettings");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.HighlightActor", b =>
             {
                 b.Property<int>("HighlightId")
@@ -923,6 +941,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("INTEGER");
 
                 b.Property<int>("RequestDelayMs")
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("UseChallengeSolver")
                     .HasColumnType("INTEGER");
 
                 b.HasKey("Id");
@@ -2257,6 +2278,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("INTEGER");
 
                 b.Property<int>("RequestDelayMs")
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("UseChallengeSolver")
                     .HasColumnType("INTEGER");
 
                 b.HasKey("Id");
