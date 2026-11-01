@@ -38,6 +38,12 @@ public interface IScheduledTask
     /// ScheduledTaskRunner — since those aren't routine noise the same way successful runs are.</summary>
     bool RecordRunHistory => true;
 
+    /// <summary>True for a task that must not wait out a full interval after the app starts when it has never run.
+    /// By default a never-run task is first due one interval after this process started (so a long task like the image
+    /// cache doesn't fire on every start), which for a short-lived process, e.g. a container restarting nightly, can
+    /// mean it never runs at all. A task whose first run is cheap and matters (database backups) opts out.</summary>
+    bool RunImmediatelyWhenNeverRun => false;
+
     TimeSpan GetInterval();
 
     /// <summary>Does the work and returns a short human-readable summary (e.g. "checked 3623,

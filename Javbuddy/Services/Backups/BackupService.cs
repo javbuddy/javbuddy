@@ -253,6 +253,7 @@ public sealed class BackupService(
 
     private async Task<int> PruneCoreAsync()
     {
+        RemoveLeftoverScratchFolders();
         var retention = TimeSpan.FromDays((await settingsService.GetEffectiveAsync()).RetentionDays);
         var cutoff = time.GetUtcNow().UtcDateTime - retention;
         var automatic = List().Where(e => e.Kind == BackupKind.Auto).ToList();
@@ -263,6 +264,29 @@ public sealed class BackupService(
             logger.LogInformation("Deleted automatic database backup {File} past its {Days}-day retention.", entry.FileName, retention.TotalDays);
         }
         return expired.Count;
+    }
+
+    /// <summary>Deletes scratch folders a crashed or killed backup or import left behind. Callers hold the lock and
+    /// every operation removes its own scratch folder before releasing it, so any that exist are leftovers.</summary>
+    private void RemoveLeftoverScratchFolders()
+    {
+        if (!Directory.Exists(location.Folder))
+        {
+            return;
+        }
+
+        foreach (var folder in Directory.EnumerateDirectories(location.Folder, ".tmp-*"))
+        {
+            try
+            {
+                Directory.Delete(folder, recursive: true);
+                logger.LogInformation("Removed leftover backup scratch folder {Folder}.", Path.GetFileName(folder));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(ex, "Could not remove leftover backup scratch folder {Folder}.", folder);
+            }
+        }
     }
 
     /// <summary>Extracts the archive's database into <paramref name="workFolder"/> and checks it; returns why it

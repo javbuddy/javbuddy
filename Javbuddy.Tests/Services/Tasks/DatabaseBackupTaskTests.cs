@@ -35,6 +35,12 @@ public sealed class DatabaseBackupTaskTests : IDisposable
     }
 
     [Fact]
+    public void RunsImmediatelyWhenItHasNeverRun()
+    {
+        Assert.True(((IScheduledTask)Task).RunImmediatelyWhenNeverRun);
+    }
+
+    [Fact]
     public async Task GetInterval_FollowsTheFrequency_AndChecksDailyWhileOff()
     {
         await env.Settings.SaveAsync(new BackupSettings { Enabled = true, FrequencyDays = 3 });

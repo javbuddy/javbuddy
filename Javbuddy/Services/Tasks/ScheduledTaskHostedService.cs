@@ -59,6 +59,13 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ILogg
         }
     }
 
+    /// <summary>Whether a task is due: its interval has passed since its last run, or, for a task that has never
+    /// run, since this process started (or at once when <paramref name="runImmediatelyWhenNeverRun"/>).</summary>
+    public static bool IsDue(DateTime? lastRunUtc, DateTime nowUtc, DateTime processStartUtc, TimeSpan interval, bool runImmediatelyWhenNeverRun) =>
+        lastRunUtc is not null
+            ? nowUtc - lastRunUtc.Value >= interval
+            : runImmediatelyWhenNeverRun || nowUtc - processStartUtc >= interval;
+
     private async Task TickAsync(CancellationToken ct)
     {
         using var scope = scopeFactory.CreateScope();
@@ -91,10 +98,7 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ILogg
                     .FirstOrDefaultAsync(ct);
             }
 
-            var due = lastRun is not null
-                ? DateTime.UtcNow - lastRun.Value >= task.GetInterval()
-                : DateTime.UtcNow - processStartUtc >= task.GetInterval();
-            if (!due) continue;
+            if (!IsDue(lastRun, DateTime.UtcNow, processStartUtc, task.GetInterval(), task.RunImmediatelyWhenNeverRun)) continue;
 
             if (task.RecordRunHistory)
             {

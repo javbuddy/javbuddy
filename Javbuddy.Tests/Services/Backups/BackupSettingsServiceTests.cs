@@ -53,6 +53,21 @@ public sealed class BackupSettingsServiceTests
     }
 
     [Fact]
+    public async Task DaysAreCappedAtTheMaximum_FromTheEnvironmentAndFromSave()
+    {
+        using var env = new BackupTestEnvironment(new() { ["Backup:FrequencyDays"] = "99999999" });
+        await env.Settings.SaveAsync(new BackupSettings { RetentionDays = 999_999, FrequencyDays = 1 });
+
+        var effective = await env.Settings.GetEffectiveAsync();
+
+        Assert.Equal(BackupSettings.MaxDays, effective.FrequencyDays);
+        Assert.Equal(BackupSettings.MaxDays, effective.RetentionDays);
+        // The capped values are ones a TimeSpan computed from now can hold.
+        _ = DateTime.UtcNow - TimeSpan.FromDays(effective.RetentionDays);
+        _ = DateTime.UtcNow + TimeSpan.FromDays(effective.FrequencyDays);
+    }
+
+    [Fact]
     public async Task SaveAsync_ClampsDaysToAtLeastOne()
     {
         using var env = new BackupTestEnvironment();

@@ -70,8 +70,47 @@ public class SystemBackupsTests : BunitContext
         cut.Find("#backup-frequency").Change("0");
         cut.Find("#backup-save").Click();
 
-        Assert.Contains("at least 1 day", cut.Find(".alert-danger").TextContent);
+        Assert.Contains("between 1 and 36500 days", cut.Find(".alert-danger").TextContent);
         settings.DidNotReceive().SaveAsync(Arg.Any<BackupSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void RejectsMoreDaysThanTheMaximum_WithoutSaving()
+    {
+        var cut = Render<SystemBackups>();
+
+        cut.Find("#backup-retention").Change("999999");
+        cut.Find("#backup-save").Click();
+
+        Assert.Contains("36500", cut.Find(".alert-danger").TextContent);
+        settings.DidNotReceive().SaveAsync(Arg.Any<BackupSettings>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void Save_ShowsAFailureInsteadOfEndingTheCircuit()
+    {
+        settings.SaveAsync(Arg.Any<BackupSettings>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("database is locked")));
+        var cut = Render<SystemBackups>();
+
+        cut.Find("#backup-save").Click();
+
+        Assert.Contains("database is locked", cut.Find(".alert-danger").TextContent);
+        Assert.False(cut.Find("#backup-save").HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public void Filtering_DropsSelectedBackupsItHides_SoDeleteNeverRemovesThemOutOfView()
+    {
+        backups.DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(OperationResult.Ok());
+        var cut = Render<SystemBackups>();
+        cut.Find(".backups-count input").Change(true);
+
+        cut.Find(".backups-filter").Input("manual");
+        cut.Find("#backup-delete").Click();
+        cut.Find(".delete-confirm-confirm-btn").Click();
+
+        backups.Received(1).DeleteAsync("javbuddy-manual-20261101-040000.zip", Arg.Any<CancellationToken>());
+        backups.DidNotReceive().DeleteAsync("javbuddy-auto-20261102-040000.zip", Arg.Any<CancellationToken>());
     }
 
     [Fact]

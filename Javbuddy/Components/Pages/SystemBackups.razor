@@ -57,7 +57,7 @@ else
             }
         </div>
         <div class="input-group backups-card-control">
-            <input class="form-control" type="number" min="1" id="backup-retention" aria-label="Retention in days"
+            <input class="form-control" type="number" min="1" max="@BackupSettings.MaxDays" id="backup-retention" aria-label="Retention in days"
                    value="@(BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.RetentionDays)) ? effective.RetentionDays : form.RetentionDays)"
                    disabled="@BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.RetentionDays))"
                    @onchange="e => form.RetentionDays = ParseDays(e.Value)" />
@@ -75,7 +75,7 @@ else
             }
         </div>
         <div class="input-group backups-card-control">
-            <input class="form-control" type="number" min="1" id="backup-frequency" aria-label="Frequency in days"
+            <input class="form-control" type="number" min="1" max="@BackupSettings.MaxDays" id="backup-frequency" aria-label="Frequency in days"
                    value="@(BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.FrequencyDays)) ? effective.FrequencyDays : form.FrequencyDays)"
                    disabled="@BackupSettingsService.IsSetByEnvironment(nameof(BackupSettings.FrequencyDays))"
                    @onchange="e => form.FrequencyDays = ParseDays(e.Value)" />
@@ -119,7 +119,7 @@ else
                 <span class="backups-btn disabled" aria-disabled="true">Export</span>
             }
         </div>
-        <input class="form-control backups-filter" type="search" placeholder="Filter" aria-label="Filter backups" @bind="filter" @bind:event="oninput" />
+        <input class="form-control backups-filter" type="search" placeholder="Filter" aria-label="Filter backups" @bind="Filter" @bind:event="oninput" />
     </div>
 
     @if (entries.Count == 0)
@@ -188,6 +188,17 @@ else
     private List<BackupEntry>? entries;
     private readonly SelectionSet<string> selected = new();
     private string filter = "";
+
+    // Narrowing the list drops selected backups it hides, so Delete never removes ones that are out of view.
+    private string Filter
+    {
+        get => filter;
+        set
+        {
+            filter = value;
+            selected.RetainOnly(visibleNames);
+        }
+    }
     private bool busy;
     private bool restorePending;
     private bool confirmDelete;
@@ -238,19 +249,18 @@ else
 
     private static int ParseDays(object? value) => int.TryParse(value?.ToString(), out var days) ? days : 0;
 
-    private async Task SaveAsync()
+    private async Task SaveAsync() => await RunAsync(async () =>
     {
-        error = notice = null;
-        if (form!.RetentionDays < 1 || form.FrequencyDays < 1)
+        if (form!.RetentionDays is < 1 or > BackupSettings.MaxDays || form.FrequencyDays is < 1 or > BackupSettings.MaxDays)
         {
-            error = "Retention and frequency must be at least 1 day.";
+            error = $"Retention and frequency must be between 1 and {BackupSettings.MaxDays} days.";
             return;
         }
 
         await BackupSettingsService.SaveAsync(form);
         await LoadSettingsAsync();
         notice = "Backup settings saved.";
-    }
+    });
 
     private async Task BackupNowAsync() => await RunAsync(async () =>
     {

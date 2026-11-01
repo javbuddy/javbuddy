@@ -9,8 +9,8 @@ namespace Javbuddy.Services.Backups;
 /// fails, the current database stays as it was.</summary>
 public static class BackupRestoreApplier
 {
-    /// <summary>True when a staged restore replaced the database. A staged restore is consumed either way, so a
-    /// failing one doesn't retry on every start.</summary>
+    /// <summary>True when a staged restore replaced the database. A restore that fails is kept staged (and logged), so
+    /// it is retried at the next start instead of silently vanishing; one that succeeds is consumed.</summary>
     public static async Task<bool> ApplyPendingAsync(BackupLocation location, TimeProvider time, ILogger logger, CancellationToken ct = default)
     {
         if (!File.Exists(location.PendingDatabasePath))
@@ -18,43 +18,46 @@ public static class BackupRestoreApplier
             return false;
         }
 
+        // Staged next to the database so the final move is a same-volume rename, whatever Backup__Path says.
+        var swapPath = location.DatabasePath + ".restoring";
         try
         {
             SqliteConnection.ClearAllPools();
             if (File.Exists(location.DatabasePath))
             {
-                await KeepPreRestoreBackupAsync(location, time, ct);
+                await KeepPreRestoreBackupAsync(location, time, logger, ct);
             }
 
-            // Staged next to the database so the final move is a same-volume rename, whatever Backup__Path says.
-            var swapPath = location.DatabasePath + ".restoring";
             File.Copy(location.PendingDatabasePath, swapPath, overwrite: true);
-            // Anything still in the old database's log belongs to the database being replaced.
+            // Anything still in the old database's log belongs to the database being replaced, and is in the
+            // pre-restore backup.
             File.Delete(location.DatabasePath + "-wal");
             File.Delete(location.DatabasePath + "-shm");
             File.Move(swapPath, location.DatabasePath, overwrite: true);
-            logger.LogWarning("Restored the database from a staged backup; the previous database is kept as a pre-restore backup.");
-            return true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Applying the staged database restore failed; keeping the current database.");
+            logger.LogError(ex, "Applying the staged database restore failed; keeping the current database and the staged restore.");
+            TryDelete(swapPath, logger);
             return false;
         }
-        finally
+
+        logger.LogWarning("Restored the database from a staged backup; the previous database is kept as a pre-restore backup.");
+        try
         {
-            try
-            {
-                Directory.Delete(location.PendingFolder, recursive: true);
-            }
-            catch (IOException ex)
-            {
-                logger.LogWarning(ex, "Could not remove the staged restore folder {Folder}.", location.PendingFolder);
-            }
+            Directory.Delete(location.PendingFolder, recursive: true);
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Could not remove the staged restore folder {Folder}.", location.PendingFolder);
+        }
+        return true;
     }
 
-    internal static async Task KeepPreRestoreBackupAsync(BackupLocation location, TimeProvider time, CancellationToken ct)
+    /// <summary>Keeps what is about to be replaced: a pre-restore backup archive, or when SQLite can't read the
+    /// database (the case where someone restores because it is damaged) a plain copy of its files in a
+    /// <c>pre-restore-files-*</c> folder. Throws only when neither could be made.</summary>
+    internal static async Task KeepPreRestoreBackupAsync(BackupLocation location, TimeProvider time, ILogger logger, CancellationToken ct)
     {
         Directory.CreateDirectory(location.Folder);
         var work = BackupArchive.CreateWorkFolder(location.Folder);
@@ -63,12 +66,40 @@ public static class BackupRestoreApplier
             var snapshot = Path.Combine(work.FullName, BackupArchive.DatabaseEntryName);
             BackupDatabase.Snapshot(location.ConnectionString, snapshot);
             var manifest = await BuildManifestAsync(snapshot, time.GetUtcNow().UtcDateTime, ct);
-            var target = BackupService.UniquePath(location.Folder, BackupKind.PreRestore, manifest.CreatedUtc);
-            await BackupArchive.CreateAsync(target, snapshot, manifest, ct);
+
+            // Built in the scratch folder and moved, so an interrupted write never leaves a half archive in the list.
+            var zip = Path.Combine(work.FullName, "backup.zip");
+            await BackupArchive.CreateAsync(zip, snapshot, manifest, ct);
+            File.Move(zip, BackupService.UniquePath(location.Folder, BackupKind.PreRestore, manifest.CreatedUtc));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Could not snapshot the current database; keeping a plain copy of its files before the restore.");
+            var copy = Directory.CreateDirectory(Path.Combine(location.Folder, $"pre-restore-files-{time.GetUtcNow().UtcDateTime:yyyyMMdd-HHmmss}"));
+            foreach (var suffix in new[] { "", "-wal", "-shm" })
+            {
+                if (File.Exists(location.DatabasePath + suffix))
+                {
+                    File.Copy(location.DatabasePath + suffix, Path.Combine(copy.FullName, Path.GetFileName(location.DatabasePath) + suffix), overwrite: true);
+                }
+            }
+            logger.LogWarning("The current database files were copied to {Folder}.", copy.FullName);
         }
         finally
         {
             work.Delete(recursive: true);
+        }
+    }
+
+    private static void TryDelete(string path, ILogger logger)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Could not remove {Path}.", path);
         }
     }
 

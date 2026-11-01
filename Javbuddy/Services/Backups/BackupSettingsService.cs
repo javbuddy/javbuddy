@@ -13,7 +13,7 @@ public static class BackupEnvConfig
         EnvConfig.GetBool(configuration, $"Backup:{field}");
 
     public static int? GetDays(IConfiguration configuration, string field) =>
-        int.TryParse(configuration[$"Backup:{field}"], out var days) && days >= 1 ? days : null;
+        int.TryParse(configuration[$"Backup:{field}"], out var days) && days >= 1 ? Math.Min(days, BackupSettings.MaxDays) : null;
 }
 
 public interface IBackupSettingsService
@@ -40,8 +40,8 @@ public sealed class BackupSettingsService(IDbContextFactory<AppDbContext> dbFact
         (existing, form) =>
         {
             existing.Enabled = form.Enabled;
-            existing.RetentionDays = Math.Max(1, form.RetentionDays);
-            existing.FrequencyDays = Math.Max(1, form.FrequencyDays);
+            existing.RetentionDays = ClampDays(form.RetentionDays);
+            existing.FrequencyDays = ClampDays(form.FrequencyDays);
         });
 
     private volatile BackupSettings? cached;
@@ -70,8 +70,8 @@ public sealed class BackupSettingsService(IDbContextFactory<AppDbContext> dbFact
         {
             Id = settings.Id,
             Enabled = settings.Enabled,
-            RetentionDays = Math.Max(1, settings.RetentionDays),
-            FrequencyDays = Math.Max(1, settings.FrequencyDays),
+            RetentionDays = ClampDays(settings.RetentionDays),
+            FrequencyDays = ClampDays(settings.FrequencyDays),
         }, ct);
         cached = null;
     }
@@ -80,11 +80,13 @@ public sealed class BackupSettingsService(IDbContextFactory<AppDbContext> dbFact
         ? BackupEnvConfig.GetBool(configuration, field) is not null
         : BackupEnvConfig.GetDays(configuration, field) is not null;
 
+    private static int ClampDays(int days) => Math.Clamp(days, 1, BackupSettings.MaxDays);
+
     private BackupSettings Apply(BackupSettings stored) => new()
     {
         Id = stored.Id,
         Enabled = BackupEnvConfig.GetBool(configuration, nameof(BackupSettings.Enabled)) ?? stored.Enabled,
-        RetentionDays = BackupEnvConfig.GetDays(configuration, nameof(BackupSettings.RetentionDays)) ?? Math.Max(1, stored.RetentionDays),
-        FrequencyDays = BackupEnvConfig.GetDays(configuration, nameof(BackupSettings.FrequencyDays)) ?? Math.Max(1, stored.FrequencyDays),
+        RetentionDays = BackupEnvConfig.GetDays(configuration, nameof(BackupSettings.RetentionDays)) ?? ClampDays(stored.RetentionDays),
+        FrequencyDays = BackupEnvConfig.GetDays(configuration, nameof(BackupSettings.FrequencyDays)) ?? ClampDays(stored.FrequencyDays),
     };
 }

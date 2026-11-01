@@ -239,4 +239,54 @@ public sealed class BackupServiceTests : IDisposable
         await BackupArchive.CreateAsync(output, database, BackupArchive.ReadManifest(zipPath)!, CancellationToken.None);
         return output;
     }
+
+    [Fact]
+    public async Task ApplyPendingAsync_WhenTheCurrentDatabaseIsUnreadable_StillRestores_AndKeepsAPlainCopyOfIt()
+    {
+        await env.AddTagsAsync(2);
+        var backup = await env.Service.CreateAsync(BackupKind.Manual);
+        await env.Service.StageRestoreAsync(backup.FileName);
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        File.Delete(env.Location.DatabasePath + "-wal");
+        File.Delete(env.Location.DatabasePath + "-shm");
+        await File.WriteAllTextAsync(env.Location.DatabasePath, "this is not a database, just damaged bytes");
+
+        var applied = await BackupRestoreApplier.ApplyPendingAsync(env.Location, env.Time, NullLogger.Instance);
+
+        Assert.True(applied);
+        Assert.Equal(2, await env.TagCountAsync());
+        var copy = Assert.Single(Directory.GetDirectories(env.Location.Folder, "pre-restore-files-*"));
+        Assert.Equal("this is not a database, just damaged bytes", await File.ReadAllTextAsync(Path.Combine(copy, "Javbuddy.db")));
+        Assert.False(Directory.Exists(env.Location.PendingFolder));
+    }
+
+    [Fact]
+    public async Task ApplyPendingAsync_WhenTheSwapFails_KeepsTheDatabaseAndTheStagedRestore()
+    {
+        await env.AddTagsAsync(2);
+        var backup = await env.Service.CreateAsync(BackupKind.Manual);
+        await env.AddTagsAsync(3);
+        await env.Service.StageRestoreAsync(backup.FileName);
+        // A directory where the swap file goes makes the copy into place fail.
+        Directory.CreateDirectory(env.Location.DatabasePath + ".restoring");
+
+        var applied = await BackupRestoreApplier.ApplyPendingAsync(env.Location, env.Time, NullLogger.Instance);
+
+        Assert.False(applied);
+        Assert.True(env.Service.RestorePending);
+        Assert.Equal(5, await env.TagCountAsync());
+    }
+
+    [Fact]
+    public async Task PruneAsync_RemovesScratchFoldersAndLeftoverFromACrashedBackup()
+    {
+        var leftover = Directory.CreateDirectory(Path.Combine(env.Location.Folder, ".tmp-deadbeef"));
+        await File.WriteAllTextAsync(Path.Combine(leftover.FullName, "Javbuddy.db"), "partial");
+        var pending = Directory.CreateDirectory(env.Location.PendingFolder); // not scratch: a staged restore
+
+        await env.Service.PruneAsync();
+
+        Assert.False(leftover.Exists || Directory.Exists(leftover.FullName));
+        Assert.True(Directory.Exists(pending.FullName));
+    }
 }

@@ -45,8 +45,8 @@ Set on **System → Backups**; each setting here overrides its field there and l
 |---|---|---|---|
 | `Backup:Path` | `Backup__Path` | `backups` next to the database file (`/data/backups` in Docker) | Directory holding the backup archives. |
 | `Backup:Enabled` | `Backup__Enabled` | `true` | Create automatic backups. |
-| `Backup:FrequencyDays` | `Backup__FrequencyDays` | `1` | Days between automatic backups. |
-| `Backup:RetentionDays` | `Backup__RetentionDays` | `10` | Days to keep automatic backups; manual and pre-restore backups are never removed automatically. |
+| `Backup:FrequencyDays` | `Backup__FrequencyDays` | `1` | Days between automatic backups (1 to 36500). |
+| `Backup:RetentionDays` | `Backup__RetentionDays` | `10` | Days to keep automatic backups (1 to 36500); manual and pre-restore backups are never removed automatically. |
 
 ### Integrations
 

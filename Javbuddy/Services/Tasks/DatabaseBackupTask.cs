@@ -11,6 +11,10 @@ public sealed class DatabaseBackupTask(IBackupService backups, IBackupSettingsSe
 
     public string Description => "Backs up the database on the schedule set under System > Backups and removes automatic backups past their retention.";
 
+    /// <summary>A backup that has never run is made right away rather than a frequency after the app starts: with the
+    /// default daily frequency, an app restarted nightly would otherwise never back up.</summary>
+    public bool RunImmediatelyWhenNeverRun => true;
+
     /// <summary>The configured frequency, or a daily check while automatic backups are off so that turning them on
     /// takes effect within a day.</summary>
     public TimeSpan GetInterval()
