@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-04
+
 ### Fixed
 
 - **Generate poster & fanart** no longer fails with "Couldn't extract any frames from the video" in the Docker image, whose ffmpeg has no JPEG encoder: frames are now taken as WebP (with the same colour conversion the scene screenshots use) and converted to JPEG by the app. When extraction does fail, the message now says why.
