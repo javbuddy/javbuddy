@@ -904,6 +904,24 @@ public class MovieServiceTests
     }
 
     [Fact]
+    public async Task UpdateMetadataAsync_SetsTheContentType_AndNullLeavesItUnchanged()
+    {
+        using var factory = new TestDbContextFactory();
+        var movieId = await AddMovieAsync(factory, "ABC-100");
+        var service = new MovieService(factory);
+
+        await service.UpdateMetadataAsync(movieId, TitleOnlyUpdate("A") with { ContentType = MovieContentType.Decensored });
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            Assert.Equal(MovieContentType.Decensored, (await db.Movies.SingleAsync(m => m.Id == movieId)).ContentType);
+        }
+
+        await service.UpdateMetadataAsync(movieId, TitleOnlyUpdate("B"));
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.Equal(MovieContentType.Decensored, (await verifyDb.Movies.SingleAsync(m => m.Id == movieId)).ContentType);
+    }
+
+    [Fact]
     public async Task UpdateMetadataAsync_BlankStringsAreStoredAsNull()
     {
         using var factory = new TestDbContextFactory();

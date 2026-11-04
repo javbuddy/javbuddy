@@ -39,6 +39,10 @@ public static class MovieFilterPredicates
             (interlaced && m.MediaScanType != null && m.MediaScanType.Trim().ToLower() != "progressive"));
     }
 
+    /// <summary>A movie matches when its content type is any of the selected ones.</summary>
+    public static IQueryable<Movie> WhereContentTypes(IQueryable<Movie> query, IReadOnlyCollection<MovieContentType>? contentTypes) =>
+        contentTypes is { Count: > 0 } ? query.Where(m => contentTypes.Contains(m.ContentType)) : query;
+
     public static IQueryable<Movie> WhereCodecs(IQueryable<Movie> query, IReadOnlyCollection<string>? codecs) =>
         codecs is { Count: > 0 } ? query.Where(m => m.MediaVideoCodec != null && codecs.Contains(m.MediaVideoCodec)) : query;
 

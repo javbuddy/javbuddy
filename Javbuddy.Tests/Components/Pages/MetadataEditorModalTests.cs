@@ -105,6 +105,29 @@ public class MetadataEditorModalTests : BunitContext
     }
 
     [Fact]
+    public async Task OpenAsync_PrefillsTheContentType_AndSaveSendsTheChoice()
+    {
+        var movieService = SetUpMovieService();
+        movieService.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>())
+            .Returns(OperationResult.Ok());
+        var movie = new Movie { Id = 5, Code = "ABC-123", ContentType = MovieContentType.Uncensored };
+
+        var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
+        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+
+        Assert.Equal("Uncensored", cut.Find("#metadata-content-type").GetAttribute("value"));
+        Assert.Equal(["Censored", "Uncensored", "Decensored"], cut.FindAll("#metadata-content-type option").Select(o => o.TextContent));
+
+        cut.Find("#metadata-content-type").Change(MovieContentType.Decensored.ToString());
+        await cut.InvokeAsync(() => cut.Find("form").Submit());
+
+        await movieService.Received(1).UpdateMetadataAsync(
+            5,
+            Arg.Is<MovieMetadataUpdate>(u => u.ContentType == MovieContentType.Decensored),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Submit_SavedButNfoNotCreated_ShowsWarningStaysOpenAndRefreshesThePage()
     {
         var movieService = SetUpMovieService();

@@ -119,6 +119,8 @@ else
                                         OnToggleResolution="o => UpdateAsync(() => Toggle(editor.Resolutions, o))"
                                         ScanTypeFilter="@editor.ScanTypes"
                                         OnToggleScanType="o => UpdateAsync(() => Toggle(editor.ScanTypes, o))"
+                                        ContentTypeFilter="@editor.ContentTypes"
+                                        OnToggleContentType="o => UpdateAsync(() => Toggle(editor.ContentTypes, o))"
                                         NfoDriftFilter="@editor.NfoDriftKinds"
                                         OnToggleNfoDrift="o => UpdateAsync(() => Toggle(editor.NfoDriftKinds, o))"
                                         AvailableCodecs="@(summary?.Codecs ?? [])"
@@ -350,6 +352,7 @@ else
         public string Text { get; set; } = string.Empty;
         public HashSet<MovieResolutionFilterOption> Resolutions { get; init; } = [];
         public HashSet<MovieScanTypeFilterOption> ScanTypes { get; init; } = [];
+        public HashSet<MovieContentType> ContentTypes { get; init; } = [];
         public HashSet<NfoDriftKind> NfoDriftKinds { get; init; } = [];
         public HashSet<string> Codecs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
         public HashSet<string> Studios { get; init; } = new(StringComparer.OrdinalIgnoreCase);
@@ -367,7 +370,7 @@ else
 
         public bool HasFilters =>
             !string.IsNullOrEmpty(Library) || !string.IsNullOrWhiteSpace(Text)
-            || Resolutions.Count + ScanTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count + Actors.Count > 0
+            || Resolutions.Count + ScanTypes.Count + ContentTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count + Actors.Count > 0
             || ExcludedStudios.Count + ExcludedGenres.Count + ExcludedActors.Count > 0
             || !ActorAttributes.IsEmpty || !Counts.IsEmpty || !Ranges.IsEmpty;
 
@@ -377,6 +380,7 @@ else
             Text = string.Empty;
             Resolutions.Clear();
             ScanTypes.Clear();
+            ContentTypes.Clear();
             NfoDriftKinds.Clear();
             Codecs.Clear();
             Studios.Clear();
@@ -396,6 +400,7 @@ else
             Library: string.IsNullOrEmpty(Library) ? null : Library,
             Resolutions: Resolutions.ToList(),
             ScanTypes: ScanTypes.ToList(),
+            ContentTypes: ContentTypes.ToList(),
             Codecs: Codecs.ToList(),
             Studios: Studios.ToList(),
             Genres: Genres.ToList(),
@@ -422,6 +427,7 @@ else
                 Text = f.Text ?? string.Empty,
                 Resolutions = [.. f.Resolutions ?? []],
                 ScanTypes = [.. f.ScanTypes ?? []],
+                ContentTypes = [.. f.ContentTypes ?? []],
                 NfoDriftKinds = [.. f.NfoDriftKinds ?? []],
                 Codecs = new(f.Codecs ?? [], StringComparer.OrdinalIgnoreCase),
                 Studios = new(f.Studios ?? [], StringComparer.OrdinalIgnoreCase),

@@ -55,6 +55,19 @@ public class MovieAddServiceTests
         Assert.True(await db.Movies.AnyAsync(m => m.Code == "ABC-123"));
     }
 
+    [Theory]
+    [InlineData("carib-010120-001", MovieContentType.Uncensored)]
+    [InlineData("SSNI-081", MovieContentType.Censored)]
+    public async Task AddAsync_SetsTheContentTypeFromTheCode(string code, MovieContentType expected)
+    {
+        using var factory = new TestDbContextFactory();
+
+        await CreateService(factory).AddAsync(code);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(expected, (await db.Movies.SingleAsync(m => m.Code == code)).ContentType);
+    }
+
     [Fact]
     public async Task AddAsync_ClearsAllMatchingCanonicalHistoryOnly()
     {

@@ -1,5 +1,6 @@
 @using Javbuddy.Services.Common
 @using Javbuddy.Services.Infrastructure
+@using Javbuddy.Models
 @page "/movies/scenes"
 @using Javbuddy.Services
 @using Javbuddy.Services.SceneMedia
@@ -118,6 +119,8 @@
                                                  OnSelectAll="SelectAllStudiosAsync"
                                                  OnSelectNone="() => SelectNoneAsync(studioFilter, OfferedStudios)" />
                     }
+                    @* The parent movie's content type; always the same three values, so shown whatever the view offers. *@
+                    <MultiSelectFilterGroup GroupLabel="Content Type" Options="@ContentTypeOptions" />
                     @* Clips whose range contains an apex, optionally one with a given tag. *@
                     @if (!ApexesView)
                     {
@@ -260,6 +263,8 @@
     private readonly HashSet<int> tagFilter = [];
     private readonly HashSet<int> actorFilter = [];
     private readonly HashSet<string> studioFilter = new(StringComparer.OrdinalIgnoreCase);
+    // The parent movie's content type; unlike the selections above, every view offers all of its values.
+    private readonly HashSet<MovieContentType> contentTypeFilter = [];
     // Apex tags: the clips containing an apex with one, or in the Apexes view the apexes
     // themselves. apexOnly keeps clips containing any apex; the Apexes view doesn't apply it.
     private readonly HashSet<int> apexTagFilter = [];
@@ -308,7 +313,8 @@
         List<int>? ActorTagIds = null,
         bool MatchAllTags = false,
         bool MatchAllActorTags = false,
-        bool MatchAllApexTags = false);
+        bool MatchAllApexTags = false,
+        List<MovieContentType>? ContentTypes = null);
 
     private enum WallView
     {
@@ -379,7 +385,7 @@
     private ActorAttributeSelection AppliedActorAttributes =>
         options is null ? ActorAttributeSelection.Empty : MovieFilterOptions.NormalizeActorAttributes(actorAttributes, options.ActorAttributes);
 
-    private int ActiveFilterCount => AppliedTags.Count + AppliedActors.Count + AppliedActorTags.Count + AppliedStudios.Count + AppliedActorAttributes.Count + AppliedApexTags.Count
+    private int ActiveFilterCount => AppliedTags.Count + AppliedActors.Count + AppliedActorTags.Count + AppliedStudios.Count + contentTypeFilter.Count + AppliedActorAttributes.Count + AppliedApexTags.Count
         + (favoritesOnly ? 1 : 0) + (ShowsHidden ? 1 : 0) + (AppliesApexOnly ? 1 : 0);
 
     private string EmptyText => CurrentView switch
@@ -404,7 +410,8 @@
         AppliedActorTags is { Count: > 0 } actorTags ? actorTags : null,
         matchAllTags,
         matchAllActorTags,
-        matchAllApexTags);
+        matchAllApexTags,
+        contentTypeFilter.Count > 0 ? [.. contentTypeFilter] : null);
 
     private IReadOnlyList<MultiSelectOption> TagOptions => IdOptions(options!.Tags, tagFilter);
 
@@ -416,6 +423,10 @@
 
     private IReadOnlyList<MultiSelectOption> StudioOptions => options!.Studios
         .Select(studio => new MultiSelectOption(studio, studioFilter.Contains(studio), EventCallback.Factory.Create(this, () => ToggleAsync(studioFilter, studio))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> ContentTypeOptions => MovieFilterOptions.ContentTypes
+        .Select(type => new MultiSelectOption(MovieFilterOptions.ContentTypeLabel(type), contentTypeFilter.Contains(type), EventCallback.Factory.Create(this, () => ToggleAsync(contentTypeFilter, type))))
         .ToList();
 
     private IReadOnlyList<MultiSelectOption> IdOptions(IReadOnlyList<SceneWallOption> source, HashSet<int> selected, bool nestSubtags = false) => source
@@ -510,6 +521,7 @@
         apexTagFilter.UnionWith((state.ApexTagIds ?? []).Where(id => apexes.ApexTags.Any(t => t.Id == id)));
         actorTagFilter.UnionWith((state.ActorTagIds ?? []).Where(id => allScenes.ActorTags.Any(t => t.Id == id) || highlights.ActorTags.Any(t => t.Id == id)
             || apexes.ActorTags.Any(t => t.Id == id)));
+        contentTypeFilter.UnionWith((state.ContentTypes ?? []).Where(Enum.IsDefined));
         apexOnly = state.ApexOnly;
         matchAllTags = state.MatchAllTags;
         matchAllActorTags = state.MatchAllActorTags;
@@ -524,7 +536,8 @@
 
     private Task SaveViewStateAsync() => JsonCookieState.SaveAsync(JS, ViewStateCookieName, new ScenesViewState(
         [.. tagFilter], [.. actorFilter], [.. studioFilter], favoritesOnly, textFilter, sort, showHidden,
-        actorAttributes, apexOnly, [.. apexTagFilter], [.. actorTagFilter], matchAllTags, matchAllActorTags, matchAllApexTags));
+        actorAttributes, apexOnly, [.. apexTagFilter], [.. actorTagFilter], matchAllTags, matchAllActorTags, matchAllApexTags,
+        [.. contentTypeFilter]));
 
     private async Task FiltersChangedAsync()
     {
@@ -628,6 +641,7 @@
         tagFilter.ExceptWith(OfferedTagIds);
         actorFilter.ExceptWith(OfferedActorIds);
         studioFilter.ExceptWith(OfferedStudios);
+        contentTypeFilter.Clear();
         apexTagFilter.ExceptWith(OfferedApexTagIds);
         actorTagFilter.ExceptWith(OfferedActorTagIds);
         if (!ApexesView) apexOnly = false;

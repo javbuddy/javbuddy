@@ -14,11 +14,61 @@ public class MovieGridFilterStateTests
         state.Studios.Add("S1");
         state.Features.Add(MovieFeatureFilterOption.Favorites);
         state.ActorIds.Add(7);
+        state.ContentTypes.Add(MovieContentType.Decensored);
 
         var restored = new MovieGridFilterState();
         restored.Apply(state.ToViewState());
 
         Assert.Equal(JsonSerializer.Serialize(state.ToViewState()), JsonSerializer.Serialize(restored.ToViewState()));
+        Assert.Equal([MovieContentType.Decensored], restored.ContentTypes);
+    }
+
+    [Fact]
+    public void ContentTypes_ReachTheQueryFilter_CountAsActive_AndClear()
+    {
+        var state = new MovieGridFilterState();
+        state.ContentTypes.Add(MovieContentType.Uncensored);
+
+        Assert.Equal([MovieContentType.Uncensored], state.ToFilter().ContentTypes);
+        Assert.True(state.HasActiveFilters);
+        Assert.True(state.ClearBesidesNavigationTargets());
+        Assert.Empty(state.ContentTypes);
+    }
+
+    [Fact]
+    public void ClearBesidesNavigationTargets_WithAContentTypeTarget_KeepsOnlyThatTypeAndReportsTheChange()
+    {
+        var state = new MovieGridFilterState();
+        state.Resolutions.Add(MovieResolutionFilterOption.Hd);
+        state.ContentTypes.Add(MovieContentType.Censored);
+
+        Assert.True(state.ClearBesidesNavigationTargets(contentTypeTarget: MovieContentType.Uncensored));
+        Assert.Empty(state.Resolutions);
+        Assert.Equal([MovieContentType.Uncensored], state.ContentTypes);
+
+        // Already exactly that filter and nothing else: nothing changed, so the grid needn't reload.
+        Assert.False(state.ClearBesidesNavigationTargets(contentTypeTarget: MovieContentType.Uncensored));
+        Assert.Equal([MovieContentType.Uncensored], state.ContentTypes);
+    }
+
+    [Fact]
+    public void ClearBesidesNavigationTargets_WithAContentTypeTargetOnAnUnfilteredGrid_ReportsAChange()
+    {
+        var state = new MovieGridFilterState();
+
+        Assert.True(state.ClearBesidesNavigationTargets(contentTypeTarget: MovieContentType.Decensored));
+        Assert.Equal([MovieContentType.Decensored], state.ContentTypes);
+    }
+
+    [Fact]
+    public void Apply_KeepsContentTypesAnOlderCookieDoesNotCarry()
+    {
+        var state = new MovieGridFilterState();
+        state.ContentTypes.Add(MovieContentType.Uncensored);
+
+        state.Apply(new MoviesViewState(ContentTypeFilter: null));
+
+        Assert.Equal([MovieContentType.Uncensored], state.ContentTypes);
     }
 
     [Fact]

@@ -148,6 +148,7 @@ public static class MovieFilterOptions
 
     public static readonly MovieResolutionFilterOption[] Resolutions = Enum.GetValues<MovieResolutionFilterOption>();
     public static readonly MovieScanTypeFilterOption[] ScanTypes = Enum.GetValues<MovieScanTypeFilterOption>();
+    public static readonly MovieContentType[] ContentTypes = Enum.GetValues<MovieContentType>();
     private static readonly Dictionary<MovieFeatureFilterOption, NfoDriftKind[]> LegacyNfoFeatures = new()
     {
         [MovieFeatureFilterOption.LegacyNfoConflict] = [NfoDriftKind.JavbuddyChanged, NfoDriftKind.ExternalEdit, NfoDriftKind.BothChanged, NfoDriftKind.Unreadable],
@@ -199,6 +200,8 @@ public static class MovieFilterOptions
         MovieResolutionFilterOption.EightK => "8K",
         _ => option.ToString(),
     };
+
+    public static string ContentTypeLabel(MovieContentType type) => type.ToString();
 
     public static string FeatureLabel(MovieFeatureFilterOption option) => option switch
     {

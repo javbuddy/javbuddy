@@ -18,6 +18,23 @@ public class MovieFilterPredicatesTests
     private static List<string> Codes(IQueryable<Movie> query) => query.Select(m => m.Code!).Order().ToList();
 
     [Fact]
+    public void WhereContentTypes_MatchesAnySelectedType_AndNoSelectionKeepsEveryMovie()
+    {
+        var movies = new[]
+        {
+            new Movie { Code = "A-001" },
+            new Movie { Code = "A-002", ContentType = MovieContentType.Uncensored },
+            new Movie { Code = "A-003", ContentType = MovieContentType.Decensored },
+        }.AsQueryable();
+
+        Assert.Equal(["A-002"], Codes(MovieFilterPredicates.WhereContentTypes(movies, [MovieContentType.Uncensored])));
+        Assert.Equal(["A-002", "A-003"], Codes(MovieFilterPredicates.WhereContentTypes(movies, [MovieContentType.Uncensored, MovieContentType.Decensored])));
+        Assert.Equal(["A-001"], Codes(MovieFilterPredicates.WhereContentTypes(movies, [MovieContentType.Censored])));
+        Assert.Equal(["A-001", "A-002", "A-003"], Codes(MovieFilterPredicates.WhereContentTypes(movies, [])));
+        Assert.Equal(["A-001", "A-002", "A-003"], Codes(MovieFilterPredicates.WhereContentTypes(movies, null)));
+    }
+
+    [Fact]
     public void WhereGenres_RollsUpSubtagsToTheirParent_AndMatchesCompoundAndBareSubtagNames()
     {
         var play = new Tag { Name = "Play" };

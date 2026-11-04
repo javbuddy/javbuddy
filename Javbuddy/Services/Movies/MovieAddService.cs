@@ -35,9 +35,14 @@ public class MovieAddService(
     private readonly IJavinizerClient javinizerClient = javinizerClient;
     private readonly MovieChangeNotifier movieChangeNotifier = movieChangeNotifier;
 
+    /// <summary>Uncensored for a date-coded uncensored studio code, otherwise the default. Only used for a new movie, so it
+    /// never overrides a value the user set.</summary>
+    public static MovieContentType ContentTypeFor(string code) =>
+        CodeNormalization.IsUncensoredStudioCode(code) ? MovieContentType.Uncensored : MovieContentType.Censored;
+
     public async Task<MovieAddResult> AddAsync(string code, CancellationToken ct = default)
     {
-        var movie = new Movie { Code = code };
+        var movie = new Movie { Code = code, ContentType = ContentTypeFor(code) };
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
             db.Movies.Add(movie);

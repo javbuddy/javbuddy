@@ -1,10 +1,12 @@
+using Javbuddy.Models;
 using Javbuddy.Services.R18Dev;
 
 namespace Javbuddy.Services.Movies;
 
 /// <summary><paramref name="CatalogSeries"/>/<paramref name="CatalogLabel"/> open the Movies page in its
 /// "All releases (r18.dev)" browse, narrowed to that r18.dev series or label. <paramref name="ActorTagId"/> filters
-/// the library by an actor tag (Tag.IsActorTag), which the Genre filter doesn't list.</summary>
+/// the library by an actor tag (Tag.IsActorTag), which the Genre filter doesn't list. <paramref name="ContentType"/>
+/// filters it by one content type.</summary>
 public sealed record MovieFilterNavigationTarget(
     string? Studio = null,
     string? Genre = null,
@@ -12,7 +14,8 @@ public sealed record MovieFilterNavigationTarget(
     DateTimeOffset? Timestamp = null,
     R18DevCatalogRef? CatalogSeries = null,
     R18DevCatalogRef? CatalogLabel = null,
-    int? ActorTagId = null)
+    int? ActorTagId = null,
+    MovieContentType? ContentType = null)
 {
     public bool IsCatalogTarget => CatalogSeries is not null || CatalogLabel is not null;
 }
@@ -51,6 +54,15 @@ public sealed class MovieFilterNavigationState(TimeProvider? timeProvider = null
         lock (gate)
         {
             pending = new MovieFilterNavigationTarget(Timestamp: this.timeProvider.GetUtcNow(), ActorTagId: actorTagId);
+        }
+    }
+
+    /// <summary>Opens the Movies grid filtered by one content type (clicked on a movie's detail page).</summary>
+    public void SetPendingContentTypeFilter(MovieContentType contentType)
+    {
+        lock (gate)
+        {
+            pending = new MovieFilterNavigationTarget(Timestamp: this.timeProvider.GetUtcNow(), ContentType: contentType);
         }
     }
 

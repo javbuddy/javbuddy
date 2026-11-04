@@ -38,6 +38,7 @@
                 }
                 <MultiSelectFilterGroup GroupLabel="Resolution" Options="@ResolutionFilterOptions" />
                 <MultiSelectFilterGroup GroupLabel="Scan Type" Options="@ScanTypeFilterOptions" />
+                <MultiSelectFilterGroup GroupLabel="Content Type" Options="@ContentTypeFilterOptions" />
                 @if (AvailableCodecs.Count > 0)
                 {
                     <MultiSelectFilterGroup GroupLabel="Codec" Options="@CodecFilterOptions" />
@@ -163,6 +164,8 @@
 
     [Parameter] public IReadOnlySet<MovieScanTypeFilterOption> ScanTypeFilter { get; set; } = new HashSet<MovieScanTypeFilterOption>();
     [Parameter] public EventCallback<MovieScanTypeFilterOption> OnToggleScanType { get; set; }
+    [Parameter] public IReadOnlySet<MovieContentType> ContentTypeFilter { get; set; } = new HashSet<MovieContentType>();
+    [Parameter] public EventCallback<MovieContentType> OnToggleContentType { get; set; }
     [Parameter] public IReadOnlySet<NfoDriftKind> NfoDriftFilter { get; set; } = new HashSet<NfoDriftKind>();
     [Parameter] public EventCallback<NfoDriftKind> OnToggleNfoDrift { get; set; }
 
@@ -288,6 +291,7 @@
         : (string.IsNullOrEmpty(LibraryFilter) ? 0 : 1)
             + ResolutionFilter.Count
             + ScanTypeFilter.Count
+            + ContentTypeFilter.Count
             + NfoDriftFilter.Count
             + CodecFilter.Count
             + StudioFilter.Count
@@ -392,6 +396,13 @@
             scanType.ToString(),
             ScanTypeFilter.Contains(scanType),
             EventCallback.Factory.Create(this, () => OnToggleScanType.InvokeAsync(scanType))))
+        .ToList();
+
+    private IReadOnlyList<MultiSelectOption> ContentTypeFilterOptions => MovieFilterOptions.ContentTypes
+        .Select(type => new MultiSelectOption(
+            MovieFilterOptions.ContentTypeLabel(type),
+            ContentTypeFilter.Contains(type),
+            EventCallback.Factory.Create(this, () => OnToggleContentType.InvokeAsync(type))))
         .ToList();
 
     private IReadOnlyList<MultiSelectOption> NfoDriftFilterOptions => MovieFilterOptions.NfoDriftKinds

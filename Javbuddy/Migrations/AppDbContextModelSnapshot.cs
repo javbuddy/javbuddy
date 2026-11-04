@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261101102159_AddChallengeSolver";
+    public override string LastMigrationId => "20261104204215_AddMovieContentType";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -971,6 +971,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasMaxLength(50)
                     .HasColumnType("TEXT")
                     .UseCollation("NOCASE");
+
+                b.Property<int>("ContentType")
+                    .HasColumnType("INTEGER");
 
                 b.Property<DateTime>("CreatedAt")
                     .HasColumnType("TEXT");

@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Scenes;
 
-/// <summary>Filters for the scene wall. Within Tags, Actors and Studios a scene
+/// <summary>Filters for the scene wall. Within Tags, Actors, Studios and ContentTypes (the parent movie's) a scene
 /// matches any selected value (TagIds also match subtags); the filters combine with AND. Text
 /// matches the scene title, movie code or movie title. Scenes hidden from the overview
 /// are left out unless IncludeHidden. ApexOnly keeps clips whose range contains an apex of their movie;
@@ -30,7 +30,8 @@ public sealed record SceneWallFilter(
     IReadOnlyCollection<int>? ActorTagIds = null,
     bool MatchAllTags = false,
     bool MatchAllActorTags = false,
-    bool MatchAllApexTags = false);
+    bool MatchAllApexTags = false,
+    IReadOnlyCollection<MovieContentType>? ContentTypes = null);
 
 public enum SceneWallSort
 {
@@ -644,6 +645,10 @@ public sealed class SceneWallQueryService(
         {
             query = query.Where(s => s.Movie.MetaStudio != null && studios.Contains(s.Movie.MetaStudio));
         }
+        if (filter.ContentTypes is { Count: > 0 } contentTypes)
+        {
+            query = query.Where(s => contentTypes.Contains(s.Movie.ContentType));
+        }
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
             var pattern = TextPattern(filter);
@@ -681,6 +686,10 @@ public sealed class SceneWallQueryService(
         if (filter.Studios is { Count: > 0 } studios)
         {
             query = query.Where(h => h.Movie.MetaStudio != null && studios.Contains(h.Movie.MetaStudio));
+        }
+        if (filter.ContentTypes is { Count: > 0 } contentTypes)
+        {
+            query = query.Where(h => contentTypes.Contains(h.Movie.ContentType));
         }
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
@@ -739,6 +748,10 @@ public sealed class SceneWallQueryService(
         if (filter.Studios is { Count: > 0 } studios)
         {
             query = query.Where(a => a.Movie.MetaStudio != null && studios.Contains(a.Movie.MetaStudio));
+        }
+        if (filter.ContentTypes is { Count: > 0 } contentTypes)
+        {
+            query = query.Where(a => contentTypes.Contains(a.Movie.ContentType));
         }
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {

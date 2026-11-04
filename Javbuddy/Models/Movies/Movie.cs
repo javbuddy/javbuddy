@@ -42,6 +42,10 @@ public class Movie : IMediaTechnicalInfo
 
     public MovieStatus Status { get; set; } = MovieStatus.Missing;
 
+    /// <summary>Censored, uncensored or decensored. Set by hand in the metadata editor, or to Uncensored when a movie is
+    /// first added under a date-coded uncensored studio code. Javbuddy's database only: not written to the .nfo.</summary>
+    public MovieContentType ContentType { get; set; } = MovieContentType.Censored;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // Metadata fetched from javinizer-go. Null until a successful fetch.

@@ -168,6 +168,7 @@ else
             <h1 class="movie-detail-title" title="@movie.DisplayName">@MovieDetailText.Truncate(movie.DisplayName, 70)</h1>
             <div class="movie-detail-badges">
                 <span class="movie-detail-badge movie-detail-badge-status-@(movie.Status == MovieStatus.Got ? "got" : "missing")" title="@MovieDetailText.MetaFetchedTooltip(movie)">@movie.Status</span>
+                <button type="button" class="movie-detail-badge movie-detail-badge-content-type" @onclick="() => FilterByContentType(movie.ContentType)" title="Content type: show all @MovieFilterOptions.ContentTypeLabel(movie.ContentType) movies">@MovieFilterOptions.ContentTypeLabel(movie.ContentType)</button>
                 @if (movie.NfoDriftKind != NfoDriftKind.None && movie.Status != MovieStatus.Missing)
                 {
                     <button type="button" class="movie-detail-badge movie-detail-badge-warning" @onclick="OpenConflictReview" title="@MovieDetailText.NfoDriftTooltip(movie)">
@@ -571,6 +572,12 @@ else
     {
         if (string.IsNullOrWhiteSpace(studio)) return;
         FilterNavigationState.SetPendingFilter(studio: studio);
+        Nav.NavigateTo("/");
+    }
+
+    private void FilterByContentType(MovieContentType contentType)
+    {
+        FilterNavigationState.SetPendingContentTypeFilter(contentType);
         Nav.NavigateTo("/");
     }
 

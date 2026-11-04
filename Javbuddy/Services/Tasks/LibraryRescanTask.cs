@@ -194,7 +194,7 @@ public class LibraryRescanTask(
 
     private async Task ImportOneAsync(string code, CancellationToken ct)
     {
-        var movie = new Movie { Code = code, Status = MovieStatus.Got };
+        var movie = new Movie { Code = code, Status = MovieStatus.Got, ContentType = MovieAddService.ContentTypeFor(code) };
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
             db.Movies.Add(movie);

@@ -16,7 +16,7 @@ namespace Javbuddy.Services.Movies;
 /// core movie field it's allowed to edit (README's "Non-goals": no MediaInfo-probed technical
 /// fields, no external integration IDs). Saving only ever updates the DB — never the local .nfo
 /// directly — so <see cref="Title"/> (Javbuddy-only, no .nfo counterpart at all) isn't
-/// functionally different from the rest here; what differs is that the other nine feed
+/// functionally different from the rest here (as is <see cref="ContentType"/>, where null leaves it unchanged); what differs is that the other nine feed
 /// NfoSyncService's .nfo-drift check (CheckMovieMetadataConflictAsync), surfacing a "Resolve .nfo
 /// Conflict" the user reviews as a diff and applies (or not) themselves, the same way the cast
 /// editing and the tag editing already work. Movie.Notes isn't edited here, so saving
@@ -31,7 +31,8 @@ public sealed record MovieMetadataUpdate(
     string? MetaSeries,
     string? MetaDirector,
     int? MetaRuntimeMinutes,
-    string? MetaDescription);
+    string? MetaDescription,
+    MovieContentType? ContentType = null);
 
 /// <summary>Result of FetchJavinizerMetadataAsync — the "Refresh with Javinizer" field picker's
 /// fetch step, which makes no DB changes; <see cref="Scraped"/> is held in memory by the
@@ -436,6 +437,7 @@ public class MovieService(
         movie.MetaDirector = update.MetaDirector.TrimToNull();
         movie.MetaRuntimeMinutes = update.MetaRuntimeMinutes;
         movie.MetaDescription = update.MetaDescription.TrimToNull();
+        if (update.ContentType is { } contentType) movie.ContentType = contentType;
 
         await db.SaveChangesAsync(ct);
         movieChangeNotifier?.NotifyChanged();

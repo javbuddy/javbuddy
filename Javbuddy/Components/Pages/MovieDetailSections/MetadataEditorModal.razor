@@ -54,13 +54,23 @@
                             <label class="form-label" for="metadata-series">Series</label>
                             <InputText id="metadata-series" class="form-control" @bind-Value="model.MetaSeries" disabled="@saving" />
                         </div>
-                        <div class="col-md-8">
+                        <div class="col-md-4">
                             <label class="form-label" for="metadata-director">Director</label>
                             <InputText id="metadata-director" class="form-control" @bind-Value="model.MetaDirector" disabled="@saving" />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label" for="metadata-runtime">Runtime (minutes)</label>
                             <InputNumber id="metadata-runtime" class="form-control" @bind-Value="model.MetaRuntimeMinutes" min="0" disabled="@saving" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="metadata-content-type">Content Type</label>
+                            <InputSelect id="metadata-content-type" class="form-select" @bind-Value="model.ContentType" disabled="@saving">
+                                @foreach (var type in MovieFilterOptions.ContentTypes)
+                                {
+                                    <option value="@type">@MovieFilterOptions.ContentTypeLabel(type)</option>
+                                }
+                            </InputSelect>
+                            <small class="text-muted">Used by the Content Type filter. Stays in Javbuddy; not written to the .nfo.</small>
                         </div>
                         <div class="col-12">
                             <label class="form-label" for="metadata-description">Overview</label>
@@ -125,6 +135,7 @@
         public string? MetaDirector { get; set; }
         public int? MetaRuntimeMinutes { get; set; }
         public string? MetaDescription { get; set; }
+        public MovieContentType ContentType { get; set; }
         public List<VrChoice> VrFormats { get; set; } = [];
     }
 
@@ -174,6 +185,7 @@
             MetaDirector = Movie.MetaDirector,
             MetaRuntimeMinutes = Movie.MetaRuntimeMinutes,
             MetaDescription = Movie.MetaDescription,
+            ContentType = Movie.ContentType,
             VrFormats = Movie.MovieFiles
                 .OrderByDescending(f => f.IsPrimary)
                 .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
@@ -205,7 +217,8 @@
             model.MetaSeries,
             model.MetaDirector,
             model.MetaRuntimeMinutes,
-            model.MetaDescription);
+            model.MetaDescription,
+            model.ContentType);
 
         var result = await MovieService.UpdateMetadataAsync(Movie.Id, update);
         var nfoWarning = result.Success ? result.ErrorMessage : null;

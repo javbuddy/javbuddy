@@ -13,6 +13,7 @@ public sealed class MovieGridFilterState
     public string? Library { get; set; }
     public HashSet<MovieResolutionFilterOption> Resolutions { get; private set; } = [];
     public HashSet<MovieScanTypeFilterOption> ScanTypes { get; private set; } = [];
+    public HashSet<MovieContentType> ContentTypes { get; private set; } = [];
     public HashSet<NfoDriftKind> NfoDriftKinds { get; private set; } = [];
     public HashSet<string> Codecs { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
     public HashSet<string> Studios { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -64,11 +65,12 @@ public sealed class MovieGridFilterState
         [.. ExcludedStudios],
         [.. ExcludedGenres],
         [.. ExcludedActorIds],
-        [.. ExcludedActorTagIds]);
+        [.. ExcludedActorTagIds],
+        [.. ContentTypes]);
 
     public MovieGridSort ToSort() => new(SortField, SortDescending, RandomSortSeed);
 
-    private int ActiveFilterCount => Resolutions.Count + ScanTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count
+    private int ActiveFilterCount => Resolutions.Count + ScanTypes.Count + ContentTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count
         + ActorIds.Count + ActorTagIds.Count + ActorAttributes.Count + Counts.Count + Ranges.Count
         + ExcludedStudios.Count + ExcludedGenres.Count + ExcludedActorIds.Count + ExcludedActorTagIds.Count;
 
@@ -84,17 +86,19 @@ public sealed class MovieGridFilterState
     /// and genres are reset here), and
     /// makes the actor-tag filter just actorTagTarget when there is one. Returns whether that
     /// changed anything.</summary>
-    public bool ClearBesidesNavigationTargets(int? actorTagTarget = null)
+    public bool ClearBesidesNavigationTargets(int? actorTagTarget = null, MovieContentType? contentTypeTarget = null)
     {
         var actorTagsChanged = actorTagTarget is { } target ? !(ActorTagIds.Count == 1 && ActorTagIds.Contains(target)) : ActorTagIds.Count > 0;
+        var contentTypesChanged = contentTypeTarget is { } contentType ? !(ContentTypes.Count == 1 && ContentTypes.Contains(contentType)) : ContentTypes.Count > 0;
         var anyActive = Status is not null || !string.IsNullOrEmpty(Library) || Resolutions.Count > 0
-            || ScanTypes.Count > 0 || NfoDriftKinds.Count > 0 || Codecs.Count > 0 || Features.Count > 0
+            || ScanTypes.Count > 0 || contentTypesChanged || NfoDriftKinds.Count > 0 || Codecs.Count > 0 || Features.Count > 0
             || ActorIds.Count > 0 || actorTagsChanged || ActorAttributes.Count > 0 || Counts.Count > 0 || Ranges.Count > 0
             || ExcludedStudios.Count > 0 || ExcludedGenres.Count > 0 || ExcludedActorIds.Count > 0 || ExcludedActorTagIds.Count > 0;
         Status = null;
         Library = null;
         Resolutions.Clear();
         ScanTypes.Clear();
+        ContentTypes.Clear();
         NfoDriftKinds.Clear();
         Codecs.Clear();
         Features.Clear();
@@ -103,6 +107,7 @@ public sealed class MovieGridFilterState
         MatchAllGenres = false;
         MatchAllActorTags = false;
         if (actorTagTarget is { } actorTag) ActorTagIds.Add(actorTag);
+        if (contentTypeTarget is { } contentTypeToKeep) ContentTypes.Add(contentTypeToKeep);
         ActorAttributes = ActorAttributeSelection.Empty;
         Counts = MovieCountSelection.Empty;
         Ranges = MovieRangeSelection.Empty;
@@ -137,7 +142,7 @@ public sealed class MovieGridFilterState
         SortField, SortDescending, [.. NfoDriftKinds],
         ActorAttributes, [.. ActorIds], ActorTagFilter: [.. ActorTagIds], MatchAllGenres: MatchAllGenres, MatchAllActorTags: MatchAllActorTags, Counts: Counts,
         Ranges: Ranges, ExcludedStudioFilter: [.. ExcludedStudios], ExcludedGenreFilter: [.. ExcludedGenres],
-        ExcludedActorFilter: [.. ExcludedActorIds], ExcludedActorTagFilter: [.. ExcludedActorTagIds]);
+        ExcludedActorFilter: [.. ExcludedActorIds], ExcludedActorTagFilter: [.. ExcludedActorTagIds], ContentTypeFilter: [.. ContentTypes]);
 
     /// <summary>Applies a saved selection; a list the state doesn't carry (a cookie written before
     /// that filter existed) keeps its current value.</summary>
@@ -147,6 +152,7 @@ public sealed class MovieGridFilterState
         Library = state.LibraryFilter;
         if (state.ResolutionFilter is not null) Resolutions = [.. state.ResolutionFilter];
         if (state.ScanTypeFilter is not null) ScanTypes = [.. state.ScanTypeFilter];
+        if (state.ContentTypeFilter is not null) ContentTypes = [.. state.ContentTypeFilter];
         if (state.CodecFilter is not null) Codecs = new HashSet<string>(state.CodecFilter, StringComparer.OrdinalIgnoreCase);
         if (state.StudioFilter is not null) Studios = new HashSet<string>(state.StudioFilter, StringComparer.OrdinalIgnoreCase);
         if (state.GenreFilter is not null) Genres = new HashSet<string>(state.GenreFilter, StringComparer.OrdinalIgnoreCase);
@@ -207,7 +213,8 @@ public sealed record MoviesViewState(
     List<string>? ExcludedStudioFilter = null,
     List<string>? ExcludedGenreFilter = null,
     List<int>? ExcludedActorFilter = null,
-    List<int>? ExcludedActorTagFilter = null)
+    List<int>? ExcludedActorTagFilter = null,
+    List<MovieContentType>? ContentTypeFilter = null)
 {
     public const string CookieName = "javbuddy-movies-view";
 }

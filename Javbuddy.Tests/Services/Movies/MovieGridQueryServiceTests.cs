@@ -797,6 +797,27 @@ public sealed class MovieGridQueryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ContentTypes_KeepMoviesOfAnySelectedType_InSql()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            AddMovie(db, "CT-001");
+            AddMovie(db, "CT-002");
+            AddMovie(db, "CT-003");
+            db.SaveChanges();
+            var movies = db.Movies.ToDictionary(m => m.Code!);
+            movies["CT-002"].ContentType = MovieContentType.Uncensored;
+            movies["CT-003"].ContentType = MovieContentType.Decensored;
+            db.SaveChanges();
+        }
+
+        Assert.Equal(["CT-002"], await FilteredCodes(new(ContentTypes: [MovieContentType.Uncensored])));
+        Assert.Equal(["CT-002", "CT-003"], await FilteredCodes(new(ContentTypes: [MovieContentType.Uncensored, MovieContentType.Decensored])));
+        Assert.Equal(["CT-001"], await FilteredCodes(new(ContentTypes: [MovieContentType.Censored])));
+        Assert.Equal(["CT-001", "CT-002", "CT-003"], await FilteredCodes(new()));
+    }
+
+    [Fact]
     public async Task ExcludedStudiosGenresAndActors_DropMatchingMovies_AndCombineWithIncludes()
     {
         int a1Id;

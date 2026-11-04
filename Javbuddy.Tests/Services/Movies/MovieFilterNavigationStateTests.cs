@@ -79,4 +79,21 @@ public class MovieFilterNavigationStateTests
         state.Clear();
         Assert.Null(state.PeekPendingFilter());
     }
+
+    [Fact]
+    public void SetPendingContentTypeFilter_CarriesOnlyTheContentType_AndExpiresLikeTheOthers()
+    {
+        var clock = new SettableTimeProvider();
+        var state = new MovieFilterNavigationState(clock);
+
+        state.SetPendingContentTypeFilter(Javbuddy.Models.MovieContentType.Decensored);
+
+        var peeked = state.PeekPendingFilter();
+        Assert.Equal(Javbuddy.Models.MovieContentType.Decensored, peeked?.ContentType);
+        Assert.Null(peeked?.Studio);
+        Assert.False(peeked!.IsCatalogTarget);
+
+        clock.CurrentTime += TimeSpan.FromSeconds(31);
+        Assert.Null(state.PeekPendingFilter());
+    }
 }

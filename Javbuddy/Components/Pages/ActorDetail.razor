@@ -295,6 +295,8 @@ else
                                                 OnToggleResolution="ToggleResolutionFilter"
                                                 ScanTypeFilter="@scanTypeFilter"
                                                 OnToggleScanType="ToggleScanTypeFilter"
+                                                ContentTypeFilter="@contentTypeFilter"
+                                                OnToggleContentType="type => contentTypeFilter.Toggle(type)"
                                                 NfoDriftFilter="@nfoDriftFilter"
                                                 OnToggleNfoDrift="ToggleNfoDriftFilter"
                                                 AvailableCodecs="@availableCodecs"
@@ -431,6 +433,7 @@ else
     private string? libraryFilter;
     private HashSet<MovieResolutionFilterOption> resolutionFilter = new();
     private HashSet<MovieScanTypeFilterOption> scanTypeFilter = new();
+    private HashSet<MovieContentType> contentTypeFilter = new();
     private HashSet<NfoDriftKind> nfoDriftFilter = new();
     private HashSet<string> codecFilter = new(StringComparer.OrdinalIgnoreCase);
     private HashSet<string> studioFilter = new(StringComparer.OrdinalIgnoreCase);
@@ -611,7 +614,7 @@ else
     }
 
     private string FilterFingerprint() => string.Join('|',
-        Fingerprint(resolutionFilter), Fingerprint(scanTypeFilter), Fingerprint(nfoDriftFilter), Fingerprint(codecFilter),
+        Fingerprint(resolutionFilter), Fingerprint(scanTypeFilter), Fingerprint(contentTypeFilter), Fingerprint(nfoDriftFilter), Fingerprint(codecFilter),
         Fingerprint(studioFilter), Fingerprint(genreFilter), Fingerprint(excludedStudioFilter), Fingerprint(excludedGenreFilter),
         Fingerprint(featureFilter), $"{countFilter.Scenes}{countFilter.Highlights}{countFilter.Apexes}",
         $"{rangeFilter.ReleaseYear}{rangeFilter.RuntimeMinutes}{rangeFilter.BitrateMbps}{rangeFilter.FileSizeGb}{rangeFilter.CastSize}");
@@ -630,6 +633,7 @@ else
 
         query = MovieFilterPredicates.WhereResolutions(query.AsQueryable(), resolutionFilter);
         query = MovieFilterPredicates.WhereScanTypes(query.AsQueryable(), scanTypeFilter);
+        query = MovieFilterPredicates.WhereContentTypes(query.AsQueryable(), contentTypeFilter);
         query = MovieFilterPredicates.WhereCodecs(query.AsQueryable(), codecFilter);
         query = MovieFilterPredicates.WhereStudios(query.AsQueryable(), studioFilter);
         query = MovieFilterPredicates.WhereNotStudios(query.AsQueryable(), excludedStudioFilter);
@@ -678,7 +682,7 @@ else
     private IEnumerable<Movie> SortMovies(IEnumerable<Movie> query) =>
         MovieSortOrders.Apply(query.AsQueryable(), new MovieGridSort(sortField, sortDescending, randomSortSeed), m => m.FileAddedAt ?? m.CreatedAt);
 
-    private int ActiveFilterCount => resolutionFilter.Count + scanTypeFilter.Count + nfoDriftFilter.Count + codecFilter.Count + studioFilter.Count + genreFilter.Count
+    private int ActiveFilterCount => resolutionFilter.Count + scanTypeFilter.Count + contentTypeFilter.Count + nfoDriftFilter.Count + codecFilter.Count + studioFilter.Count + genreFilter.Count
         + excludedStudioFilter.Count + excludedGenreFilter.Count + featureFilter.Count + countFilter.Count + rangeFilter.Count;
 
     private bool HasActiveFilters =>
@@ -694,6 +698,7 @@ else
         textFilter = string.Empty;
         resolutionFilter.Clear();
         scanTypeFilter.Clear();
+        contentTypeFilter.Clear();
         nfoDriftFilter.Clear();
         codecFilter.Clear();
         studioFilter.Clear();

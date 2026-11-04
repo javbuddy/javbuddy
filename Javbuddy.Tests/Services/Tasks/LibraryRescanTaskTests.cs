@@ -38,6 +38,22 @@ public class LibraryRescanTaskTests
 
     private static IProgress<TaskProgress> NoopProgress => new Progress<TaskProgress>();
 
+    [Theory]
+    [InlineData("carib-010120-001", MovieContentType.Uncensored)]
+    [InlineData("ABC-123", MovieContentType.Censored)]
+    public async Task RunAsync_NewFolder_ImportsWithTheContentTypeItsCodeImplies(string code, MovieContentType expected)
+    {
+        using var factory = new TestDbContextFactory();
+        var client = CreateLocalLibraryClient(
+            folderCodes: [code],
+            metadataLookup: c => new LocalLookupResult(true, "/media/" + c, new LocalMovieMetadata { Title = "T" }, null));
+
+        await new LibraryRescanTask(factory, client, NullLogger<LibraryRescanTask>.Instance).RunAsync(CancellationToken.None, NoopProgress);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(expected, (await db.Movies.SingleAsync()).ContentType);
+    }
+
     [Fact]
     public async Task RunAsync_NewFolderNotTracked_ImportsAsGotAndAppliesLocalMetadata()
     {

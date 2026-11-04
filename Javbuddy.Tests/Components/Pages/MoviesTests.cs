@@ -1542,6 +1542,27 @@ public class MoviesTests : BunitContext
     }
 
     [Fact]
+    public void ContentType_PendingNavigationState_FiltersGridToThatType()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "AAA-001" });
+            db.Movies.Add(new Movie { Code = "BBB-002", ContentType = MovieContentType.Uncensored });
+            db.Movies.Add(new Movie { Code = "CCC-003", ContentType = MovieContentType.Decensored });
+            db.SaveChanges();
+        }
+
+        var filterState = Services.GetRequiredService<MovieFilterNavigationState>();
+        filterState.SetPendingContentTypeFilter(MovieContentType.Uncensored);
+
+        var cut = Render<Movies>();
+
+        Assert.Equal(new[] { "BBB-002" }, RenderedCodes(cut));
+        Assert.Null(filterState.PeekPendingFilter());
+    }
+
+    [Fact]
     public void Genre_PendingNavigationState_FiltersGridToMatchingMovies()
     {
         using var factory = SetUpServices();
@@ -1685,6 +1706,7 @@ public class MoviesTests : BunitContext
     [InlineData("studio")]
     [InlineData("genre")]
     [InlineData("codePrefix")]
+    [InlineData("contentType")]
     public void PendingNavigationState_ClearsEveryOtherFilter_AndSavesTheCleanViewState(string target)
     {
         using var factory = SetUpServices();
@@ -1697,6 +1719,7 @@ public class MoviesTests : BunitContext
             {
                 movie.MetaStudio = movie.Code!.StartsWith("AAA") ? "Studio A" : "Studio B";
                 movie.Status = movie.Code == "AAA-001" ? MovieStatus.Missing : MovieStatus.Got;
+                movie.ContentType = movie.Code == "AAA-002" ? MovieContentType.Censored : MovieContentType.Uncensored;
             }
             db.SaveChanges();
         }
@@ -1705,7 +1728,7 @@ public class MoviesTests : BunitContext
         var httpContextAccessor = Substitute.For<IHttpContextAccessor>();
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers.Cookie = "javbuddy-movies-view=" + Uri.EscapeDataString(
-            """{"Filter":1,"StudioFilter":["Studio B"],"GenreFilter":["Comedy"],"TextFilter":"003","CodePrefixFilter":"BBB","ResolutionFilter":[0]}""");
+            """{"Filter":1,"StudioFilter":["Studio B"],"GenreFilter":["Comedy"],"TextFilter":"003","CodePrefixFilter":"BBB","ResolutionFilter":[0],"ContentTypeFilter":[2]}""");
         httpContextAccessor.HttpContext.Returns(httpContext);
         Services.AddSingleton(httpContextAccessor);
 
@@ -1714,12 +1737,18 @@ public class MoviesTests : BunitContext
         {
             case "studio": filterState.SetPendingFilter(studio: "Studio A"); break;
             case "genre": filterState.SetPendingFilter(genre: "Drama"); break;
+            case "contentType": filterState.SetPendingContentTypeFilter(MovieContentType.Uncensored); break;
             default: filterState.SetPendingFilter(codePrefix: "AAA"); break;
         }
 
         var cut = Render<Movies>();
 
-        var expected = target == "genre" ? new[] { "AAA-001" } : new[] { "AAA-001", "AAA-002" };
+        var expected = target switch
+        {
+            "genre" => new[] { "AAA-001" },
+            "contentType" => new[] { "AAA-001", "BBB-003" },
+            _ => new[] { "AAA-001", "AAA-002" },
+        };
         Assert.Equal(expected, RenderedCodes(cut).OrderBy(c => c));
 
         var saved = JSInterop.Invocations.Last(inv => inv.Identifier == "lsJsonCookie.set"
@@ -1731,6 +1760,9 @@ public class MoviesTests : BunitContext
         Assert.Equal(target == "studio" ? 1 : 0, root.GetProperty("StudioFilter").GetArrayLength());
         Assert.Equal(target == "genre" ? 1 : 0, root.GetProperty("GenreFilter").GetArrayLength());
         Assert.Equal(target == "codePrefix" ? "AAA" : "", root.GetProperty("TextFilter").GetString());
+        // The remembered Decensored filter is replaced by the clicked type, or dropped by the other targets.
+        var contentTypes = root.GetProperty("ContentTypeFilter").EnumerateArray().Select(e => e.GetInt32()).ToList();
+        Assert.Equal(target == "contentType" ? new List<int> { (int)MovieContentType.Uncensored } : new List<int>(), contentTypes);
     }
 
     [Fact]

@@ -271,6 +271,16 @@ public static partial class CodeNormalization
     [GeneratedRegex(@"(?<![A-Za-z0-9])(?:(?:carib(?:bean(?:com)?)?|caribpr|1pondo|paco(?:pacomama)?|pacopacomama|10musume|10mu|muramura|mura)[-_]\d{6}[-_]\d{3}|tokyo[-_]?hot[-_][a-z]{0,3}\d{3,5})(?![A-Za-z0-9])", RegexOptions.IgnoreCase)]
     private static partial Regex UncensoredStudioCodeRegex();
 
+    /// <summary>True when the whole code is a date-coded uncensored studio code ("carib-010120-001", "tokyo-hot-n1234"):
+    /// the one case the code alone says a release is uncensored. Anything else, including every normal JAV code, is false.</summary>
+    public static bool IsUncensoredStudioCode(string? code)
+    {
+        if (string.IsNullOrWhiteSpace(code)) return false;
+        var trimmed = code.Trim();
+        var match = UncensoredStudioCodeRegex().Match(trimmed);
+        return match.Success && match.Length == trimmed.Length;
+    }
+
     /// <summary>
     /// Extracts a likely JAV release code embedded within a directory name or file name (e.g. "SSNI-081 [1080p]" -> "SSNI-081").
     /// Date-coded uncensored studio codes are recognised first so their trailing sequence number is kept.

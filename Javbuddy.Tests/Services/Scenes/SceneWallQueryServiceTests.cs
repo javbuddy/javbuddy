@@ -694,6 +694,34 @@ public sealed class SceneWallQueryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ContentTypes_FilterScenesHighlightsAndApexesByTheirMoviesType()
+    {
+        await SeedAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.Single(m => m.Id == newMovieId).ContentType = MovieContentType.Uncensored;
+            await db.SaveChangesAsync();
+        }
+
+        var oldHighlight = await AddHighlightAsync(oldMovieId, 100, 110);
+        var newHighlight = await AddHighlightAsync(newMovieId, 100, 110);
+        var oldApex = await AddApexAsync(oldMovieId, 100);
+        var newApex = await AddApexAsync(newMovieId, 50);
+        var uncensored = new SceneWallFilter(ContentTypes: [MovieContentType.Uncensored]);
+        var censored = new SceneWallFilter(ContentTypes: [MovieContentType.Censored]);
+
+        Assert.Equal(["NEW-001/Scene 1"], await TitlesAsync(uncensored));
+        Assert.Equal(["OLD-001/Intro", "OLD-001/Scene 2"], await TitlesAsync(censored));
+        Assert.Equal([newHighlight], await HighlightIdsAsync(uncensored));
+        Assert.Equal([oldHighlight], await HighlightIdsAsync(censored));
+        Assert.Equal([newApex], await ApexIdsAsync(uncensored));
+        Assert.Equal([oldApex], await ApexIdsAsync(censored));
+        Assert.Empty(await TitlesAsync(new SceneWallFilter(ContentTypes: [MovieContentType.Decensored])));
+        Assert.Equal(3, (await TitlesAsync(new SceneWallFilter(ContentTypes: [MovieContentType.Censored, MovieContentType.Uncensored]))).Count);
+        Assert.Empty(await TitlesAsync(new SceneWallFilter(Studios: ["S1"], ContentTypes: [MovieContentType.Uncensored])));
+    }
+
+    [Fact]
     public async Task ApexPage_FiltersAndOrdersByTheApexsOwnValues()
     {
         await SeedAsync();

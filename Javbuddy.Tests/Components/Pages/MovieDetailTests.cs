@@ -1012,6 +1012,50 @@ public class MovieDetailTests : BunitContext
         Assert.Contains(cut.FindAll("button.movie-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
     }
 
+    [Theory]
+    [InlineData(MovieContentType.Censored, "Censored")]
+    [InlineData(MovieContentType.Uncensored, "Uncensored")]
+    [InlineData(MovieContentType.Decensored, "Decensored")]
+    public void ShowsTheContentTypeBadgeNextToTheStatus(MovieContentType type, string label)
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123", Status = MovieStatus.Got, ContentType = type });
+            db.SaveChanges();
+        }
+
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+
+        var badges = cut.FindAll(".movie-detail-badges .movie-detail-badge");
+        Assert.Equal("Got", badges[0].TextContent.Trim());
+        Assert.Equal(label, badges[1].TextContent.Trim());
+        Assert.Equal($"Content type: show all {label} movies", badges[1].GetAttribute("title"));
+    }
+
+    [Fact]
+    public void ClickingTheContentTypeBadge_FiltersTheMoviesPageByThatType()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123", Status = MovieStatus.Got, ContentType = MovieContentType.Uncensored });
+            db.SaveChanges();
+        }
+
+        var filterState = Services.GetRequiredService<MovieFilterNavigationState>();
+        var nav = Services.GetRequiredService<NavigationManager>();
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+
+        cut.Find("button.movie-detail-badge-content-type").Click();
+
+        var target = filterState.PeekPendingFilter();
+        Assert.Equal(MovieContentType.Uncensored, target?.ContentType);
+        Assert.Null(target?.Studio);
+        Assert.Null(target?.CodePrefix);
+        Assert.Equal("http://localhost/", nav.Uri);
+    }
+
     [Fact]
     public void GotMovieWithoutNfo_OffersCreateNfoInTheToolsMenu()
     {
