@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-04
+
 ### Added
 
 - Support for movies that come without metadata or artwork, such as uncensored releases. A folder with no `.nfo` is tracked with its code and the probed video details, and the Movies filter has a **Metadata incomplete** option that lists them. Saving the metadata editor on such a movie creates its `.nfo` (Tools → **Create .nfo** does the same without editing); an existing `.nfo` is never overwritten. Tools → **Generate poster & fanart** picks sharp, well-exposed frames from the video and writes `poster.jpg` (a 2:3 crop) and `fanart.jpg`, skipping any image that already exists.
