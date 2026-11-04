@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-04
+
 ### Added
 
 - A movie has a **Content Type**: Censored (the default), Uncensored or Decensored. Set it in the metadata editor; a movie first added under a date-coded uncensored studio code (`carib-010120-001`, `1pondo-010120_001`, …) or a `tokyo-hot-` code starts as Uncensored. The movie's detail page shows it next to the status, and clicking it lists every movie of that type. The **Content Type** filter on the Movies page, Actor Detail and the DeoVR group editor, and on the Scenes, Highlights and Apexes walls (which filter by the content type of their movie), keeps movies of any selected type. The value stays in Javbuddy's database and is not written to the `.nfo`.
