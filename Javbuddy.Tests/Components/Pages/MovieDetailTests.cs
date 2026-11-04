@@ -91,6 +91,7 @@ public class MovieDetailTests : BunitContext
             .Returns(new List<string>());
         Services.AddSingleton(localLibraryClient);
         Services.AddSingleton(extraFanartService);
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IMoviePosterGenerationService>());
 
         // MovieDetail.razor always renders a child ProwlarrSearchModal once a movie is loaded.
         Services.AddSingleton(Substitute.For<ITorrentGrabService>());
@@ -1007,8 +1008,23 @@ public class MovieDetailTests : BunitContext
 
         var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
 
-        Assert.Equal(["Crop Cover", "Edit .nfo", "Repair Video"], ToolbarMenuItems(cut, "Tools"));
+        Assert.Equal(["Crop Cover", "Edit .nfo", "Generate poster & fanart", "Repair Video"], ToolbarMenuItems(cut, "Tools"));
         Assert.Contains(cut.FindAll("button.movie-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
+    }
+
+    [Fact]
+    public void GotMovieWithoutNfo_OffersCreateNfoInTheToolsMenu()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123", Status = MovieStatus.Got, MetaSourceName = "Generated" });
+            db.SaveChanges();
+        }
+
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+
+        Assert.Contains("Create .nfo", ToolbarMenuItems(cut, "Tools"));
     }
 
     [Fact]

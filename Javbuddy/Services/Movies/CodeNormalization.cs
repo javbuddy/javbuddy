@@ -265,12 +265,21 @@ public static partial class CodeNormalization
     [GeneratedRegex(@"\b(?:FC2[-_]?PPV[-_]?\d+|\d{6}[-_]\d{3}|[A-Za-z0-9]{2,10}[-_]\d{2,6}|[A-Za-z]{2,10}\d{2,6})\b", RegexOptions.IgnoreCase)]
     private static partial Regex MovieCodeExtractionRegex();
 
+    /// <summary>Uncensored studios whose release codes are date-based ("carib-010120-001", "1pondo-010120_001") or
+    /// carry a hyphenated studio name ("tokyo-hot-n1234"). The generic pattern would cut these short ("carib-010120"),
+    /// so they are tried first.</summary>
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:(?:carib(?:bean(?:com)?)?|caribpr|1pondo|paco(?:pacomama)?|pacopacomama|10musume|10mu|muramura|mura)[-_]\d{6}[-_]\d{3}|tokyo[-_]?hot[-_][a-z]{0,3}\d{3,5})(?![A-Za-z0-9])", RegexOptions.IgnoreCase)]
+    private static partial Regex UncensoredStudioCodeRegex();
+
     /// <summary>
     /// Extracts a likely JAV release code embedded within a directory name or file name (e.g. "SSNI-081 [1080p]" -> "SSNI-081").
+    /// Date-coded uncensored studio codes are recognised first so their trailing sequence number is kept.
     /// </summary>
     public static string? ExtractMovieCode(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
+        var studio = UncensoredStudioCodeRegex().Match(text);
+        if (studio.Success) return studio.Value;
         var match = MovieCodeExtractionRegex().Match(text);
         return match.Success ? match.Value : null;
     }

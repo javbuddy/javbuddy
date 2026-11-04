@@ -19,6 +19,10 @@
                     {
                         <div class="alert alert-danger mb-3">@saveError</div>
                     }
+                    @if (saveWarning is not null)
+                    {
+                        <div class="alert alert-warning mb-3">Your changes were saved, but the .nfo wasn't created: @saveWarning</div>
+                    }
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label" for="metadata-title">Title</label>
@@ -153,6 +157,7 @@
     private bool show;
     private bool saving;
     private string? saveError;
+    private string? saveWarning;
     private EditModel model = new();
 
     public Task OpenAsync()
@@ -176,6 +181,7 @@
                 .ToList(),
         };
         saveError = null;
+        saveWarning = null;
         show = true;
         StateHasChanged();
         return Task.CompletedTask;
@@ -187,6 +193,7 @@
     {
         saving = true;
         saveError = null;
+        saveWarning = null;
 
         var update = new MovieMetadataUpdate(
             model.Title,
@@ -201,6 +208,7 @@
             model.MetaDescription);
 
         var result = await MovieService.UpdateMetadataAsync(Movie.Id, update);
+        var nfoWarning = result.Success ? result.ErrorMessage : null;
         foreach (var vr in model.VrFormats.Where(v => v.Choice != v.Original))
         {
             if (!result.Success) break;
@@ -212,6 +220,14 @@
         if (!result.Success)
         {
             saveError = result.ErrorMessage;
+            return;
+        }
+
+        if (nfoWarning is not null)
+        {
+            // Saved, but the .nfo couldn't be created: keep the dialog open so the reason is seen.
+            saveWarning = nfoWarning;
+            await OnSaved.InvokeAsync();
             return;
         }
 

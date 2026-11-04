@@ -211,7 +211,10 @@ public class LibraryRescanTask(
 
         LocalLibraryMetadataMapper.Apply(tracked, local.Metadata);
         await MovieActorAssociation.SynchronizeAsync(trackedDb, tracked, ct);
-        await TagNormalization.ApplyToMovieAsync(trackedDb, tracked, local.Metadata.Genres, ct);
+        if (!local.Metadata.IsGenerated)
+        {
+            await TagNormalization.ApplyToMovieAsync(trackedDb, tracked, local.Metadata.Genres, ct);
+        }
         await trackedDb.SaveChangesAsync(ct);
     }
 

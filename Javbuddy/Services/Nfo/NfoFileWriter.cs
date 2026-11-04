@@ -56,6 +56,30 @@ public static class NfoFileWriter
         }, ct);
     }
 
+    /// <summary>Creates a new .nfo with <paramref name="content"/> (UTF-8, no BOM). Never overwrites: returns false when
+    /// a file already exists at <paramref name="nfoPath"/>, so it can't clobber an .nfo that appeared after the caller
+    /// checked. Written through a sibling temp file and moved into place, so a media server never sees it half-written.</summary>
+    public static async Task<bool> CreateTextAsync(string nfoPath, string content, CancellationToken ct)
+    {
+        if (File.Exists(nfoPath)) return false;
+
+        var tempPath = nfoPath + TempSuffix;
+        try
+        {
+            await File.WriteAllTextAsync(tempPath, content, Utf8NoBom, ct);
+            File.Move(tempPath, nfoPath, overwrite: false);
+            return true;
+        }
+        catch (IOException) when (File.Exists(nfoPath))
+        {
+            return false;
+        }
+        finally
+        {
+            BestEffortFile.TryDeleteFile(tempPath);
+        }
+    }
+
     /// <summary>Serializes <paramref name="doc"/> as-is — no re-indenting, so a document loaded
     /// with LoadOptions.PreserveWhitespace keeps the on-disk formatting it came with, and the XML
     /// declaration is written only if the document has one.</summary>

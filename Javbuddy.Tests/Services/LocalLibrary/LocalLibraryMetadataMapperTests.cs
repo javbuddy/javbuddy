@@ -276,3 +276,73 @@ public class LocalLibraryMetadataMapperTests
         Assert.Equal("VR, Solowork", movie.MetaGenres);
     }
 }
+
+public class GeneratedMetadataTests
+{
+    [Fact]
+    public void A_folder_without_an_nfo_is_marked_generated()
+    {
+        var movie = new Javbuddy.Models.Movie { Code = "abc-001" };
+
+        LocalLibraryMetadataMapper.ApplyDescriptiveMetadata(movie, new LocalMovieMetadata { IsGenerated = true });
+
+        Assert.Equal(LocalLibraryMetadataMapper.GeneratedSourceName, movie.MetaSourceName);
+        Assert.NotNull(movie.MetaFetchedAt);
+    }
+
+    [Fact]
+    public void A_folder_without_an_nfo_never_blanks_metadata_from_another_source()
+    {
+        var movie = new Javbuddy.Models.Movie { Code = "abc-001", MetaTitle = "Edited", MetaSourceName = "Local" };
+
+        LocalLibraryMetadataMapper.ApplyDescriptiveMetadata(movie, new LocalMovieMetadata { IsGenerated = true });
+
+        Assert.Equal("Edited", movie.MetaTitle);
+        Assert.Equal("Local", movie.MetaSourceName);
+    }
+
+    [Fact]
+    public void A_legacy_empty_Local_placeholder_becomes_Generated()
+    {
+        // Before "Generated" existed, a folder without an .nfo was imported as "Local" with nothing in it.
+        var movie = new Javbuddy.Models.Movie { Code = "abc-001", MetaSourceName = "Local" };
+
+        LocalLibraryMetadataMapper.ApplyDescriptiveMetadata(movie, new LocalMovieMetadata { IsGenerated = true });
+
+        Assert.Equal(LocalLibraryMetadataMapper.GeneratedSourceName, movie.MetaSourceName);
+    }
+
+    [Fact]
+    public void A_scraped_source_without_a_title_is_still_protected()
+    {
+        var movie = new Javbuddy.Models.Movie { Code = "abc-001", MetaSourceName = "javinizer-go", MetaStudio = "Studio" };
+
+        LocalLibraryMetadataMapper.ApplyDescriptiveMetadata(movie, new LocalMovieMetadata { IsGenerated = true });
+
+        Assert.Equal("javinizer-go", movie.MetaSourceName);
+        Assert.Equal("Studio", movie.MetaStudio);
+    }
+
+    [Theory]
+    [InlineData(nameof(Javbuddy.Models.Movie.MetaDescription))]
+    [InlineData(nameof(Javbuddy.Models.Movie.MetaStudio))]
+    [InlineData(nameof(Javbuddy.Models.Movie.MetaGenres))]
+    [InlineData(nameof(Javbuddy.Models.Movie.MetaDirector))]
+    public void A_placeholder_with_a_hand_set_field_is_not_blanked(string field)
+    {
+        var movie = new Javbuddy.Models.Movie { Code = "abc-001", MetaSourceName = "Generated" };
+        typeof(Javbuddy.Models.Movie).GetProperty(field)!.SetValue(movie, "set by the user");
+
+        LocalLibraryMetadataMapper.ApplyDescriptiveMetadata(movie, new LocalMovieMetadata { IsGenerated = true });
+
+        Assert.Equal("set by the user", typeof(Javbuddy.Models.Movie).GetProperty(field)!.GetValue(movie));
+    }
+
+    [Fact]
+    public void A_hand_set_runtime_or_date_also_counts_as_existing_metadata()
+    {
+        Assert.True(LocalLibraryMetadataMapper.HasExistingMetadata(new Javbuddy.Models.Movie { MetaRuntimeMinutes = 24 }));
+        Assert.True(LocalLibraryMetadataMapper.HasExistingMetadata(new Javbuddy.Models.Movie { MetaReleaseDate = new DateTime(2024, 1, 1) }));
+        Assert.False(LocalLibraryMetadataMapper.HasExistingMetadata(new Javbuddy.Models.Movie { MetaSourceName = "Local" }));
+    }
+}

@@ -74,7 +74,10 @@ public class MovieAddService(
             {
                 LocalLibraryMetadataMapper.Apply(tracked, local.Metadata);
                 await MovieActorAssociation.SynchronizeAsync(db, tracked, ct);
-                await TagNormalization.ApplyToMovieAsync(db, tracked, local.Metadata.Genres, ct);
+                if (!local.Metadata.IsGenerated)
+                {
+                    await TagNormalization.ApplyToMovieAsync(db, tracked, local.Metadata.Genres, ct);
+                }
                 await db.SaveChangesAsync(ct);
             }
             return new MovieAddResult(movie, match is not null, true, null);

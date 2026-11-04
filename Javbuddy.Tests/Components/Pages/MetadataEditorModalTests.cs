@@ -105,6 +105,25 @@ public class MetadataEditorModalTests : BunitContext
     }
 
     [Fact]
+    public async Task Submit_SavedButNfoNotCreated_ShowsWarningStaysOpenAndRefreshesThePage()
+    {
+        var movieService = SetUpMovieService();
+        movieService.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>())
+            .Returns(new OperationResult(true, "the folder isn't writable"));
+        var saved = 0;
+
+        var cut = Render<MetadataEditorModal>(p => p
+            .Add(x => x.Movie, new Movie { Id = 42, Code = "ABC-123" })
+            .Add(x => x.OnSaved, () => saved++));
+        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        await cut.InvokeAsync(() => cut.Find("form").Submit());
+
+        Assert.Contains("Your changes were saved, but the .nfo wasn't created: the folder isn't writable", cut.Find(".alert-warning").TextContent);
+        Assert.NotEmpty(cut.FindAll(".metadata-editor-modal-backdrop"));
+        Assert.Equal(1, saved);
+    }
+
+    [Fact]
     public async Task Submit_Failure_ShowsErrorAndStaysOpen()
     {
         var movieService = SetUpMovieService();

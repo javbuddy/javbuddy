@@ -849,6 +849,60 @@ public class MovieServiceTests
         Assert.Equal("Overview text.", reloaded.MetaDescription);
     }
 
+    private static MovieMetadataUpdate TitleOnlyUpdate(string title) =>
+        new(null, title, null, null, null, null, null, null, null, null);
+
+    [Fact]
+    public async Task UpdateMetadataAsync_FolderWithoutNfo_CreatesItAndMarksTheSourceLocal()
+    {
+        using var factory = new TestDbContextFactory();
+        var movieId = await AddMovieAsync(factory, "ABC-100");
+        var library = Substitute.For<ILocalLibraryClient>();
+        library.ResolveNfoFilePathAsync("ABC-100", Arg.Any<CancellationToken>()).Returns((string?)null);
+        library.ResolveMovieFolderPathAsync("ABC-100", Arg.Any<CancellationToken>()).Returns("/library/ABC-100");
+        library.CreateNfoAsync("ABC-100", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+
+        var result = await new MovieService(factory, localLibraryClient: library).UpdateMetadataAsync(movieId, TitleOnlyUpdate("Edited"));
+
+        Assert.True(result.Success);
+        Assert.Null(result.ErrorMessage);
+        await library.Received(1).CreateNfoAsync("ABC-100", Arg.Is<string>(nfo => nfo.Contains("<title>Edited</title>")), Arg.Any<CancellationToken>());
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal("Local", (await db.Movies.SingleAsync(m => m.Id == movieId)).MetaSourceName);
+    }
+
+    [Fact]
+    public async Task UpdateMetadataAsync_NfoCannotBeCreated_StillSavesTheEditsAndReturnsAWarning()
+    {
+        using var factory = new TestDbContextFactory();
+        var movieId = await AddMovieAsync(factory, "ABC-100");
+        var library = Substitute.For<ILocalLibraryClient>();
+        library.ResolveNfoFilePathAsync("ABC-100", Arg.Any<CancellationToken>()).Returns((string?)null);
+        library.ResolveMovieFolderPathAsync("ABC-100", Arg.Any<CancellationToken>()).Returns("/library/ABC-100");
+        library.CreateNfoAsync("ABC-100", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(false);
+
+        var result = await new MovieService(factory, localLibraryClient: library).UpdateMetadataAsync(movieId, TitleOnlyUpdate("Edited"));
+
+        Assert.True(result.Success);
+        Assert.False(string.IsNullOrWhiteSpace(result.ErrorMessage));
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal("Edited", (await db.Movies.SingleAsync(m => m.Id == movieId)).MetaTitle);
+    }
+
+    [Fact]
+    public async Task UpdateMetadataAsync_ExistingNfo_IsNotTouched()
+    {
+        using var factory = new TestDbContextFactory();
+        var movieId = await AddMovieAsync(factory, "ABC-100");
+        var library = Substitute.For<ILocalLibraryClient>();
+        library.ResolveNfoFilePathAsync("ABC-100", Arg.Any<CancellationToken>()).Returns("/library/ABC-100/ABC-100.nfo");
+
+        var result = await new MovieService(factory, localLibraryClient: library).UpdateMetadataAsync(movieId, TitleOnlyUpdate("Edited"));
+
+        Assert.Null(result.ErrorMessage);
+        await library.DidNotReceiveWithAnyArgs().CreateNfoAsync(default!, default!, default);
+    }
+
     [Fact]
     public async Task UpdateMetadataAsync_BlankStringsAreStoredAsNull()
     {

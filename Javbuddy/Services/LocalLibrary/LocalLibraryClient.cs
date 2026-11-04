@@ -60,6 +60,10 @@ public interface ILocalLibraryClient
     /// local folder/.nfo file was found to overwrite, or it's read-only/unwritable.</summary>
     Task<string?> SaveRawNfoAsync(string code, string content, CancellationToken ct = default);
 
+    /// <summary>Creates "{code}.nfo" in the movie's local folder when it has no .nfo at all. Returns false (changing
+    /// nothing) when the folder isn't found, an .nfo already exists, or the folder isn't writable.</summary>
+    Task<bool> CreateNfoAsync(string code, string content, CancellationToken ct = default);
+
     Task<ConditionalNfoSaveResult> SaveRawNfoIfUnchangedAsync(
         string code,
         string expectedContent,
@@ -256,7 +260,7 @@ public class LocalLibraryClient(
 
         var nfoPath = FindNfoFile(folder, code);
         var metadata = nfoPath is not null ? await LocalNfoParser.ParseAsync(nfoPath, ct) : null;
-        metadata ??= new LocalMovieMetadata();
+        metadata ??= new LocalMovieMetadata { IsGenerated = nfoPath is null };
 
         metadata.LocalPosterFileName = PosterFileNames.FirstOrDefault(name => File.Exists(Path.Combine(folder, name)));
         metadata.HasLocalFanart = FanartFileNames.Any(name => File.Exists(Path.Combine(folder, name)));
@@ -392,6 +396,22 @@ public class LocalLibraryClient(
         {
             logger.LogWarning(ex, "Failed to write .nfo {Path}", nfoPath);
             return null;
+        }
+    }
+
+    public async Task<bool> CreateNfoAsync(string code, string content, CancellationToken ct = default)
+    {
+        var folder = await FindMovieFolderAsync(code, ct);
+        if (folder is null || FindNfoFile(folder, code) is not null) return false;
+
+        try
+        {
+            return await NfoFileWriter.CreateTextAsync(Path.Combine(folder, code + ".nfo"), content, ct);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Failed to create .nfo for {Code} in {Folder}", code, folder);
+            return false;
         }
     }
 
@@ -919,7 +939,10 @@ public class LocalLibraryClient(
 
         LocalLibraryMetadataMapper.Apply(movie, result.Metadata);
         await MovieActorAssociation.SynchronizeAsync(db, movie, ct);
-        await TagNormalization.ApplyToMovieAsync(db, movie, result.Metadata.Genres, ct);
+        if (!result.Metadata.IsGenerated)
+        {
+            await TagNormalization.ApplyToMovieAsync(db, movie, result.Metadata.Genres, ct);
+        }
         await db.SaveChangesAsync(ct);
         await RefreshMediaInfoOnlyAsync(movieId, ct);
         return new OperationResult(true, null);
@@ -1234,7 +1257,11 @@ public class LocalLibraryClient(
             return new OperationResult(false, "Could not read the .nfo file.");
         }
 
-        if (movie.MediaNfoLastWriteUtc is null)
+        // A movie with no real metadata yet (a placeholder from a folder that had no .nfo) takes the .nfo on first sight,
+        // instead of just baselining it.
+        var hasExistingMetadata = LocalLibraryMetadataMapper.HasExistingMetadata(movie);
+
+        if (movie.MediaNfoLastWriteUtc is null && hasExistingMetadata)
         {
             // First observation for this movie — establish the baseline only. Applying now would
             // mean a whole-library rollout re-applies every movie's local .nfo content over
@@ -1244,7 +1271,7 @@ public class LocalLibraryClient(
             return new OperationResult(true, null);
         }
 
-        if (movie.MediaNfoLastWriteUtc.Value == currentWriteUtc)
+        if (movie.MediaNfoLastWriteUtc == currentWriteUtc)
         {
             return new OperationResult(true, null);
         }
@@ -1254,10 +1281,6 @@ public class LocalLibraryClient(
         // If the movie has no descriptive metadata yet in Javbuddy, populate it from .nfo.
         // If the movie already has metadata in Javbuddy, preserve it — any divergence between
         // the .nfo file and Javbuddy will be detected non-destructively by DetectConflictsAsync.
-        bool hasExistingMetadata = !string.IsNullOrWhiteSpace(movie.MetaTitle)
-            || !string.IsNullOrWhiteSpace(movie.MetaSourceName)
-            || !string.IsNullOrWhiteSpace(movie.MetaActresses);
-
         if (!hasExistingMetadata)
         {
             var metadata = await LocalNfoParser.ParseAsync(nfoPath, ct);

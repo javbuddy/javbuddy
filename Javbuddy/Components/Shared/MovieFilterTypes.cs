@@ -49,6 +49,8 @@ public enum MovieFeatureFilterOption
     //; appended for the same cookie reason. A linked actor who is a favorite / retired.
     HasFavoriteActor,
     HasRetiredActor,
+    //; appended for the same cookie reason. A movie whose folder has no .nfo (MetaSourceName "Generated").
+    MetadataIncomplete,
 }
 
 public readonly record struct MovieSortChange(string Field, bool Descending, int? RandomSortSeed = null);
@@ -211,6 +213,7 @@ public static class MovieFilterOptions
         MovieFeatureFilterOption.Vr => "VR",
         MovieFeatureFilterOption.HasFavoriteActor => "Has favorite actor",
         MovieFeatureFilterOption.HasRetiredActor => "Has retired actor",
+        MovieFeatureFilterOption.MetadataIncomplete => "Metadata incomplete",
         _ => option.ToString(),
     };
 

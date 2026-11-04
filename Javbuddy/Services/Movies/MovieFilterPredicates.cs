@@ -1,5 +1,6 @@
 using Javbuddy.Components.Shared;
 using Javbuddy.Models;
+using Javbuddy.Services.LocalLibrary;
 
 namespace Javbuddy.Services.Movies;
 
@@ -203,6 +204,10 @@ public static class MovieFilterPredicates
             // Gated on MetaFetchedAt so a movie that simply hasn't had metadata fetched yet
             // (MetaActresses null for an unrelated reason) doesn't count as "no cast".
             query = query.Where(m => m.MetaFetchedAt != null && (m.MetaActresses == null || m.MetaActresses == ""));
+        }
+        if (features.Contains(MovieFeatureFilterOption.MetadataIncomplete))
+        {
+            query = query.Where(m => m.MetaSourceName == LocalLibraryMetadataMapper.GeneratedSourceName);
         }
         if (features.Contains(MovieFeatureFilterOption.BrokenBFrames))
         {

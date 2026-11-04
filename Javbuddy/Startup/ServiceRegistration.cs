@@ -225,6 +225,7 @@ public static class ServiceRegistration
         services.AddScoped<IRemotePosterCropService, RemotePosterCropService>();
         services.AddScoped<IMovieCoverCropService, MovieCoverCropService>();
         services.AddScoped<IMovieExtraFanartService, MovieExtraFanartService>();
+        services.AddScoped<IMoviePosterGenerationService, MoviePosterGenerationService>();
         services.AddScoped<IImageCacheMaintenanceService, ImageCacheMaintenanceService>();
         services.AddScoped<IDiskSpaceService, DiskSpaceService>();
         services.AddScoped<IR18DevDumpImporter, R18DevDumpImporter>();

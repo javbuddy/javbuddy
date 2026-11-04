@@ -115,15 +115,14 @@ public class MovieRescanService(
                     // yet, whose title can carry a prepended code) — never from a person reviewing the
                     // real file. The moment it transitions to Got, the .nfo that shipped with the
                     // actual file becomes the best-known truth and is imported over that guess.
-                    var hasExistingMetadata = !string.IsNullOrWhiteSpace(movie.MetaTitle)
-                        || !string.IsNullOrWhiteSpace(movie.MetaSourceName)
-                        || !string.IsNullOrWhiteSpace(movie.MetaActresses);
+                    var hasExistingMetadata = LocalLibraryMetadataMapper.HasExistingMetadata(movie);
 
                     if ((wasMissing || !hasExistingMetadata) && local.Metadata is not null)
                     {
                         LocalLibraryMetadataMapper.ApplyDescriptiveMetadata(movie, local.Metadata);
                         nfoApplied = true;
-                        rawGenres = local.Metadata.Genres;
+                        // A folder without an .nfo has no genres to offer: leave the movie's tags alone.
+                        rawGenres = local.Metadata.IsGenerated ? null : local.Metadata.Genres;
                     }
 
                     var nfoPath = await localLibraryClient.ResolveNfoFilePathAsync(code, ct);
@@ -166,7 +165,7 @@ public class MovieRescanService(
                 {
                     // Unified precedence: Local .nfo metadata takes precedence over external scrapers.
                     // Only query javinizer-go if the movie's metadata is not sourced from Local.
-                    if (movie.MetaSourceName != "Local")
+                    if (movie.MetaSourceName is not (LocalLibraryMetadataMapper.LocalSourceName or LocalLibraryMetadataMapper.GeneratedSourceName))
                     {
                         var javinizerBaseUrl = await javinizerClient.GetBaseUrlAsync(ct);
                         if (!string.IsNullOrWhiteSpace(javinizerBaseUrl))

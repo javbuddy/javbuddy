@@ -6,6 +6,12 @@ namespace Javbuddy.Services.LocalLibrary;
 
 public static class LocalLibraryMetadataMapper
 {
+    /// <summary>MetaSourceName of a movie whose folder has no .nfo: it has no descriptive metadata yet, which is
+    /// what the "Metadata incomplete" filter looks for. Saving the metadata editor writes an .nfo and moves it to "Local".</summary>
+    public const string GeneratedSourceName = "Generated";
+
+    public const string LocalSourceName = "Local";
+
     public static void Apply(Movie movie, LocalMovieMetadata metadata)
     {
         ApplyDescriptiveMetadata(movie, metadata);
@@ -18,6 +24,21 @@ public static class LocalLibraryMetadataMapper
         ApplyMediaProbe(movie, metadata.MediaProbe);
     }
 
+    /// <summary>Whether the movie already holds descriptive metadata that a rescan must not replace: any descriptive field
+    /// (MetaGenres mirrors the movie's tags), or a source other than "Local"/"Generated". A "Local" or "Generated"
+    /// movie with none of that is a placeholder (what a folder without an .nfo was imported as), so an .nfo found
+    /// later may fill it in.</summary>
+    public static bool HasExistingMetadata(Movie movie) =>
+        new[]
+        {
+            movie.MetaTitle, movie.MetaOriginalTitle, movie.MetaDescription, movie.MetaStudio, movie.MetaLabel,
+            movie.MetaSeries, movie.MetaDirector, movie.MetaActresses, movie.MetaGenres,
+        }.Any(value => !string.IsNullOrWhiteSpace(value))
+        || movie.MetaReleaseDate is not null
+        || movie.MetaRuntimeMinutes is not null
+        || (!string.IsNullOrWhiteSpace(movie.MetaSourceName)
+            && movie.MetaSourceName is not (LocalSourceName or GeneratedSourceName));
+
     /// <summary>Just the javinizer-go-adjacent Meta* fields (title, plot, actresses, ...) — split
     /// out so RefreshLocalMetadataIfNfoChangedAsync can re-apply an edited .nfo's descriptive
     /// content without touching LocalFileSizeBytes/MediaHasSubtitleFile/the Media* probe block,
@@ -25,6 +46,13 @@ public static class LocalLibraryMetadataMapper
     /// of, this is called on its own, independent of any video/subtitle probing that run).</summary>
     public static void ApplyDescriptiveMetadata(Movie movie, LocalMovieMetadata metadata)
     {
+        // A folder without an .nfo has nothing to say: never let it blank out metadata that came from elsewhere
+        // (an edit whose .nfo couldn't be written, a scrape).
+        if (metadata.IsGenerated && HasExistingMetadata(movie))
+        {
+            return;
+        }
+
         movie.MetaTitle = metadata.Title;
         movie.MetaOriginalTitle = metadata.OriginalTitle;
         movie.MetaDescription = metadata.Plot;
@@ -47,7 +75,7 @@ public static class LocalLibraryMetadataMapper
         movie.MetaCoverUrl = metadata.PosterFallbackUrl;
         movie.MetaBackdropUrl = metadata.FanartFallbackUrl;
 
-        movie.MetaSourceName = "Local";
+        movie.MetaSourceName = metadata.IsGenerated ? GeneratedSourceName : LocalSourceName;
         movie.MetaFetchedAt = DateTime.UtcNow;
     }
 

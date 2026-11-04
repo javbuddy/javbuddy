@@ -1175,6 +1175,64 @@ public class LocalLibraryClientTests
         Assert.Equal("Title From NFO", updated.MetaTitle);
     }
 
+    [Theory]
+    [InlineData("Generated")]
+    [InlineData("Local")] // what a folder without an .nfo was imported as before "Generated" existed
+    public async Task RefreshLocalMetadataIfNfoChangedAsync_PlaceholderMovie_TakesANfoDroppedInLaterOnFirstSight(string source)
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        await File.WriteAllTextAsync(Path.Combine(folder, "ABC-123.nfo"), string.Format(SampleNfo, "Title From NFO"));
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            // No baseline yet and no real metadata: nothing to protect, so the .nfo is applied, not just baselined.
+            var movie = new Movie { Code = "ABC-123", MetaSourceName = source };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        await CreateClientFor(factory, root).RefreshLocalMetadataIfNfoChangedAsync(movieId);
+
+        using var verifyDb = factory.CreateDbContext();
+        var updated = verifyDb.Movies.Single(m => m.Id == movieId);
+        Assert.Equal("Title From NFO", updated.MetaTitle);
+        Assert.Equal("Local", updated.MetaSourceName);
+        Assert.NotNull(updated.MediaNfoLastWriteUtc);
+    }
+
+    [Fact]
+    public async Task RefreshLocalMetadataAsync_FolderWithoutNfo_KeepsTheMoviesTagsAndFields()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        await File.WriteAllBytesAsync(Path.Combine(folder, "ABC-123.mp4"), [0]);
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            // A placeholder with a hand-set studio and a tag: no title, no cast, so only the studio and tags mark it as edited.
+            var tag = new Tag { Name = "Cosplay" };
+            var movie = new Movie { Code = "ABC-123", MetaSourceName = "Generated", MetaStudio = "My Studio", MetaGenres = "Cosplay" };
+            movie.MovieTags.Add(new MovieTag { Tag = tag });
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        await CreateClientFor(factory, root).RefreshLocalMetadataAsync(movieId);
+
+        using var verifyDb = factory.CreateDbContext();
+        var updated = verifyDb.Movies.Include(m => m.MovieTags).Single(m => m.Id == movieId);
+        Assert.Equal("My Studio", updated.MetaStudio);
+        Assert.Single(updated.MovieTags);
+        Assert.Equal("Cosplay", updated.MetaGenres);
+    }
+
     [Fact]
     public async Task RefreshLocalMetadataIfNfoChangedAsync_Unchanged_NoOp()
     {

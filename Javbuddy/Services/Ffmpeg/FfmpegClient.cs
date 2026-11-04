@@ -30,6 +30,10 @@ public interface IFfmpegClient
     /// screenshot). leftEyeOnly crops a side-by-side VR frame to its left half.</summary>
     Task<FfmpegRunResult> ExtractStillWebpAsync(string inputPath, double seconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default);
 
+    /// <summary>Writes one full-resolution frame at <paramref name="seconds"/> as a high-quality JPEG (the source for a
+    /// generated poster or fanart, which a 360p still is too small for).</summary>
+    Task<FfmpegRunResult> ExtractFrameJpegAsync(string inputPath, double seconds, string outputPath, CancellationToken ct = default);
+
     /// <summary>Writes a short, silent 360p VP9 WebM at the source frame rate (a scene hover preview, played muted
     /// and looping) starting at <paramref name="seconds"/>.</summary>
     Task<FfmpegRunResult> ExtractPreviewVideoAsync(string inputPath, double seconds, double durationSeconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default);
@@ -216,6 +220,18 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
     public Task<FfmpegRunResult> ExtractStillWebpAsync(string inputPath, double seconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
         RunAsync(BuildStillArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
+
+    public Task<FfmpegRunResult> ExtractFrameJpegAsync(string inputPath, double seconds, string outputPath, CancellationToken ct = default) =>
+        RunAsync(BuildFrameJpegArguments(inputPath, seconds, outputPath), ct);
+
+    public static List<string> BuildFrameJpegArguments(string inputPath, double seconds, string outputPath) =>
+    [
+        "-hide_banner", "-nostdin", "-y",
+        "-ss", FormatSeconds(seconds), "-i", inputPath,
+        "-frames:v", "1", "-an", "-sn",
+        "-q:v", "2",
+        outputPath,
+    ];
 
     public Task<FfmpegRunResult> ExtractPreviewVideoAsync(string inputPath, double seconds, double durationSeconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
         RunAsync(BuildPreviewVideoArguments(inputPath, seconds, durationSeconds, leftEyeOnly, outputPath), ct);

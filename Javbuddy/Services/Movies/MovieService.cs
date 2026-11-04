@@ -99,8 +99,15 @@ public interface IMovieService
     /// <summary>Applies the metadata editor modal's "Save" — writes every field in
     /// <paramref name="update"/> onto the movie, then immediately re-checks .nfo drift (never
     /// writes to the .nfo itself), mirroring AddActorToMovieAsync/RemoveActorFromMovieAsync's
-    /// immediate-recheck pattern.</summary>
+    /// immediate-recheck pattern. For a movie whose folder has no .nfo it also creates one; when that fails
+    /// the edits are still saved and the result is a success whose <see cref="OperationResult.ErrorMessage"/> is the
+    /// warning to show.</summary>
     Task<OperationResult> UpdateMetadataAsync(int movieId, MovieMetadataUpdate update, CancellationToken ct = default);
+
+    /// <summary>Writes a new .nfo from the movie's stored metadata when its folder has none, then marks the metadata
+    /// as coming from a real file (so "Metadata incomplete" no longer lists it). Never touches an existing .nfo.
+    /// Fails when the folder can't be found or written, or an .nfo already exists.</summary>
+    Task<OperationResult> CreateNfoAsync(int movieId, CancellationToken ct = default);
 
     /// <summary>Queries javinizer-go for the movie's code and returns the result for review —
     /// makes no DB changes (the "No Auto Overwrite" requirement). Fails if javinizer-go isn't
@@ -433,15 +440,58 @@ public class MovieService(
         await db.SaveChangesAsync(ct);
         movieChangeNotifier?.NotifyChanged();
 
-        // Never writes to the .nfo directly — CheckMovieMetadataConflictAsync's strict
+        // Never overwrites an existing .nfo — CheckMovieMetadataConflictAsync's strict
         // field matching is what turns any resulting drift into a "Resolve .nfo Conflict" the
         // user reviews as a diff and applies (or not) themselves, mirroring how cast/tag editing
-        // already only ever touch the DB.
+        // already only ever touch the DB. The one exception is a folder with no .nfo at all: there is
+        // nothing to conflict with, so the first save creates it.
+        string? nfoWarning = null;
+        if (localLibraryClient is not null && movie.Code is not null
+            && await localLibraryClient.ResolveNfoFilePathAsync(movie.Code, ct) is null
+            && await localLibraryClient.ResolveMovieFolderPathAsync(movie.Code, ct) is not null)
+        {
+            var created = await CreateNfoAsync(movieId, ct);
+            if (!created.Success)
+            {
+                nfoWarning = created.ErrorMessage;
+            }
+        }
+
         if (nfoSyncService is not null)
         {
             await nfoSyncService.CheckMovieMetadataConflictAsync(movieId, ct);
         }
 
+        // The edits are saved either way, so this is a success carrying a warning, not a failure.
+        return new OperationResult(true, nfoWarning);
+    }
+
+    public async Task<OperationResult> CreateNfoAsync(int movieId, CancellationToken ct = default)
+    {
+        if (localLibraryClient is null)
+        {
+            return OperationResult.Fail("The local library isn't configured.");
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var movie = await db.Movies
+            .Include(m => m.MovieActors).ThenInclude(ma => ma.Actor)
+            .Include(m => m.MovieTags).ThenInclude(mt => mt.Tag).ThenInclude(t => t.ParentTag)
+            .FirstOrDefaultAsync(m => m.Id == movieId, ct);
+        if (movie is null || string.IsNullOrWhiteSpace(movie.Code))
+        {
+            return OperationResult.Fail("Movie not found.");
+        }
+
+        if (!await localLibraryClient.CreateNfoAsync(movie.Code, MovieNfoBuilder.Build(movie), ct))
+        {
+            return OperationResult.Fail("Couldn't create the .nfo: the movie's folder wasn't found, isn't writable, or already has one.");
+        }
+
+        movie.MetaSourceName = LocalLibraryMetadataMapper.LocalSourceName;
+        movie.MetaFetchedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        movieChangeNotifier?.NotifyChanged();
         return OperationResult.Ok();
     }
 
