@@ -30,9 +30,10 @@ public interface IFfmpegClient
     /// screenshot). leftEyeOnly crops a side-by-side VR frame to its left half.</summary>
     Task<FfmpegRunResult> ExtractStillWebpAsync(string inputPath, double seconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default);
 
-    /// <summary>Writes one full-resolution frame at <paramref name="seconds"/> as a high-quality JPEG (the source for a
-    /// generated poster or fanart, which a 360p still is too small for).</summary>
-    Task<FfmpegRunResult> ExtractFrameJpegAsync(string inputPath, double seconds, string outputPath, CancellationToken ct = default);
+    /// <summary>Writes one full-resolution frame at <paramref name="seconds"/> as a high-quality WebP (the source for a
+    /// generated poster or fanart, which a 360p still is too small for). WebP rather than JPEG because the bundled
+    /// ffmpeg is built with only the libwebp and libvpx_vp9 encoders (see the Dockerfile); the caller converts it.</summary>
+    Task<FfmpegRunResult> ExtractFrameWebpAsync(string inputPath, double seconds, string outputPath, CancellationToken ct = default);
 
     /// <summary>Writes a short, silent 360p VP9 WebM at the source frame rate (a scene hover preview, played muted
     /// and looping) starting at <paramref name="seconds"/>.</summary>
@@ -221,15 +222,18 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
     public Task<FfmpegRunResult> ExtractStillWebpAsync(string inputPath, double seconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
         RunAsync(BuildStillArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
 
-    public Task<FfmpegRunResult> ExtractFrameJpegAsync(string inputPath, double seconds, string outputPath, CancellationToken ct = default) =>
-        RunAsync(BuildFrameJpegArguments(inputPath, seconds, outputPath), ct);
+    public Task<FfmpegRunResult> ExtractFrameWebpAsync(string inputPath, double seconds, string outputPath, CancellationToken ct = default) =>
+        RunAsync(BuildFrameWebpArguments(inputPath, seconds, outputPath), ct);
 
-    public static List<string> BuildFrameJpegArguments(string inputPath, double seconds, string outputPath) =>
+    public static List<string> BuildFrameWebpArguments(string inputPath, double seconds, string outputPath) =>
     [
         "-hide_banner", "-nostdin", "-y",
         "-ss", FormatSeconds(seconds), "-i", inputPath,
         "-frames:v", "1", "-an", "-sn",
-        "-q:v", "2",
+        // Full size, but the same BT.601 conversion every other WebP here uses (see WebpScaleOptions): without it a
+        // BT.709 source comes out with darker, pinker skin tones.
+        "-vf", $"scale=iw:ih:{WebpScaleOptions}",
+        "-c:v", "libwebp", "-quality", "95", "-compression_level", "4",
         outputPath,
     ];
 

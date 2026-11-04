@@ -14,7 +14,7 @@ public static class FrameScorer
     public static double Score(SKBitmap bitmap)
     {
         var height = Math.Max(3, (int)Math.Round((double)bitmap.Height * AnalysisWidth / bitmap.Width));
-        using var small = bitmap.Resize(new SKImageInfo(AnalysisWidth, height, SKColorType.Gray8), SKSamplingOptions.Default);
+        using var small = bitmap.Resize(new SKImageInfo(AnalysisWidth, height, SKColorType.Gray8), new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
         if (small is null) return 0;
 
         return Score(small.Bytes, small.Width, small.Height);

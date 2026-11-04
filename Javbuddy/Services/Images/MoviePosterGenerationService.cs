@@ -62,19 +62,32 @@ public class MoviePosterGenerationService(
         try
         {
             var candidates = new List<(string Path, double Score)>();
+            string? firstError = null;
             for (var i = 1; i <= SampleCount; i++)
             {
-                var framePath = Path.Combine(scratch, $"{i}.jpg");
-                var extracted = await ffmpegClient.ExtractFrameJpegAsync(video, movie.MediaDurationSeconds.Value * i / (SampleCount + 1), framePath, ct);
-                if (!extracted.Success || !File.Exists(framePath)) continue;
+                var framePath = Path.Combine(scratch, $"{i}.webp");
+                var extracted = await ffmpegClient.ExtractFrameWebpAsync(video, movie.MediaDurationSeconds.Value * i / (SampleCount + 1), framePath, ct);
+                if (!extracted.Success || !File.Exists(framePath) || new FileInfo(framePath).Length == 0)
+                {
+                    firstError ??= extracted.ErrorMessage ?? "ffmpeg wrote no frame at that point of the video";
+                    continue;
+                }
 
                 using var bitmap = SKBitmap.Decode(framePath);
-                if (bitmap is not null) candidates.Add((framePath, FrameScorer.Score(bitmap)));
+                if (bitmap is not null)
+                {
+                    candidates.Add((framePath, FrameScorer.Score(bitmap)));
+                }
+                else
+                {
+                    firstError ??= "the extracted frame couldn't be decoded";
+                }
             }
 
             if (candidates.Count == 0)
             {
-                return OperationResult.Fail("Couldn't extract any frames from the video.");
+                logger.LogWarning("No frame could be extracted from {Video} for {Code}: {Error}", video, movie.Code, firstError);
+                return OperationResult.Fail($"Couldn't extract any frames from the video ({firstError}).");
             }
 
             var ranked = candidates.OrderByDescending(c => c.Score).ToList();
@@ -89,7 +102,13 @@ public class MoviePosterGenerationService(
                 return OperationResult.Fail("The video's frames are too small to make a poster from.");
             }
 
-            if (needFanart) WriteFile(Path.Combine(folder, "fanart.jpg"), File.ReadAllBytes(fanartSource));
+            var fanart = needFanart ? EncodeJpeg(fanartSource) : null;
+            if (needFanart && fanart is null)
+            {
+                return OperationResult.Fail("Couldn't convert the extracted frame to a JPEG.");
+            }
+
+            if (fanart is not null) WriteFile(Path.Combine(folder, "fanart.jpg"), fanart);
             if (poster is not null) WriteFile(Path.Combine(folder, "poster.jpg"), poster);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -104,6 +123,16 @@ public class MoviePosterGenerationService(
 
         await localLibraryClient.SyncImagesSignatureAsync(movieId, ct);
         return OperationResult.Ok();
+    }
+
+    /// <summary>The frame re-encoded as JPEG bytes, or null when it can't be decoded or encoded.</summary>
+    private static byte[]? EncodeJpeg(string sourceImage)
+    {
+        using var frame = SKBitmap.Decode(sourceImage);
+        if (frame is null) return null;
+
+        using var data = frame.Encode(SKEncodedImageFormat.Jpeg, JpegQuality);
+        return data?.ToArray();
     }
 
     /// <summary>A centered 2:3 crop of the frame as JPEG bytes, or null when the frame is too small to crop or encode.</summary>

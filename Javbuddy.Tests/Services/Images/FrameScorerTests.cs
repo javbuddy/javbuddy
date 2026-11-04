@@ -32,4 +32,22 @@ public class FrameScorerTests
     {
         Assert.Equal(0, FrameScorer.Score(new byte[4], Size, Size));
     }
+
+    [Fact]
+    public void The_bitmap_overload_scores_a_detailed_frame_above_a_flat_one()
+    {
+        using var flat = new SkiaSharp.SKBitmap(640, 360);
+        flat.Erase(new SkiaSharp.SKColor(128, 128, 128));
+        using var detailed = new SkiaSharp.SKBitmap(640, 360);
+        for (var y = 0; y < detailed.Height; y++)
+        {
+            for (var x = 0; x < detailed.Width; x++)
+            {
+                var v = (byte)(((x / 4) + (y / 4)) % 2 == 0 ? 90 : 170);
+                detailed.SetPixel(x, y, new SkiaSharp.SKColor(v, v, v));
+            }
+        }
+
+        Assert.True(FrameScorer.Score(detailed) > FrameScorer.Score(flat));
+    }
 }

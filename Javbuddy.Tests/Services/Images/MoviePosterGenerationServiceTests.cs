@@ -21,7 +21,7 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "abc-001.mp4"), [0]);
         library.ResolveMovieFolderPathAsync("abc-001", Arg.Any<CancellationToken>()).Returns(folder);
-        ffmpeg.ExtractFrameJpegAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        ffmpeg.ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
                 WriteFrame(call.ArgAt<string>(2));
@@ -39,7 +39,7 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
     {
         using var bitmap = new SKBitmap(640, 360);
         bitmap.Erase(new SKColor(120, 120, 120));
-        using var data = bitmap.Encode(SKEncodedImageFormat.Jpeg, 90);
+        using var data = bitmap.Encode(SKEncodedImageFormat.Webp, 90);
         File.WriteAllBytes(path, data.ToArray());
     }
 
@@ -63,6 +63,7 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
         var result = await CreateService().GenerateAsync(id);
 
         Assert.True(result.Success, result.ErrorMessage);
+        Assert.All(new[] { "poster.jpg", "fanart.jpg" }, name => Assert.Equal([0xFF, 0xD8], File.ReadAllBytes(Path.Combine(folder, name))[..2]));
         using var poster = SKBitmap.Decode(Path.Combine(folder, "poster.jpg"));
         using var fanart = SKBitmap.Decode(Path.Combine(folder, "fanart.jpg"));
         Assert.Equal(360, poster.Height);
@@ -95,7 +96,7 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
         var result = await CreateService().GenerateAsync(id);
 
         Assert.False(result.Success);
-        await ffmpeg.DidNotReceiveWithAnyArgs().ExtractFrameJpegAsync(default!, default, default!, default);
+        await ffmpeg.DidNotReceiveWithAnyArgs().ExtractFrameWebpAsync(default!, default, default!, default);
     }
 
     [Fact]
@@ -110,12 +111,12 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
     public async Task A_frame_too_small_to_crop_fails_without_a_poster_or_stray_temp_files()
     {
         var id = await AddMovieAsync();
-        ffmpeg.ExtractFrameJpegAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        ffmpeg.ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
                 using var bitmap = new SKBitmap(640, 1);
                 bitmap.Erase(new SKColor(120, 120, 120));
-                using var data = bitmap.Encode(SKEncodedImageFormat.Jpeg, 90);
+                using var data = bitmap.Encode(SKEncodedImageFormat.Webp, 90);
                 File.WriteAllBytes(call.ArgAt<string>(2), data.ToArray());
                 return FfmpegRunResult.Ok();
             });
@@ -133,12 +134,13 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
     public async Task Fails_and_leaves_no_images_when_no_frame_can_be_extracted()
     {
         var id = await AddMovieAsync();
-        ffmpeg.ExtractFrameJpegAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        ffmpeg.ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(FfmpegRunResult.Failed("boom"));
 
         var result = await CreateService().GenerateAsync(id);
 
         Assert.False(result.Success);
+        Assert.Contains("boom", result.ErrorMessage);
         Assert.False(File.Exists(Path.Combine(folder, "poster.jpg")));
     }
 }
