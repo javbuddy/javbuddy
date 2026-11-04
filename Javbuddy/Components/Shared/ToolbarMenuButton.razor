@@ -1,7 +1,14 @@
 <div class="toolbar-menu" @onkeydown="OnKeyDown">
     <button type="button" class="toolbar-menu-btn" disabled="@Disabled" title="@Title"
-            aria-haspopup="menu" aria-expanded="@(open ? "true" : "false")" @onclick="Toggle">
-        @Icon
+            aria-haspopup="menu" aria-expanded="@(open ? "true" : "false")" aria-busy="@(Busy ? "true" : null)" @onclick="Toggle">
+        @if (Busy)
+        {
+            <span class="toolbar-menu-spinner" role="status" aria-label="Working"></span>
+        }
+        else
+        {
+            @Icon
+        }
         @Label
         <svg class="toolbar-menu-caret" viewBox="0 0 16 16" width="10" height="10" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z" /></svg>
     </button>
@@ -25,6 +32,9 @@
     [Parameter] public RenderFragment? Icon { get; set; }
     [Parameter] public string? Title { get; set; }
     [Parameter] public bool Disabled { get; set; }
+    /// <summary>An action from this menu is running: shows a spinner in place of the icon, so
+    /// progress is visible while the menu is closed.</summary>
+    [Parameter] public bool Busy { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private bool open;
