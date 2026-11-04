@@ -38,6 +38,62 @@ public class NfoDriftDetectorTests
         Assert.Equal(["Drama", "Squirt"], NfoDriftDetector.CanonicalGenres(movie));
     }
 
+    private static Movie MovieWithTags(params string[] tags)
+    {
+        var movie = MovieWith();
+        foreach (var name in tags) movie.MovieTags.Add(new MovieTag { Movie = movie, Tag = new Tag { Name = name } });
+        return movie;
+    }
+
+    [Fact]
+    public void Evaluate_TagsAddedToAMovieWhoseNfoHasNoGenres_IsJavbuddyChanged()
+    {
+        var baseline = NfoDriftDetector.Evaluate(MovieWithTags(), DiskWith(), baseline: null, strict: false).Baseline;
+
+        var outcome = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), DiskWith(), baseline, strict: false);
+
+        Assert.Equal(NfoDriftKind.JavbuddyChanged, outcome.Kind);
+        Assert.Equal("[Javbuddy changed] Genres: .nfo has '(none)', canonical is 'Drama'", outcome.Details);
+    }
+
+    [Fact]
+    public void Evaluate_AMovieWithTagsCheckedForTheFirstTimeAgainstAnNfoWithNoGenres_IsJavbuddyChanged()
+    {
+        // The upgrade case: no baseline for the field, tags already there, the file never had genres.
+        var outcome = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), DiskWith(), baseline: null, strict: false);
+
+        Assert.Equal(NfoDriftKind.JavbuddyChanged, outcome.Kind);
+        Assert.Contains("Genres: .nfo has '(none)', canonical is 'Drama'", outcome.Details);
+    }
+
+    [Fact]
+    public void Evaluate_AnOutsideToolStrippingTheGenresFromAnInSyncNfo_IsAnExternalEdit()
+    {
+        var withGenres = Disk("<movie><title>Title A</title><plot>Plot A</plot><genre>Drama</genre></movie>");
+        var baseline = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), withGenres, baseline: null, strict: false).Baseline;
+
+        var outcome = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), DiskWith(), baseline, strict: false);
+
+        Assert.Equal(NfoDriftKind.ExternalEdit, outcome.Kind);
+    }
+
+    [Fact]
+    public void Evaluate_NoTagsAndNoGenres_IsNotDrift_AndNeitherIsAnNfoWithGenresForAMovieWithoutTags()
+    {
+        Assert.Equal(NfoDriftKind.None, NfoDriftDetector.Evaluate(MovieWithTags(), DiskWith(), baseline: null, strict: false).Kind);
+        // Javbuddy has no tags to push, so the file's own genres are not drift.
+        var disk = Disk("<movie><title>Title A</title><plot>Plot A</plot><genre>Drama</genre></movie>");
+        Assert.Equal(NfoDriftKind.None, NfoDriftDetector.Evaluate(MovieWithTags(), disk, baseline: null, strict: false).Kind);
+    }
+
+    [Fact]
+    public void Evaluate_NfoGenresMatchingTheTags_IsNoDrift()
+    {
+        var disk = Disk("<movie><title>Title A</title><plot>Plot A</plot><genre>drama</genre></movie>");
+
+        Assert.Equal(NfoDriftKind.None, NfoDriftDetector.Evaluate(MovieWithTags("Drama"), disk, baseline: null, strict: false).Kind);
+    }
+
     [Fact]
     public void Evaluate_NoDrift_ReturnsNoneAndBaselinesEveryField()
     {

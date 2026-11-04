@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- Tags added in Javbuddy to a movie whose `.nfo` had no `<genre>` elements are now detected as `.nfo` drift ("Javbuddy changed") and are written into the file when you resolve the conflict or use **Write Javbuddy metadata to .nfo**; before, an `.nfo` without genres was never flagged and nothing was ever written to it. The `<genre>` elements are placed before the first `<actor>` with the file's own indentation. An `.nfo` with no genres is also flagged for a movie that already had tags, so after updating, such movies show up as drift until you write them. Likewise, if another tool strips the genres from an `.nfo` whose tags Javbuddy knows, it shows as an external edit.
+
 ## [0.4.2] - 2026-11-04
 
 ### Added

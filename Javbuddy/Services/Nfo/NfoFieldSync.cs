@@ -6,7 +6,7 @@ namespace Javbuddy.Services.Nfo;
 
 /// <summary>Writes a movie's canonical descriptive fields onto an .nfo's XML (title, plot, studio, series,
 /// genres, release date, runtime). Only elements the movie has a value for are touched, and the return value
-/// says whether anything changed.</summary>
+/// says whether anything changed. Genres are the one field whose element is created when the file lacks it.</summary>
 public static class NfoFieldSync
 {
     /// <summary>Reconciles the same non-actor fields NfoDriftDetector compares onto
@@ -15,7 +15,7 @@ public static class NfoFieldSync
     /// director, studio/label, series, genres, release date, and runtime. Only updates an
     /// element that already exists on disk with some value — never invents a brand-new element
     /// for a field the on-disk .nfo doesn't have at all (same scope boundary as
-    /// NfoDriftDetector.AppendFieldConflicts). Returns whether anything actually changed, so callers that persist
+    /// NfoDriftDetector.AppendFieldConflicts) — except genres, which are created when the file has none. Returns whether anything actually changed, so callers that persist
     /// to disk (SyncMovieMetadataToNfoAsync) can skip an unnecessary write/timestamp bump.</summary>
     public static bool ApplyFieldUpdates(Movie movie, XElement root)
     {
@@ -79,11 +79,18 @@ public static class NfoFieldSync
     /// <summary>Replaces the on-disk &lt;genre&gt; element set with the canonical list when they
     /// differ, mirroring ConsolidateAndUpdateActorElements' primary/secondary shape: the first
     /// existing &lt;genre&gt; element becomes the anchor, extras are removed, and any additional
-    /// canonical genres are inserted right after it.</summary>
+    /// canonical genres are inserted right after it. An .nfo with no &lt;genre&gt; element at all gets them
+    /// created (the one element this class does invent): tags are added in Javbuddy, so a file that
+    /// has none yet must be able to receive them.</summary>
     private static bool UpdateGenreElements(XElement root, List<string> canonicalGenres)
     {
         var genreElements = root.Elements("genre").ToList();
-        if (canonicalGenres.Count == 0 || genreElements.Count == 0) return false;
+        if (canonicalGenres.Count == 0) return false;
+        if (genreElements.Count == 0)
+        {
+            InsertGenreElements(root, canonicalGenres);
+            return true;
+        }
 
         var currentGenres = genreElements.Select(e => e.Value.Trim()).Where(v => v.Length > 0).ToList();
         if (new HashSet<string>(currentGenres, StringComparer.OrdinalIgnoreCase).SetEquals(canonicalGenres))
@@ -109,6 +116,37 @@ public static class NfoFieldSync
         }
 
         return true;
+    }
+
+    /// <summary>Adds a &lt;genre&gt; per name to an .nfo that has none: right before the first &lt;actor&gt; (where
+    /// scrapers write them), else after the last element, copying the file's own indentation so a document loaded
+    /// with whitespace preserved keeps its shape.</summary>
+    private static void InsertGenreElements(XElement root, List<string> genres)
+    {
+        var before = root.Element("actor");
+        var reference = before ?? root.Elements().LastOrDefault();
+        if (reference is null)
+        {
+            root.Add(genres.Select(g => new XElement("genre", g)));
+            return;
+        }
+
+        var indent = reference.PreviousNode is XText text && string.IsNullOrWhiteSpace(text.Value) ? text.Value : null;
+        if (before is not null)
+        {
+            foreach (var genre in genres)
+            {
+                before.AddBeforeSelf(new XElement("genre", genre));
+                if (indent is not null) before.AddBeforeSelf(new XText(indent));
+            }
+            return;
+        }
+
+        for (var i = genres.Count - 1; i >= 0; i--)
+        {
+            reference.AddAfterSelf(new XElement("genre", genres[i]));
+            if (indent is not null) reference.AddAfterSelf(new XText(indent));
+        }
     }
 
     /// <summary>Writes the canonical release date into whichever of &lt;releasedate&gt;/

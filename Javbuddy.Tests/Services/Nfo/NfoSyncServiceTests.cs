@@ -1902,6 +1902,55 @@ public class NfoSyncServiceTests
     }
 
     [Fact]
+    public async Task TagsAddedToAMovieWhoseNfoHadNoGenres_AreDetectedAsDrift_AndPushedIntoTheFile()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var (service, _, movieId, nfoPath) = await SeedDriftMovieAsync(factory, root);
+        await File.WriteAllTextAsync(nfoPath, "<movie>\n  <title>Title A</title>\n  <plot>Plot A</plot>\n  <actor><name>Mikami Yua</name></actor>\n</movie>");
+        await service.CheckMovieNfoConflictAsync(movieId);
+        Assert.Equal(NfoDriftKind.None, Reload(factory, movieId).NfoDriftKind);
+
+        using (var db = factory.CreateDbContext())
+        {
+            AddGenreTags(db, db.Movies.Single(m => m.Id == movieId), "Drama", "Cosplay");
+        }
+
+        var check = await service.CheckMovieNfoConflictAsync(movieId);
+
+        Assert.True(check.HasConflict);
+        Assert.Equal(NfoDriftKind.JavbuddyChanged, Reload(factory, movieId).NfoDriftKind);
+        Assert.Equal("[Javbuddy changed] Genres: .nfo has '(none)', canonical is 'Cosplay, Drama'", Reload(factory, movieId).NfoConflictDetails);
+
+        var result = await service.PushNfoDriftAsync([movieId], includeExternal: false);
+
+        Assert.Equal(new NfoDriftPushResult(Written: 1, SkippedExternal: 0, Failed: 0, StillDrifting: 0), result);
+        Assert.Equal(
+            "<movie>\n  <title>Title A</title>\n  <plot>Plot A</plot>\n  <genre>Cosplay</genre>\n  <genre>Drama</genre>\n  <actor><name>Mikami Yua</name></actor>\n</movie>",
+            await File.ReadAllTextAsync(nfoPath));
+        Assert.Equal(NfoDriftKind.None, Reload(factory, movieId).NfoDriftKind);
+    }
+
+    [Fact]
+    public async Task GenerateProposedNfoAsync_AddsGenresToAnNfoThatHasNone()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var (service, _, movieId, nfoPath) = await SeedDriftMovieAsync(factory, root);
+        await File.WriteAllTextAsync(nfoPath, "<movie>\n  <title>Title A</title>\n</movie>");
+        using (var db = factory.CreateDbContext())
+        {
+            AddGenreTags(db, db.Movies.Single(m => m.Id == movieId), "Drama");
+        }
+
+        var proposed = await service.GenerateProposedNfoAsync(movieId);
+
+        Assert.NotNull(proposed);
+        Assert.Equal(["Drama"], System.Xml.Linq.XDocument.Parse(proposed).Root!.Elements("genre").Select(e => e.Value));
+        Assert.DoesNotContain("<genre>", await File.ReadAllTextAsync(nfoPath));
+    }
+
+    [Fact]
     public async Task PushNfoDriftAsync_LeavesOutsideEditsAlone_UnlessIncluded()
     {
         using var factory = new TestDbContextFactory();

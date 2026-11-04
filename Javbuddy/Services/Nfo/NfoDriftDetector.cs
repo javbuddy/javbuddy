@@ -277,9 +277,10 @@ public static class NfoDriftDetector
     /// that "both present" requirement for just those fields, because the metadata editor modal
     /// never writes to the .nfo itself — an edit whose target element is blank or entirely
     /// absent needs to surface as a conflict too, not silently vanish. Rating/rating
-    /// votes/genres always stay lenient regardless of <paramref name="strict"/>: they aren't
+    /// votes always stay lenient regardless of <paramref name="strict"/>: they aren't
     /// editable through that modal, so this method being called from it is no reason to newly
-    /// flag drift in fields it never touched.</summary>
+    /// flag drift in fields it never touched. Genres are compared the same way in both modes, and
+    /// flag an .nfo with no genres at all when the movie has tags (see the genre check below).</summary>
     private static void AppendFieldConflicts(List<(NfoField, string)> drifts, NfoFieldValues db, NfoFieldValues disk, bool strict)
     {
         AppendScalarConflict(drifts, NfoField.Title, "Title", db.Title, disk.Title, strict);
@@ -314,10 +315,14 @@ public static class NfoDriftDetector
             drifts.Add((NfoField.Runtime, $"Runtime: .nfo has '{nfoDisplay}' minutes, canonical is '{dbRuntime}' minutes"));
         }
 
-        if (db.Genres.Count > 0 && disk.Genres.Count > 0
+        // Unlike the scalar fields above, an .nfo with no <genre> element at all is drift when the movie has tags: tags
+        // are something the user adds in Javbuddy, so a file that predates them (or never had any) must show the
+        // difference, and NfoFieldSync creates the elements when it is resolved.
+        if (db.Genres.Count > 0
             && !new HashSet<string>(db.Genres, StringComparer.OrdinalIgnoreCase).SetEquals(disk.Genres))
         {
-            drifts.Add((NfoField.Genres, $"Genres: .nfo has '{string.Join(", ", disk.Genres)}', canonical is '{string.Join(", ", db.Genres)}'"));
+            var nfoDisplay = disk.Genres.Count > 0 ? string.Join(", ", disk.Genres) : "(none)";
+            drifts.Add((NfoField.Genres, $"Genres: .nfo has '{nfoDisplay}', canonical is '{string.Join(", ", db.Genres)}'"));
         }
     }
 
@@ -404,7 +409,7 @@ public static class NfoDriftDetector
     /// tell a Tag name containing its own comma (e.g. "Nasty, hardcore") apart from two separate
     /// genres once it's been joined into that string. Requires the caller to have
     /// loaded movie.MovieTags with its Tag navigation. The sort itself makes both the conflict
-    /// message and (more importantly) the elements NfoSyncService.UpdateGenreElements writes into
+    /// message and (more importantly) the elements NfoFieldSync.UpdateGenreElements writes into
     /// the .nfo deterministic.</summary>
     public static List<string> CanonicalGenres(Movie movie)
     {
