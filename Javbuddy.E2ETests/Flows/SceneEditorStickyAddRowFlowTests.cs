@@ -105,6 +105,30 @@ public class SceneEditorStickyAddRowFlowTests
         await Expect(top).Not.ToHaveClassAsync(Unpinned);
     }
 
+    [Fact]
+    public async Task KeybindingsPopover_IsDrawnOverTheHeadingAndAddButtons()
+    {
+        var panel = await OpenEditorWithManyScenesAsync("E2E-STICKY-4");
+        var page = panel.Page;
+
+        await page.Locator(".shortcuts-info-btn").HoverAsync();
+        var popover = page.Locator(".shortcuts-info-popover");
+        await Expect(popover).ToBeVisibleAsync();
+        await page.WaitForFunctionAsync("() => getComputedStyle(document.querySelector('.shortcuts-info-popover')).opacity === '1'");
+
+        // Wherever the popover overlaps the pinned editor top, the popover is what's on top there. The popover is
+        // pointer-events: none, which hit-testing would skip, so make it hittable first (paint order is unchanged).
+        var covered = await popover.EvaluateAsync<string>(
+            "p => { p.style.pointerEvents = 'auto'; const r = p.getBoundingClientRect(); " +
+            "for (const sel of ['.scene-editor-heading', '.scene-editor-add-btn']) { " +
+            "const t = document.querySelector(sel).getBoundingClientRect(); " +
+            "const x0 = Math.max(r.left, t.left), x1 = Math.min(r.right, t.right), y0 = Math.max(r.top, t.top), y1 = Math.min(r.bottom, t.bottom); " +
+            "if (x0 >= x1 || y0 >= y1) return sel + ' does not overlap the popover'; " +
+            "if (!p.contains(document.elementFromPoint((x0 + x1) / 2, (y0 + y1) / 2))) return sel + ' is drawn over the popover'; } " +
+            "return ''; }");
+        Assert.Equal("", covered);
+    }
+
     private async Task<ILocator> OpenEditorWithManyScenesAsync(string code)
     {
         var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, code, MovieStatus.Got);

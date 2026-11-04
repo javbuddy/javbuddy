@@ -34,7 +34,9 @@
     top: 0;
     left: 0;
     right: 0;
-    z-index: 3;
+    /* Above the side panel's pinned editor top (z-index 6): the header's ShortcutsInfo popover is trapped in this
+       stacking context, so the header itself has to out-rank everything the popover hangs over. */
+    z-index: 7;
     box-sizing: border-box;
     height: var(--video-player-header-height);
     background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0));
