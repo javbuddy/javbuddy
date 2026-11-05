@@ -207,6 +207,21 @@ public class NfoDriftDetectorTests
     }
 
     [Fact]
+    public void Evaluate_FirstNameOnlyActorMissingFromNfo_IsJavbuddyChanged_AndLastNameOnlyActorIsIgnored()
+    {
+        const string diskXml = "<movie><title>Title A</title><plot>Plot A</plot><actor><name>Test Aoi</name></actor></movie>";
+        var baseline = NfoDriftDetector.Evaluate(MovieWith(null, null, "Aoi"), Disk(diskXml), baseline: null, strict: false).Baseline;
+        var movie = MovieWith(null, null, "Aoi");
+        movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "Madonna", LastName = null } });
+        movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "", LastName = "Smith" } });
+
+        var outcome = NfoDriftDetector.Evaluate(movie, Disk(diskXml), baseline, strict: false);
+
+        Assert.Equal(NfoDriftKind.JavbuddyChanged, outcome.Kind);
+        Assert.Equal("[Javbuddy changed] Actor 'Madonna' missing in .nfo", outcome.Details);
+    }
+
+    [Fact]
     public void Evaluate_ActorMatchingStillUsesDiskAliases()
     {
         var movie = MovieWith(null, null, "Aoi");

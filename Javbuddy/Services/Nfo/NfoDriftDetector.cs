@@ -224,7 +224,7 @@ public static class NfoDriftDetector
 
     private static List<Actor> LinkedActors(Movie movie) => movie.MovieActors
         .Select(ma => ma.Actor)
-        .Where(a => a != null && !string.IsNullOrWhiteSpace(a.FirstName))
+        .Where(a => a != null && a.HasName)
         .ToList();
 
     private static void AppendActorConflicts(List<(NfoField, string)> drifts, Movie movie, NfoFieldValues disk)

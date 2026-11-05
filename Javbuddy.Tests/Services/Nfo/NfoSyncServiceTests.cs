@@ -163,6 +163,45 @@ public class NfoSyncServiceTests
     }
 
     [Fact]
+    public async Task PreviewSyncActorAsync_FirstNameOnlyActor_IsPreviewed_AndLastNameOnlyActorIsSkipped()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var client = CreateClientFor(factory, root);
+        var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
+
+        var folder = root.AddMovieFolder("IPX-001");
+        await File.WriteAllTextAsync(Path.Combine(folder, "IPX-001.nfo"),
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<movie><title>T</title><actor><name>Madonna Ciccone</name></actor></movie>");
+
+        int firstOnlyId, lastOnlyId;
+        using (var db = factory.CreateDbContext())
+        {
+            var lastOnly = new Actor { FirstName = "Madonna", LastName = null };
+            lastOnly.Aliases.Add(new ActorAlias { Name = "Madonna Ciccone" });
+            var nameless = new Actor { FirstName = "", LastName = "Smith" };
+            db.Actors.AddRange(lastOnly, nameless);
+            db.Movies.Add(new Movie { Code = "IPX-001", Title = "Movie 1", MetaActresses = "Madonna Ciccone" });
+            db.SaveChanges();
+            firstOnlyId = lastOnly.Id;
+            lastOnlyId = nameless.Id;
+            db.MovieActors.Add(new MovieActor { MovieId = db.Movies.Single().Id, ActorId = firstOnlyId });
+            db.SaveChanges();
+        }
+
+        var preview = await service.PreviewSyncActorAsync(firstOnlyId);
+        Assert.Equal("Madonna", preview.CanonicalName);
+        Assert.Equal(1, preview.WillUpdateCount);
+
+        var lastOnlyPreview = await service.PreviewSyncActorAsync(lastOnlyId);
+        Assert.Equal(string.Empty, lastOnlyPreview.CanonicalName);
+        Assert.Empty(lastOnlyPreview.Movies);
+
+        var lastOnlySync = await service.SyncActorAsync(lastOnlyId);
+        Assert.Equal(string.Empty, lastOnlySync.CanonicalName);
+    }
+
+    [Fact]
     public async Task PreviewSyncActorAsync_ReadOnlyFile_ReturnsReadOnlyStatus()
     {
         using var factory = new TestDbContextFactory();

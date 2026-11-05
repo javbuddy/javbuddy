@@ -68,6 +68,11 @@ public class Actor
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Whether the actor has a usable name. A first name is required (a one-name actor is stored
+    /// as a first name only); a last name alone is not enough. The .nfo writers, the drift check and the
+    /// actor sync all skip an actor without one, so they agree on who is written and compared.</summary>
+    public bool HasName => !string.IsNullOrWhiteSpace(FirstName);
+
     /// <summary>LastName FirstName, matching the established cast-linking and route convention.</summary>
     public string DisplayName => Services.Actors.ActorDisplayName.Format(FirstName ?? string.Empty, LastName);
 

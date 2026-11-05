@@ -175,7 +175,7 @@ public class NfoSyncService(
             .Include(a => a.Aliases)
             .FirstOrDefaultAsync(a => a.Id == actorId, ct);
 
-        if (actor is null || string.IsNullOrWhiteSpace(actor.FirstName))
+        if (actor is null || !actor.HasName)
         {
             return new ActorNfoSyncPreviewResult(actorId, string.Empty, []);
         }
@@ -327,7 +327,7 @@ public class NfoSyncService(
             .Include(a => a.Aliases)
             .FirstOrDefaultAsync(a => a.Id == actorId, ct);
 
-        if (actor is null || string.IsNullOrWhiteSpace(actor.FirstName))
+        if (actor is null || !actor.HasName)
         {
             return new ActorNfoSyncResult(actorId, string.Empty, 0, 0, 0, 0, 0, []);
         }
@@ -846,7 +846,7 @@ public class NfoSyncService(
 
         var linkedActors = movie.MovieActors
             .Select(ma => ma.Actor)
-            .Where(a => a != null && !string.IsNullOrWhiteSpace(a.FirstName))
+            .Where(a => a != null && a.HasName)
             .ToList();
 
         var preWrite = NfoDriftDetector.ReadNfo(root);
@@ -1052,7 +1052,7 @@ public class NfoSyncService(
 
         var linkedActors = movie.MovieActors
             .Select(ma => ma.Actor)
-            .Where(a => a != null && !string.IsNullOrWhiteSpace(a.FirstName))
+            .Where(a => a != null && a.HasName)
             .ToList();
 
         foreach (var actor in linkedActors)
@@ -1145,7 +1145,7 @@ public class NfoSyncService(
                 }
 
                 movie.MediaNfoLastWriteUtc = result.LastWriteUtc;
-                foreach (var actor in movie.MovieActors.Select(ma => ma.Actor).Where(a => a != null && !string.IsNullOrWhiteSpace(a.FirstName)))
+                foreach (var actor in movie.MovieActors.Select(ma => ma.Actor).Where(a => a != null && a.HasName))
                 {
                     UpdateMovieMetaActresses(movie, CreateNameMatcher(actor, null), actor.DisplayName);
                 }
@@ -1219,7 +1219,7 @@ public class NfoSyncService(
 
         var linkedActors = movie.MovieActors
             .Select(ma => ma.Actor)
-            .Where(a => a != null && !string.IsNullOrWhiteSpace(a.FirstName))
+            .Where(a => a != null && a.HasName)
             .ToList();
 
         foreach (var actor in linkedActors)

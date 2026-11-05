@@ -67,6 +67,20 @@ public sealed class MovieNfoBuilderTests : IDisposable
     }
 
     [Fact]
+    public void Build_writes_first_name_only_actors_and_skips_ones_without_a_first_name()
+    {
+        var movie = new Movie { Code = "abc-001" };
+        movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "Yua", LastName = "Mikami" } });
+        movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "Madonna", LastName = null } });
+        movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "", LastName = "Smith" } });
+        movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = " ", LastName = null } });
+
+        var root = XDocument.Parse(MovieNfoBuilder.Build(movie)).Root!;
+
+        Assert.Equal(["Madonna", "Mikami Yua"], root.Elements("actor").Select(a => a.Element("name")!.Value).Order());
+    }
+
+    [Fact]
     public async Task CreateTextAsync_creates_a_new_file_but_never_overwrites_one()
     {
         var path = Path.Combine(dir, "x.nfo");

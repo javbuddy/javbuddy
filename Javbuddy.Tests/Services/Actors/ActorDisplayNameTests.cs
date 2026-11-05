@@ -41,4 +41,15 @@ public class ActorDisplayNameTests
         Assert.Equal("Yua Mikami", actor.WesternOrderName);
         Assert.Equal("Mikami Yua", actor.DisplayName);
     }
+
+    [Theory]
+    [InlineData("Madonna", null, true)]
+    [InlineData("Yua", "Mikami", true)]
+    [InlineData("", "Smith", false)]
+    [InlineData(null, "Smith", false)]
+    [InlineData(" ", null, false)]
+    public void Actor_HasName_RequiresAFirstName(string? first, string? last, bool expected)
+    {
+        Assert.Equal(expected, new Javbuddy.Models.Actor { FirstName = first, LastName = last }.HasName);
+    }
 }
