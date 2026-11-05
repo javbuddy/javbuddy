@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-05
+
 ### Added
 
 - The player shows external subtitles: `.srt` and `.vtt` files beside the video that are named after it (`ABC-123.srt`, `ABC-123.en.srt`; the suffix is the language label) are offered as tracks, the first on by default. The **CC** button over the video steps through the tracks and turns them off. SRT is converted to WebVTT on the fly; nothing is written to the library. `.ass`/`.ssa` and the VR viewer are not supported.
