@@ -98,6 +98,35 @@ public class ScrapeChallengeFallbackTests
     }
 
     [Fact]
+    public async Task WhenTheSolversFirstAnswerIsStillAChallenge_ItIsRetriedOnce()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        await SaveMinnanoAsync(dbFactory, useSolver: true);
+        var solver = Solver();
+        solver.GetAsync(Arg.Any<Uri>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(
+            Solved("<html><title>Just a moment...</title></html>", "https://www.minnano-av.com/search_result.php", 403),
+            Solved(ListHtml, "https://www.minnano-av.com/search_result.php"));
+        var client = new MinnanoAvClient(new FakeHttpClientFactory(Challenge()), dbFactory, challengeSolver: solver);
+
+        var results = await client.SearchPerformersAsync("美帆");
+
+        Assert.NotEmpty(results);
+        await solver.Received(2).GetAsync(Arg.Any<Uri>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task WhenTheSolverStaysChallenged_ItGivesUpAfterOneRetry()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        await SaveMinnanoAsync(dbFactory, useSolver: true);
+        var solver = Solver(Solved("<html><title>Just a moment...</title></html>", "https://www.minnano-av.com/x", 403));
+        var client = new MinnanoAvClient(new FakeHttpClientFactory(Challenge()), dbFactory, challengeSolver: solver);
+
+        await Assert.ThrowsAsync<ScrapeBlockedException>(() => client.SearchPerformersAsync("美帆"));
+        await solver.Received(2).GetAsync(Arg.Any<Uri>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task DetailFetch_GoesThroughTheSolverWhenChallenged()
     {
         using var dbFactory = new TestDbContextFactory();

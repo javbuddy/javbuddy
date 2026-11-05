@@ -125,16 +125,26 @@ public abstract class ThrottledScrapeClientBase<TSettings>(
         }
 
         var uri = new Uri(url);
-        var solved = form is null
-            ? await challengeSolver.GetAsync(uri, SourceName, ct)
-            : await challengeSolver.PostFormAsync(uri, form, SourceName, ct);
+
+        Task<SolverResult> SolveAsync() => form is null
+            ? challengeSolver.GetAsync(uri, SourceName, ct)
+            : challengeSolver.PostFormAsync(uri, form, SourceName, ct);
+
+        var solved = await SolveAsync();
+        if (solved.Response is { } first && IsStillChallenge(first))
+        {
+            // A solver's first attempt at a site can come back still challenged (a cold browser or a fresh
+            // session); the next one goes through with the clearance it just earned, so try once more.
+            Logger.LogInformation("{Source}: the challenge solver returned a challenge page; retrying once", SourceName);
+            solved = await SolveAsync();
+        }
 
         if (solved.Response is not { } page)
         {
             throw new ScrapeBlockedException($"{SourceName} is protected by a bot challenge (Cloudflare) and the challenge solver failed: {solved.Error}");
         }
 
-        if (ScrapeChallenge.IsChallenge((System.Net.HttpStatusCode)page.StatusCode, false, false, page.Html))
+        if (IsStillChallenge(page))
         {
             throw new ScrapeBlockedException($"{SourceName} is protected by a bot challenge (Cloudflare) that the challenge solver could not pass.");
         }
@@ -142,6 +152,9 @@ public abstract class ThrottledScrapeClientBase<TSettings>(
         var success = page.StatusCode is >= 200 and < 300;
         return new FetchedPage(success ? page.Html : null, string.IsNullOrEmpty(page.FinalUrl) ? url : page.FinalUrl, page.StatusCode);
     }
+
+    private static bool IsStillChallenge(SolvedResponse page) =>
+        ScrapeChallenge.IsChallenge((System.Net.HttpStatusCode)page.StatusCode, false, false, page.Html);
 
     public async Task<bool> TestConnectionAsync(CancellationToken ct = default)
     {
