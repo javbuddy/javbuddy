@@ -24,6 +24,7 @@ public class VideoPlayerModalTests : BunitContext
     {
         Services.AddSingleton(jellyfinClient);
         Services.AddSingleton(streamService);
+        Services.AddSingleton(Substitute.For<IMovieSubtitleService>());
         Services.AddSingleton(trickplayService);
         Services.AddSingleton(new TrickplayGenerationTracker());
         streamService.GetMainFilePathAsync(Arg.Any<int>()).Returns("/library/ABC-123/ABC-123.mp4");

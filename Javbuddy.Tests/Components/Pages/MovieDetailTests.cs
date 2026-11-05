@@ -62,6 +62,7 @@ public class MovieDetailTests : BunitContext
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
         Services.AddSingleton(jellyfinClient);
         Services.AddSingleton(StreamServiceStubs.AllPlayable());
+        Services.AddSingleton(Substitute.For<IMovieSubtitleService>());
         Services.AddSingleton(Substitute.For<ITrickplayService>());
         Services.AddSingleton(new TrickplayGenerationTracker());
         Services.AddSingleton<IMediaServerClient>(jellyfinClient);

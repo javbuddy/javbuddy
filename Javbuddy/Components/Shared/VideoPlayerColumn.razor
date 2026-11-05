@@ -1,3 +1,4 @@
+@using Javbuddy.Services.Movies
 @using Javbuddy.Services.Trickplay
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -16,7 +17,17 @@
                    controlslist="@(ScrubBarShown ? "nofullscreen" : null)"
                    @ondurationchange="OnVideoDurationChangedAsync"
                    autoplay>
+                @for (var i = 0; i < Subtitles.Count; i++)
+                {
+                    <track kind="subtitles" src="@Subtitles[i].Url" label="@Subtitles[i].Label" srclang="@Subtitles[i].Language" default="@(i == 0)" />
+                }
             </video>
+            @if (Subtitles.Count > 0 && !VrMode)
+            {
+                <button type="button" class="video-player-subtitles @(subtitleIndex is null ? null : "video-player-subtitles-on")"
+                        title="@SubtitlesTitle" aria-label="@SubtitlesTitle" aria-pressed="@(subtitleIndex is not null ? "true" : "false")"
+                        @onclick="CycleSubtitlesAsync">CC@(subtitleIndex is { } n && Subtitles.Count > 1 ? " " + Subtitles[n].Label : null)</button>
+            }
             @if (VrMode)
             {
                 <VrViewer @key="VrProjection" VideoSelector="@VideoSelector" Projection="@VrProjection" />
@@ -53,6 +64,10 @@
 
     /// <summary>The video's URL; no video is shown while it's null.</summary>
     [Parameter] public string? Src { get; set; }
+
+    /// <summary>External subtitles for the video. The first shows by default; the CC button steps through
+    /// them and off. Not offered in VR mode, whose viewer draws the video itself.</summary>
+    [Parameter] public IReadOnlyList<SubtitleTrack> Subtitles { get; set; } = [];
 
     [Parameter] public TrickplayLayout? Trickplay { get; set; }
 
@@ -121,6 +136,43 @@
     // scrub bar once the browser has read the video's own length.
     private double? TimelineDurationSeconds => DurationSeconds is > 0 ? DurationSeconds : videoDurationSeconds;
 
+    // The track showing, null for off; the first track shows until the user changes it.
+    private int? subtitleIndex = 0;
+    private string? subtitleKey;
+    // New tracks: a reused <track> element keeps its old mode, so the first one is shown explicitly.
+    private bool subtitleTracksChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!subtitleTracksChanged) return;
+        subtitleTracksChanged = false;
+        try
+        {
+            videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");
+            await videoModule.InvokeVoidAsync("setSubtitleTrack", VideoSelector, subtitleIndex);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private string SubtitlesTitle => subtitleIndex is { } n ? $"Subtitles: {Subtitles[n].Label} (click for next / off)" : "Subtitles: off (click to turn on)";
+
+    private async Task CycleSubtitlesAsync()
+    {
+        try
+        {
+            videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");
+            // Where the browser is now, since its own captions menu can change the track too.
+            subtitleIndex = await videoModule.InvokeAsync<int?>("subtitleTrack", VideoSelector);
+            subtitleIndex = subtitleIndex is null ? 0 : subtitleIndex + 1 < Subtitles.Count ? subtitleIndex + 1 : null;
+            await videoModule.InvokeVoidAsync("setSubtitleTrack", VideoSelector, subtitleIndex);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
     private double? videoDurationSeconds;
     // The stream videoDurationSeconds was read from; a media fragment (#t=...) doesn't change it.
     private string? videoStream;
@@ -135,6 +187,13 @@
         {
             videoStream = stream;
             videoDurationSeconds = null;
+        }
+        var key = string.Join('|', Subtitles.Select(t => t.Url));
+        if (key != subtitleKey)
+        {
+            subtitleKey = key;
+            subtitleIndex = Subtitles.Count > 0 ? 0 : null;
+            subtitleTracksChanged = Subtitles.Count > 0;
         }
         await ReportScrubBarShownAsync();
     }

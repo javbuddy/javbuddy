@@ -52,6 +52,7 @@ public class MovieScenesTests : BunitContext
         Services.AddSingleton(Substitute.For<IMovieHighlightService>());
         Services.AddSingleton(Substitute.For<IMovieApexService>());
         Services.AddSingleton(StreamServiceStubs.AllPlayable());
+        Services.AddSingleton(Substitute.For<IMovieSubtitleService>());
         Services.AddSingleton(Substitute.For<ITrickplayService>());
         Services.AddSingleton(new TrickplayGenerationTracker());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Trickplay.IHighlightTrickplayService>());

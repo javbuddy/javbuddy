@@ -67,6 +67,7 @@ public class MovieCleanupTests : BunitContext
         Services.AddSingleton(cleanupService);
         Services.AddSingleton(jellyfinClient ?? Substitute.For<IJellyfinClient>());
         Services.AddSingleton(streamService ?? StreamServiceStubs.AllPlayable());
+        Services.AddSingleton(Substitute.For<IMovieSubtitleService>());
         Services.AddSingleton(trickplayService ?? Substitute.For<ITrickplayService>());
         Services.AddSingleton(repairService ?? Substitute.For<Javbuddy.Services.VideoRepair.IVideoRepairService>());
         Services.AddSingleton(movieChangeNotifier ?? new MovieChangeNotifier());

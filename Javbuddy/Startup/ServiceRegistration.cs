@@ -139,6 +139,7 @@ public static class ServiceRegistration
         services.AddScoped<IMovieGridQueryService, MovieGridQueryService>();
         services.AddScoped<IMovieRescanService, MovieRescanService>();
         services.AddScoped<IMovieStreamService, MovieStreamService>();
+        services.AddScoped<IMovieSubtitleService, MovieSubtitleService>();
         services.AddScoped<IDeoVrSettingsService, DeoVrSettingsService>();
         services.AddScoped<IDeoVrGroupService, DeoVrGroupService>();
         services.AddScoped<IDeoVrService, DeoVrService>();

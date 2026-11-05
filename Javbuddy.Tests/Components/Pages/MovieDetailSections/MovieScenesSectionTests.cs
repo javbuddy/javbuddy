@@ -81,6 +81,7 @@ public class MovieScenesSectionTests : BunitContext
         highlightMedia.ServesVariant(SceneMediaService.VariantThumb).Returns(true);
         Services.AddSingleton(Substitute.For<IJellyfinClient>());
         Services.AddSingleton(StreamServiceStubs.AllPlayable());
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Movies.IMovieSubtitleService>());
         Services.AddSingleton(trickplayService);
         Services.AddSingleton(generation);
         Services.AddSingleton(highlightTrickplay);

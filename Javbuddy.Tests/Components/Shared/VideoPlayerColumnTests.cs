@@ -1,5 +1,6 @@
 using Bunit;
 using Javbuddy.Components.Shared;
+using Javbuddy.Services.Movies;
 using Javbuddy.Services.Trickplay;
 using Microsoft.AspNetCore.Components;
 
@@ -14,6 +15,70 @@ public class VideoPlayerColumnTests : BunitContext
     public VideoPlayerColumnTests()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
+    private static readonly IReadOnlyList<SubtitleTrack> TwoTracks =
+        [new("/api/movies/1/subtitles/0", "English", "en"), new("/api/movies/1/subtitles/1", "Japanese", "ja")];
+
+    [Fact]
+    public void Subtitles_RenderAsTracks_WithOnlyTheFirstDefault_AndACcButton()
+    {
+        var cut = Render<VideoPlayerColumn>(p => p
+            .Add(x => x.VideoClass, "test-video")
+            .Add(x => x.Src, "/api/movies/1/stream")
+            .Add(x => x.Subtitles, TwoTracks));
+
+        var tracks = cut.FindAll("video track");
+        Assert.Equal(["/api/movies/1/subtitles/0", "/api/movies/1/subtitles/1"], tracks.Select(t => t.GetAttribute("src")));
+        Assert.True(tracks[0].HasAttribute("default"));
+        Assert.False(tracks[1].HasAttribute("default"));
+        Assert.Contains("video-player-subtitles-on", cut.Find(".video-player-subtitles").ClassList);
+    }
+
+    [Fact]
+    public void NoSubtitles_OrVrMode_ShowsNoCcButton()
+    {
+        var none = Render<VideoPlayerColumn>(p => p.Add(x => x.VideoClass, "v").Add(x => x.Src, "/s"));
+        var vr = Render<VideoPlayerColumn>(p => p.Add(x => x.VideoClass, "v").Add(x => x.Src, "/s")
+            .Add(x => x.Subtitles, TwoTracks).Add(x => x.VrMode, true));
+
+        Assert.Empty(none.FindAll(".video-player-subtitles"));
+        Assert.Empty(vr.FindAll(".video-player-subtitles"));
+    }
+
+    [Fact]
+    public void CcButton_StepsThroughTheTracksAndOff()
+    {
+        JSInterop.Setup<int?>("subtitleTrack", _ => true).SetResult(null);
+        var cut = Render<VideoPlayerColumn>(p => p
+            .Add(x => x.VideoClass, "test-video")
+            .Add(x => x.Src, "/api/movies/1/stream")
+            .Add(x => x.Subtitles, TwoTracks));
+
+        // The browser reports the track now showing; the button moves to the next one, then off.
+        var current = JSInterop.Setup<int?>("subtitleTrack", _ => true);
+        current.SetResult(0);
+        cut.Find(".video-player-subtitles").Click();
+        JSInterop.VerifyInvoke("setSubtitleTrack", 2); // once for the new tracks, once for the click
+        Assert.Contains("Japanese", cut.Find(".video-player-subtitles").TextContent);
+
+        current.SetResult(1);
+        cut.Find(".video-player-subtitles").Click();
+        Assert.DoesNotContain("video-player-subtitles-on", cut.Find(".video-player-subtitles").ClassList);
+    }
+
+    [Fact]
+    public void ChangingTheTracks_ResetsToTheFirst()
+    {
+        var cut = Render<VideoPlayerColumn>(p => p
+            .Add(x => x.VideoClass, "test-video")
+            .Add(x => x.Src, "/api/movies/1/stream")
+            .Add(x => x.Subtitles, TwoTracks));
+        cut.Find(".video-player-subtitles").Click();
+
+        cut.Render(p => p.Add(x => x.Subtitles, [new SubtitleTrack("/api/movies/1/subtitles/0?fileId=2", "French", "fr")]));
+
+        Assert.Contains("video-player-subtitles-on", cut.Find(".video-player-subtitles").ClassList);
     }
 
     [Fact]

@@ -44,6 +44,7 @@ public class ActorDetailTests : BunitContext
         Services.AddSingleton(Substitute.For<IMovieHighlightService>());
         Services.AddSingleton(Substitute.For<IMovieApexService>());
         Services.AddSingleton(StreamServiceStubs.AllPlayable());
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Movies.IMovieSubtitleService>());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Trickplay.ITrickplayService>());
         Services.AddSingleton(new Javbuddy.Services.Trickplay.TrickplayGenerationTracker());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Trickplay.IHighlightTrickplayService>());

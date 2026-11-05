@@ -3,6 +3,7 @@
 @using Javbuddy.Services.Movies
 @using Javbuddy.Services.Trickplay
 @inject IMovieStreamService StreamService
+@inject IMovieSubtitleService SubtitleService
 @inject ITrickplayService TrickplayService
 @inject TrickplayGenerationTracker TrickplayGeneration
 @inject IJSRuntime JS
@@ -100,6 +101,7 @@
                     <div class="video-player-layout">
                     <VideoPlayerColumn VideoClass="video-player-video"
                                        Src="@VideoSrc"
+                                       Subtitles="subtitles"
                                        Trickplay="trickplay"
                                        Generating="generating"
                                        DurationSeconds="DurationSeconds"
@@ -240,6 +242,8 @@
     private bool prevShow;
     private int? prevMovieId;
     private string? streamUrl;
+    // The external subtitles beside the file streamUrl plays.
+    private IReadOnlyList<SubtitleTrack> subtitles = [];
     // The movie streamUrl belongs to; behind MovieId while switching to another one.
     private int? streamMovieId;
     private TrickplayLayout? trickplay;
@@ -344,13 +348,18 @@
         string? error = null;
         IReadOnlyList<MovieVersionOption> loadedVersions = [];
         string? loadedVrType = null;
+        IReadOnlyList<SubtitleTrack> loadedSubtitles = [];
         try
         {
             var path = fileId is { } id
                 ? await StreamService.GetFilePathAsync(movieId.Value, id)
                 : await StreamService.GetMainFilePathAsync(movieId.Value);
             url = path is not null ? MovieStreamService.StreamUrl(movieId.Value, fileId) : null;
-            if (url is not null) loadedVrType = await StreamService.GetVrTypeAsync(movieId.Value, fileId);
+            if (url is not null)
+            {
+                loadedVrType = await StreamService.GetVrTypeAsync(movieId.Value, fileId);
+                loadedSubtitles = await LoadSubtitlesAsync(movieId.Value, fileId);
+            }
             if (ShowVersions)
             {
                 loadedVersions = await StreamService.GetVersionsAsync(movieId.Value) ?? [];
@@ -370,6 +379,7 @@
 
         loading = false;
         streamUrl = url;
+        subtitles = loadedSubtitles;
         streamMovieId = movieId;
         UseVrViewerFor(loadedVrType);
         versions = loadedVersions;
@@ -482,13 +492,28 @@
         {
             // The viewer is a convenience: without the format the video just plays flat.
         }
+        var versionSubtitles = await LoadSubtitlesAsync(movieId, fileId);
         if (!Show || streamMovieId != movieId) return;
 
+        subtitles = versionSubtitles;
         playingFileId = fileId;
         errorMessage = null;
         UseVrViewerFor(vrType);
         resumeAtSeconds = at ?? StartSeconds;
         streamUrl = MovieStreamService.StreamUrl(movieId, fileId);
+    }
+
+    // Subtitles are a convenience: without them the video just plays.
+    private async Task<IReadOnlyList<SubtitleTrack>> LoadSubtitlesAsync(int movieId, int? fileId)
+    {
+        try
+        {
+            return await SubtitleService.GetTracksAsync(movieId, fileId);
+        }
+        catch (Exception)
+        {
+            return [];
+        }
     }
 
     private async Task LoadTrickplayAsync(int movieId)
@@ -536,6 +561,7 @@
     private async Task CloseAsync()
     {
         streamUrl = null;
+        subtitles = [];
         trickplay = null;
         generating = null;
         vrMode = false;

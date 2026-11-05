@@ -29,6 +29,7 @@ public class ClipPlayerModalTests : BunitContext
     {
         Services.AddSingleton(jellyfinClient);
         Services.AddSingleton(streamService);
+        Services.AddSingleton(Substitute.For<IMovieSubtitleService>());
         Services.AddSingleton(trickplayService);
         Services.AddSingleton(tracker);
         Services.AddSingleton(highlightService);

@@ -15,6 +15,22 @@ export function duration(selector) {
     return video && Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
 }
 
+// The index of the subtitle track showing, or null when none is.
+export function subtitleTrack(selector) {
+    const video = document.querySelector(selector);
+    const i = video ? Array.from(video.textTracks).findIndex(t => t.mode === "showing") : -1;
+    return i < 0 ? null : i;
+}
+
+// Shows the video's index-th subtitle track and hides the rest; null hides them all.
+export function setSubtitleTrack(selector, index) {
+    const video = document.querySelector(selector);
+    if (!video) return;
+    Array.from(video.textTracks).forEach((track, i) => {
+        track.mode = i === index ? "showing" : "disabled";
+    });
+}
+
 export function seek(selector, seconds) {
     const video = document.querySelector(selector);
     if (!video) return false;

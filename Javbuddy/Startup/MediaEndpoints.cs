@@ -48,6 +48,14 @@ public static class MediaEndpoints
                 : Results.File(path, MovieStreamService.ContentType(path), enableRangeProcessing: true);
         });
 
+        // A sidecar subtitle beside the movie's video file (or its ?fileId= version), as WebVTT for a
+        // <track>. It is named by its index among the file's siblings, never by a path from the request.
+        app.MapGet("/api/movies/{movieId:int}/subtitles/{index:int}", async (int movieId, int index, int? fileId, IMovieSubtitleService subtitles, CancellationToken ct) =>
+        {
+            var vtt = await subtitles.GetWebVttAsync(movieId, fileId, index, ct);
+            return vtt is null ? Results.NotFound() : Results.Text(vtt, "text/vtt", System.Text.Encoding.UTF8);
+        });
+
         // One sheet of a movie's locally generated trickplay. The identity names one exact
         // video file, so a sheet never changes under its URL.
         app.MapGet("/trickplay/{movieId:int}/{identity}/{index:int}.webp", async (

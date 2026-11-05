@@ -19,6 +19,7 @@ public class VideoPlayerShellTests : BunitContext
     public VideoPlayerShellTests()
     {
         Services.AddSingleton(streamService);
+        Services.AddSingleton(Substitute.For<IMovieSubtitleService>());
         Services.AddSingleton(trickplayService);
         Services.AddSingleton(tracker);
         JSInterop.Mode = JSRuntimeMode.Loose;
