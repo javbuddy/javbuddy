@@ -1,0 +1,45 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.MediaInfo
+@inject IMediaInfoSettingsService SettingsService
+
+@* Local Library drawer's MediaInfo section. *@
+<p class="text-muted">
+    Probes each movie's local video file with MediaInfo for technical info — resolution,
+    codec, bitrate, duration, and similar — as part of every local scan/refresh. No
+    external service is involved; the library ships with the app.
+</p>
+
+@if (settings is not null)
+{
+    <EditForm Model="settings" OnValidSubmit="SaveAsync" FormName="mediainfo-settings">
+        <div class="form-check mb-3">
+            <input class="form-check-input" type="checkbox" id="mediainfo-enabled" @bind="settings.Enabled" />
+            <label class="form-check-label" for="mediainfo-enabled">Enable MediaInfo probing</label>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit">Save</button>
+        </div>
+        @if (saved)
+        {
+            <div class="alert alert-success mt-3 mb-0">Saved.</div>
+        }
+    </EditForm>
+}
+
+@code {
+    /// <summary>Raised after a save, so the page can refresh its tile.</summary>
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private MediaInfoSettings? settings;
+    private bool saved;
+
+    protected override async Task OnInitializedAsync() => settings = await SettingsService.GetAsync();
+
+    private async Task SaveAsync()
+    {
+        await SettingsService.SaveAsync(settings!);
+        saved = true;
+        await OnSaved.InvokeAsync();
+    }
+}

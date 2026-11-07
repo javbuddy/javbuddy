@@ -33,6 +33,10 @@ public class SettingsMetadataTests : BunitContext
             .Returns(new ConnectionStatus("locallibrary", false, false, "Not configured"));
         Services.AddSingleton(connectionStatusService);
 
+        var saveService = Substitute.For<IConnectionSettingsSaveService>();
+        saveService.GetLocalLibraryAsync(Arg.Any<CancellationToken>()).Returns(new LocalLibrarySettings());
+        Services.AddSingleton(saveService);
+
         Services.AddSingleton<ILogger<BackgroundJobRunner>>(NullLogger<BackgroundJobRunner>.Instance);
         Services.AddSingleton<BackgroundJobRunner>();
         Services.AddSingleton<ScheduledTaskLauncher>();
@@ -40,10 +44,12 @@ public class SettingsMetadataTests : BunitContext
 
         var trickplaySettings = Substitute.For<ITrickplaySettingsService>();
         trickplaySettings.GetEffectiveAsync(Arg.Any<CancellationToken>()).Returns(new TrickplaySettings());
+        trickplaySettings.GetStoredAsync(Arg.Any<CancellationToken>()).Returns(new TrickplaySettings());
         Services.AddSingleton(trickplaySettings);
 
         var newMovieArtworkSettings = Substitute.For<INewMovieArtworkSettingsService>();
         newMovieArtworkSettings.GetEffectiveAsync(Arg.Any<CancellationToken>()).Returns(new NewMovieArtworkSettings());
+        newMovieArtworkSettings.GetStoredAsync(Arg.Any<CancellationToken>()).Returns(new NewMovieArtworkSettings());
         Services.AddSingleton(newMovieArtworkSettings);
     }
 
@@ -84,8 +90,12 @@ public class SettingsMetadataTests : BunitContext
         // Verify StatusTiles
         Assert.Contains("Local Library", cut.Markup);
         Assert.Contains("r18.dev", cut.Markup);
-        Assert.Contains("MediaInfo", cut.Markup);
-        Assert.Contains("Generating for new files", cut.Markup);
+        // MediaInfo, Trickplay and New movie artwork are folded into the Local Library tile.
+        var titles = cut.FindAll(".status-tile-title").Select(t => t.TextContent.Trim());
+        Assert.DoesNotContain("MediaInfo", titles);
+        Assert.DoesNotContain("Trickplay", titles);
+        Assert.DoesNotContain("New movie artwork", titles);
+        Assert.Contains("MediaInfo", cut.Find(".status-tile-meta").TextContent);
         Assert.DoesNotContain("WAPdB", cut.Markup);
         Assert.Contains("minnano-av.com", cut.Markup);
     }
@@ -115,7 +125,7 @@ public class SettingsMetadataTests : BunitContext
     }
 
     [Fact]
-    public void OpenMediaInfoDrawer_ShowsSettingsWithoutRescanButton()
+    public void OpenLocalLibraryDrawer_ShowsMediaInfoTrickplayAndArtworkSections()
     {
         var factory = new TestDbContextFactory();
         using (var db = factory.CreateDbContext())
@@ -140,12 +150,12 @@ public class SettingsMetadataTests : BunitContext
 
         var cut = Render<SettingsMetadata>();
 
-        // Click the MediaInfo tile to open drawer
-        var mediaInfoTile = cut.FindAll(".status-tile").First(t => t.TextContent.Contains("MediaInfo"));
-        mediaInfoTile.Click();
+        cut.FindAll(".status-tile").First(t => t.TextContent.Contains("Local Library")).Click();
 
         // Verify drawer contents
         Assert.Contains("Enable MediaInfo probing", cut.Markup);
+        Assert.Contains("Generate trickplay for new movie files", cut.Markup);
+        Assert.Contains("Generate extrafanart for new movies", cut.Markup);
         Assert.Contains("Save", cut.Markup);
         Assert.DoesNotContain("Rescan library now", cut.Markup);
         Assert.DoesNotContain("The button below runs a full library rescan", cut.Markup);

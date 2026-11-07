@@ -34,7 +34,32 @@
     </FormFields>
 </ConnectionSettingsCard>
 
+@* Everything below acts on the movies' local video files. Each part keeps its own Save. *@
+<div class="card mt-4" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">MediaInfo</h5>
+        <MediaInfoSection OnSaved="OnSaved" />
+    </div>
+</div>
+
+<div class="card mt-4" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">Trickplay</h5>
+        <TrickplaySection OnSaved="OnSaved" />
+    </div>
+</div>
+
+<div class="card mt-4" style="max-width: 640px;">
+    <div class="card-body">
+        <h5 class="card-title">New movie artwork</h5>
+        <NewMovieArtworkSection OnSaved="OnSaved" />
+    </div>
+</div>
+
 @code {
+    /// <summary>Raised after any part saves, so the page can refresh its tile.</summary>
+    [Parameter] public EventCallback OnSaved { get; set; }
+
     private LocalLibrarySettings? settings;
     private bool saved;
     private bool envConfigured;

@@ -40,10 +40,7 @@ else
         <section class="metadata-section">
             <h2 class="metadata-section-title">Movies</h2>
             <div class="metadata-grid">
-                <StatusTile Title="Local Library" Description="Folder-based metadata source, checked before javinizer-go." Configured="localLibraryStatus.Configured" Summary="@localLibraryStatus.Summary" EnvConfigured="localLibraryStatus.EnvConfigured" OnOpen="OpenLocalLibraryModal" />
-                <StatusTile Title="MediaInfo" Description="Probes local video files for technical info (resolution, codec, bitrate)." Configured="mediaInfoSettings.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenMediaInfoModal" />
-                <StatusTile Title="Trickplay" Description="Scrub-bar preview thumbnails for the player." Configured="trickplaySettings?.GenerateForNewFiles == true" ConfiguredLabel="Generating for new files" NotConfiguredLabel="Not generating for new files" EnvConfigured="trickplayFromEnv" OnOpen="OpenTrickplayModal" />
-                <StatusTile Title="New movie artwork" Description="Extrafanart, poster and fanart generated from the video for movies a library rescan imports." Configured="newMovieArtworkSettings?.GenerateExtraFanart == true || newMovieArtworkSettings?.GeneratePosterAndFanart == true" ConfiguredLabel="Generating" NotConfiguredLabel="Off" OnOpen="OpenNewMovieArtworkModal" />
+                <StatusTile Title="Local Library" Description="Folder-based metadata source, checked before javinizer-go, plus MediaInfo, trickplay and artwork generation from the video files." Configured="localLibraryStatus.Configured" Summary="@LocalLibrarySummary" EnvConfigured="localLibraryStatus.EnvConfigured" OnOpen="OpenLocalLibraryModal" />
             </div>
         </section>
 
@@ -71,20 +68,9 @@ else
 }
 
 <SlideOverDrawer Show="showLocalLibraryModal" Title="Local Library" OnClose="CloseLocalLibraryModal">
-    <LocalLibrarySection />
-</SlideOverDrawer>
-
-<SlideOverDrawer Show="showTrickplayModal" Title="Trickplay" OnClose="CloseTrickplayModal">
-    @if (showTrickplayModal)
+    @if (showLocalLibraryModal)
     {
-        <TrickplaySection OnSaved="LoadTrickplayTileAsync" />
-    }
-</SlideOverDrawer>
-
-<SlideOverDrawer Show="showNewMovieArtworkModal" Title="New movie artwork" OnClose="CloseNewMovieArtworkModal">
-    @if (showNewMovieArtworkModal)
-    {
-        <NewMovieArtworkSection OnSaved="LoadNewMovieArtworkTileAsync" />
+        <LocalLibrarySection OnSaved="LoadLocalLibraryTileAsync" />
     }
 </SlideOverDrawer>
 
@@ -172,31 +158,6 @@ else
 
             <button class="btn btn-primary mt-2" type="submit">Save</button>
             @if (discoverySaved)
-            {
-                <div class="alert alert-success mt-3 mb-0">Saved.</div>
-            }
-        </EditForm>
-    </SlideOverDrawer>
-}
-
-@if (mediaInfoSettings is not null)
-{
-    <SlideOverDrawer Show="showMediaInfoModal" Title="MediaInfo" OnClose="CloseMediaInfoModal">
-        <p class="text-muted">
-            Probes each movie's local video file with MediaInfo for technical info — resolution,
-            codec, bitrate, duration, and similar — as part of every local scan/refresh. No
-            external service is involved; the library ships with the app.
-        </p>
-        <EditForm Model="mediaInfoSettings" OnValidSubmit="SaveMediaInfo" FormName="mediainfo-settings">
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="mediainfo-enabled" @bind="mediaInfoSettings.Enabled" />
-                <label class="form-check-label" for="mediainfo-enabled">Enable MediaInfo probing</label>
-            </div>
-
-            <div class="d-flex gap-2">
-                <button class="btn btn-primary" type="submit">Save</button>
-            </div>
-            @if (mediaInfoSaved)
             {
                 <div class="alert alert-success mt-3 mb-0">Saved.</div>
             }
@@ -292,16 +253,11 @@ else
     private MediaInfoSettings? mediaInfoSettings;
 
     private TrickplaySettings? trickplaySettings;
-    private bool trickplayFromEnv;
-    private bool showTrickplayModal;
     private NewMovieArtworkSettings? newMovieArtworkSettings;
-    private bool showNewMovieArtworkModal;
-    private bool showMediaInfoModal;
     private IReadOnlyList<DiscoverySourceStatus>? discoverySources;
     private Dictionary<string, bool> discoveryEdits = new();
     private bool showDiscoveryModal;
     private bool discoverySaved;
-    private bool mediaInfoSaved;
 
     private MinnanoAvSettings? minnanoAvSettings;
 
@@ -329,8 +285,20 @@ else
         minnanoAvSettings = await MinnanoAvSettingsService.GetAsync();
         if (MinnanoAvSolverEnv is { } minnanoAvSolver) minnanoAvSettings.UseChallengeSolver = minnanoAvSolver;
         discoverySources = await DiscoverySettingsService.GetSourcesAsync();
-        await LoadTrickplayTileAsync();
-        await LoadNewMovieArtworkTileAsync();
+        await LoadLocalLibraryTileAsync();
+    }
+
+    private string? LocalLibrarySummary
+    {
+        get
+        {
+            var onDisk = new List<string>();
+            if (mediaInfoSettings?.Enabled == true) onDisk.Add("MediaInfo");
+            if (trickplaySettings?.GenerateForNewFiles == true) onDisk.Add("trickplay");
+            if (newMovieArtworkSettings?.GenerateExtraFanart == true || newMovieArtworkSettings?.GeneratePosterAndFanart == true) onDisk.Add("new movie artwork");
+            var processing = onDisk.Count == 0 ? "No background processing" : $"{string.Join(", ", onDisk)} on";
+            return string.IsNullOrEmpty(localLibraryStatus?.Summary) ? processing : $"{localLibraryStatus.Summary} · {processing}";
+        }
     }
 
     private string DiscoverySummary => $"{discoverySources!.Count(x => x.Enabled)} of {discoverySources!.Count} enabled";
@@ -351,22 +319,13 @@ else
         discoverySaved = true;
     }
 
-    private async Task LoadTrickplayTileAsync()
+    private async Task LoadLocalLibraryTileAsync()
     {
+        localLibraryStatus = await ConnectionStatusService.GetLocalLibraryStatusAsync();
+        mediaInfoSettings = await MediaInfoSettingsService.GetAsync();
         trickplaySettings = await TrickplaySettingsService.GetEffectiveAsync();
-        trickplayFromEnv = TrickplaySettingsService.IsSetByEnvironment(nameof(TrickplaySettings.GenerateForNewFiles));
-    }
-
-    private async Task LoadNewMovieArtworkTileAsync() =>
         newMovieArtworkSettings = await NewMovieArtworkSettingsService.GetEffectiveAsync();
-
-    private void OpenNewMovieArtworkModal() => showNewMovieArtworkModal = true;
-
-    private void CloseNewMovieArtworkModal() => showNewMovieArtworkModal = false;
-
-    private void OpenTrickplayModal() => showTrickplayModal = true;
-
-    private void CloseTrickplayModal() => showTrickplayModal = false;
+    }
 
     private void OpenLocalLibraryModal() => showLocalLibraryModal = true;
 
@@ -374,7 +333,7 @@ else
     {
         showLocalLibraryModal = false;
         // Re-fetch so the tile reflects anything saved while the drawer was open.
-        localLibraryStatus = await ConnectionStatusService.GetLocalLibraryStatusAsync();
+        await LoadLocalLibraryTileAsync();
     }
 
     private void OpenModal()
@@ -431,22 +390,6 @@ else
         importing = false;
         await LoadAsync();
         importMessage = "Import queued — see System → Tasks for progress and the result.";
-    }
-
-    private void OpenMediaInfoModal()
-    {
-        mediaInfoSaved = false;
-        showMediaInfoModal = true;
-    }
-
-    private void CloseMediaInfoModal() => showMediaInfoModal = false;
-
-    private async Task SaveMediaInfo()
-    {
-        if (mediaInfoSettings is null) return;
-
-        await MediaInfoSettingsService.SaveAsync(mediaInfoSettings);
-        mediaInfoSaved = true;
     }
 
     private void OpenMinnanoAvModal()
