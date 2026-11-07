@@ -83,7 +83,7 @@ public sealed record MovieNfoConflictResolutionResult(bool Success, bool FileCha
 
 /// <summary>Outcome of a bulk .nfo push. StillDrifting counts movies that are still
 /// drifting afterwards — written but with drift left over, or with nothing the proposal could
-/// write (it never invents a missing element, except the genres of an .nfo that has none).</summary>
+/// write (it never invents a missing element, except the title and the genres of an .nfo that has none).</summary>
 public sealed record NfoDriftPushResult(int Written, int SkippedExternal, int Failed, int StillDrifting);
 
 public interface INfoSyncService
@@ -138,7 +138,7 @@ public interface INfoSyncService
     /// current descriptive Meta* fields into its local .nfo file, if one exists, via the same
     /// conservative element-reconciliation ApplyFieldUpdates already uses for the diff preview
     /// (GenerateProposedNfoAsync) — only updates an element that already exists on disk with some
-    /// value, never invents one (except the &lt;genre&gt; elements of an .nfo that has none). A deliberate departure from MovieService.UpdateMetadataAsync's
+    /// value, never invents one (except the &lt;title&gt; and &lt;genre&gt; elements of an .nfo that has none). A deliberate departure from MovieService.UpdateMetadataAsync's
     /// DB-only precedent, since the spec explicitly asks for a direct .nfo write on
     /// confirm. Re-checks remaining .nfo drift afterward, since a selected field with no matching
     /// on-disk element (or an unselected field) can still leave real drift. No-ops (returns false)
@@ -955,7 +955,7 @@ public class NfoSyncService(
         }
 
         // Re-check remaining drift either way: a selected field whose target .nfo element didn't
-        // exist is deliberately left untouched by ApplyFieldUpdates (see its remarks; genres are the exception), and an
+        // exist is deliberately left untouched by ApplyFieldUpdates (see its remarks; title and genres are the exceptions), and an
         // unselected field can still differ — both are real drift the user should still see.
         var preWrite = NfoDriftDetector.ReadNfo(root);
         var changed = ApplyFieldUpdates(movie, root);

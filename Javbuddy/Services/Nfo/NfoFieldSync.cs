@@ -6,7 +6,7 @@ namespace Javbuddy.Services.Nfo;
 
 /// <summary>Writes a movie's canonical descriptive fields onto an .nfo's XML (title, plot, studio, series,
 /// genres, release date, runtime). Only elements the movie has a value for are touched, and the return value
-/// says whether anything changed. Genres are the one field whose element is created when the file lacks it.</summary>
+/// says whether anything changed. Title and genres are the fields whose element is created when the file lacks it.</summary>
 public static class NfoFieldSync
 {
     /// <summary>Reconciles the same non-actor fields NfoDriftDetector compares onto
@@ -15,12 +15,13 @@ public static class NfoFieldSync
     /// director, studio/label, series, genres, release date, and runtime. Only updates an
     /// element that already exists on disk with some value — never invents a brand-new element
     /// for a field the on-disk .nfo doesn't have at all (same scope boundary as
-    /// NfoDriftDetector.AppendFieldConflicts) — except genres, which are created when the file has none. Returns whether anything actually changed, so callers that persist
+    /// NfoDriftDetector.AppendFieldConflicts) — except the title and genres, which are created when the file has none (or, for the
+    /// title, an empty one). Returns whether anything actually changed, so callers that persist
     /// to disk (SyncMovieMetadataToNfoAsync) can skip an unnecessary write/timestamp bump.</summary>
     public static bool ApplyFieldUpdates(Movie movie, XElement root)
     {
         var changed = false;
-        changed |= UpdateScalarElement(root, movie.MetaTitle, "title");
+        changed |= UpdateTitleElement(root, movie.MetaTitle);
         changed |= UpdateScalarElement(root, movie.MetaOriginalTitle, "originaltitle");
         changed |= UpdateScalarElement(root, movie.MetaDescription, "plot");
         changed |= UpdateScalarElement(root, movie.MetaDirector, "director");
@@ -52,6 +53,46 @@ public static class NfoFieldSync
         return false;
     }
 
+    /// <summary>Like the other scalar fields, rewrites an existing non-empty &lt;title&gt;. Unlike them, a file with no
+    /// &lt;title&gt; (or an empty one) gets it: it is the foundational NFO element, so a title added in Javbuddy after
+    /// an import from a title-less file must reach disk. An empty element is filled in place; a missing one is
+    /// inserted right after &lt;id&gt;, else as the root's first child, copying the file's own indentation.</summary>
+    private static bool UpdateTitleElement(XElement root, string? canonicalValue)
+    {
+        if (string.IsNullOrWhiteSpace(canonicalValue)) return false;
+        var trimmed = canonicalValue.Trim();
+
+        var element = root.Element("title");
+        if (element is not null)
+        {
+            if (string.Equals(element.Value.Trim(), trimmed, StringComparison.Ordinal)) return false;
+            element.Value = trimmed;
+            return true;
+        }
+
+        var title = new XElement("title", trimmed);
+        var after = root.Element("id");
+        if (after is not null)
+        {
+            var indent = after.PreviousNode is XText text && string.IsNullOrWhiteSpace(text.Value) ? text.Value : null;
+            after.AddAfterSelf(title);
+            if (indent is not null) after.AddAfterSelf(new XText(indent));
+            return true;
+        }
+
+        var first = root.Elements().FirstOrDefault();
+        if (first is null)
+        {
+            root.AddFirst(title);
+            return true;
+        }
+
+        var firstIndent = first.PreviousNode is XText t && string.IsNullOrWhiteSpace(t.Value) ? t.Value : null;
+        first.AddBeforeSelf(title);
+        if (firstIndent is not null) first.AddBeforeSelf(new XText(firstIndent));
+        return true;
+    }
+
     private static bool UpdateSeriesElement(XElement root, string? canonicalValue)
     {
         if (string.IsNullOrWhiteSpace(canonicalValue)) return false;
@@ -80,7 +121,7 @@ public static class NfoFieldSync
     /// differ, mirroring ConsolidateAndUpdateActorElements' primary/secondary shape: the first
     /// existing &lt;genre&gt; element becomes the anchor, extras are removed, and any additional
     /// canonical genres are inserted right after it. An .nfo with no &lt;genre&gt; element at all gets them
-    /// created (the one element this class does invent): tags are added in Javbuddy, so a file that
+    /// created (one of the two elements this class invents, with the title): tags are added in Javbuddy, so a file that
     /// has none yet must be able to receive them.</summary>
     private static bool UpdateGenreElements(XElement root, List<string> canonicalGenres)
     {

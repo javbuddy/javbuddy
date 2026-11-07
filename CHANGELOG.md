@@ -19,6 +19,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- NFO sync now adds a `<title>` to an `.nfo` that lacked one (or had it empty) when the movie has a title, placing it right after `<id>` (else as the first element). (#106)
 - minnano-av.com actor detail pages whose performer name or aliases include a parenthesized qualifier (such as `みさ（同人モデル）` or `みさちゃん（FC2）`) now parse and keep the qualifier instead of failing to load or truncating at the first parenthesis. (#105)
 - When minnano-av.com cannot be reached (for example, `Connection refused`), the actor search modal now shows an inline connection error instead of reporting "No matching performers found", and the server logs a single-line warning instead of a full stack trace. (#105)
 - Clicking **Inspect** on an actor search result now shows a spinner on the button and a "Loading performer details…" placeholder while the details load. (#113)
