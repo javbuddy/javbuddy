@@ -87,4 +87,36 @@ public class MovieImageUploadModalTests : BunitContext
         Assert.Contains("Only JPEG, PNG, and WebP", cut.Find(".alert-danger").TextContent);
         Assert.True(cut.Find(".upload-btn").HasAttribute("disabled"));
     }
+
+    [Fact]
+    public void GenerateStillsOption_IsHidden_WhenNoCallbackIsBound() =>
+        Assert.Empty(RenderModal().FindAll(".generate-stills-btn"));
+
+    [Fact]
+    public void GenerateStillsOption_ClosesTheModalAndRaisesTheCallback()
+    {
+        var closed = 0;
+        var requested = 0;
+        var cut = Render<MovieImageUploadModal>(p => p
+            .Add(m => m.Show, true).Add(m => m.MovieId, 7).Add(m => m.Code, "IPX-535")
+            .Add(m => m.CanGenerateStills, true)
+            .Add(m => m.OnClose, () => closed++)
+            .Add(m => m.OnGenerateStills, () => requested++));
+
+        cut.Find(".generate-stills-btn").Click();
+
+        Assert.Equal(1, closed);
+        Assert.Equal(1, requested);
+    }
+
+    [Fact]
+    public void GenerateStillsOption_IsDisabled_WithoutALocalVideo()
+    {
+        var cut = Render<MovieImageUploadModal>(p => p
+            .Add(m => m.Show, true).Add(m => m.MovieId, 7).Add(m => m.Code, "IPX-535")
+            .Add(m => m.CanGenerateStills, false)
+            .Add(m => m.OnGenerateStills, () => { }));
+
+        Assert.True(cut.Find(".generate-stills-btn").HasAttribute("disabled"));
+    }
 }

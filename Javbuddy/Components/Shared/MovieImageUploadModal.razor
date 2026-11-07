@@ -45,6 +45,15 @@
                     @(fetchingUrl ? "Fetching…" : "Fetch")
                 </button>
             </div>
+            @if (OnGenerateStills.HasDelegate)
+            {
+                <div class="movie-image-upload-divider"><span>or</span></div>
+                <button type="button" class="btn btn-outline-primary btn-sm generate-stills-btn" @onclick="GenerateStillsAsync"
+                        disabled="@(Busy || !CanGenerateStills)"
+                        title="@(CanGenerateStills ? null : "The movie needs a scanned local video")">
+                    Generate stills from the video…
+                </button>
+            }
         </ChildContent>
         <FooterContent>
             <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@Busy">@(addedCount > 0 ? "Done" : "Cancel")</button>
@@ -58,6 +67,12 @@
     [Parameter] public int MovieId { get; set; }
     [Parameter] public string Code { get; set; } = string.Empty;
     [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Opens the generate-stills dialog (this one closes first). The option is hidden when not bound.</summary>
+    [Parameter] public EventCallback OnGenerateStills { get; set; }
+
+    /// <summary>The movie has a scanned local video to take stills from.</summary>
+    [Parameter] public bool CanGenerateStills { get; set; }
 
     /// <summary>Raised after each successful add, so the caller can reload its gallery while
     /// the modal stays open for more.</summary>
@@ -141,6 +156,13 @@
     private async Task HandleUrlKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter") await FetchFromUrlAsync();
+    }
+
+    private async Task GenerateStillsAsync()
+    {
+        if (Busy) return;
+        await CloseAsync();
+        await OnGenerateStills.InvokeAsync();
     }
 
     private async Task CloseAsync()

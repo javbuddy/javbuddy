@@ -1,0 +1,228 @@
+@* Generates extrafanart from the movie's own video: pick how many stills, preview the sharpest evenly
+   spaced frames, tick the ones to keep and save them as WebP into the extrafanart folder.
+   Hosted by Movie Detail (Tools menu, or the Add Images dialog's hand-off). *@
+@using Javbuddy.Services.Movies
+@implements IDisposable
+@inject IMovieExtraFanartStillsService StillsService
+
+@if (Show)
+{
+    <ModalShell MaxWidth="760px" OnClose="CloseAsync" Busy="@Busy">
+        <TitleContent>Generate stills — @Code</TitleContent>
+        <ChildContent>
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger py-2">@errorMessage</div>
+            }
+            else if (savedCount > 0)
+            {
+                <div class="alert alert-success py-2">Added @savedCount image@(savedCount == 1 ? string.Empty : "s").</div>
+            }
+            <div class="stills-options">
+                <label class="stills-option">
+                    <span class="small">Stills</span>
+                    <input type="number" class="form-control form-control-sm" min="@MovieExtraFanartStillsService.MinCount" max="@MovieExtraFanartStillsService.MaxCount"
+                           @bind="count" disabled="@Busy" />
+                </label>
+                <label class="stills-option">
+                    <span class="small">WebP quality</span>
+                    <input type="number" class="form-control form-control-sm" min="@MovieExtraFanartStillsService.MinQuality" max="@MovieExtraFanartStillsService.MaxQuality"
+                           @bind="quality" disabled="@Busy" />
+                </label>
+                <label class="stills-option">
+                    <span class="small">Existing images</span>
+                    <select class="form-select form-select-sm" @bind="mode" disabled="@Busy">
+                        <option value="@ExtraFanartStillsMode.Append">Add to them</option>
+                        <option value="@ExtraFanartStillsMode.ReplaceAll">Replace all</option>
+                        <option value="@ExtraFanartStillsMode.OnlyIfNone">Only if there are none</option>
+                    </select>
+                </label>
+            </div>
+            <div class="form-check mt-2">
+                <input id="stills-left-eye" type="checkbox" class="form-check-input" @bind="leftEyeOnly" disabled="@Busy" />
+                <label for="stills-left-eye" class="form-check-label small">Crop to the left eye (side-by-side VR video)</label>
+            </div>
+            @if (generating || arrived.Count > 0)
+            {
+                <div class="stills-grid mt-3" role="status" aria-busy="@generating.ToString().ToLowerInvariant()">
+                    @foreach (var still in arrived)
+                    {
+                        var id = still.Id;
+                        <label class="stills-tile @(selected.Contains(id) ? "stills-tile-selected" : "")">
+                            <img src="data:image/webp;base64,@Convert.ToBase64String(still.PreviewWebp)" alt="Still at @FormatTime(still.Seconds)" />
+                            <span class="stills-tile-caption">
+                                <input type="checkbox" checked="@selected.Contains(id)" @onchange="e => Toggle(id, (bool)e.Value!)" disabled="@Busy" />
+                                @FormatTime(still.Seconds)
+                            </span>
+                        </label>
+                    }
+                    @if (generating)
+                    {
+                        @for (var i = arrived.Count; i < requested; i++)
+                        {
+                            <div class="stills-tile"><div class="stills-shimmer" title="Generating still"></div></div>
+                        }
+                    }
+                </div>
+            }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@Busy">@(savedCount > 0 ? "Done" : "Cancel")</button>
+            <button type="button" class="btn btn-outline-primary" @onclick="GenerateAsync" disabled="@Busy">@(generating ? "Generating…" : preview is null ? "Generate previews" : "Regenerate")</button>
+            @if (preview is not null)
+            {
+                <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(Busy || selected.Count == 0)">@(saving ? "Saving…" : $"Save {selected.Count} selected")</button>
+            }
+        </FooterContent>
+    </ModalShell>
+}
+
+@code {
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public int MovieId { get; set; }
+    [Parameter] public string Code { get; set; } = string.Empty;
+
+    /// <summary>The movie is side-by-side VR: the left-eye crop starts ticked.</summary>
+    [Parameter] public bool IsVr { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Raised after stills were saved, so the caller can reload its gallery.</summary>
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private int count = MovieExtraFanartStillsService.DefaultCount;
+    private bool leftEyeOnly;
+    private bool wasShown;
+    private int quality = MovieExtraFanartStillsService.DefaultQuality;
+    private ExtraFanartStillsMode mode = ExtraFanartStillsMode.Append;
+    private ExtraFanartStillsPreview? preview;
+    private readonly HashSet<int> selected = [];
+    private readonly List<ExtraFanartStill> arrived = [];
+    private int requested;
+    private string? errorMessage;
+    private bool generating;
+    private bool saving;
+    private bool disposed;
+    private readonly CancellationTokenSource cts = new();
+    private int savedCount;
+
+    protected override void OnParametersSet()
+    {
+        // Set each time the modal opens, so it never overrides a choice made while it is open.
+        if (Show && !wasShown) leftEyeOnly = IsVr;
+        wasShown = Show;
+    }
+
+    private bool Busy => generating || saving;
+
+    private static string FormatTime(double seconds) => TimeSpan.FromSeconds(seconds).ToString(seconds >= 3600 ? @"h\:mm\:ss" : @"m\:ss");
+
+    private void Toggle(int id, bool on)
+    {
+        if (on) selected.Add(id); else selected.Remove(id);
+    }
+
+    private void DiscardPreview()
+    {
+        preview?.Dispose();
+        preview = null;
+        selected.Clear();
+        arrived.Clear();
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (Busy) return;
+
+        generating = true;
+        errorMessage = null;
+        savedCount = 0;
+        DiscardPreview();
+        count = Math.Clamp(count, MovieExtraFanartStillsService.MinCount, MovieExtraFanartStillsService.MaxCount);
+        requested = count;
+        try
+        {
+            // Each still is shown (and ticked) the moment its slot of the video is done.
+            void OnStill(ExtraFanartStill still) => _ = InvokeAsync(() =>
+            {
+                if (disposed) return;
+                arrived.Add(still);
+                selected.Add(still.Id);
+                StateHasChanged();
+            });
+            var result = await StillsService.PreviewAsync(MovieId, count, mode, leftEyeOnly, OnStill, cts.Token);
+            if (disposed)
+            {
+                result.Preview?.Dispose();
+                return;
+            }
+            if (!result.Success)
+            {
+                errorMessage = result.ErrorMessage;
+                arrived.Clear();
+                selected.Clear();
+                return;
+            }
+            preview = result.Preview;
+            // Anything the streaming callback didn't already show.
+            foreach (var still in preview!.Stills.Where(st => arrived.All(a => a.Id != st.Id)))
+            {
+                arrived.Add(still);
+                selected.Add(still.Id);
+            }
+            arrived.Sort((a, b) => a.Id.CompareTo(b.Id));
+        }
+        catch (OperationCanceledException) when (disposed)
+        {
+        }
+        finally
+        {
+            generating = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (preview is null || Busy) return;
+
+        saving = true;
+        errorMessage = null;
+        try
+        {
+            var result = await StillsService.SaveAsync(MovieId, preview, selected.ToList(), quality, mode, cts.Token);
+            if (!result.Success)
+            {
+                errorMessage = result.ErrorMessage;
+                // Replace all may already have removed images; refresh the gallery either way.
+                if (mode == ExtraFanartStillsMode.ReplaceAll) await OnSaved.InvokeAsync();
+                return;
+            }
+            savedCount = result.AddedCount;
+            DiscardPreview();
+            await OnSaved.InvokeAsync();
+        }
+        catch (OperationCanceledException) when (disposed)
+        {
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        if (Busy) return;
+        DiscardPreview();
+        errorMessage = null;
+        savedCount = 0;
+        await OnClose.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        cts.Cancel();
+        cts.Dispose();
+        preview?.Dispose();
+    }
+}

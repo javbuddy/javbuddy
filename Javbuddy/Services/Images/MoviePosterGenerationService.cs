@@ -66,7 +66,7 @@ public class MoviePosterGenerationService(
             for (var i = 1; i <= SampleCount; i++)
             {
                 var framePath = Path.Combine(scratch, $"{i}.webp");
-                var extracted = await ffmpegClient.ExtractFrameWebpAsync(video, movie.MediaDurationSeconds.Value * i / (SampleCount + 1), framePath, ct);
+                var extracted = await ffmpegClient.ExtractFrameWebpAsync(video, movie.MediaDurationSeconds.Value * i / (SampleCount + 1), false, framePath, ct);
                 if (!extracted.Success || !File.Exists(framePath) || new FileInfo(framePath).Length == 0)
                 {
                     firstError ??= extracted.ErrorMessage ?? "ffmpeg wrote no frame at that point of the video";

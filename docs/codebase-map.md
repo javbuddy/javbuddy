@@ -46,7 +46,8 @@ One row per product area.
 | `ActorPhotoGallery.razor` | Actor-detail Photos card: album filters, gallery management, and portrait promotion | `ActorPhotoGalleryTests.cs` |
 | `ClipCard.razor` (+ `.razor.js`) | One scene, highlight or apex card (screenshot/hover preview, duration, favorite, apex count, title, movie, actors, tags) that plays its clip on a plain click; shared by the Scenes wall and Actor Detail's clip sections. `preventPlainCardClicks` in its JS keeps a plain click from following the card's link, and `bindHoverPreviews` plays a hovered card's preview video in the browser (no server round trip per hover) | `ClipCardTests.cs` |
 | `ActorPhotoUploadModal.razor` | Batch actor-photo upload and optional album creation | `ActorPhotoUploadModalTests.cs` |
-| `MovieImageUploadModal.razor` | Movie Detail's "Add Images": multi-file upload / drag & drop or one URL import into the movie's local `extrafanart` folder | `MovieImageUploadModalTests.cs` |
+| `MovieStillsGenerateModal.razor` | Movie Detail's Tools → "Generate stills": pick count/quality/existing-image mode, preview candidate video frames, save the ticked ones as extrafanart | `MovieStillsGenerateModalTests.cs` |
+| `MovieImageUploadModal.razor` | Movie Detail's "Add Images": multi-file upload / drag & drop or one URL import into the movie's local `extrafanart` folder, plus a hand-off to Generate stills | `MovieImageUploadModalTests.cs` |
 | `DeleteConfirmDialog.razor` | Modal "Delete "X"?" confirmation (Cancel/Esc/backdrop cancel without closing a surrounding player modal; Cancel focused on open), used by the scene, highlight and apex editors and Movie Detail's image delete | `DeleteConfirmDialogTests.cs`; real-browser coverage in `SceneDeleteConfirmFlowTests.cs`, `HighlightFlowTests.cs` |
 | `ClipEditor.razor` (+ `.razor.js`) | A movie's scenes, highlights and apexes as one tree (built by `ClipTree`): scene rows and form, chapter import, the Detect / Write chapters row, the player bridge and the M / Shift+M, H / Shift+H and A shortcuts; rolled-up tags and inherited actors show grayed. Shared by `MovieCleanup.razor`'s Review card and `VideoPlayerModal`'s side panel | `ClipEditorSceneTests.cs`, `ClipEditorHighlightTests.cs`, `ClipEditorApexTests.cs`, `ClipEditorTreeTests.cs` (on `ClipEditorTestBase`); real-browser coverage in `ClipEditorFlowTests.cs`, `HighlightFlowTests.cs` |
 | `ClipHighlightRow.razor` / `ClipHighlightForm.razor` | A highlight's row and add/edit form inside `ClipEditor` | via `ClipEditorHighlightTests.cs` |
@@ -73,7 +74,7 @@ Domain services are grouped into `Services/<Group>/` folders whose namespace mat
 
 | Group | Holds |
 |---|---|
-| `Movies/` | movie reads and mutations, add/rescan/stream/cover-crop, extrafanart add/delete (`MovieExtraFanartService`), the cleanup (Review) flow, deletion history recording/matching and review/purge, filters and code normalization, header search |
+| `Movies/` | movie reads and mutations, add/rescan/stream/cover-crop, extrafanart add/delete (`MovieExtraFanartService`) and generation from the video (`MovieExtraFanartStillsService`), the cleanup (Review) flow, deletion history recording/matching and review/purge, filters and code normalization, header search |
 | `Actors/` | actor CRUD/merge/import, discovery, photos, name and physical-attribute helpers |
 | `Scenes/` | scenes, highlights, chapter import/write, scene detection and time helpers, the scenes wall queries |
 | `Nfo/` | .nfo sync, drift detection/push, history, the .nfo file writer and the pure XML helpers |
@@ -106,6 +107,7 @@ Domain services (`Services/<Group>/*.cs`):
 | `MovieChangeNotifier.cs` | Cross-circuit pub/sub so other open tabs' Movies grids refresh |
 | `MovieActorAssociation.cs` | Synchronizes indexed tracked-actor links from a movie's metadata cast |
 | `MovieRescanService.cs` | Unified on-demand single movie rescan (local files, .nfo, javinizer-go, actors, Jellyfin) |
+| `MovieExtraFanartStillsService.cs` | Generates extrafanart candidates from a movie's video (one slot of the video per still, the better of two ffmpeg WebP frames by `FrameScorer`, streamed as each completes) and saves the chosen ones as WebP through `MovieExtraFanartService` |
 | `MovieExtraFanartService.cs` | Adds (upload/URL, saved as the next `fanartN`) and deletes images in a movie's local `extrafanart` folder, purging the index-keyed extrafanart cache rows from the first changed position |
 | `MovieApexService.cs` (+ `ApexRanges.cs`) | Per-movie apex CRUD with library tags, actors and favorites; `ApexRanges` holds time validation, the playback window (lead-in/tail) and clip shifting; `ApexPlaybackSettingsService` holds the default window (single-row settings, per-field `ApexPlayback__*` env overrides) | `MovieApexServiceTests.cs`, `ApexRangesTests.cs` |
 | `MovieHighlightService.cs` (+ `HighlightRanges.cs`) | Per-movie highlight CRUD and favorite; `HighlightRanges` holds the pure validation and timeline-lane helpers |

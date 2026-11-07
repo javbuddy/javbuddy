@@ -21,10 +21,10 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
         Directory.CreateDirectory(folder);
         File.WriteAllBytes(Path.Combine(folder, "abc-001.mp4"), [0]);
         library.ResolveMovieFolderPathAsync("abc-001", Arg.Any<CancellationToken>()).Returns(folder);
-        ffmpeg.ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        ffmpeg.ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<bool>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
-                WriteFrame(call.ArgAt<string>(2));
+                WriteFrame(call.ArgAt<string>(3));
                 return FfmpegRunResult.Ok();
             });
     }
@@ -96,7 +96,7 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
         var result = await CreateService().GenerateAsync(id);
 
         Assert.False(result.Success);
-        await ffmpeg.DidNotReceiveWithAnyArgs().ExtractFrameWebpAsync(default!, default, default!, default);
+        await ffmpeg.DidNotReceiveWithAnyArgs().ExtractFrameWebpAsync(default!, default, default, default!, default);
     }
 
     [Fact]
@@ -111,13 +111,13 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
     public async Task A_frame_too_small_to_crop_fails_without_a_poster_or_stray_temp_files()
     {
         var id = await AddMovieAsync();
-        ffmpeg.ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        ffmpeg.ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<bool>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(call =>
             {
                 using var bitmap = new SKBitmap(640, 1);
                 bitmap.Erase(new SKColor(120, 120, 120));
                 using var data = bitmap.Encode(SKEncodedImageFormat.Webp, 90);
-                File.WriteAllBytes(call.ArgAt<string>(2), data.ToArray());
+                File.WriteAllBytes(call.ArgAt<string>(3), data.ToArray());
                 return FfmpegRunResult.Ok();
             });
 
@@ -134,7 +134,7 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
     public async Task Fails_and_leaves_no_images_when_no_frame_can_be_extracted()
     {
         var id = await AddMovieAsync();
-        ffmpeg.ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+        ffmpeg.ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), Arg.Any<bool>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(FfmpegRunResult.Failed("boom"));
 
         var result = await CreateService().GenerateAsync(id);

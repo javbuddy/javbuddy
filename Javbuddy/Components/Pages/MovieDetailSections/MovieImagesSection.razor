@@ -39,6 +39,8 @@
 <MovieImageUploadModal Show="@showImageUploadModal"
                        MovieId="@Movie.Id"
                        Code="@(Movie.Code ?? "")"
+                       CanGenerateStills="@(Movie.MediaDurationSeconds is > 0 && Movie.Status != MovieStatus.Missing)"
+                       OnGenerateStills="OnGenerateStillsRequested"
                        OnClose="() => showImageUploadModal = false"
                        OnUploaded="ReloadExtraFanartAfterChangeAsync" />
 
@@ -54,6 +56,9 @@
 
 @code {
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+
+    /// <summary>Raised when the Add Images dialog's "Generate stills" option is chosen; the page hosts that dialog.</summary>
+    [Parameter] public EventCallback OnGenerateStillsRequested { get; set; }
 
     private Movie? loadedFor;
     private List<string> extraFanartFiles = new();
@@ -81,6 +86,9 @@
     private string FanartUrl(int index, string variant) =>
         $"/image-cache/{Uri.EscapeDataString(Movie.Code!)}/extrafanart/{index}/{variant}?v={Uri.EscapeDataString(extraFanartFiles[index])}"
         + (extraFanartGeneration > 0 ? $"&g={extraFanartGeneration}" : "");
+
+    /// <summary>Reloads the gallery after something outside this section (Movie Detail's Generate stills) changed the folder.</summary>
+    public Task ReloadAsync() => ReloadExtraFanartAfterChangeAsync();
 
     private Task ReloadExtraFanartAfterChangeAsync()
     {

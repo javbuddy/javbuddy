@@ -92,6 +92,7 @@ public class MovieDetailTests : BunitContext
             .Returns(new List<string>());
         Services.AddSingleton(localLibraryClient);
         Services.AddSingleton(extraFanartService);
+        Services.AddSingleton(Substitute.For<IMovieExtraFanartStillsService>());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IMoviePosterGenerationService>());
 
         // MovieDetail.razor always renders a child ProwlarrSearchModal once a movie is loaded.
@@ -1009,7 +1010,7 @@ public class MovieDetailTests : BunitContext
 
         var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
 
-        Assert.Equal(["Crop Cover", "Edit .nfo", "Generate poster & fanart", "Repair Video"], ToolbarMenuItems(cut, "Tools"));
+        Assert.Equal(["Crop Cover", "Edit .nfo", "Generate poster & fanart", "Generate stills", "Repair Video"], ToolbarMenuItems(cut, "Tools"));
         Assert.Contains(cut.FindAll("button.movie-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
     }
 

@@ -93,11 +93,19 @@ public class FfmpegClientTests
     }
 
     [Fact]
+    public void FrameArguments_CropToTheLeftEye_WhenAsked()
+    {
+        var args = FfmpegClient.BuildFrameWebpArguments("in.mp4", 1, true, "out.webp");
+
+        Assert.Equal("crop=iw/2:ih:0:0,scale=iw:ih:flags=lanczos+accurate_rnd+full_chroma_int:out_color_matrix=bt601:out_range=tv", args[args.IndexOf("-vf") + 1]);
+    }
+
+    [Fact]
     public void FrameArguments_UseOnlyEncodersTheBundledFfmpegHas_FullSizeWebpAsBt601()
     {
         // The Docker image's ffmpeg is built with --enable-encoder=libwebp,libvpx_vp9,wrapped_avframe,pcm_s16le only,
         // so a frame must not ask for mjpeg (an ".jpg" output would) or any other encoder.
-        var args = FfmpegClient.BuildFrameWebpArguments("in.mp4", 603.5, "out.webp");
+        var args = FfmpegClient.BuildFrameWebpArguments("in.mp4", 603.5, false, "out.webp");
 
         Assert.Equal(
             ["-hide_banner", "-nostdin", "-y", "-ss", "603.5", "-i", "in.mp4", "-frames:v", "1", "-an", "-sn",
