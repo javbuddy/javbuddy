@@ -277,4 +277,14 @@ public class MinnanoAvHtmlParserTests
 
         Assert.Equal("https://www.minnano-av.com/p_actress_125_125/006/148426.jpg?new", url);
     }
+
+    [Fact]
+    public void ParsePerformerDetail_ExposesOgImageAsImageUrl()
+    {
+        var html = SampleDetailHtml + """<meta property="og:image" content="https://www.minnano-av.com/p_actress_125_125/006/148426.jpg?new">""";
+
+        var detail = MinnanoAvHtmlParser.ParsePerformerDetail(html, "actress148426.html");
+
+        Assert.Equal("https://www.minnano-av.com/p_actress_125_125/006/148426.jpg?new", detail!.ImageUrl);
+    }
 }

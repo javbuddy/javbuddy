@@ -123,7 +123,8 @@ public static partial class MinnanoAvHtmlParser
             PathOrUrl = pathOrUrl,
             Name = HtmlTextHelper.CleanText(headerMatch.Groups["kanji"].Value),
             Kana = HtmlTextHelper.CleanText(headerMatch.Groups["kana"].Value),
-            Romaji = HtmlTextHelper.CleanText(headerMatch.Groups["romaji"].Value)
+            Romaji = HtmlTextHelper.CleanText(headerMatch.Groups["romaji"].Value),
+            ImageUrl = ParseOgImage(html, baseUrl)
         };
 
         var sizeMatch = SizeLineRegex().Match(html);

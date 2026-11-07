@@ -135,7 +135,25 @@
                     </div>
 
                     <ActorImportFieldPicker Actor="Actor" Values="selectedDetail.ToImportedData()" Options="importOptions"
-                                            SourceName="minnano-av.com" HasKnownAttributes="selectedDetail.HasKnownAttributes" Disabled="isEnriching" OnOptionsChanged="@StateHasChanged" />
+                                            SourceName="minnano-av.com" HasKnownAttributes="selectedDetail.HasKnownAttributes" Disabled="isEnriching" OnOptionsChanged="@StateHasChanged"
+                                            OnSelectAll="SelectAllExtraFields" OnDeselectAll="DeselectAllExtraFields">
+                        <ExtraRows>
+                            @{
+                                var hasImage = !string.IsNullOrWhiteSpace(selectedDetail.ImageUrl);
+                            }
+                            <div class="import-field-item @(hasImage ? "" : "field-unavailable")">
+                                <div class="form-check m-0">
+                                    <input class="form-check-input" type="checkbox" id="field-image"
+                                           @bind="importOptions.ImportImage" disabled="@(!hasImage || isEnriching)" />
+                                    <label class="form-check-label fw-medium" for="field-image">Image (portrait)</label>
+                                </div>
+                                <div class="field-values">
+                                    <span class="field-new-value">@(hasImage ? "1 image" : "—")</span>
+                                    <span class="field-current-value">Current: @(ActorHasImage ? "Has portrait" : "No portrait")</span>
+                                </div>
+                            </div>
+                        </ExtraRows>
+                    </ActorImportFieldPicker>
                 </div>
             }
         </ChildContent>
@@ -155,6 +173,7 @@
 @code {
     [Parameter] public bool Show { get; set; }
     [Parameter] public Actor? Actor { get; set; }
+    [Parameter] public bool ActorHasImage { get; set; }
     [Parameter] public string? InitialSelectedPath { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnEnriched { get; set; }
@@ -310,7 +329,8 @@
                 ImportMeasurements = false,
                 ImportBirthDate = false,
                 ImportRetiredStatus = false,
-                ImportAliases = false
+                ImportAliases = false,
+                ImportImage = false
             };
             return;
         }
@@ -326,9 +346,18 @@
             ImportMeasurements = selectedDetail.Bust.HasValue || selectedDetail.Waist.HasValue || selectedDetail.Hips.HasValue,
             ImportBirthDate = selectedDetail.BirthDate.HasValue,
             ImportRetiredStatus = selectedDetail.IsRetired.HasValue,
-            ImportAliases = selectedDetail.Aliases.Count > 0
+            ImportAliases = selectedDetail.Aliases.Count > 0,
+            // Replaces the portrait, so only ticked by default when there isn't one to lose.
+            ImportImage = !ActorHasImage && !string.IsNullOrWhiteSpace(selectedDetail.ImageUrl)
         };
     }
+
+    private void SelectAllExtraFields()
+    {
+        if (selectedDetail is not null) importOptions.ImportImage = !string.IsNullOrWhiteSpace(selectedDetail.ImageUrl);
+    }
+
+    private void DeselectAllExtraFields() => importOptions.ImportImage = false;
 
     private async Task EnrichActor()
     {
@@ -344,7 +373,15 @@
             if (res.Success)
             {
                 await OnEnriched.InvokeAsync();
-                succeeded = true;
+                if (res.Warning is not null)
+                {
+                    // Keep the modal open so the warning isn't lost to the auto-close.
+                    errorMessage = res.Warning;
+                }
+                else
+                {
+                    succeeded = true;
+                }
             }
             else
             {

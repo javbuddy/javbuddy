@@ -393,6 +393,7 @@ else
 
     <MinnanoAvMetadataSearchModal Show="@showMinnanoAvSearchModal"
                                   Actor="@actor"
+                                  ActorHasImage="@hasImage"
                                   InitialSelectedPath="@minnanoAvInitialPath"
                                   OnClose="() => { showMinnanoAvSearchModal = false; minnanoAvInitialPath = null; }"
                                   OnEnriched="OnActorEnriched" />

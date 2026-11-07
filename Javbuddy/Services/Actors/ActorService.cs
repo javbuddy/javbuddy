@@ -1063,7 +1063,9 @@ public class ActorService(
             detail.ToImportedData(),
             ImportSelection.From(options),
             () => MinnanoAvNewActorNames(detail),
-            importPhotos: null,
+            options.ImportImage && !string.IsNullOrWhiteSpace(detail.ImageUrl)
+                ? (_, actorId, token) => ImportMinnanoAvImageAsync(actorId, detail.ImageUrl, token)
+                : null,
             ct);
     }
 
@@ -1234,6 +1236,30 @@ public class ActorService(
             {
                 return uploadResult.ErrorMessage ?? "Failed to save photos to the WAPdB album.";
             }
+        }
+
+        return null;
+    }
+
+    /// <summary>Downloads the performer's minnano-av.com image and saves it as the actor's portrait,
+    /// replacing any existing one. Returns null on success, or a warning message on failure.</summary>
+    private async Task<string?> ImportMinnanoAvImageAsync(int actorId, string imageUrl, CancellationToken ct)
+    {
+        if (imageCacheService is null) return "The image could not be saved from minnano-av.com.";
+
+        var download = await imageCacheService.DownloadImageFromUrlAsync(imageUrl, ct);
+        if (!download.Success || download.Bytes is not { Length: > 0 })
+        {
+            return $"The image could not be downloaded from minnano-av.com: {download.ErrorMessage ?? "empty response"}";
+        }
+
+        try
+        {
+            await imageCacheService.SaveCustomImageAsync(actorId, download.Bytes, cropRect: null, ct);
+        }
+        catch (Exception ex)
+        {
+            return $"The image from minnano-av.com could not be saved: {ex.Message}";
         }
 
         return null;

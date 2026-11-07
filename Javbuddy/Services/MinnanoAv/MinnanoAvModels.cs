@@ -33,6 +33,8 @@ public class MinnanoAvPerformerDetail
     public int? Hips { get; set; }
     public DateTime? BirthDate { get; set; }
     public bool? IsRetired { get; set; }
+    /// <summary>The profile image (the page's OGP thumbnail), if the page has one.</summary>
+    public string? ImageUrl { get; set; }
     public List<string> Aliases { get; set; } = new();
 
     public ImportedActorData ToImportedData() => new(
@@ -56,6 +58,7 @@ public class MinnanoAvImportOptions : IActorImportOptions
     public bool ImportBirthDate { get; set; } = true;
     public bool ImportRetiredStatus { get; set; } = true;
     public bool ImportAliases { get; set; } = true;
+    public bool ImportImage { get; set; }
 
     public int SelectedCount(MinnanoAvPerformerDetail? detail)
     {
@@ -68,6 +71,7 @@ public class MinnanoAvImportOptions : IActorImportOptions
         if (ImportBirthDate && detail.BirthDate.HasValue) count++;
         if (ImportRetiredStatus && detail.IsRetired.HasValue) count++;
         if (ImportAliases && detail.Aliases.Count > 0) count++;
+        if (ImportImage && !string.IsNullOrWhiteSpace(detail.ImageUrl)) count++;
         return count;
     }
 }
