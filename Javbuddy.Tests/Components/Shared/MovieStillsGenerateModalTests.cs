@@ -10,6 +10,7 @@ public class MovieStillsGenerateModalTests : BunitContext
 {
     private readonly IMovieExtraFanartStillsService service = Substitute.For<IMovieExtraFanartStillsService>();
     private int savedCount;
+    private int closedCount;
 
     public MovieStillsGenerateModalTests()
     {
@@ -23,7 +24,8 @@ public class MovieStillsGenerateModalTests : BunitContext
             .Add(m => m.Code, "IPX-535")
             .Add(m => m.IsVr, isVr)
             .Add(m => m.MinSavingMilliseconds, 0)
-            .Add(m => m.OnSaved, () => savedCount++));
+            .Add(m => m.OnSaved, () => savedCount++)
+            .Add(m => m.OnClose, () => closedCount++));
 
     private static ExtraFanartStillsPreview Preview()
     {
@@ -54,7 +56,7 @@ public class MovieStillsGenerateModalTests : BunitContext
             service.Received(1).SaveAsync(7, Arg.Any<ExtraFanartStillsPreview>(),
                 Arg.Is<IReadOnlyCollection<int>>(ids => ids.Count == 1 && ids.Contains(1)), 92, ExtraFanartStillsMode.Append, Arg.Any<CancellationToken>());
             Assert.Equal(1, savedCount);
-            Assert.Contains("Added 1 image", cut.Markup);
+            Assert.Equal(1, closedCount);
         });
     }
 
@@ -84,7 +86,7 @@ public class MovieStillsGenerateModalTests : BunitContext
         {
             gate.Set();
         }
-        await cut.WaitForAssertionAsync(() => Assert.Contains("Added 2 images", cut.Markup));
+        await cut.WaitForAssertionAsync(() => Assert.Equal(1, closedCount));
     }
 
     [Fact]
@@ -94,12 +96,12 @@ public class MovieStillsGenerateModalTests : BunitContext
         service.SaveAsync(7, Arg.Any<ExtraFanartStillsPreview>(), Arg.Any<IReadOnlyCollection<int>>(), 92, ExtraFanartStillsMode.Append, Arg.Any<CancellationToken>())
             .Returns(ExtraFanartResult.Ok(2));
         var cut = Render<MovieStillsGenerateModal>(p => p
-            .Add(m => m.Show, true).Add(m => m.MovieId, 7).Add(m => m.Code, "IPX-535").Add(m => m.MinSavingMilliseconds, -1));
+            .Add(m => m.Show, true).Add(m => m.MovieId, 7).Add(m => m.Code, "IPX-535").Add(m => m.MinSavingMilliseconds, -1).Add(m => m.OnClose, () => closedCount++));
         cut.FindAll("button").First(b => b.TextContent.Contains("Generate previews")).Click();
 
         cut.FindAll("button").First(b => b.TextContent.Contains("Save 2 selected")).Click();
 
-        await cut.WaitForAssertionAsync(() => Assert.Contains("Added 2 images", cut.Markup), TimeSpan.FromSeconds(3));
+        await cut.WaitForAssertionAsync(() => Assert.Equal(1, closedCount), TimeSpan.FromSeconds(3));
     }
 
     [Fact]
@@ -127,7 +129,7 @@ public class MovieStillsGenerateModalTests : BunitContext
         await cut.WaitForAssertionAsync(() =>
         {
             Assert.Empty(cut.FindAll(".stills-saving"));
-            Assert.Contains("Added 2 images", cut.Markup);
+            Assert.Equal(1, closedCount);
         });
     }
 
@@ -138,7 +140,7 @@ public class MovieStillsGenerateModalTests : BunitContext
         service.SaveAsync(7, Arg.Any<ExtraFanartStillsPreview>(), Arg.Any<IReadOnlyCollection<int>>(), 92, ExtraFanartStillsMode.Append, Arg.Any<CancellationToken>())
             .Returns(ExtraFanartResult.Ok(2));
         var cut = Render<MovieStillsGenerateModal>(p => p
-            .Add(m => m.Show, true).Add(m => m.MovieId, 7).Add(m => m.Code, "IPX-535").Add(m => m.MinSavingMilliseconds, 1000));
+            .Add(m => m.Show, true).Add(m => m.MovieId, 7).Add(m => m.Code, "IPX-535").Add(m => m.MinSavingMilliseconds, 1000).Add(m => m.OnClose, () => closedCount++));
         cut.FindAll("button").First(b => b.TextContent.Contains("Generate previews")).Click();
 
         cut.FindAll("button").First(b => b.TextContent.Contains("Save 2 selected")).Click();
@@ -147,8 +149,25 @@ public class MovieStillsGenerateModalTests : BunitContext
         await Task.Delay(100);
         Assert.NotEmpty(cut.FindAll(".stills-saving"));
         // ...and gives way to the result once the minimum has passed.
-        await cut.WaitForAssertionAsync(() => Assert.Contains("Added 2 images", cut.Markup), TimeSpan.FromSeconds(5));
+        await cut.WaitForAssertionAsync(() => Assert.Equal(1, closedCount), TimeSpan.FromSeconds(5));
         Assert.Empty(cut.FindAll(".stills-saving"));
+    }
+
+    [Fact]
+    public async Task Save_Failure_KeepsTheDialogOpen_WithTheError()
+    {
+        service.PreviewAsync(7, 10, ExtraFanartStillsMode.Append, false, Arg.Any<Action<ExtraFanartStill>?>(), Arg.Any<CancellationToken>()).Returns(new ExtraFanartStillsPreviewResult(Preview()));
+        service.SaveAsync(7, Arg.Any<ExtraFanartStillsPreview>(), Arg.Any<IReadOnlyCollection<int>>(), 92, ExtraFanartStillsMode.Append, Arg.Any<CancellationToken>())
+            .Returns(ExtraFanartResult.Fail("Disk full."));
+        var cut = RenderModal();
+        cut.FindAll("button").First(b => b.TextContent.Contains("Generate previews")).Click();
+
+        cut.FindAll("button").First(b => b.TextContent.Contains("Save 2 selected")).Click();
+
+        await cut.WaitForAssertionAsync(() => Assert.Contains("Disk full.", cut.Markup));
+        Assert.Equal(0, closedCount);
+        Assert.Equal(0, savedCount);
+        Assert.Contains(cut.FindAll("button"), b => b.TextContent.Contains("Save 2 selected"));
     }
 
     [Fact]
