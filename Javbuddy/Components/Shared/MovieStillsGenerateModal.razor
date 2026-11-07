@@ -42,6 +42,12 @@
                 <input id="stills-left-eye" type="checkbox" class="form-check-input" @bind="leftEyeOnly" disabled="@Busy" />
                 <label for="stills-left-eye" class="form-check-label small">Crop to the left eye (side-by-side VR video)</label>
             </div>
+            @if (saving)
+            {
+                <div class="stills-saving alert alert-info py-2 mt-3 mb-0" role="status">
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving @selected.Count image@(selected.Count == 1 ? string.Empty : "s")…
+                </div>
+            }
             @if (generating || arrived.Count > 0)
             {
                 <div class="stills-grid mt-3" role="status" aria-busy="@generating.ToString().ToLowerInvariant()">
@@ -71,7 +77,16 @@
             <button type="button" class="btn btn-outline-primary" @onclick="GenerateAsync" disabled="@Busy">@(generating ? "Generating…" : preview is null ? "Generate previews" : "Regenerate")</button>
             @if (preview is not null)
             {
-                <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(Busy || selected.Count == 0)">@(saving ? "Saving…" : $"Save {selected.Count} selected")</button>
+                <button type="button" class="btn btn-primary" @onclick="SaveAsync" disabled="@(Busy || selected.Count == 0)">
+                    @if (saving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>@:Saving…
+                    }
+                    else
+                    {
+                        @:Save @selected.Count selected
+                    }
+                </button>
             }
         </FooterContent>
     </ModalShell>
@@ -88,6 +103,10 @@
 
     /// <summary>Raised after stills were saved, so the caller can reload its gallery.</summary>
     [Parameter] public EventCallback OnSaved { get; set; }
+
+    /// <summary>A save of a few WebP files takes a fraction of a second, too short to notice the saving state, so it
+    /// is kept on screen for at least this long.</summary>
+    [Parameter] public int MinSavingMilliseconds { get; set; } = 700;
 
     private int count = MovieExtraFanartStillsService.DefaultCount;
     private bool leftEyeOnly;
@@ -188,7 +207,15 @@
         errorMessage = null;
         try
         {
-            var result = await StillsService.SaveAsync(MovieId, preview, selected.ToList(), quality, mode, cts.Token);
+            // The service re-encodes every frame before its first await; run on the thread pool, that CPU work can't hold
+            // up the circuit, so the saving state is rendered at once instead of after the encoding.
+            var chosen = selected.ToList();
+            // Everything the pool thread uses is captured here: the token can't be read once Dispose has disposed its source.
+            var (movieId, currentPreview, currentQuality, currentMode, token) = (MovieId, preview, quality, mode, cts.Token);
+            var save = Task.Run(() => StillsService.SaveAsync(movieId, currentPreview, chosen, currentQuality, currentMode, token), token);
+            // Disposed during this wait (the host going away), the save's result is dropped with the component.
+            await Task.WhenAll(save, Task.Delay(Math.Max(0, MinSavingMilliseconds), token));
+            var result = await save;
             if (!result.Success)
             {
                 errorMessage = result.ErrorMessage;

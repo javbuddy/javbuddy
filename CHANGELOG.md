@@ -12,6 +12,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 - **Generate poster and fanart** now writes `poster.webp` and `fanart.webp` instead of JPEG files, and takes side-by-side VR frames from the left eye only.
 - The default WebP quality for generated extrafanart stills is now 92 (was 85), in the Generate stills dialog and for the stills generated automatically for new movies. (#120)
+- The Generate stills dialog shows a spinner on the Save button and a "Saving N images…" bar while the ticked stills are being saved (kept visible for at least 0.7 s, and no longer held back by the encoding work). (#121)
 
 ## [0.5.0] - 2026-11-07
 
