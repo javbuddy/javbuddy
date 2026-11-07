@@ -64,12 +64,27 @@
                                 </div>
                                 <button class="btn btn-sm @(isSelected ? "btn-primary" : "btn-outline-secondary") flex-shrink-0"
                                         type="button" disabled="@isLoadingDetail">
-                                    @(isLoadingDetail && isSelected ? "Loading…" : (isSelected ? "Selected" : "Inspect"))
+                                    @if (isLoadingDetail && isSelected)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                                        <span>Loading…</span>
+                                    }
+                                    else
+                                    {
+                                        @(isSelected ? "Selected" : "Inspect")
+                                    }
                                 </button>
                             </div>
                         }
                     </div>
                 }
+            }
+
+            @if (isLoadingDetail)
+            {
+                <div class="text-muted small mt-3" role="status">
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading performer details…
+                </div>
             }
 
             @if (selectedDetail is not null)
