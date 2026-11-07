@@ -32,7 +32,7 @@ public class VideoPlayerColumnTests : BunitContext
         Assert.Equal(["/api/movies/1/subtitles/0", "/api/movies/1/subtitles/1"], tracks.Select(t => t.GetAttribute("src")));
         Assert.True(tracks[0].HasAttribute("default"));
         Assert.False(tracks[1].HasAttribute("default"));
-        Assert.Contains("video-player-subtitles-on", cut.Find(".video-player-subtitles").ClassList);
+        Assert.Contains("video-player-subtitles-on", cut.Find(".video-player-subtitles-button").ClassList);
     }
 
     [Fact]
@@ -42,43 +42,98 @@ public class VideoPlayerColumnTests : BunitContext
         var vr = Render<VideoPlayerColumn>(p => p.Add(x => x.VideoClass, "v").Add(x => x.Src, "/s")
             .Add(x => x.Subtitles, TwoTracks).Add(x => x.VrMode, true));
 
-        Assert.Empty(none.FindAll(".video-player-subtitles"));
-        Assert.Empty(vr.FindAll(".video-player-subtitles"));
+        Assert.Empty(none.FindAll(".video-player-subtitles-button"));
+        Assert.Empty(vr.FindAll(".video-player-subtitles-button"));
     }
 
     [Fact]
-    public void CcButton_StepsThroughTheTracksAndOff()
+    public void WithTheScrubBarControls_TheCcButtonSitsInTheBarBeforeTheMute()
     {
-        JSInterop.Setup<int?>("subtitleTrack", _ => true).SetResult(null);
         var cut = Render<VideoPlayerColumn>(p => p
             .Add(x => x.VideoClass, "test-video")
             .Add(x => x.Src, "/api/movies/1/stream")
+            .Add(x => x.DurationSeconds, 180d)
+            .Add(x => x.ShowTimeline, true)
             .Add(x => x.Subtitles, TwoTracks));
 
-        // The browser reports the track now showing; the button moves to the next one, then off.
-        var current = JSInterop.Setup<int?>("subtitleTrack", _ => true);
-        current.SetResult(0);
-        cut.Find(".video-player-subtitles").Click();
-        JSInterop.VerifyInvoke("setSubtitleTrack", 2); // once for the new tracks, once for the click
-        Assert.Contains("Japanese", cut.Find(".video-player-subtitles").TextContent);
-
-        current.SetResult(1);
-        cut.Find(".video-player-subtitles").Click();
-        Assert.DoesNotContain("video-player-subtitles-on", cut.Find(".video-player-subtitles").ClassList);
+        Assert.Single(cut.FindAll(".scrub-bar .video-player-subtitles-in-bar .video-player-subtitles-button"));
+        Assert.Empty(cut.FindAll(".video-player-subtitles-overlay"));
+        Assert.Contains("video-player-subtitles-in-bar", cut.Find(".scrub-bar-mute").PreviousElementSibling!.ClassList);
     }
 
     [Fact]
-    public void ChangingTheTracks_ResetsToTheFirst()
+    public void CcMenu_ListsOffAndTheTracks_AndPicksOne()
     {
         var cut = Render<VideoPlayerColumn>(p => p
             .Add(x => x.VideoClass, "test-video")
             .Add(x => x.Src, "/api/movies/1/stream")
             .Add(x => x.Subtitles, TwoTracks));
-        cut.Find(".video-player-subtitles").Click();
+
+        Assert.Empty(cut.FindAll(".video-player-subtitles-menu"));
+        cut.Find(".video-player-subtitles-button").Click();
+        var items = cut.FindAll(".video-player-subtitles-item");
+        Assert.Equal(["Off", "English", "Japanese", "Small", "Medium", "Large", "Extra large", "Transparent", "Semi-transparent", "Solid"],
+            items.Select(i => i.TextContent.Replace("✓", "").Trim()));
+        Assert.Equal("true", items[1].GetAttribute("aria-checked"));
+
+        items[2].Click();
+
+        Assert.Empty(cut.FindAll(".video-player-subtitles-menu"));
+        Assert.Contains("Japanese", cut.Find(".video-player-subtitles-button").GetAttribute("title"));
+        JSInterop.VerifyInvoke("setSubtitleTrack", 2); // once for the new tracks, once for the pick
+        JSInterop.VerifyInvoke("saveSubtitlePrefs");
+    }
+
+    [Fact]
+    public void CcMenu_Off_TurnsSubtitlesOff_AndTheNextClipStaysOff()
+    {
+        var cut = Render<VideoPlayerColumn>(p => p
+            .Add(x => x.VideoClass, "test-video")
+            .Add(x => x.Src, "/api/movies/1/stream")
+            .Add(x => x.Subtitles, TwoTracks));
+        cut.Find(".video-player-subtitles-button").Click();
+        cut.FindAll(".video-player-subtitles-item")[0].Click();
+        Assert.DoesNotContain("video-player-subtitles-on", cut.Find(".video-player-subtitles-button").ClassList);
+
+        cut.Render(p => p.Add(x => x.Subtitles, [new SubtitleTrack("/api/movies/2/subtitles/0", "French", "fr")]));
+
+        Assert.DoesNotContain("video-player-subtitles-on", cut.Find(".video-player-subtitles-button").ClassList);
+        Assert.False(cut.Find("video track").HasAttribute("default"));
+    }
+
+    [Fact]
+    public void CcMenu_SizeAndBackground_AreAppliedAndSaved()
+    {
+        var cut = Render<VideoPlayerColumn>(p => p
+            .Add(x => x.VideoClass, "test-video")
+            .Add(x => x.Src, "/api/movies/1/stream")
+            .Add(x => x.Subtitles, TwoTracks));
+        cut.Find(".video-player-subtitles-button").Click();
+
+        cut.FindAll(".video-player-subtitles-item").First(i => i.TextContent.Contains("Large")).Click();
+        cut.FindAll(".video-player-subtitles-item").First(i => i.TextContent.Contains("Solid")).Click();
+
+        var style = JSInterop.Invocations.Where(i => i.Identifier == "applySubtitleStyle").Last();
+        Assert.Equal(["video.test-video", "large", "solid"], style.Arguments.Select(a => a?.ToString()));
+        Assert.Equal(2, JSInterop.Invocations.Count(i => i.Identifier == "saveSubtitlePrefs"));
+    }
+
+    [Fact]
+    public void ChangingTheTracks_ResetsToTheFirst_AndAlwaysSetsTheTrack()
+    {
+        var cut = Render<VideoPlayerColumn>(p => p
+            .Add(x => x.VideoClass, "test-video")
+            .Add(x => x.Src, "/api/movies/1/stream")
+            .Add(x => x.Subtitles, TwoTracks));
+        cut.Find(".video-player-subtitles-button").Click();
+        cut.FindAll(".video-player-subtitles-item")[2].Click();
 
         cut.Render(p => p.Add(x => x.Subtitles, [new SubtitleTrack("/api/movies/1/subtitles/0?fileId=2", "French", "fr")]));
+        Assert.Contains("video-player-subtitles-on", cut.Find(".video-player-subtitles-button").ClassList);
 
-        Assert.Contains("video-player-subtitles-on", cut.Find(".video-player-subtitles").ClassList);
+        var before = JSInterop.Invocations.Count(i => i.Identifier == "setSubtitleTrack");
+        cut.Render(p => p.Add(x => x.Subtitles, []));
+        Assert.True(JSInterop.Invocations.Count(i => i.Identifier == "setSubtitleTrack") > before);
     }
 
     [Fact]

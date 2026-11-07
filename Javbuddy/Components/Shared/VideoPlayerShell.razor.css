@@ -280,7 +280,7 @@
 .video-player-modal-panel.player-idle ::deep .scrub-bar,
 .video-player-modal-panel.player-idle ::deep .clip-controls,
 .video-player-modal-panel.player-idle ::deep .vr-viewer-projection,
-.video-player-modal-panel.player-idle ::deep .video-player-subtitles {
+.video-player-modal-panel.player-idle ::deep .video-player-subtitles-overlay {
     opacity: 0;
     pointer-events: none;
 }

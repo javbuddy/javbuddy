@@ -44,15 +44,19 @@ public class PlayerSubtitlesFlowTests
             await page.WaitForFunctionAsync("() => document.querySelector('video.video-player-video').textTracks.length === 2");
             await page.WaitForFunctionAsync("() => Array.from(document.querySelector('video.video-player-video').textTracks).map(t => t.mode).join(',') === 'showing,disabled'");
 
-            // A real click: it fails if the player's header overlay covers the button.
-            var cc = page.Locator(".video-player-subtitles");
+            // Real clicks: they fail if the player's header overlay covers the button.
+            var cc = page.Locator(".video-player-subtitles-button");
+            var modes = "() => Array.from(document.querySelector('video.video-player-video').textTracks).map(t => t.mode).join(',')";
             await cc.ClickAsync();
-            await page.WaitForFunctionAsync("() => Array.from(document.querySelector('video.video-player-video').textTracks).map(t => t.mode).join(',') === 'disabled,showing'");
+            await page.Locator(".video-player-subtitles-item", new() { HasText = "Japanese" }).ClickAsync();
+            await page.WaitForFunctionAsync($"() => ({modes[6..]}) === 'disabled,showing'");
             await cc.ClickAsync();
+            await page.Locator(".video-player-subtitles-item", new() { HasText = "Off" }).ClickAsync();
             await page.WaitForFunctionAsync("() => Array.from(document.querySelector('video.video-player-video').textTracks).every(t => t.mode === 'disabled')");
             await Expect(cc).Not.ToHaveClassAsync(new System.Text.RegularExpressions.Regex("video-player-subtitles-on"));
             await cc.ClickAsync();
-            await page.WaitForFunctionAsync("() => Array.from(document.querySelector('video.video-player-video').textTracks).map(t => t.mode).join(',') === 'showing,disabled'");
+            await page.Locator(".video-player-subtitles-item", new() { HasText = "English" }).ClickAsync();
+            await page.WaitForFunctionAsync($"() => ({modes[6..]}) === 'showing,disabled'");
             await Expect(page.Locator("#blazor-error-ui")).ToBeHiddenAsync();
         }
         finally
@@ -73,7 +77,7 @@ public class PlayerSubtitlesFlowTests
             await page.GotoInteractiveAsync($"/movies/{movie.Code}");
             await page.Locator("button.movie-detail-badge-play").ClickAsync();
             await Expect(page.Locator("video.video-player-video")).ToBeVisibleAsync();
-            await Expect(page.Locator(".video-player-subtitles")).ToHaveCountAsync(0);
+            await Expect(page.Locator(".video-player-subtitles-button")).ToHaveCountAsync(0);
         }
         finally
         {

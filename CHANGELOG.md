@@ -13,6 +13,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
+- The player's subtitle button is now a closed-captions icon that opens a menu: pick Off or a language (checkmark on the active one), the subtitle size (Small to Extra large) and the background (Transparent, Semi-transparent, Solid). Subtitles now default to a transparent background with a text outline. Whether subtitles are on, their size and background are remembered in the browser, so turning them off stays off for the next clip in a playlist or shuffle. (#108, #109, #110, #111)
 - The minnano-av.com search modal title now separates the site name and actor name with a colon instead of an em dash. (#115)
 
 ### Removed
@@ -21,6 +22,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- A subtitle cue no longer stays on screen over the next clip or movie when that one has no subtitles. (#107)
 - NFO sync now adds a `<title>` to an `.nfo` that lacked one (or had it empty) when the movie has a title, placing it right after `<id>` (else as the first element). (#106)
 - minnano-av.com actor detail pages whose performer name or aliases include a parenthesized qualifier (such as `みさ（同人モデル）` or `みさちゃん（FC2）`) now parse and keep the qualifier instead of failing to load or truncating at the first parenthesis. (#105)
 - When minnano-av.com cannot be reached (for example, `Connection refused`), the actor search modal now shows an inline connection error instead of reporting "No matching performers found", and the server logs a single-line warning instead of a full stack trace. (#105)

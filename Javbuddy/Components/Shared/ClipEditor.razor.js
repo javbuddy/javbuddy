@@ -15,20 +15,58 @@ export function duration(selector) {
     return video && Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
 }
 
-// The index of the subtitle track showing, or null when none is.
-export function subtitleTrack(selector) {
-    const video = document.querySelector(selector);
-    const i = video ? Array.from(video.textTracks).findIndex(t => t.mode === "showing") : -1;
-    return i < 0 ? null : i;
-}
-
-// Shows the video's index-th subtitle track and hides the rest; null hides them all.
+// Shows the video's index-th subtitle track and hides the rest; null hides them all, clearing any
+// cue still on screen (Blink/WebKit can leave the last one frozen over the next video).
 export function setSubtitleTrack(selector, index) {
     const video = document.querySelector(selector);
     if (!video) return;
     Array.from(video.textTracks).forEach((track, i) => {
-        track.mode = i === index ? "showing" : "disabled";
+        if (i === index) {
+            track.mode = "showing";
+            return;
+        }
+        // A disabled track exposes no cues, so remove them while it is merely hidden.
+        if (track.mode === "showing") {
+            track.mode = "hidden";
+            Array.from(track.activeCues ?? []).forEach(cue => track.removeCue(cue));
+        }
+        track.mode = "disabled";
     });
+}
+
+const SUBTITLE_PREFS_KEY = "javbuddy-subtitles";
+const SUBTITLE_DEFAULTS = { enabled: true, size: "medium", background: "transparent" };
+const SUBTITLE_SIZES = { small: "75%", medium: "100%", large: "150%", xlarge: "200%" };
+const SUBTITLE_BACKGROUNDS = { transparent: "transparent", translucent: "rgba(0, 0, 0, 0.55)", solid: "#000" };
+
+// The remembered subtitle preferences; localStorage may be unavailable (private mode, blocked).
+export function subtitlePrefs() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(SUBTITLE_PREFS_KEY) ?? "{}");
+        return {
+            enabled: typeof saved.enabled === "boolean" ? saved.enabled : SUBTITLE_DEFAULTS.enabled,
+            size: Object.hasOwn(SUBTITLE_SIZES, saved.size) ? saved.size : SUBTITLE_DEFAULTS.size,
+            background: Object.hasOwn(SUBTITLE_BACKGROUNDS, saved.background) ? saved.background : SUBTITLE_DEFAULTS.background,
+        };
+    } catch {
+        return { ...SUBTITLE_DEFAULTS };
+    }
+}
+
+export function saveSubtitlePrefs(prefs) {
+    try {
+        localStorage.setItem(SUBTITLE_PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+        // Not remembered, but the choice still applies to this player.
+    }
+}
+
+// Sets the custom properties the video's ::cue rule reads.
+export function applySubtitleStyle(selector, size, background) {
+    const video = document.querySelector(selector);
+    if (!video) return;
+    video.style.setProperty("--video-subtitle-font-size", SUBTITLE_SIZES[size] ?? SUBTITLE_SIZES.medium);
+    video.style.setProperty("--video-subtitle-background", SUBTITLE_BACKGROUNDS[background] ?? "transparent");
 }
 
 export function seek(selector, seconds) {

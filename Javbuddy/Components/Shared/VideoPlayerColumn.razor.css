@@ -92,25 +92,103 @@
     display: none !important;
 }
 
-/* The CC button: top right of the video, over the picture; lit while a subtitle track shows. */
-.video-player-subtitles {
+/* The CC button and its menu: in the scrub bar, else top right of the video; lit while a subtitle track shows. */
+.video-player-subtitles-overlay {
     position: absolute;
     /* Below the player modal's header, which overlays the top of the video (--video-player-header-height). */
     top: calc(var(--video-player-header-height, 0rem) + 0.5rem);
     right: 0.5rem;
-    z-index: 2;
+    z-index: 4;
     transition: opacity 0.3s ease;
-    padding: 0.1rem 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+/* In the scrub bar, beside the volume; its menu opens upward. */
+.video-player-subtitles-in-bar {
+    position: relative;
+    flex: none;
+}
+
+.video-player-subtitles-in-bar .video-player-subtitles-menu {
+    top: auto;
+    bottom: calc(100% + 0.25rem);
+}
+
+.video-player-subtitles-button {
+    display: flex;
+    align-items: center;
+    padding: 0.15rem 0.3rem;
+    border: none;
     border-radius: 4px;
-    background-color: rgba(0, 0, 0, 0.6);
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 0.8rem;
-    font-weight: 600;
+    background-color: transparent;
+    color: rgba(255, 255, 255, 0.55);
     cursor: pointer;
+}
+
+.video-player-subtitles-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.video-player-subtitles-overlay .video-player-subtitles-button {
+    background-color: rgba(0, 0, 0, 0.6);
 }
 
 .video-player-subtitles-on {
     color: #fff;
-    border-color: #fff;
+}
+
+.video-player-subtitles-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+}
+
+.video-player-subtitles-menu {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    min-width: 11rem;
+    padding: 0.25rem 0;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    background-color: rgba(20, 20, 20, 0.95);
+    color: #fff;
+    font-size: 0.85rem;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.video-player-subtitles-heading {
+    padding: 0.35rem 0.75rem 0.15rem;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.video-player-subtitles-item {
+    display: flex;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.25rem 0.75rem;
+    border: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.video-player-subtitles-item:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.video-player-subtitles-check {
+    display: inline-block;
+    width: 1rem;
+}
+
+/* Subtitle look: size and background come from the CC menu (set on the video by ClipEditor.razor.js). */
+.video-player-media::cue {
+    font-size: var(--video-subtitle-font-size, 100%);
+    background-color: var(--video-subtitle-background, transparent);
+    text-shadow: 0 0 2px #000, 0 1px 3px rgba(0, 0, 0, 0.9), 0 2px 4px rgba(0, 0, 0, 0.8);
 }

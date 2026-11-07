@@ -45,6 +45,7 @@
     @if (PlayerControls)
     {
         <span class="scrub-bar-clock"></span>
+        @ExtraControls
         <button type="button" class="scrub-bar-btn scrub-bar-mute" aria-label="Mute or unmute" title="Mute/unmute">
             <svg class="scrub-bar-icon-sound" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
                 <path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z" />
@@ -98,6 +99,9 @@
     /// <summary>Adds play/pause, the time readout and mute + volume, for a player whose
     /// browser controls are hidden; the host sets it together with its video's <c>controls</c> off.</summary>
     [Parameter] public bool PlayerControls { get; set; }
+
+    /// <summary>Extra controls shown with PlayerControls, just before the mute button.</summary>
+    [Parameter] public RenderFragment? ExtraControls { get; set; }
 
     private double? Duration => Trickplay?.DurationSeconds ?? DurationSeconds;
 

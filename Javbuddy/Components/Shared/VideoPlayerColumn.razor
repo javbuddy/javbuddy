@@ -19,14 +19,12 @@
                    autoplay>
                 @for (var i = 0; i < Subtitles.Count; i++)
                 {
-                    <track kind="subtitles" src="@Subtitles[i].Url" label="@Subtitles[i].Label" srclang="@Subtitles[i].Language" default="@(i == 0)" />
+                    <track kind="subtitles" src="@Subtitles[i].Url" label="@Subtitles[i].Label" srclang="@Subtitles[i].Language" default="@(i == 0 && subtitlesEnabled)" />
                 }
             </video>
-            @if (Subtitles.Count > 0 && !VrMode)
+            @if (Subtitles.Count > 0 && !VrMode && !OwnControls)
             {
-                <button type="button" class="video-player-subtitles @(subtitleIndex is null ? null : "video-player-subtitles-on")"
-                        title="@SubtitlesTitle" aria-label="@SubtitlesTitle" aria-pressed="@(subtitleIndex is not null ? "true" : "false")"
-                        @onclick="CycleSubtitlesAsync">CC@(subtitleIndex is { } n && Subtitles.Count > 1 ? " " + Subtitles[n].Label : null)</button>
+                @SubtitleControl(false)
             }
             @if (VrMode)
             {
@@ -49,7 +47,14 @@
         }
         else if (ScrubBarShown)
         {
-            <ScrubBar Trickplay="Trickplay" Generating="Trickplay is null ? Generating : null" DurationSeconds="TimelineDurationSeconds" VideoSelector="@VideoSelector" Scenes="Scenes" Suggestions="Suggestions" Highlights="Highlights" Apexes="Apexes" PlayerControls="OwnControls" />
+            <ScrubBar Trickplay="Trickplay" Generating="Trickplay is null ? Generating : null" DurationSeconds="TimelineDurationSeconds" VideoSelector="@VideoSelector" Scenes="Scenes" Suggestions="Suggestions" Highlights="Highlights" Apexes="Apexes" PlayerControls="OwnControls">
+                <ExtraControls>
+                    @if (Subtitles.Count > 0)
+                    {
+                        @SubtitleControl(true)
+                    }
+                </ExtraControls>
+            </ScrubBar>
         }
     }
 </div>
@@ -65,7 +70,7 @@
     /// <summary>The video's URL; no video is shown while it's null.</summary>
     [Parameter] public string? Src { get; set; }
 
-    /// <summary>External subtitles for the video. The first shows by default; the CC button steps through
+    /// <summary>External subtitles for the video. The first shows unless the user turned subtitles off; the CC menu picks
     /// them and off. Not offered in VR mode, whose viewer draws the video itself.</summary>
     [Parameter] public IReadOnlyList<SubtitleTrack> Subtitles { get; set; } = [];
 
@@ -123,6 +128,49 @@
     /// <summary>Shown in the video area after the video.</summary>
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
+    // The CC button and menu: in the scrub bar beside the volume when it carries the player controls,
+    // otherwise over the top right of the video.
+    private RenderFragment SubtitleControl(bool inBar) => @<div class="video-player-subtitles @(inBar ? "video-player-subtitles-in-bar" : "video-player-subtitles-overlay")">
+    <button type="button" class="video-player-subtitles-button @(subtitleIndex is null ? null : "video-player-subtitles-on")"
+            title="@SubtitlesTitle" aria-label="@SubtitlesTitle" aria-haspopup="menu" aria-expanded="@(subtitleMenuOpen ? "true" : "false")"
+            @onclick="ToggleSubtitleMenu">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M19 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v1z" /></svg>
+    </button>
+    @if (subtitleMenuOpen)
+    {
+        <div class="video-player-subtitles-backdrop" @onclick="CloseSubtitleMenu"></div>
+        <div class="video-player-subtitles-menu" role="menu">
+            <div class="video-player-subtitles-heading">Subtitles</div>
+            <button type="button" role="menuitemradio" aria-checked="@(subtitleIndex is null ? "true" : "false")" class="video-player-subtitles-item" @onclick="() => SelectSubtitleAsync(null)">
+                <span class="video-player-subtitles-check">@(subtitleIndex is null ? "✓" : null)</span>Off
+            </button>
+            @for (var i = 0; i < Subtitles.Count; i++)
+            {
+                var index = i;
+                <button type="button" role="menuitemradio" aria-checked="@(subtitleIndex == index ? "true" : "false")" class="video-player-subtitles-item" @onclick="() => SelectSubtitleAsync(index)">
+                    <span class="video-player-subtitles-check">@(subtitleIndex == index ? "✓" : null)</span>@Subtitles[index].Label
+                </button>
+            }
+            <div class="video-player-subtitles-heading">Size</div>
+            @foreach (var (value, label) in SizeOptions)
+            {
+                var v = value;
+                <button type="button" role="menuitemradio" aria-checked="@(subtitleSize == v ? "true" : "false")" class="video-player-subtitles-item" @onclick="() => SetSubtitleSizeAsync(v)">
+                    <span class="video-player-subtitles-check">@(subtitleSize == v ? "✓" : null)</span>@label
+                </button>
+            }
+            <div class="video-player-subtitles-heading">Background</div>
+            @foreach (var (value, label) in BackgroundOptions)
+            {
+                var v = value;
+                <button type="button" role="menuitemradio" aria-checked="@(subtitleBackground == v ? "true" : "false")" class="video-player-subtitles-item" @onclick="() => SetSubtitleBackgroundAsync(v)">
+                    <span class="video-player-subtitles-check">@(subtitleBackground == v ? "✓" : null)</span>@label
+                </button>
+            }
+        </div>
+    }
+</div>;
+
     private string VideoSelector => "video." + VideoClass;
 
     // The scrub bar replaces the browser's seek bar, with trickplay thumbnails once they load.
@@ -136,37 +184,107 @@
     // scrub bar once the browser has read the video's own length.
     private double? TimelineDurationSeconds => DurationSeconds is > 0 ? DurationSeconds : videoDurationSeconds;
 
-    // The track showing, null for off; the first track shows until the user changes it.
+    private static readonly (string Value, string Label)[] SizeOptions = [("small", "Small"), ("medium", "Medium"), ("large", "Large"), ("xlarge", "Extra large")];
+    private static readonly (string Value, string Label)[] BackgroundOptions = [("transparent", "Transparent"), ("translucent", "Semi-transparent"), ("solid", "Solid")];
+
+    // The track showing, null for off. Whether subtitles are on, and their look, are remembered in the
+    // browser (see ClipEditor.razor.js) so they carry over from clip to clip and across visits.
     private int? subtitleIndex = 0;
     private string? subtitleKey;
-    // New tracks: a reused <track> element keeps its old mode, so the first one is shown explicitly.
+    private bool subtitlesEnabled = true;
+    private string subtitleSize = "medium";
+    private string subtitleBackground = "transparent";
+    private bool subtitleMenuOpen;
+    // New tracks or preferences: a reused <track> element keeps its old mode, so it is set explicitly.
     private bool subtitleTracksChanged;
+    private bool subtitleStyleChanged = true;
+    private bool subtitlePrefsLoaded;
+
+    private sealed record SubtitlePrefs(bool Enabled, string Size, string Background);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!subtitleTracksChanged) return;
+        if (!subtitlePrefsLoaded && Subtitles.Count > 0)
+        {
+            subtitlePrefsLoaded = true;
+            try
+            {
+                await EnsureModuleAsync();
+                var prefs = await videoModule!.InvokeAsync<SubtitlePrefs?>("subtitlePrefs");
+                if (prefs is not null)
+                {
+                    subtitlesEnabled = prefs.Enabled;
+                    subtitleSize = prefs.Size;
+                    subtitleBackground = prefs.Background;
+                    subtitleIndex = subtitlesEnabled ? 0 : null;
+                    subtitleTracksChanged = true;
+                    subtitleStyleChanged = true;
+                    StateHasChanged();
+                }
+            }
+            catch (JSDisconnectedException)
+            {
+                return;
+            }
+        }
+        if (!subtitleTracksChanged && !subtitleStyleChanged) return;
+        var tracks = subtitleTracksChanged;
+        var style = subtitleStyleChanged;
         subtitleTracksChanged = false;
+        subtitleStyleChanged = false;
+        if (Src is null) return;
         try
         {
-            videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");
-            await videoModule.InvokeVoidAsync("setSubtitleTrack", VideoSelector, subtitleIndex);
+            await EnsureModuleAsync();
+            if (style) await videoModule!.InvokeVoidAsync("applySubtitleStyle", VideoSelector, subtitleSize, subtitleBackground);
+            if (tracks) await videoModule!.InvokeVoidAsync("setSubtitleTrack", VideoSelector, subtitleIndex);
         }
         catch (JSDisconnectedException)
         {
         }
     }
 
-    private string SubtitlesTitle => subtitleIndex is { } n ? $"Subtitles: {Subtitles[n].Label} (click for next / off)" : "Subtitles: off (click to turn on)";
+    // Every caller catches JSDisconnectedException.
+#pragma warning disable BL0016
+    private async Task EnsureModuleAsync() =>
+        videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");
+#pragma warning restore BL0016
 
-    private async Task CycleSubtitlesAsync()
+    private string SubtitlesTitle => subtitleIndex is { } n && n < Subtitles.Count ? $"Subtitles: {Subtitles[n].Label}" : "Subtitles: off";
+
+    private void ToggleSubtitleMenu() => subtitleMenuOpen = !subtitleMenuOpen;
+
+    private void CloseSubtitleMenu() => subtitleMenuOpen = false;
+
+    private async Task SelectSubtitleAsync(int? index)
+    {
+        subtitleIndex = index;
+        subtitlesEnabled = index is not null;
+        subtitleMenuOpen = false;
+        subtitleTracksChanged = true;
+        await SavePrefsAsync();
+    }
+
+    private async Task SetSubtitleSizeAsync(string size)
+    {
+        subtitleSize = size;
+        subtitleStyleChanged = true;
+        await SavePrefsAsync();
+    }
+
+    private async Task SetSubtitleBackgroundAsync(string background)
+    {
+        subtitleBackground = background;
+        subtitleStyleChanged = true;
+        await SavePrefsAsync();
+    }
+
+    private async Task SavePrefsAsync()
     {
         try
         {
-            videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");
-            // Where the browser is now, since its own captions menu can change the track too.
-            subtitleIndex = await videoModule.InvokeAsync<int?>("subtitleTrack", VideoSelector);
-            subtitleIndex = subtitleIndex is null ? 0 : subtitleIndex + 1 < Subtitles.Count ? subtitleIndex + 1 : null;
-            await videoModule.InvokeVoidAsync("setSubtitleTrack", VideoSelector, subtitleIndex);
+            await EnsureModuleAsync();
+            await videoModule!.InvokeVoidAsync("saveSubtitlePrefs", new SubtitlePrefs(subtitlesEnabled, subtitleSize, subtitleBackground));
         }
         catch (JSDisconnectedException)
         {
@@ -192,8 +310,10 @@
         if (key != subtitleKey)
         {
             subtitleKey = key;
-            subtitleIndex = Subtitles.Count > 0 ? 0 : null;
-            subtitleTracksChanged = Subtitles.Count > 0;
+            subtitleIndex = Subtitles.Count > 0 && subtitlesEnabled ? 0 : null;
+            // Even with no tracks, so the last clip's cue is cleared.
+            subtitleTracksChanged = true;
+            subtitleMenuOpen = false;
         }
         await ReportScrubBarShownAsync();
     }
