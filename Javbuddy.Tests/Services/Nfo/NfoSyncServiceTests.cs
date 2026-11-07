@@ -1666,6 +1666,34 @@ public class NfoSyncServiceTests
     }
 
     [Fact]
+    public async Task SyncMovieMetadataToNfoAsync_TitleLessNfo_GetsTheTitleWritten()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var client = CreateClientFor(factory, root);
+        var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
+
+        var folder = root.AddMovieFolder("SYN-002");
+        var nfoPath = Path.Combine(folder, "SYN-002.nfo");
+        await File.WriteAllTextAsync(nfoPath, "<movie><id>SYN-002</id><plot>P</plot></movie>");
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "SYN-002", Status = MovieStatus.Got, MetaTitle = "Added Title" };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        Assert.True(await service.SyncMovieMetadataToNfoAsync(movieId));
+        Assert.Contains("<title>Added Title</title>", await File.ReadAllTextAsync(nfoPath));
+
+        // The title is now on disk, so a second sync has nothing left to write.
+        Assert.False(await service.SyncMovieMetadataToNfoAsync(movieId));
+    }
+
+    [Fact]
     public async Task SyncMovieMetadataToNfoAsync_NoLocalNfo_ReturnsFalse()
     {
         using var factory = new TestDbContextFactory();

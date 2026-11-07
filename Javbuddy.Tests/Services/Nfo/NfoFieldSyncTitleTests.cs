@@ -63,4 +63,39 @@ public class NfoFieldSyncTitleTests
         Assert.False(NfoFieldSync.ApplyFieldUpdates(MovieWithTitle(null), root));
         Assert.Null(root.Element("title"));
     }
+
+    [Fact]
+    public void WhitespaceOnlyCanonicalTitle_DoesNotInventAnElement()
+    {
+        var root = Load("<movie><plot>P</plot></movie>");
+
+        Assert.False(NfoFieldSync.ApplyFieldUpdates(MovieWithTitle("   "), root));
+        Assert.Null(root.Element("title"));
+    }
+
+    [Fact]
+    public void WithoutPreservedWhitespace_TitleIsInsertedAfterId()
+    {
+        var root = XDocument.Parse("<movie><id>ABC-123</id><plot>P</plot></movie>").Root!;
+
+        Assert.True(NfoFieldSync.ApplyFieldUpdates(MovieWithTitle("New"), root));
+        Assert.Equal("<movie><id>ABC-123</id><title>New</title><plot>P</plot></movie>", root.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void WithoutPreservedWhitespace_TitleBecomesTheFirstChildWhenThereIsNoId()
+    {
+        var root = XDocument.Parse("<movie><plot>P</plot></movie>").Root!;
+
+        Assert.True(NfoFieldSync.ApplyFieldUpdates(MovieWithTitle("New"), root));
+        Assert.Equal("<movie><title>New</title><plot>P</plot></movie>", root.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void TitleWithSurroundingWhitespace_MatchingTheCanonicalTitle_ReportsNoChange()
+    {
+        var root = Load("<movie><title> Same </title></movie>");
+
+        Assert.False(NfoFieldSync.ApplyFieldUpdates(MovieWithTitle("Same"), root));
+    }
 }
