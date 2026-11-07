@@ -248,6 +248,7 @@
     {
         isLoadingDetail = true;
         selectedPath = path;
+        selectedDetail = null;
         errorMessage = null;
 
         try
@@ -260,15 +261,18 @@
             }
             else
             {
+                selectedPath = null;
                 errorMessage = "Failed to load performer details.";
             }
         }
         catch (HttpRequestException ex)
         {
+            selectedPath = null;
             errorMessage = $"Could not reach minnano-av.com: {ex.Message}";
         }
         catch (Exception ex)
         {
+            selectedPath = null;
             errorMessage = $"Failed to load performer details: {ex.Message}";
         }
         finally

@@ -559,4 +559,62 @@ public class ActorMetadataSearchModalTests : BunitContext
         Assert.Contains("Could not reach WAPdB: Connection refused (warashi-asian-pornstars.fr:443)", alert.TextContent);
         Assert.DoesNotContain("No matching performers found on WAPdB.", cut.Markup);
     }
+
+    [Fact]
+    public void Modal_WhenDetailLoadReturnsNull_ShowsErrorMessageAndClearsSelection()
+    {
+        var warashiClient = Substitute.For<IWarashiClient>();
+        var actorService = Substitute.For<IActorService>();
+
+        warashiClient.GetPerformerDetailAsync("/en/actress-1", Arg.Any<CancellationToken>())
+            .Returns((WarashiPerformerDetail?)null);
+
+        Services.AddSingleton(warashiClient);
+        Services.AddSingleton(actorService);
+
+        var actor = new Actor { Id = 1, FirstName = "Misa", LastName = "Kimura" };
+        var cut = Render<ActorMetadataSearchModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.Actor, actor)
+            .Add(x => x.InitialSelectedPath, "/en/actress-1"));
+
+        var alert = cut.Find(".alert-danger");
+        Assert.Contains("Failed to load performer details.", alert.TextContent);
+        Assert.Empty(cut.FindAll(".performer-detail-card"));
+    }
+
+    [Fact]
+    public async Task Modal_WhenSelectingSecondCandidateThrowsHttpRequestException_ClearsPreviousDetailAndSelection()
+    {
+        var warashiClient = Substitute.For<IWarashiClient>();
+        var actorService = Substitute.For<IActorService>();
+
+        var first = new WarashiSearchResult("Yua Mikami", "三上悠亜", "/en/actress-1", null, null, true, []);
+        var second = new WarashiSearchResult("Misa Kimura", "木村みさ", "/en/actress-2", null, null, false, []);
+        warashiClient.SearchPerformersAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new List<WarashiSearchResult> { first, second });
+
+        warashiClient.GetPerformerDetailAsync("/en/actress-1", Arg.Any<CancellationToken>())
+            .Returns(new WarashiPerformerDetail { Name = "Yua Mikami", HeightCm = 159 });
+        warashiClient.GetPerformerDetailAsync("/en/actress-2", Arg.Any<CancellationToken>())
+            .Returns<WarashiPerformerDetail?>(_ => throw new HttpRequestException("Connection refused"));
+
+        Services.AddSingleton(warashiClient);
+        Services.AddSingleton(actorService);
+
+        var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
+        var cut = Render<ActorMetadataSearchModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.Actor, actor));
+
+        Assert.NotEmpty(cut.FindAll(".performer-detail-card"));
+
+        var secondItem = cut.FindAll(".search-result-item")[1];
+        await cut.InvokeAsync(() => secondItem.Click());
+
+        var alert = cut.Find(".alert-danger");
+        Assert.Contains("Could not reach WAPdB: Connection refused", alert.TextContent);
+        Assert.Empty(cut.FindAll(".performer-detail-card"));
+        Assert.Empty(cut.FindAll(".search-result-item.selected"));
+    }
 }

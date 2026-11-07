@@ -421,5 +421,41 @@ public class MinnanoAvMetadataSearchModalTests : BunitContext
 
         var alert = cut.Find(".alert-danger");
         Assert.Contains("Failed to load performer details.", alert.TextContent);
+        Assert.Empty(cut.FindAll(".performer-detail-card"));
+    }
+
+    [Fact]
+    public async Task Modal_WhenSelectingSecondCandidateThrowsHttpRequestException_ClearsPreviousDetailAndSelection()
+    {
+        var client = Substitute.For<IMinnanoAvClient>();
+        var actorService = Substitute.For<IActorService>();
+
+        var first = new MinnanoAvSearchResult("通野未帆", "とおのみほ", "Tohno Miho", "actress1.html", null, null, true, []);
+        var second = new MinnanoAvSearchResult("みさ（同人モデル）", "みさ", "Misa", "actress630532.html", null, null, false, []);
+        client.SearchPerformersAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new List<MinnanoAvSearchResult> { first, second });
+
+        client.GetPerformerDetailAsync("actress1.html", Arg.Any<CancellationToken>())
+            .Returns(new MinnanoAvPerformerDetail { Name = "通野未帆", HeightCm = 160 });
+        client.GetPerformerDetailAsync("actress630532.html", Arg.Any<CancellationToken>())
+            .Returns<MinnanoAvPerformerDetail?>(_ => throw new HttpRequestException("Connection refused"));
+
+        Services.AddSingleton(client);
+        Services.AddSingleton(actorService);
+
+        var actor = new Actor { Id = 1, FirstName = "Miho", LastName = "Tohno" };
+        var cut = Render<MinnanoAvMetadataSearchModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.Actor, actor));
+
+        Assert.NotEmpty(cut.FindAll(".performer-detail-card"));
+
+        var secondItem = cut.FindAll(".search-result-item")[1];
+        await cut.InvokeAsync(() => secondItem.Click());
+
+        var alert = cut.Find(".alert-danger");
+        Assert.Contains("Could not reach minnano-av.com: Connection refused", alert.TextContent);
+        Assert.Empty(cut.FindAll(".performer-detail-card"));
+        Assert.Empty(cut.FindAll(".search-result-item.selected"));
     }
 }

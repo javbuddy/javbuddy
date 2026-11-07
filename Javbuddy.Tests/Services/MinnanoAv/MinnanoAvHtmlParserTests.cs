@@ -208,6 +208,9 @@ public class MinnanoAvHtmlParserTests
                     <td><span>別名</span><p>みさちゃん（FC2） （みさちゃん / Misachan）</p></td>
                 </tr>
                 <tr>
+                    <td><span>別名</span><p>みさ（別名義）</p></td>
+                </tr>
+                <tr>
                     <td><span>サイズ</span><p>T155 / B88(<a href="actress_list.php?cup=F">Fカップ</a>) / W58 / H86</p></td>
                 </tr>
             </table>
@@ -220,7 +223,7 @@ public class MinnanoAvHtmlParserTests
         Assert.Equal("みさ（同人モデル）", detail.Name);
         Assert.Equal("みさ", detail.Kana);
         Assert.Equal("Misa", detail.Romaji);
-        Assert.Equal(["木村みさ", "みさちゃん（FC2）"], detail.Aliases);
+        Assert.Equal(["木村みさ", "みさちゃん（FC2）", "みさ（別名義）"], detail.Aliases);
         Assert.Equal(155, detail.HeightCm);
         Assert.Equal("F", detail.CupSize);
     }
