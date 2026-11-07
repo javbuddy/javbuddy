@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- A library rescan now queues the artwork a newly imported movie came without, generated in the background from frames of its own video once MediaInfo has scanned it (a restart or a cancelled run picks up what is left): 10 extrafanart stills when it has none, and a poster and fanart image when it has neither. Each is a toggle (on by default) in **Settings → Metadata → New movie artwork**, or the `NewMovieArtwork__GenerateExtraFanart` / `NewMovieArtwork__GeneratePosterAndFanart` environment variables. Existing images are never replaced, and a movie whose metadata already has a cover URL gets no generated poster. (#118, #119)
+
+### Changed
+
+- **Generate poster and fanart** now writes `poster.webp` and `fanart.webp` instead of JPEG files, and takes side-by-side VR frames from the left eye only.
+
 ## [0.5.0] - 2026-11-07
 
 ### Added

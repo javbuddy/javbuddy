@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261107091058_RemoveWarashiSettings";
+    public override string LastMigrationId => "20261107222831_AddNewMovieArtwork";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -1255,6 +1255,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<string>("MetaTitle")
                     .HasColumnType("TEXT");
 
+                b.Property<bool>("NewArtworkPending")
+                    .HasColumnType("INTEGER");
+
                 b.Property<string>("NfoBaselineJson")
                     .HasColumnType("TEXT");
 
@@ -1645,6 +1648,23 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.HasIndex("TagId");
 
                 b.ToTable("MovieTags");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.NewMovieArtworkSettings", b =>
+            {
+                b.Property<int>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("GenerateExtraFanart")
+                    .HasColumnType("INTEGER");
+
+                b.Property<bool>("GeneratePosterAndFanart")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("Id");
+
+                b.ToTable("NewMovieArtworkSettings");
             });
 
         modelBuilder.Entity("Javbuddy.Models.NfoGeneration", b =>

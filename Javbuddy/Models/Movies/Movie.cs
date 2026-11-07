@@ -28,6 +28,11 @@ public class Movie : IMediaTechnicalInfo
     [NotMapped]
     public bool IsVr => !string.IsNullOrEmpty(VrType);
 
+    /// <summary>Full side-by-side VR (not half-width): the frames hold both eyes next to each other, so a still can
+    /// be cropped to the left eye.</summary>
+    [NotMapped]
+    public bool IsSideBySideVr => VrType is { } vr && vr.Contains("SBS", StringComparison.Ordinal) && !vr.Contains("HSBS", StringComparison.Ordinal);
+
     /// <summary>Manual override display name. Rarely set — MetaTitle from javinizer-go takes precedence.</summary>
     [StringLength(300)]
     public string? Title { get; set; }
@@ -169,6 +174,12 @@ public class Movie : IMediaTechnicalInfo
     /// cleared by ClipActorSync. New movies start stale; the migration made every existing one stale, which
     /// is the first fill.</summary>
     public bool ClipActorsStale { get; set; } = true;
+
+    /// <summary>A library rescan imported this movie and its missing artwork hasn't been generated yet
+    /// (NewMovieArtworkWorker). Stays set until the movie's video has a probed duration, so a movie the probe
+    /// couldn't reach yet, or a run that was cancelled, is picked up later; cleared once generation was
+    /// attempted (or the "New movie artwork" settings are off).</summary>
+    public bool NewArtworkPending { get; set; }
 
     /// <summary>Cheap composite signature of poster/fanart/extrafanart file names, sizes, and
     /// (for poster/fanart) last-write times, plus extrafanart count/total size — not a

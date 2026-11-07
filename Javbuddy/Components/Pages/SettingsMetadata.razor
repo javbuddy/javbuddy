@@ -9,6 +9,7 @@
 @using Javbuddy.Services.R18Dev
 @using Javbuddy.Services.Tasks
 @using Javbuddy.Services.Trickplay
+@using Javbuddy.Services.Movies
 @using Javbuddy.Services.Infrastructure
 @using Javbuddy.Services.MinnanoAv
 @using Javbuddy.Components.Pages.SettingsMetadataSections
@@ -20,6 +21,7 @@
 @inject IConfiguration Configuration
 @inject IMinnanoAvSettingsService MinnanoAvSettingsService
 @inject ITrickplaySettingsService TrickplaySettingsService
+@inject INewMovieArtworkSettingsService NewMovieArtworkSettingsService
 @inject ScheduledTaskLauncher TaskLauncher
 @inject ActorBatchEnrichmentLauncher EnrichmentLauncher
 @rendermode InteractiveServer
@@ -41,6 +43,7 @@ else
                 <StatusTile Title="Local Library" Description="Folder-based metadata source, checked before javinizer-go." Configured="localLibraryStatus.Configured" Summary="@localLibraryStatus.Summary" EnvConfigured="localLibraryStatus.EnvConfigured" OnOpen="OpenLocalLibraryModal" />
                 <StatusTile Title="MediaInfo" Description="Probes local video files for technical info (resolution, codec, bitrate)." Configured="mediaInfoSettings.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenMediaInfoModal" />
                 <StatusTile Title="Trickplay" Description="Scrub-bar preview thumbnails for the player." Configured="trickplaySettings?.GenerateForNewFiles == true" ConfiguredLabel="Generating for new files" NotConfiguredLabel="Not generating for new files" EnvConfigured="trickplayFromEnv" OnOpen="OpenTrickplayModal" />
+                <StatusTile Title="New movie artwork" Description="Extrafanart, poster and fanart generated from the video for movies a library rescan imports." Configured="newMovieArtworkSettings?.GenerateExtraFanart == true || newMovieArtworkSettings?.GeneratePosterAndFanart == true" ConfiguredLabel="Generating" NotConfiguredLabel="Off" OnOpen="OpenNewMovieArtworkModal" />
             </div>
         </section>
 
@@ -75,6 +78,13 @@ else
     @if (showTrickplayModal)
     {
         <TrickplaySection OnSaved="LoadTrickplayTileAsync" />
+    }
+</SlideOverDrawer>
+
+<SlideOverDrawer Show="showNewMovieArtworkModal" Title="New movie artwork" OnClose="CloseNewMovieArtworkModal">
+    @if (showNewMovieArtworkModal)
+    {
+        <NewMovieArtworkSection OnSaved="LoadNewMovieArtworkTileAsync" />
     }
 </SlideOverDrawer>
 
@@ -284,6 +294,8 @@ else
     private TrickplaySettings? trickplaySettings;
     private bool trickplayFromEnv;
     private bool showTrickplayModal;
+    private NewMovieArtworkSettings? newMovieArtworkSettings;
+    private bool showNewMovieArtworkModal;
     private bool showMediaInfoModal;
     private IReadOnlyList<DiscoverySourceStatus>? discoverySources;
     private Dictionary<string, bool> discoveryEdits = new();
@@ -318,6 +330,7 @@ else
         if (MinnanoAvSolverEnv is { } minnanoAvSolver) minnanoAvSettings.UseChallengeSolver = minnanoAvSolver;
         discoverySources = await DiscoverySettingsService.GetSourcesAsync();
         await LoadTrickplayTileAsync();
+        await LoadNewMovieArtworkTileAsync();
     }
 
     private string DiscoverySummary => $"{discoverySources!.Count(x => x.Enabled)} of {discoverySources!.Count} enabled";
@@ -343,6 +356,13 @@ else
         trickplaySettings = await TrickplaySettingsService.GetEffectiveAsync();
         trickplayFromEnv = TrickplaySettingsService.IsSetByEnvironment(nameof(TrickplaySettings.GenerateForNewFiles));
     }
+
+    private async Task LoadNewMovieArtworkTileAsync() =>
+        newMovieArtworkSettings = await NewMovieArtworkSettingsService.GetEffectiveAsync();
+
+    private void OpenNewMovieArtworkModal() => showNewMovieArtworkModal = true;
+
+    private void CloseNewMovieArtworkModal() => showNewMovieArtworkModal = false;
 
     private void OpenTrickplayModal() => showTrickplayModal = true;
 

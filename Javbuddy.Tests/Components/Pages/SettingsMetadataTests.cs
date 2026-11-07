@@ -8,6 +8,7 @@ using Javbuddy.Services.MediaInfo;
 using Javbuddy.Services.MinnanoAv;
 using Javbuddy.Services.Monitoring;
 using Javbuddy.Services.MovieDiscovery;
+using Javbuddy.Services.Movies;
 using Javbuddy.Services.R18Dev;
 using Javbuddy.Services.Settings;
 using Javbuddy.Services.Tasks;
@@ -40,6 +41,10 @@ public class SettingsMetadataTests : BunitContext
         var trickplaySettings = Substitute.For<ITrickplaySettingsService>();
         trickplaySettings.GetEffectiveAsync(Arg.Any<CancellationToken>()).Returns(new TrickplaySettings());
         Services.AddSingleton(trickplaySettings);
+
+        var newMovieArtworkSettings = Substitute.For<INewMovieArtworkSettingsService>();
+        newMovieArtworkSettings.GetEffectiveAsync(Arg.Any<CancellationToken>()).Returns(new NewMovieArtworkSettings());
+        Services.AddSingleton(newMovieArtworkSettings);
     }
 
     private static TaskActivityTracker NewTaskActivityTracker() =>

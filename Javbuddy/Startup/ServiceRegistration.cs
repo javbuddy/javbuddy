@@ -224,6 +224,10 @@ public static class ServiceRegistration
         services.AddScoped<IMovieExtraFanartService, MovieExtraFanartService>();
         services.AddScoped<IMovieExtraFanartStillsService, MovieExtraFanartStillsService>();
         services.AddScoped<IMoviePosterGenerationService, MoviePosterGenerationService>();
+        services.AddScoped<INewMovieArtworkSettingsService, NewMovieArtworkSettingsService>();
+        services.AddScoped<INewMovieArtworkService, NewMovieArtworkService>();
+        services.AddSingleton<NewMovieArtworkSignal>();
+        services.AddHostedService<NewMovieArtworkWorker>();
         services.AddScoped<IImageCacheMaintenanceService, ImageCacheMaintenanceService>();
         services.AddScoped<IDiskSpaceService, DiskSpaceService>();
         services.AddScoped<IR18DevDumpImporter, R18DevDumpImporter>();

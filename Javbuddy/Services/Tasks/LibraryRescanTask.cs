@@ -39,6 +39,10 @@ namespace Javbuddy.Services.Tasks;
 ///    a debug message noticing it.
 /// 8. Detects metadata conflicts between local .nfo files and Javbuddy (DetectConflictsAsync).
 ///
+/// A movie step 1 imports is marked Movie.NewArtworkPending; once the probe has recorded its duration the
+/// NewMovieArtworkWorker (a background queue, so this run never waits on ffmpeg) generates its missing
+/// extrafanart, poster and fanart, per the "New movie artwork" settings.
+///
 /// Steps 5-7 use a null-stored-value-means-"never observed, establish the baseline, don't log or
 /// re-apply" rule (see each LocalLibraryClient method) specifically so rolling this feature out to
 /// an already-fully-scanned library doesn't fire a false "changed" event. Info in Javbuddy is authoritative.
@@ -55,7 +59,8 @@ public class LibraryRescanTask(
     ILogger<LibraryRescanTask> logger,
     INfoSyncService? nfoSyncService = null,
     MovieChangeNotifier? movieChangeNotifier = null,
-    TimeSpan? movieChangeNotifyInterval = null) : IScheduledTask
+    TimeSpan? movieChangeNotifyInterval = null,
+    NewMovieArtworkSignal? newMovieArtworkSignal = null) : IScheduledTask
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromHours(24);
     private const int MaxConcurrency = 4;
@@ -65,6 +70,7 @@ public class LibraryRescanTask(
     private readonly ILogger<LibraryRescanTask> logger = logger;
     private readonly INfoSyncService? nfoSyncService = nfoSyncService;
     private readonly MovieChangeNotifier? movieChangeNotifier = movieChangeNotifier;
+    private readonly NewMovieArtworkSignal? newMovieArtworkSignal = newMovieArtworkSignal;
     private readonly TimeSpan notifyThrottle = movieChangeNotifyInterval ?? TimeSpan.FromSeconds(2);
 
     public string Name => "Library Rescan";
@@ -108,6 +114,8 @@ public class LibraryRescanTask(
         var subtitlesSynced = await SyncSubtitleFlagsAsync(progress, ct);
         var trailersSynced = await SyncTrailerFlagsAsync(progress, ct);
         var probed = await ProbeMediaInfoAsync(progress, ct);
+        // MediaInfo has now recorded the durations the artwork frames are taken by (NewMovieArtworkWorker).
+        newMovieArtworkSignal?.Signal();
         var nfoSynced = await SyncNfoAsync(progress, ct);
         var imagesSynced = await SyncImagesAsync(progress, ct);
         var conflictsDetected = await DetectConflictsAsync(progress, ct);
@@ -194,7 +202,7 @@ public class LibraryRescanTask(
 
     private async Task ImportOneAsync(string code, CancellationToken ct)
     {
-        var movie = new Movie { Code = code, Status = MovieStatus.Got, ContentType = MovieAddService.ContentTypeFor(code) };
+        var movie = new Movie { Code = code, Status = MovieStatus.Got, ContentType = MovieAddService.ContentTypeFor(code), NewArtworkPending = true };
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
             db.Movies.Add(movie);

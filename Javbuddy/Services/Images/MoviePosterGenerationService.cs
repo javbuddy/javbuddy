@@ -10,10 +10,12 @@ namespace Javbuddy.Services.Images;
 
 public interface IMoviePosterGenerationService
 {
-    /// <summary>Samples frames from the movie's video, picks the sharpest well-exposed ones and writes "poster.jpg"
-    /// (a 2:3 crop) and "fanart.jpg" (the full frame) into its folder — only the ones that don't exist yet, never
-    /// overwriting an image. Fails when the movie has no local video or already has both.</summary>
-    Task<OperationResult> GenerateAsync(int movieId, CancellationToken ct = default);
+    /// <summary>Samples frames from the movie's video, picks the sharpest well-exposed ones and writes "poster.webp"
+    /// (a 2:3 crop) and "fanart.webp" (the full frame) into its folder — only the ones that don't exist yet, never
+    /// overwriting an image. Fails when the movie has no local video or already has both. Frames of side-by-side VR video
+    /// are cropped to the left eye. With <paramref name="respectRemoteArtwork"/>, a poster (or fanart) isn't generated for a
+    /// movie whose metadata already has a cover (or backdrop) URL, so a real remote cover isn't shadowed by a video frame.</summary>
+    Task<OperationResult> GenerateAsync(int movieId, bool respectRemoteArtwork = false, CancellationToken ct = default);
 }
 
 /// <summary>For a movie that came without artwork (no scraper has covers for most uncensored releases).</summary>
@@ -25,9 +27,9 @@ public class MoviePosterGenerationService(
 {
     internal const int SampleCount = 9;
     private const double PosterAspectRatio = 2.0 / 3.0;
-    private const int JpegQuality = 92;
+    private const int WebpQuality = 92;
 
-    public async Task<OperationResult> GenerateAsync(int movieId, CancellationToken ct = default)
+    public async Task<OperationResult> GenerateAsync(int movieId, bool respectRemoteArtwork = false, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies.AsNoTracking().FirstOrDefaultAsync(m => m.Id == movieId, ct);
@@ -44,6 +46,11 @@ public class MoviePosterGenerationService(
 
         var needPoster = !HasImage(folder, "poster") && !HasImage(folder, "folder");
         var needFanart = !HasImage(folder, "fanart");
+        if (respectRemoteArtwork)
+        {
+            needPoster &= string.IsNullOrWhiteSpace(movie.MetaCoverUrl);
+            needFanart &= string.IsNullOrWhiteSpace(movie.MetaBackdropUrl);
+        }
         if (!needPoster && !needFanart)
         {
             return OperationResult.Fail("The movie already has a poster and fanart.");
@@ -66,7 +73,7 @@ public class MoviePosterGenerationService(
             for (var i = 1; i <= SampleCount; i++)
             {
                 var framePath = Path.Combine(scratch, $"{i}.webp");
-                var extracted = await ffmpegClient.ExtractFrameWebpAsync(video, movie.MediaDurationSeconds.Value * i / (SampleCount + 1), false, framePath, ct);
+                var extracted = await ffmpegClient.ExtractFrameWebpAsync(video, movie.MediaDurationSeconds.Value * i / (SampleCount + 1), movie.IsSideBySideVr, framePath, ct);
                 if (!extracted.Success || !File.Exists(framePath) || new FileInfo(framePath).Length == 0)
                 {
                     firstError ??= extracted.ErrorMessage ?? "ffmpeg wrote no frame at that point of the video";
@@ -95,21 +102,21 @@ public class MoviePosterGenerationService(
             var fanartSource = (ranked.Count > 1 ? ranked[1] : ranked[0]).Path;
 
             // Everything that can fail on a bad frame happens before the first file is written, so a failure never
-            // leaves a lone fanart.jpg behind (which would block generating it later).
+            // leaves a lone fanart.webp behind (which would block generating it later).
             var poster = needPoster ? CropToPoster(posterSource) : null;
             if (needPoster && poster is null)
             {
                 return OperationResult.Fail("The video's frames are too small to make a poster from.");
             }
 
-            var fanart = needFanart ? EncodeJpeg(fanartSource) : null;
+            var fanart = needFanart ? EncodeWebp(fanartSource) : null;
             if (needFanart && fanart is null)
             {
-                return OperationResult.Fail("Couldn't convert the extracted frame to a JPEG.");
+                return OperationResult.Fail("Couldn't convert the extracted frame to WebP.");
             }
 
-            if (fanart is not null) WriteFile(Path.Combine(folder, "fanart.jpg"), fanart);
-            if (poster is not null) WriteFile(Path.Combine(folder, "poster.jpg"), poster);
+            if (fanart is not null) WriteFile(Path.Combine(folder, "fanart.webp"), fanart);
+            if (poster is not null) WriteFile(Path.Combine(folder, "poster.webp"), poster);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -125,20 +132,20 @@ public class MoviePosterGenerationService(
         return OperationResult.Ok();
     }
 
-    /// <summary>The frame re-encoded as JPEG bytes, or null when it can't be decoded or encoded.</summary>
-    private static byte[]? EncodeJpeg(string sourceImage)
+    /// <summary>The frame re-encoded as WebP bytes, or null when it can't be decoded or encoded.</summary>
+    private static byte[]? EncodeWebp(string sourceImage)
     {
         using var frame = SKBitmap.Decode(sourceImage);
         if (frame is null) return null;
 
-        using var data = frame.Encode(SKEncodedImageFormat.Jpeg, JpegQuality);
+        using var data = frame.Encode(SKEncodedImageFormat.Webp, WebpQuality);
         return data?.ToArray();
     }
 
-    /// <summary>A centered 2:3 crop of the frame as JPEG bytes, or null when the frame is too small to crop or encode.</summary>
-    private static byte[]? CropToPoster(string sourceJpeg)
+    /// <summary>A centered 2:3 crop of the frame as WebP bytes, or null when the frame is too small to crop or encode.</summary>
+    private static byte[]? CropToPoster(string sourceImage)
     {
-        using var frame = SKBitmap.Decode(sourceJpeg);
+        using var frame = SKBitmap.Decode(sourceImage);
         if (frame is null) return null;
 
         var cropWidth = Math.Min(frame.Width, (int)(frame.Height * PosterAspectRatio));
@@ -153,7 +160,7 @@ public class MoviePosterGenerationService(
             canvas.DrawBitmap(frame, rect, new SKRect(0, 0, rect.Width, rect.Height), SKSamplingOptions.Default);
         }
 
-        using var data = poster.Encode(SKEncodedImageFormat.Jpeg, JpegQuality);
+        using var data = poster.Encode(SKEncodedImageFormat.Webp, WebpQuality);
         return data?.ToArray();
     }
 

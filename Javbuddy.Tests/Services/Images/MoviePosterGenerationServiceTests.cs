@@ -2,6 +2,7 @@ using Javbuddy.Models;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.LocalLibrary;
+using Javbuddy.Services.Movies;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -43,10 +44,10 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
         File.WriteAllBytes(path, data.ToArray());
     }
 
-    private async Task<int> AddMovieAsync(double? duration = 600)
+    private async Task<int> AddMovieAsync(double? duration = 600, string? coverUrl = null, string? backdropUrl = null, string? vrType = null)
     {
         await using var context = await db.CreateDbContextAsync();
-        var movie = new Movie { Code = "abc-001", MediaDurationSeconds = duration };
+        var movie = new Movie { Code = "abc-001", MediaDurationSeconds = duration, MetaCoverUrl = coverUrl, MetaBackdropUrl = backdropUrl, VrType = vrType };
         context.Movies.Add(movie);
         await context.SaveChangesAsync();
         return movie.Id;
@@ -63,9 +64,9 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
         var result = await CreateService().GenerateAsync(id);
 
         Assert.True(result.Success, result.ErrorMessage);
-        Assert.All(new[] { "poster.jpg", "fanart.jpg" }, name => Assert.Equal([0xFF, 0xD8], File.ReadAllBytes(Path.Combine(folder, name))[..2]));
-        using var poster = SKBitmap.Decode(Path.Combine(folder, "poster.jpg"));
-        using var fanart = SKBitmap.Decode(Path.Combine(folder, "fanart.jpg"));
+        Assert.All(new[] { "poster.webp", "fanart.webp" }, name => Assert.Equal("RIFF"u8.ToArray(), File.ReadAllBytes(Path.Combine(folder, name))[..4]));
+        using var poster = SKBitmap.Decode(Path.Combine(folder, "poster.webp"));
+        using var fanart = SKBitmap.Decode(Path.Combine(folder, "fanart.webp"));
         Assert.Equal(360, poster.Height);
         Assert.InRange((double)poster.Width / poster.Height, 0.65, 0.68);
         Assert.Equal(640, fanart.Width);
@@ -82,16 +83,16 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
 
         Assert.True(result.Success, result.ErrorMessage);
         Assert.Equal("keep", await File.ReadAllTextAsync(Path.Combine(folder, "folder.jpg")));
-        Assert.False(File.Exists(Path.Combine(folder, "poster.jpg")));
-        Assert.True(File.Exists(Path.Combine(folder, "fanart.jpg")));
+        Assert.False(File.Exists(Path.Combine(folder, "poster.webp")));
+        Assert.True(File.Exists(Path.Combine(folder, "fanart.webp")));
     }
 
     [Fact]
     public async Task Fails_without_touching_ffmpeg_when_both_images_exist()
     {
         var id = await AddMovieAsync();
-        await File.WriteAllTextAsync(Path.Combine(folder, "poster.jpg"), "x");
-        await File.WriteAllTextAsync(Path.Combine(folder, "fanart.jpg"), "x");
+        await File.WriteAllTextAsync(Path.Combine(folder, "poster.webp"), "x");
+        await File.WriteAllTextAsync(Path.Combine(folder, "fanart.webp"), "x");
 
         var result = await CreateService().GenerateAsync(id);
 
@@ -124,8 +125,8 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
         var result = await CreateService().GenerateAsync(id);
 
         Assert.False(result.Success);
-        Assert.False(File.Exists(Path.Combine(folder, "poster.jpg")));
-        Assert.False(File.Exists(Path.Combine(folder, "fanart.jpg")), "a failed poster must not leave a lone fanart that blocks generating it later");
+        Assert.False(File.Exists(Path.Combine(folder, "poster.webp")));
+        Assert.False(File.Exists(Path.Combine(folder, "fanart.webp")), "a failed poster must not leave a lone fanart that blocks generating it later");
         Assert.Empty(Directory.GetFiles(folder, "*.tmp"));
         await library.DidNotReceiveWithAnyArgs().SyncImagesSignatureAsync(default, default);
     }
@@ -141,6 +142,54 @@ public sealed class MoviePosterGenerationServiceTests : IDisposable
 
         Assert.False(result.Success);
         Assert.Contains("boom", result.ErrorMessage);
-        Assert.False(File.Exists(Path.Combine(folder, "poster.jpg")));
+        Assert.False(File.Exists(Path.Combine(folder, "poster.webp")));
+    }
+
+    [Fact]
+    public async Task With_respectRemoteArtwork_skips_an_image_the_metadata_already_has_a_url_for()
+    {
+        var id = await AddMovieAsync(coverUrl: "https://example.com/cover.jpg");
+
+        var result = await CreateService().GenerateAsync(id, respectRemoteArtwork: true);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.False(File.Exists(Path.Combine(folder, "poster.webp")), "a remote cover must not be shadowed by a video frame");
+        Assert.True(File.Exists(Path.Combine(folder, "fanart.webp")));
+    }
+
+    [Fact]
+    public async Task With_respectRemoteArtwork_fails_when_urls_cover_both_images()
+    {
+        var id = await AddMovieAsync(coverUrl: "https://example.com/cover.jpg", backdropUrl: "https://example.com/back.jpg");
+
+        var result = await CreateService().GenerateAsync(id, respectRemoteArtwork: true);
+
+        Assert.False(result.Success);
+        await ffmpeg.DidNotReceiveWithAnyArgs().ExtractFrameWebpAsync(default!, default, default, default!, default);
+    }
+
+    [Fact]
+    public async Task Without_respectRemoteArtwork_ignores_the_urls()
+    {
+        var id = await AddMovieAsync(coverUrl: "https://example.com/cover.jpg");
+
+        var result = await CreateService().GenerateAsync(id);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        Assert.True(File.Exists(Path.Combine(folder, "poster.webp")));
+    }
+
+    [Theory]
+    [InlineData(VrFormat.Vr180Sbs, true)]
+    [InlineData(VrFormat.ThreeDHsbs, false)]
+    [InlineData(null, false)]
+    public async Task Takes_the_left_eye_only_for_full_side_by_side_vr(string? vrType, bool leftEyeOnly)
+    {
+        var id = await AddMovieAsync(vrType: vrType);
+
+        await CreateService().GenerateAsync(id);
+
+        await ffmpeg.Received().ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), leftEyeOnly, Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await ffmpeg.DidNotReceive().ExtractFrameWebpAsync(Arg.Any<string>(), Arg.Any<double>(), !leftEyeOnly, Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }

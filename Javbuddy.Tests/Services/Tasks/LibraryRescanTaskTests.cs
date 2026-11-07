@@ -55,6 +55,58 @@ public class LibraryRescanTaskTests
     }
 
     [Fact]
+    public async Task RunAsync_NewFolder_MarksOnlyTheImportedMovieForArtwork_AndWakesTheWorker()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.Add(new Movie { Code = "OLD-001", Status = MovieStatus.Got });
+            await db.SaveChangesAsync();
+        }
+        var client = CreateLocalLibraryClient(
+            folderCodes: ["OLD-001", "ABC-123"],
+            metadataLookup: code => new LocalLookupResult(true, "/media/" + code, new LocalMovieMetadata { Title = "T" }, null));
+        var signal = new NewMovieArtworkSignal();
+
+        await new LibraryRescanTask(factory, client, NullLogger<LibraryRescanTask>.Instance, newMovieArtworkSignal: signal)
+            .RunAsync(CancellationToken.None, NoopProgress);
+
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.True((await check.Movies.SingleAsync(m => m.Code == "ABC-123")).NewArtworkPending);
+        Assert.False((await check.Movies.SingleAsync(m => m.Code == "OLD-001")).NewArtworkPending);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await signal.WaitAsync(cts.Token);
+    }
+
+    [Fact]
+    public async Task RunAsync_WakesTheArtworkWorker_OnlyAfterMediaInfoWasProbed()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123", Status = MovieStatus.Got });
+            await db.SaveChangesAsync();
+        }
+        var signal = new NewMovieArtworkSignal();
+        var client = CreateLocalLibraryClient(folderCodes: ["ABC-123"]);
+        var signalledBeforeProbe = false;
+        client.RefreshMediaInfoOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            using var probe = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+            try { signal.WaitAsync(probe.Token).GetAwaiter().GetResult(); signalledBeforeProbe = true; }
+            catch (OperationCanceledException) { }
+            return new OperationResult(true, null);
+        });
+
+        await new LibraryRescanTask(factory, client, NullLogger<LibraryRescanTask>.Instance, newMovieArtworkSignal: signal)
+            .RunAsync(CancellationToken.None, NoopProgress);
+
+        Assert.False(signalledBeforeProbe);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await signal.WaitAsync(cts.Token);
+    }
+
+    [Fact]
     public async Task RunAsync_NewFolderNotTracked_ImportsAsGotAndAppliesLocalMetadata()
     {
         using var factory = new TestDbContextFactory();

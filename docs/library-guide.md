@@ -31,7 +31,7 @@ Everything beside the video is optional. A `.nfo`, `poster.*`, `fanart.*`, `extr
 1. Add your library folder as a root, either with `LocalLibrary__RootPaths__0` or under **Settings → Metadata**. Nothing is scanned until at least one root is set.
 2. Open **Movies → Library Import** (`/add/import`) and press **Run Library Rescan**.
 
-Every folder found is added as **Got**, with its `.nfo`, poster and fanart read from disk. Movies already tracked are skipped, nothing you already track is changed. It's the same task as **System → Tasks → Library Rescan**, so it also reads media details (resolution, codec, duration), subtitles and trailers for the whole library. A large library takes a while the first time. Progress is shown on the button.
+Every folder found is added as **Got**, with its `.nfo`, poster and fanart read from disk. Movies already tracked are skipped, nothing you already track is changed. A newly imported movie that has no poster, fanart or extrafanart gets them generated from its own video in the background (WebP files written into its folder, never replacing an existing image); turn that off under **Settings → Metadata → New movie artwork**. It's the same task as **System → Tasks → Library Rescan**, so it also reads media details (resolution, codec, duration), subtitles and trailers for the whole library. A large library takes a while the first time. Progress is shown on the button.
 
 A scheduled rescan keeps picking up folders you add later, so after the first import you rarely need to run it by hand.
 

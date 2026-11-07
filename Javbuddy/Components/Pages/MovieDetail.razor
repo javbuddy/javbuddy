@@ -453,7 +453,7 @@ else
     private bool showStillsModal;
 
     // The left-eye crop takes the left half of the frame, which is only right for side-by-side layouts.
-    private bool IsSideBySideVr => movie?.VrType is { } vr && vr.Contains("SBS", StringComparison.Ordinal) && !vr.Contains("HSBS", StringComparison.Ordinal);
+    private bool IsSideBySideVr => movie?.IsSideBySideVr == true;
     private MovieImagesSection? imagesSection;
     private bool confirmingDelete;
     private bool deleting;

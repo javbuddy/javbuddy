@@ -1,0 +1,81 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Movies
+@inject INewMovieArtworkSettingsService SettingsService
+
+@* Settings > Metadata's "New movie artwork" drawer. A field set by its NewMovieArtwork__<Field>
+   environment variable is shown with that value and can't be changed here. *@
+<p class="text-muted">
+    When a library rescan imports a movie, Javbuddy can fill in the artwork it came without, using frames from the
+    movie's own video (ffmpeg), in the background once MediaInfo has scanned the video. It only creates missing
+    images, never replaces or adds to existing ones, and saves them as WebP.
+</p>
+
+@if (settings is not null && effective is not null)
+{
+    <EditForm Model="settings" OnValidSubmit="SaveAsync" FormName="new-movie-artwork-settings">
+        @Toggle("new-artwork-extrafanart", nameof(NewMovieArtworkSettings.GenerateExtraFanart), effective.GenerateExtraFanart,
+            settings.GenerateExtraFanart, v => settings.GenerateExtraFanart = v,
+            "Generate extrafanart for new movies",
+            "Saves 10 stills from the video into the movie's extrafanart folder when it has none.")
+
+        @Toggle("new-artwork-poster", nameof(NewMovieArtworkSettings.GeneratePosterAndFanart), effective.GeneratePosterAndFanart,
+            settings.GeneratePosterAndFanart, v => settings.GeneratePosterAndFanart = v,
+            "Generate poster and fanart for new movies",
+            "Writes poster.webp (a portrait crop) and fanart.webp (the full frame) into the movie's folder when it has no poster or fanart image. Skipped for an image whose cover or backdrop URL the movie's metadata already has.")
+
+        <div class="d-flex gap-2">
+            <button class="btn btn-primary" type="submit" disabled="@allFromEnv">Save</button>
+        </div>
+        @if (saved)
+        {
+            <div class="alert alert-success mt-3 mb-0">Saved.</div>
+        }
+    </EditForm>
+}
+
+@code {
+    /// <summary>Raised after a save, so the page can refresh its tile.</summary>
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private static readonly string[] Fields =
+        [nameof(NewMovieArtworkSettings.GenerateExtraFanart), nameof(NewMovieArtworkSettings.GeneratePosterAndFanart)];
+
+    private NewMovieArtworkSettings? settings;
+    private NewMovieArtworkSettings? effective;
+    private bool allFromEnv;
+    private bool saved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        allFromEnv = Fields.All(SettingsService.IsSetByEnvironment);
+        settings = await SettingsService.GetStoredAsync();
+        effective = await SettingsService.GetEffectiveAsync();
+    }
+
+    private RenderFragment Toggle(string id, string field, bool effectiveValue, bool storedValue, Action<bool> set, string label, string help) => @<div class="form-check mb-3">
+        @if (SettingsService.IsSetByEnvironment(field))
+        {
+            <input class="form-check-input" type="checkbox" id="@id" checked="@effectiveValue" disabled />
+        }
+        else
+        {
+            <input class="form-check-input" type="checkbox" id="@id" checked="@storedValue"
+                   @onchange="e => set(e.Value is true)" />
+        }
+        <label class="form-check-label" for="@id">@label</label>
+        <div class="form-text">@help</div>
+        @if (SettingsService.IsSetByEnvironment(field))
+        {
+            <div class="form-text">Set by the <code>NewMovieArtwork__@field</code> environment variable.</div>
+        }
+    </div>;
+
+    private async Task SaveAsync()
+    {
+        saved = false;
+        await SettingsService.SaveAsync(settings!);
+        effective = await SettingsService.GetEffectiveAsync();
+        saved = true;
+        await OnSaved.InvokeAsync();
+    }
+}

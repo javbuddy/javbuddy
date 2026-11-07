@@ -11,6 +11,8 @@ Configured via `LocalLibrary:RootPaths`, one path per JAV "channel" the user wan
 
 ## Folder layout
 
+Image files can be `.jpg`, `.png` or `.webp` (Javbuddy's own generated artwork is `.webp`).
+
 ```
 /media/vr/ABCD-123
 │   fanart.jpg
