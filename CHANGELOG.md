@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-07
+
 ### Added
 
 - Movie Detail's **Tools** menu has a **Generate stills** action (for movies with a scanned local video). It splits the video (minus its first and last 10%) into slots, keeps the sharper, better-exposed of two frames per slot, and shows each still in a preview the moment it is ready, with a shimmer in place of the ones still being generated. Tick which to keep and they are saved as WebP `fanartN` images in the movie's `extrafanart` folder. You choose how many (1–20, default 10), the WebP quality, whether to add to, replace, or only generate when there are no existing images, and whether to crop side-by-side VR video to the left eye (ticked by default for VR movies). The Add Images dialog also offers it. (#104)
