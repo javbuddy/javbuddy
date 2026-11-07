@@ -69,7 +69,7 @@ public class MovieExtraFanartStillsService(
     public const int DefaultCount = 10;
     public const int MinQuality = 50;
     public const int MaxQuality = 100;
-    public const int DefaultQuality = 85;
+    public const int DefaultQuality = 92;
 
     private const double EdgeSkipFraction = 0.10;
     private const int PreviewWidth = 480;

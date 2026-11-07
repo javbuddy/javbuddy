@@ -38,7 +38,7 @@ public class MovieStillsGenerateModalTests : BunitContext
     public async Task Generate_ShowsAllStillsTicked_AndSaveSendsTheSelection()
     {
         service.PreviewAsync(7, 10, ExtraFanartStillsMode.Append, false, Arg.Any<Action<ExtraFanartStill>?>(), Arg.Any<CancellationToken>()).Returns(new ExtraFanartStillsPreviewResult(Preview()));
-        service.SaveAsync(7, Arg.Any<ExtraFanartStillsPreview>(), Arg.Any<IReadOnlyCollection<int>>(), 85, ExtraFanartStillsMode.Append, Arg.Any<CancellationToken>())
+        service.SaveAsync(7, Arg.Any<ExtraFanartStillsPreview>(), Arg.Any<IReadOnlyCollection<int>>(), 92, ExtraFanartStillsMode.Append, Arg.Any<CancellationToken>())
             .Returns(ExtraFanartResult.Ok(1));
         var cut = RenderModal();
 
@@ -48,7 +48,7 @@ public class MovieStillsGenerateModalTests : BunitContext
         cut.FindAll("button").First(b => b.TextContent.Contains("Save 1 selected")).Click();
 
         await service.Received(1).SaveAsync(7, Arg.Any<ExtraFanartStillsPreview>(),
-            Arg.Is<IReadOnlyCollection<int>>(ids => ids.Count == 1 && ids.Contains(1)), 85, ExtraFanartStillsMode.Append, Arg.Any<CancellationToken>());
+            Arg.Is<IReadOnlyCollection<int>>(ids => ids.Count == 1 && ids.Contains(1)), 92, ExtraFanartStillsMode.Append, Arg.Any<CancellationToken>());
         Assert.Equal(1, savedCount);
         Assert.Contains("Added 1 image", cut.Markup);
     }
