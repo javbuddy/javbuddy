@@ -66,6 +66,11 @@ public class WarashiClient(
         {
             throw;
         }
+        catch (HttpRequestException ex) when (!ct.IsCancellationRequested)
+        {
+            Logger.LogWarning("Warashi performer search for '{Query}' failed: {Message}", query, ex.Message);
+            throw;
+        }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             Logger.LogWarning(ex, "Error occurred during Warashi performer search for '{Query}'", query);
@@ -95,6 +100,11 @@ public class WarashiClient(
         {
             throw;
         }
+        catch (HttpRequestException ex) when (!ct.IsCancellationRequested)
+        {
+            Logger.LogWarning("Warashi performer detail fetch for '{Url}' failed: {Message}", performerPathOrUrl, ex.Message);
+            throw;
+        }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             Logger.LogWarning(ex, "Error occurred during Warashi performer detail fetch for '{Url}'", performerPathOrUrl);
@@ -122,6 +132,11 @@ public class WarashiClient(
             }
 
             return await BoundedHttpContent.ReadBytesAsync(response.Content, BoundedHttpContent.MaxImageBytes, ct);
+        }
+        catch (HttpRequestException ex) when (!ct.IsCancellationRequested)
+        {
+            Logger.LogWarning("Warashi image download for '{Url}' failed: {Message}", url, ex.Message);
+            return null;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

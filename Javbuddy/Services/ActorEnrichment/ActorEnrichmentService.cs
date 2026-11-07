@@ -124,6 +124,10 @@ public class ActorEnrichmentService(
                 blocked = ex;
                 logger.LogWarning("Source {Source} is blocked for actor {ActorId}: {Message}", source.SourceName, actorId, ex.Message);
             }
+            catch (HttpRequestException ex) when (!ct.IsCancellationRequested)
+            {
+                logger.LogWarning("Source {Source} failed lookup for actor {ActorId}: {Message}", source.SourceName, actorId, ex.Message);
+            }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 logger.LogWarning(ex, "Source {Source} failed lookup for actor {ActorId}", source.SourceName, actorId);

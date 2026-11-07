@@ -164,6 +164,11 @@ public abstract class ThrottledScrapeClientBase<TSettings>(
             var page = await FetchHtmlAsync(baseUrl, 0, useChallengeSolver, null, ct);
             return page.Html is not null;
         }
+        catch (HttpRequestException ex) when (!ct.IsCancellationRequested)
+        {
+            Logger.LogWarning("Failed to connect to {Source}: {Message}", SourceName, ex.Message);
+            return false;
+        }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             Logger.LogWarning(ex, "Failed to connect to {Source}", SourceName);

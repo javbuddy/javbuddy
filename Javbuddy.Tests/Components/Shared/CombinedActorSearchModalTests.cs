@@ -146,7 +146,8 @@ public class CombinedActorSearchModalTests : BunitContext
             .Add(x => x.Show, true)
             .Add(x => x.Actor, actor));
 
-        Assert.Contains("WAPdB search failed", cut.Markup);
+        Assert.Contains("Could not reach WAPdB: boom", cut.Markup);
+        Assert.DoesNotContain("No matching performers found on WAPdB.", cut.Markup);
         var items = cut.FindAll(".search-result-item");
         Assert.Single(items);
         Assert.Contains("通野未帆", items[0].TextContent);

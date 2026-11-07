@@ -2,6 +2,8 @@ using System.Net;
 using Javbuddy.Models;
 using Javbuddy.Services.MinnanoAv;
 using Javbuddy.Tests.TestSupport;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
 
 namespace Javbuddy.Tests.Services.MinnanoAv;
 
@@ -171,13 +173,21 @@ public class MinnanoAvClientTests
     }
 
     [Fact]
-    public async Task OrdinaryProviderFailure_IsStillHandled()
+    public async Task HttpRequestException_PropagatesFromSearchAndDetail_AndReturnsFalseOnTestConnection()
     {
         using var dbFactory = new TestDbContextFactory();
-        var client = new MinnanoAvClient(new FakeHttpClientFactory(FakeHttpMessageHandler.Throwing(new HttpRequestException("connection refused"))), dbFactory);
+        var logger = Substitute.For<ILogger<MinnanoAvClient>>();
+        var client = new MinnanoAvClient(new FakeHttpClientFactory(FakeHttpMessageHandler.Throwing(new HttpRequestException("connection refused"))), dbFactory, logger);
 
         Assert.False(await client.TestConnectionAsync());
-        Assert.Empty(await client.SearchPerformersAsync("Yua Mikami"));
-        Assert.Null(await client.GetPerformerDetailAsync("/performer/1"));
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SearchPerformersAsync("Yua Mikami"));
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetPerformerDetailAsync("/performer/1"));
+
+        logger.Received().Log(
+            LogLevel.Warning,
+            Arg.Any<EventId>(),
+            Arg.Any<object>(),
+            Arg.Is<Exception?>(ex => ex == null),
+            Arg.Any<Func<object, Exception?, string>>());
     }
 }

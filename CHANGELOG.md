@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- minnano-av.com actor detail pages whose performer name or aliases include a parenthesized qualifier (such as `みさ（同人モデル）` or `みさちゃん（FC2）`) now parse and keep the qualifier instead of failing to load or truncating at the first parenthesis. (#105)
+- When WAPdB or minnano-av.com cannot be reached (for example, `Connection refused`), the actor search modals now show an inline connection error for that provider instead of reporting "No matching performers found", and the server logs a single-line warning instead of a full stack trace. (#105)
+
 ## [0.4.3] - 2026-11-05
 
 ### Added

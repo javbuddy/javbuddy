@@ -254,10 +254,15 @@
                 }
             }
         }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Could not reach WAPdB: {ex.Message}";
+            searchResults = null;
+        }
         catch (Exception ex)
         {
             errorMessage = $"Search failed: {ex.Message}";
-            searchResults = Array.Empty<WarashiSearchResult>();
+            searchResults = null;
         }
         finally
         {
@@ -281,6 +286,14 @@
                 InitializeImportOptions();
                 searchQuery = selectedDetail.Name;
             }
+            else
+            {
+                errorMessage = "Failed to load performer details.";
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            errorMessage = $"Could not reach WAPdB: {ex.Message}";
         }
         catch (Exception ex)
         {

@@ -87,6 +87,11 @@ public partial class MinnanoAvClient(
         {
             throw;
         }
+        catch (HttpRequestException ex) when (!ct.IsCancellationRequested)
+        {
+            Logger.LogWarning("minnano-av.com performer search for '{Query}' failed: {Message}", query, ex.Message);
+            throw;
+        }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             Logger.LogWarning(ex, "Error occurred during minnano-av.com performer search for '{Query}'", query);
@@ -114,6 +119,11 @@ public partial class MinnanoAvClient(
         }
         catch (ScrapeBlockedException)
         {
+            throw;
+        }
+        catch (HttpRequestException ex) when (!ct.IsCancellationRequested)
+        {
+            Logger.LogWarning("minnano-av.com performer detail fetch for '{Url}' failed: {Message}", performerPathOrUrl, ex.Message);
             throw;
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)

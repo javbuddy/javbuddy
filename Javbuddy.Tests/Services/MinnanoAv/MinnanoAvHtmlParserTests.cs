@@ -191,6 +191,65 @@ public class MinnanoAvHtmlParserTests
     }
 
     [Fact]
+    public void ParsePerformerDetail_ParenthesizedNameAndAliases_PreservesQualifiers()
+    {
+        // Regression test for https://www.minnano-av.com/actress630532.html: both the header name
+        // and an alias carry parenthesized disambiguators before the (kana / romaji) reading block.
+        const string html = """
+            <div class="act-profile">
+            <table width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                    <td><h2>みさ（同人モデル） （みさ / Misa）</h2></td>
+                </tr>
+                <tr>
+                    <td><span>別名</span><p>木村みさ （きむらみさ / Kimura Misa）</p></td>
+                </tr>
+                <tr>
+                    <td><span>別名</span><p>みさちゃん（FC2） （みさちゃん / Misachan）</p></td>
+                </tr>
+                <tr>
+                    <td><span>サイズ</span><p>T155 / B88(<a href="actress_list.php?cup=F">Fカップ</a>) / W58 / H86</p></td>
+                </tr>
+            </table>
+            </div>
+            """;
+
+        var detail = MinnanoAvHtmlParser.ParsePerformerDetail(html, "actress630532.html");
+
+        Assert.NotNull(detail);
+        Assert.Equal("みさ（同人モデル）", detail.Name);
+        Assert.Equal("みさ", detail.Kana);
+        Assert.Equal("Misa", detail.Romaji);
+        Assert.Equal(["木村みさ", "みさちゃん（FC2）"], detail.Aliases);
+        Assert.Equal(155, detail.HeightCm);
+        Assert.Equal("F", detail.CupSize);
+    }
+
+    [Fact]
+    public void ParseSearchResults_WhenAliasHasParenthesizedQualifier_PreservesClosingParenthesis()
+    {
+        const string html = """
+            <table class="tbllist actress">
+            <tr>
+                <td><a href="actress630532.html"><img src="p_actress_125_125/063/630532.jpg" alt="みさ（同人モデル）" /></a></td>
+                <td class="details">
+                    <h2 class="ttl"><a href="actress630532.html">みさ（同人モデル）</a></h2>
+                    <p class="furi">みさ / Misa</p>
+                    <p class="furi">（みさちゃん（FC2））</p>
+                </td>
+                <td>5</td>
+            </tr>
+            </table>
+            """;
+
+        var results = MinnanoAvHtmlParser.ParseSearchResults(html);
+
+        var result = Assert.Single(results);
+        Assert.Equal("みさ（同人モデル）", result.Name);
+        Assert.Equal(["みさちゃん（FC2）"], result.KnownAliases);
+    }
+
+    [Fact]
     public void ParsePerformerDetail_WhenHeaderMissing_ReturnsNull()
     {
         var detail = MinnanoAvHtmlParser.ParsePerformerDetail("<html><body>no profile here</body></html>", "actress1.html");

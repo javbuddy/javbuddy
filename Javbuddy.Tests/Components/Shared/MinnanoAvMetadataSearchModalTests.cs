@@ -378,4 +378,48 @@ public class MinnanoAvMetadataSearchModalTests : BunitContext
 
         Assert.True(closed);
     }
+
+    [Fact]
+    public void Modal_WhenProviderConnectionRefused_ShowsReachabilityErrorWithoutNoMatchesText()
+    {
+        var client = Substitute.For<IMinnanoAvClient>();
+        var actorService = Substitute.For<IActorService>();
+
+        client.SearchPerformersAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<IReadOnlyList<MinnanoAvSearchResult>>(_ => throw new HttpRequestException("Connection refused (www.minnano-av.com:443)"));
+
+        Services.AddSingleton(client);
+        Services.AddSingleton(actorService);
+
+        var actor = new Actor { Id = 1, FirstName = "Misa", LastName = "Kimura" };
+        var cut = Render<MinnanoAvMetadataSearchModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.Actor, actor));
+
+        var alert = cut.Find(".alert-danger");
+        Assert.Contains("Could not reach minnano-av.com: Connection refused (www.minnano-av.com:443)", alert.TextContent);
+        Assert.DoesNotContain("No matching performers found on minnano-av.com.", cut.Markup);
+    }
+
+    [Fact]
+    public void Modal_WhenDetailLoadReturnsNull_ShowsErrorMessage()
+    {
+        var client = Substitute.For<IMinnanoAvClient>();
+        var actorService = Substitute.For<IActorService>();
+
+        client.GetPerformerDetailAsync("actress630532.html", Arg.Any<CancellationToken>())
+            .Returns((MinnanoAvPerformerDetail?)null);
+
+        Services.AddSingleton(client);
+        Services.AddSingleton(actorService);
+
+        var actor = new Actor { Id = 1, FirstName = "Misa", LastName = "Kimura" };
+        var cut = Render<MinnanoAvMetadataSearchModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.Actor, actor)
+            .Add(x => x.InitialSelectedPath, "actress630532.html"));
+
+        var alert = cut.Find(".alert-danger");
+        Assert.Contains("Failed to load performer details.", alert.TextContent);
+    }
 }

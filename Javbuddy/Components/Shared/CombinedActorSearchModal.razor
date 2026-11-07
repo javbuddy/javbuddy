@@ -191,6 +191,11 @@
         {
             warashiResults = await WarashiClient.SearchPerformersAsync(query);
         }
+        catch (HttpRequestException ex)
+        {
+            warashiError = $"Could not reach WAPdB: {ex.Message}";
+            warashiResults = Array.Empty<WarashiSearchResult>();
+        }
         catch (Exception ex)
         {
             warashiError = $"WAPdB search failed: {ex.Message}";
@@ -203,6 +208,11 @@
         try
         {
             minnanoAvResults = await MinnanoAvClient.SearchPerformersAsync(query);
+        }
+        catch (HttpRequestException ex)
+        {
+            minnanoAvError = $"Could not reach minnano-av.com: {ex.Message}";
+            minnanoAvResults = Array.Empty<MinnanoAvSearchResult>();
         }
         catch (Exception ex)
         {

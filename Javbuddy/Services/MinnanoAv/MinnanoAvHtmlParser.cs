@@ -20,10 +20,11 @@ public static partial class MinnanoAvHtmlParser
     private static partial Regex FuriLineRegex();
 
     // Detail page header, e.g. <td><h2>通野未帆 （とおのみほ / Tohno Miho）</h2></td>
-    [GeneratedRegex(@"<td><h2>(?<kanji>[^<(（]+?)\s*[（(](?<kana>[^\s/)）]+)\s*/\s*(?<romaji>[^)）]+)[)）]</h2></td>")]
+    // or <td><h2>みさ（同人モデル） （みさ / Misa）</h2></td>
+    [GeneratedRegex(@"<td><h2>(?<kanji>[^<]+?)\s*[（(](?<kana>[^\s/()（）<]+)\s*/\s*(?<romaji>[^()（）<]+)[)）]</h2></td>")]
     private static partial Regex DetailHeaderRegex();
 
-    [GeneratedRegex(@"<span>別名</span><p>(?<name>[^（(<]+)")]
+    [GeneratedRegex(@"<span>別名</span><p>(?<name>[^<]+?)(?:\s*[（(][^<()（）/]*/[^<()（）]*[)）])?\s*(?=<|$)")]
     private static partial Regex AliasRegex();
 
     [GeneratedRegex(@"<span>生年月日</span><p>(?<y>\d{4})年(?<m>\d{1,2})月(?<d>\d{1,2})日")]
@@ -83,7 +84,7 @@ public static partial class MinnanoAvHtmlParser
 
                 if ((line.StartsWith('（') || line.StartsWith('(')) && (line.EndsWith('）') || line.EndsWith(')')))
                 {
-                    var alias = line.Trim('（', '）', '(', ')').Trim();
+                    var alias = line[1..^1].Trim();
                     if (!string.IsNullOrWhiteSpace(alias)) aliases.Add(alias);
                 }
                 else if (kana is null && line.Contains('/'))

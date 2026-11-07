@@ -537,4 +537,26 @@ public class ActorMetadataSearchModalTests : BunitContext
         Assert.NotNull(enrichBtnAfterSelect);
         Assert.True(enrichBtnAfterSelect.HasAttribute("disabled"));
     }
+
+    [Fact]
+    public void Modal_WhenProviderConnectionRefused_ShowsReachabilityErrorWithoutNoMatchesText()
+    {
+        var warashiClient = Substitute.For<IWarashiClient>();
+        var actorService = Substitute.For<IActorService>();
+
+        warashiClient.SearchPerformersAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<IReadOnlyList<WarashiSearchResult>>(_ => throw new HttpRequestException("Connection refused (warashi-asian-pornstars.fr:443)"));
+
+        Services.AddSingleton(warashiClient);
+        Services.AddSingleton(actorService);
+
+        var actor = new Actor { Id = 1, FirstName = "Misa", LastName = "Kimura" };
+        var cut = Render<ActorMetadataSearchModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.Actor, actor));
+
+        var alert = cut.Find(".alert-danger");
+        Assert.Contains("Could not reach WAPdB: Connection refused (warashi-asian-pornstars.fr:443)", alert.TextContent);
+        Assert.DoesNotContain("No matching performers found on WAPdB.", cut.Markup);
+    }
 }
