@@ -34,6 +34,49 @@ public class ProwlarrSearchModalTests : BunitContext
     }
 
     [Fact]
+    public void DisabledIndexers_ShowNamedWarnings_AndNoneWhenAllEnabled()
+    {
+        var prowlarr = Substitute.For<IProwlarrClient>();
+        prowlarr.SearchAsync("ABC-123", Arg.Any<CancellationToken>())
+            .Returns(new ProwlarrSearchResult(true, [new ReleaseResourceDto { Title = "ABC-123 release", Guid = "r1" }], null));
+        prowlarr.GetDisabledIndexersAsync(Arg.Any<CancellationToken>()).Returns([
+            new ProwlarrDisabledIndexer(1, "Beta"),
+            new ProwlarrDisabledIndexer(2, "Gamma", DateTime.UtcNow.AddHours(1))]);
+        Services.AddSingleton(prowlarr);
+        Services.AddSingleton(Substitute.For<ITorrentGrabService>());
+        Services.AddSingleton(Substitute.For<IMovieAddService>());
+
+        var cut = Render<ProwlarrSearchModal>(parameters => parameters
+            .Add(x => x.Code, "ABC-123")
+            .Add(x => x.Show, true));
+
+        cut.WaitForAssertion(() => Assert.Contains("ABC-123 release", cut.Markup));
+        var warnings = cut.FindAll(".disabled-indexer-warning");
+        Assert.Equal(2, warnings.Count);
+        Assert.Contains("Indexer Beta is disabled in Prowlarr and was not searched", warnings[0].TextContent);
+        Assert.Contains("Indexer Gamma is temporarily disabled", warnings[1].TextContent);
+    }
+
+    [Fact]
+    public void NoDisabledIndexers_ShowsNoWarning()
+    {
+        var prowlarr = Substitute.For<IProwlarrClient>();
+        prowlarr.SearchAsync("ABC-123", Arg.Any<CancellationToken>())
+            .Returns(new ProwlarrSearchResult(true, [new ReleaseResourceDto { Title = "ABC-123 release", Guid = "r1" }], null));
+        prowlarr.GetDisabledIndexersAsync(Arg.Any<CancellationToken>()).Returns([]);
+        Services.AddSingleton(prowlarr);
+        Services.AddSingleton(Substitute.For<ITorrentGrabService>());
+        Services.AddSingleton(Substitute.For<IMovieAddService>());
+
+        var cut = Render<ProwlarrSearchModal>(parameters => parameters
+            .Add(x => x.Code, "ABC-123")
+            .Add(x => x.Show, true));
+
+        cut.WaitForAssertion(() => Assert.Contains("ABC-123 release", cut.Markup));
+        Assert.Empty(cut.FindAll(".disabled-indexer-warning"));
+    }
+
+    [Fact]
     public async Task UntrackedCode_ClickAddAndDownload_AddsMovieGrabsReleaseAndNotifiesParent()
     {
         var release = new ReleaseResourceDto { Title = "ABC-123 release", Guid = "release-1", MagnetUrl = "magnet:?xt=urn:btih:abc" };

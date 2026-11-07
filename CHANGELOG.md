@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 - The minnano-av.com actor search now accepts an actress ID (`141240`) or a full `actress<id>.html` URL (query string ignored) as well as a name, and opens that actress directly. (#114)
 - The minnano-av.com actor search modal has an **Image (portrait)** row that imports the performer's image from minnano-av.com as the actor's portrait, replacing an existing one. It is ticked by default only when the actor has no portrait; if the download fails, the other fields still import and the modal shows a warning. (#116)
+- The Prowlarr search modal now warns, naming each indexer, when Prowlarr skipped one because it is disabled or was temporarily blocked after repeated failures; System → Status lists the same indexers in its Health section. Nothing is shown when Prowlarr is unconfigured or unreachable. (#117)
 
 ### Changed
 

@@ -16,6 +16,10 @@
                 </button>
             </div>
             <div class="prowlarr-modal-body">
+                @foreach (var indexer in disabledIndexers)
+                {
+                    <div class="alert alert-warning py-2 mb-2 disabled-indexer-warning">Indexer @indexer.Name is @indexer.Reason and was not searched.</div>
+                }
                 @if (searching)
                 {
                     <p class="text-muted mb-0">Searching…</p>
@@ -104,6 +108,7 @@
     private readonly HashSet<string> grabbingKeys = new();
     private string? grabError;
     private string? grabSuccessMessage;
+    private IReadOnlyList<ProwlarrDisabledIndexer> disabledIndexers = [];
 
     private string? SearchCode => Movie?.Code ?? Code;
 
@@ -148,11 +153,14 @@
         searching = true;
         searchError = null;
         results = null;
+        disabledIndexers = [];
         grabError = null;
         grabSuccessMessage = null;
         StateHasChanged();
 
+        var disabledTask = ProwlarrClient.GetDisabledIndexersAsync();
         var result = await ProwlarrClient.SearchAsync(SearchCode);
+        disabledIndexers = await disabledTask;
         if (!result.Success || result.Releases is null)
         {
             searchError = result.ErrorMessage ?? "Search failed.";

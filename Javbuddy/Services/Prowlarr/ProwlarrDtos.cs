@@ -64,3 +64,27 @@ public class ProwlarrSystemStatusDto
     public string? Version { get; set; }
 }
 
+
+// Mirror Prowlarr's Prowlarr.Api.V1.Indexers.IndexerResource (GET /api/v1/indexer) and IndexerStatusResource
+// (GET /api/v1/indexerstatus), reduced to the fields Javbuddy reads.
+
+public class ProwlarrIndexerDto
+{
+    [JsonPropertyName("id")]
+    public int Id { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("enable")]
+    public bool Enable { get; set; }
+}
+
+public class ProwlarrIndexerStatusDto
+{
+    [JsonPropertyName("indexerId")]
+    public int IndexerId { get; set; }
+
+    [JsonPropertyName("disabledTill")]
+    public DateTime? DisabledTill { get; set; }
+}

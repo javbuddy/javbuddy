@@ -71,6 +71,32 @@ public class SystemStatusServiceTests
     }
 
     [Fact]
+    public async Task GetHealthReportAsync_ProwlarrWithDisabledIndexers_WarnsPerIndexer()
+    {
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.ProwlarrSettings.Add(new ProwlarrSettings { BaseUrl = "http://p", ApiKey = "k" });
+            await db.SaveChangesAsync();
+        }
+        prowlarr.GetDisabledIndexersAsync(Arg.Any<CancellationToken>()).Returns([
+            new ProwlarrDisabledIndexer(1, "Beta"),
+            new ProwlarrDisabledIndexer(2, "Gamma", DateTime.UtcNow.AddHours(1))]);
+
+        var report = await CreateService().GetHealthReportAsync();
+
+        Assert.Contains(report.Messages, m => m.Contains("Beta") && m.Contains("disabled in Prowlarr"));
+        Assert.Contains(report.Messages, m => m.Contains("Gamma") && m.Contains("repeated failures"));
+    }
+
+    [Fact]
+    public async Task GetHealthReportAsync_ProwlarrNotConfigured_DoesNotQueryIndexers()
+    {
+        await CreateService().GetHealthReportAsync();
+
+        await prowlarr.DidNotReceive().GetDisabledIndexersAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task GetHealthReportAsync_ConfiguredJellyfinWithoutLibraries_Warns()
     {
         await using (var db = await factory.CreateDbContextAsync())

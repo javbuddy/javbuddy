@@ -8,12 +8,25 @@ namespace Javbuddy.Services.Prowlarr;
 public record ProwlarrSearchResult(bool Success, List<ReleaseResourceDto>? Releases, string? ErrorMessage);
 public record ProwlarrTestResult(bool Success, string Message, string? Version = null);
 
+/// <summary>An indexer Prowlarr skips when searching. <see cref="DisabledTill"/> is null for one switched off
+/// in Prowlarr (<c>enable: false</c>); otherwise Prowlarr blocked it temporarily after repeated failures.</summary>
+public record ProwlarrDisabledIndexer(int Id, string Name, DateTime? DisabledTill = null)
+{
+    public string Reason => DisabledTill is null
+        ? "disabled in Prowlarr"
+        : "temporarily disabled by Prowlarr after repeated failures";
+}
+
 public interface IProwlarrClient
 {
     Task<string?> GetBaseUrlAsync(CancellationToken ct = default);
     Task<string?> GetExternalUrlAsync(CancellationToken ct = default);
     Task<ProwlarrSearchResult> SearchAsync(string query, CancellationToken ct = default);
     Task<ProwlarrTestResult> TestConnectionAsync(CancellationToken ct = default);
+
+    /// <summary>The indexers Prowlarr would skip in a search. Empty when Prowlarr is not configured or can't be
+    /// reached — those cases have their own connection handling.</summary>
+    Task<IReadOnlyList<ProwlarrDisabledIndexer>> GetDisabledIndexersAsync(CancellationToken ct = default);
 }
 
 /// <summary>Reads Prowlarr connection settings from environment variables /
@@ -82,6 +95,68 @@ public class ProwlarrClient : ApiClientBase<ProwlarrSettings>, IProwlarrClient
                 return new ProwlarrSearchResult(true, releases ?? new List<ReleaseResourceDto>(), null);
             },
             message => new ProwlarrSearchResult(false, null, message));
+    }
+
+    public async Task<IReadOnlyList<ProwlarrDisabledIndexer>> GetDisabledIndexersAsync(CancellationToken ct = default)
+    {
+        var settings = await GetSettingsAsync(ct);
+        if (settings is null)
+        {
+            return [];
+        }
+
+        return await ExecuteAsync<IReadOnlyList<ProwlarrDisabledIndexer>>(TimeSpan.FromSeconds(10), ct,
+            async (client, token) =>
+            {
+                using var indexerRequest = new HttpRequestMessage(HttpMethod.Get, CombineUrl(settings.BaseUrl!, "/api/v1/indexer"));
+                indexerRequest.Headers.Add("X-Api-Key", settings.ApiKey);
+                using var indexerResponse = await client.SendAsync(indexerRequest, token);
+                if (!indexerResponse.IsSuccessStatusCode)
+                {
+                    return [];
+                }
+
+                var indexers = await ReadListAsync<ProwlarrIndexerDto>(indexerResponse, token);
+
+                // Prowlarr keeps enable=true on an indexer it blocked after failures and just skips it until
+                // disabledTill, so that comes from the separate status endpoint. Best-effort: without it we
+                // still report the manually disabled ones.
+                var blockedTill = new Dictionary<int, DateTime>();
+                using var statusRequest = new HttpRequestMessage(HttpMethod.Get, CombineUrl(settings.BaseUrl!, "/api/v1/indexerstatus"));
+                statusRequest.Headers.Add("X-Api-Key", settings.ApiKey);
+                using var statusResponse = await client.SendAsync(statusRequest, token);
+                if (statusResponse.IsSuccessStatusCode)
+                {
+                    foreach (var status in await ReadListAsync<ProwlarrIndexerStatusDto>(statusResponse, token))
+                    {
+                        if (status.DisabledTill is { } till && till.ToUniversalTime() > DateTime.UtcNow)
+                        {
+                            blockedTill[status.IndexerId] = till;
+                        }
+                    }
+                }
+
+                return indexers
+                    .Select(i => !i.Enable
+                        ? new ProwlarrDisabledIndexer(i.Id, i.Name ?? $"#{i.Id}")
+                        : blockedTill.TryGetValue(i.Id, out var till) ? new ProwlarrDisabledIndexer(i.Id, i.Name ?? $"#{i.Id}", till) : null)
+                    .OfType<ProwlarrDisabledIndexer>()
+                    .OrderBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            },
+            _ => []);
+    }
+
+    private static async Task<List<T>> ReadListAsync<T>(HttpResponseMessage response, CancellationToken ct)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<List<T>>(cancellationToken: ct) ?? [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
+        }
     }
 
     public async Task<ProwlarrTestResult> TestConnectionAsync(CancellationToken ct = default)

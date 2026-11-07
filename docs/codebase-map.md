@@ -63,7 +63,7 @@ One row per product area.
 | `PosterCard.razor` | One poster tile (image, status badge, click-through) | `PosterCardTests.cs` |
 | `PosterGrid.razor` | Layout grid wrapping `PosterCard` tiles | `PosterGridTests.cs` |
 | `R18DevReleaseCard.razor` | An r18.dev release as a `PosterCard` with hover Prowlarr-search/add actions for releases not in the library (actor Missing page, Movies "All releases") | `R18DevReleaseCardTests.cs` |
-| `ProwlarrSearchModal.razor` | Modal for searching/grabbing Prowlarr torrent results | — |
+| `ProwlarrSearchModal.razor` | Modal for searching/grabbing Prowlarr torrent results, with a warning per disabled/blocked indexer | `ProwlarrSearchModalTests.cs` |
 | `StatusFilterButtonGroup.razor` (+ `FilterButtonOption.cs`) | Toggle-button group for status filters (All/Missing/Got) | `StatusFilterButtonGroupTests.cs` |
 | `PosterImageLoading.cs` | Enum: lazy vs. eager poster image loading strategy | — |
 

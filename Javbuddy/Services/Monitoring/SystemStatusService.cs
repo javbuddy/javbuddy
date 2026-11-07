@@ -64,6 +64,13 @@ public class SystemStatusService(
         {
             messages.Add("Prowlarr is not configured — release search will not work until you configure it in Settings.");
         }
+        if (configured.Prowlarr)
+        {
+            foreach (var indexer in await prowlarrClient.GetDisabledIndexersAsync(ct))
+            {
+                messages.Add($"Prowlarr indexer {indexer.Name} is {indexer.Reason} — release searches skip it.");
+            }
+        }
         if (!configured.QBittorrent)
         {
             messages.Add("qBittorrent is not configured — grabbing releases will fail until you configure it in Settings.");
