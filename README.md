@@ -36,7 +36,7 @@ Javbuddy is a self-hosted manager for JAV collections, modeled on Sonarr/Radarr:
 - Optional **DeoVR** support (off by default): browse and play your movies in the DeoVR player, with every version as a source, scenes as chapters, and your own filtered and sorted lists (**Settings > DeoVR**).
 
 ### Actors
-- A tracked actor directory with profile data (birth date, height, measurements) from javinizer-go, r18.dev, WAPdB and minnano-av.
+- A tracked actor directory with profile data (birth date, height, measurements) from javinizer-go, r18.dev and minnano-av.
 - Per-actor **Missing** releases from their r18.dev filmography that aren't in your library, with one-click search and add.
 - Photo galleries with albums, batch upload and portrait promotion. Merge duplicate actors, and keep aliases.
 
@@ -59,9 +59,8 @@ Javbuddy is a self-hosted manager for JAV collections, modeled on Sonarr/Radarr:
 | [qBittorrent](https://www.qbittorrent.org/) | Downloading | For downloads |
 | [Jellyfin](https://jellyfin.org/) | Ownership/link sync, "Open in Jellyfin", trickplay fallback | No |
 | [DeoVR](https://deovr.com/) | Browsing and playing movies in VR through its JSON API | No (off by default) |
-| [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) or [Trawl](https://github.com/germondai/trawl) | Gets minnano-av.com and WAPdB past a Cloudflare challenge | No |
+| [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) or [Trawl](https://github.com/germondai/trawl) | Gets minnano-av.com past a Cloudflare challenge | No |
 | r18.dev dump | Release catalog, actor filmographies (imported locally) | No |
-| WAPdB | Extra actor profile data | No |
 | FFmpeg / MediaInfo | Media probing, trickplay, clip previews, VR merge (bundled in the Docker image) | Bundled |
 
 ## Getting started
@@ -99,7 +98,7 @@ Integrations can be configured in the UI or through environment variables (which
 The short version (see [Getting started](docs/getting-started.md) for the full walkthrough):
 
 1. **Settings → Connections** (`/settings/connections`): enter javinizer-go, and optionally Prowlarr, qBittorrent and Jellyfin, then test each connection.
-2. **Settings → Metadata** (`/settings/metadata`): check your library folders and enable the optional metadata sources (r18.dev, WAPdB, minnano-av.com). If a source is blocked by Cloudflare, add a FlareSolverr or Trawl address under **Settings → Connections**; the sources then use it on a challenge.
+2. **Settings → Metadata** (`/settings/metadata`): check your library folders and enable the optional metadata sources (r18.dev, minnano-av.com). If a source is blocked by Cloudflare, add a FlareSolverr or Trawl address under **Settings → Connections**; the source then uses it on a challenge.
 3. Bring in your collection with **Movies → Library Import** (`/add/import`), or start a wanted list with **Movies → Add New** (`/add/new`).
 4. **System → Tasks** (`/system/tasks`): review the schedules and run the first library rescan / image cache / r18.dev import now instead of waiting.
 

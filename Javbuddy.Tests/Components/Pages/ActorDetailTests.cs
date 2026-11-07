@@ -11,7 +11,6 @@ using Javbuddy.Services.Nfo;
 using Javbuddy.Services.R18Dev;
 using Javbuddy.Services.SceneMedia;
 using Javbuddy.Services.Scenes;
-using Javbuddy.Services.Warashi;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
@@ -50,7 +49,6 @@ public class ActorDetailTests : BunitContext
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Trickplay.IHighlightTrickplayService>());
         Services.AddSingleton(TimeProvider.System);
         Services.AddSingleton(Substitute.For<IJellyfinClient>());
-        Services.AddSingleton(Substitute.For<IWarashiClient>());
         Services.AddSingleton(Substitute.For<IMinnanoAvClient>());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Movies.IMovieService>());
         JSInterop.Mode = JSRuntimeMode.Loose;
@@ -100,14 +98,10 @@ public class ActorDetailTests : BunitContext
             .FirstOrDefault(b => b.TextContent.Contains("Change Photo"));
         Assert.NotNull(changePhotoBtn);
 
-        // Combined "Search" split-button present in toolbar, with a dropdown arrow for
-        // provider-specific searches
-        var searchBtn = cut.FindAll("button.actor-toolbar-btn-split-main")
+        // "Search" (minnano-av.com) button present in toolbar
+        var searchBtn = cut.FindAll("button.actor-toolbar-btn")
             .FirstOrDefault(b => b.TextContent.Contains("Search"));
         Assert.NotNull(searchBtn);
-
-        var searchArrowBtn = cut.FindAll("button.actor-toolbar-btn-split-arrow");
-        Assert.Single(searchArrowBtn);
 
         // Merge button present in toolbar
         var mergeBtn = cut.FindAll("button.actor-toolbar-btn")
@@ -537,7 +531,7 @@ public class ActorDetailTests : BunitContext
     }
 
     [Fact]
-    public async Task ActorDetail_ClickingSearchButton_OpensCombinedSearchModal()
+    public async Task ActorDetail_ClickingSearchButton_OpensMinnanoAvSearchModal()
     {
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
@@ -554,96 +548,13 @@ public class ActorDetailTests : BunitContext
 
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
 
-        var searchBtn = cut.Find("button.actor-toolbar-btn-split-main");
+        Assert.Empty(cut.FindAll(".modal-shell-title"));
+
+        var searchBtn = cut.FindAll("button.actor-toolbar-btn").First(b => b.TextContent.Contains("Search"));
         await cut.InvokeAsync(() => searchBtn.Click());
 
         var title = cut.Find(".modal-shell-title");
-        Assert.Contains("Search All Providers", title.TextContent);
-    }
-
-    [Fact]
-    public async Task ActorDetail_ClickingDropdownArrow_ShowsProviderMenu_AndSelectingWAPdBOpensItsOwnModal()
-    {
-        using var factory = new TestDbContextFactory();
-        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
-        Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
-
-        var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
-
-        var actorService = Substitute.For<IActorService>();
-        actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(actor);
-        Services.AddSingleton(actorService);
-        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>());
-        Services.AddSingleton(Substitute.For<INfoSyncService>());
-
-        var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
-
-        Assert.Empty(cut.FindAll(".actor-toolbar-dropdown-menu"));
-
-        var arrowBtn = cut.Find("button.actor-toolbar-btn-split-arrow");
-        await cut.InvokeAsync(() => arrowBtn.Click());
-
-        var menu = cut.Find(".actor-toolbar-dropdown-menu");
-        var items = menu.QuerySelectorAll(".actor-toolbar-dropdown-item");
-        Assert.Equal(2, items.Length);
-        Assert.Equal("WAPdB", items[0].TextContent);
-        Assert.Equal("minnano-av", items[1].TextContent);
-
-        await cut.InvokeAsync(() => items[0].Click());
-
-        // Dropdown menu closes, and the WAPdB-only modal (not the combined one) is now shown
-        Assert.Empty(cut.FindAll(".actor-toolbar-dropdown-menu"));
-        var title = cut.Find(".modal-shell-title");
-        Assert.Contains("Mikami Yua", title.TextContent);
-        Assert.DoesNotContain("Search All Providers", title.TextContent);
-    }
-
-    [Fact]
-    public async Task ActorDetail_WhenCombinedSearchPicksAWarashiCandidate_HandsOffToTheWarashiModal()
-    {
-        using var factory = new TestDbContextFactory();
-        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
-        Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
-
-        var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
-
-        var actorService = Substitute.For<IActorService>();
-        actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(actor);
-        Services.AddSingleton(actorService);
-        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>());
-        Services.AddSingleton(Substitute.For<INfoSyncService>());
-
-        var warashiClient = Substitute.For<IWarashiClient>();
-        var searchResult = new WarashiSearchResult(
-            Name: "Yua MIKAMI", JapaneseName: "三上悠亜", PathOrUrl: "/en/actress-1",
-            ImageUrl: null, CareerActivity: null, IsExactMatch: true, KnownAliases: Array.Empty<string>());
-        warashiClient.SearchPerformersAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new List<WarashiSearchResult> { searchResult });
-        warashiClient.GetPerformerDetailAsync("/en/actress-1", Arg.Any<CancellationToken>())
-            .Returns(new WarashiPerformerDetail { Name = "Yua MIKAMI", JapaneseName = "三上悠亜", HeightCm = 159, Aliases = new List<string>() });
-        Services.AddSingleton(warashiClient);
-
-        var minnanoAvClient = Substitute.For<Javbuddy.Services.MinnanoAv.IMinnanoAvClient>();
-        minnanoAvClient.SearchPerformersAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new List<Javbuddy.Services.MinnanoAv.MinnanoAvSearchResult>());
-        Services.AddSingleton(minnanoAvClient);
-
-        var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
-
-        var searchBtn = cut.Find("button.actor-toolbar-btn-split-main");
-        await cut.InvokeAsync(() => searchBtn.Click());
-
-        var inspectBtn = cut.Find(".search-result-item button");
-        await cut.InvokeAsync(() => inspectBtn.Click());
-
-        // Combined modal is gone, the WAPdB modal is open and already shows this candidate's detail
-        var title = cut.Find(".modal-shell-title");
-        Assert.Contains("Mikami Yua", title.TextContent);
-        Assert.DoesNotContain("Search All Providers", title.TextContent);
-        var detailCard = cut.Find(".performer-detail-card");
-        Assert.Contains("Height: 159 cm", detailCard.TextContent);
+        Assert.Contains("Search minnano-av.com: Mikami Yua", title.TextContent);
     }
 
     [Fact]
@@ -1799,7 +1710,7 @@ public class ActorDetailTests : BunitContext
     }
 
     [Fact]
-    public async Task WapdbEnrichment_RefreshesPhotoGalleryWithoutRequiringPageRefresh()
+    public async Task MinnanoAvEnrichment_RefreshesPhotoGalleryWithoutRequiringPageRefresh()
     {
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
@@ -1823,10 +1734,10 @@ public class ActorDetailTests : BunitContext
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
         cut.WaitForAssertion(() => Assert.Contains("No photos in this selection yet.", cut.Markup));
 
-        // Simulate a WAPdB enrichment importing a photo (ActorService.ImportOrEnrichFromWarashiAsync
+        // Simulate an enrichment importing a photo (ActorService.ImportOrEnrichFromMinnanoAvAsync
         // would have written this row) and then raising the same OnEnriched callback EnrichActor fires.
         photos.Add(new ActorPhotoSummary(1, null, DateTime.UtcNow));
-        var searchModal = cut.FindComponent<ActorMetadataSearchModal>();
+        var searchModal = cut.FindComponent<MinnanoAvMetadataSearchModal>();
         await cut.InvokeAsync(() => searchModal.Instance.OnEnriched.InvokeAsync());
 
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".actor-photo-tile")));

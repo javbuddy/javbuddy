@@ -58,22 +58,10 @@ else
             Change Photo
         </button>
         <span class="actor-toolbar-sep"></span>
-        <div class="actor-toolbar-dropdown" @onfocusout="OnSearchDropdownFocusOut" tabindex="-1">
-            <button class="actor-toolbar-btn actor-toolbar-btn-split-main" @onclick="OpenCombinedSearchModal" title="Search all metadata providers (WAPdB + minnano-av.com) for this actor">
-                <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>
-                Search
-            </button>
-            <button class="actor-toolbar-btn actor-toolbar-btn-split-arrow" @onclick="ToggleSearchDropdown" aria-label="Choose a metadata provider" aria-haspopup="true" aria-expanded="@showSearchDropdown">
-                <svg viewBox="0 0 16 16" width="10" height="10" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>
-            </button>
-            @if (showSearchDropdown)
-            {
-                <div class="actor-toolbar-dropdown-menu">
-                    <button type="button" class="actor-toolbar-dropdown-item" @onclick="OpenWarashiSearch">WAPdB</button>
-                    <button type="button" class="actor-toolbar-dropdown-item" @onclick="OpenMinnanoAvSearch">minnano-av</button>
-                </div>
-            }
-        </div>
+        <button class="actor-toolbar-btn" @onclick="OpenMinnanoAvSearch" title="Search minnano-av.com for this actor">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>
+            Search
+        </button>
         <span class="actor-toolbar-sep"></span>
         <button class="actor-toolbar-btn" @onclick="() => showMergeModal = true">
             <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.646 5.646a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708L10.293 8 8.646 6.354a.5.5 0 0 1 0-.708z"/><path fill-rule="evenodd" d="M12 8a.5.5 0 0 1-.5.5H4a.5.5 0 0 1 0-1h7.5A.5.5 0 0 1 12 8z"/><path d="M4.5 3a2.5 2.5 0 0 0-2.5 2.5v5A2.5 2.5 0 0 0 4.5 13H5a.5.5 0 0 0 0-1h-.5A1.5 1.5 0 0 1 3 10.5v-5A1.5 1.5 0 0 1 4.5 4H5a.5.5 0 0 0 0-1h-.5z"/></svg>
@@ -384,25 +372,12 @@ else
                        Actor="@actor"
                        OnClose="() => showNfoSyncModal = false" />
 
-    <ActorMetadataSearchModal Show="@showSearchModal"
-                              Actor="@actor"
-                              ActorHasImage="@hasImage"
-                              InitialSelectedPath="@warashiInitialPath"
-                              OnClose="() => { showSearchModal = false; warashiInitialPath = null; }"
-                              OnEnriched="OnActorEnriched" />
-
     <MinnanoAvMetadataSearchModal Show="@showMinnanoAvSearchModal"
                                   Actor="@actor"
                                   ActorHasImage="@hasImage"
                                   InitialSelectedPath="@minnanoAvInitialPath"
                                   OnClose="() => { showMinnanoAvSearchModal = false; minnanoAvInitialPath = null; }"
                                   OnEnriched="OnActorEnriched" />
-
-    <CombinedActorSearchModal Show="@showCombinedSearchModal"
-                              Actor="@actor"
-                              OnClose="() => showCombinedSearchModal = false"
-                              OnPickWarashi="OnCombinedPickWarashi"
-                              OnPickMinnanoAv="OnCombinedPickMinnanoAv" />
 
     @if (showDeleteConfirmation)
     {
@@ -461,11 +436,7 @@ else
     private bool showLightbox;
     private bool showMergeModal;
     private bool showNfoSyncModal;
-    private bool showSearchModal;
     private bool showMinnanoAvSearchModal;
-    private bool showCombinedSearchModal;
-    private bool showSearchDropdown;
-    private string? warashiInitialPath;
     private string? minnanoAvInitialPath;
     private bool showDeleteConfirmation;
     private bool deleting;
@@ -902,7 +873,7 @@ else
         await LoadAsync();
 
         // actor.Id doesn't change on enrichment, so ActorPhotoGallery's own ActorId-change
-        // guard never fires — reload it explicitly or any WAPdB/minnano-av imported photos
+        // guard never fires — reload it explicitly or any minnano-av imported photos
         // stay stale until a manual page refresh recreates the component.
         if (photoGalleryRef is not null)
         {
@@ -910,46 +881,9 @@ else
         }
     }
 
-    private void ToggleSearchDropdown() => showSearchDropdown = !showSearchDropdown;
-
-    private async Task OnSearchDropdownFocusOut()
-    {
-        // Give a click on a dropdown item time to register before the blur closes the menu.
-        await Task.Delay(150);
-        showSearchDropdown = false;
-    }
-
-    private void OpenCombinedSearchModal()
-    {
-        showSearchDropdown = false;
-        showCombinedSearchModal = true;
-    }
-
-    private void OpenWarashiSearch()
-    {
-        showSearchDropdown = false;
-        warashiInitialPath = null;
-        showSearchModal = true;
-    }
-
     private void OpenMinnanoAvSearch()
     {
-        showSearchDropdown = false;
         minnanoAvInitialPath = null;
-        showMinnanoAvSearchModal = true;
-    }
-
-    private void OnCombinedPickWarashi(string path)
-    {
-        warashiInitialPath = path;
-        showCombinedSearchModal = false;
-        showSearchModal = true;
-    }
-
-    private void OnCombinedPickMinnanoAv(string path)
-    {
-        minnanoAvInitialPath = path;
-        showCombinedSearchModal = false;
         showMinnanoAvSearchModal = true;
     }
 

@@ -12,7 +12,6 @@ using Javbuddy.Services.R18Dev;
 using Javbuddy.Services.Settings;
 using Javbuddy.Services.Tasks;
 using Javbuddy.Services.Trickplay;
-using Javbuddy.Services.Warashi;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -59,7 +58,6 @@ public class SettingsMetadataTests : BunitContext
         var configuration = new ConfigurationBuilder().Build();
         Services.AddSingleton<IConfiguration>(configuration);
 
-        Services.AddSingleton<IWarashiSettingsService>(new WarashiSettingsService(factory));
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
@@ -83,7 +81,7 @@ public class SettingsMetadataTests : BunitContext
         Assert.Contains("r18.dev", cut.Markup);
         Assert.Contains("MediaInfo", cut.Markup);
         Assert.Contains("Generating for new files", cut.Markup);
-        Assert.Contains("WAPdB (warashi-asian-pornstars.fr)", cut.Markup);
+        Assert.DoesNotContain("WAPdB", cut.Markup);
         Assert.Contains("minnano-av.com", cut.Markup);
     }
 
@@ -97,7 +95,6 @@ public class SettingsMetadataTests : BunitContext
         var dumpStore = Substitute.For<IR18DevDumpStore>();
         Services.AddSingleton(dumpStore);
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-        Services.AddSingleton<IWarashiSettingsService>(new WarashiSettingsService(factory));
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
@@ -130,7 +127,6 @@ public class SettingsMetadataTests : BunitContext
         var configuration = new ConfigurationBuilder().Build();
         Services.AddSingleton<IConfiguration>(configuration);
 
-        Services.AddSingleton<IWarashiSettingsService>(new WarashiSettingsService(factory));
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
@@ -151,43 +147,6 @@ public class SettingsMetadataTests : BunitContext
     }
 
     [Fact]
-    public void OpenWarashiDrawer_ShowsSettings()
-    {
-        var factory = new TestDbContextFactory();
-        using (var db = factory.CreateDbContext())
-        {
-            db.WarashiSettings.Add(new WarashiSettings { Enabled = true, RequestDelayMs = 750 });
-            db.SaveChanges();
-        }
-
-        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
-
-        var dumpStore = Substitute.For<IR18DevDumpStore>();
-        Services.AddSingleton(dumpStore);
-
-        var configuration = new ConfigurationBuilder().Build();
-        Services.AddSingleton<IConfiguration>(configuration);
-
-        Services.AddSingleton<IWarashiSettingsService>(new WarashiSettingsService(factory));
-        Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
-        Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
-        Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
-        Services.AddSingleton(NewTaskActivityTracker());
-
-        var cut = Render<SettingsMetadata>();
-
-        // Click the WAPdB tile to open drawer
-        var warashiTile = cut.FindAll(".status-tile").First(t => t.TextContent.Contains("WAPdB"));
-        warashiTile.Click();
-
-        // Verify drawer contents
-        Assert.Contains("Warashi Asian Pornstars Database (WAPdB)", cut.Markup);
-        Assert.Contains("Enable the WAPdB metadata provider", cut.Markup);
-        Assert.DoesNotContain("Search & Import Actor", cut.Markup);
-    }
-
-    [Fact]
     public void OpenMinnanoAvDrawer_ShowsSettings()
     {
         var factory = new TestDbContextFactory();
@@ -205,7 +164,6 @@ public class SettingsMetadataTests : BunitContext
         var configuration = new ConfigurationBuilder().Build();
         Services.AddSingleton<IConfiguration>(configuration);
 
-        Services.AddSingleton<IWarashiSettingsService>(new WarashiSettingsService(factory));
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
@@ -233,7 +191,6 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton(Substitute.For<IR18DevDumpStore>());
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
             .AddInMemoryCollection(env is null ? [] : new Dictionary<string, string?> { ["MinnanoAv:UseChallengeSolver"] = env }).Build());
-        Services.AddSingleton<IWarashiSettingsService>(new WarashiSettingsService(factory));
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
@@ -261,7 +218,6 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton(Substitute.For<IR18DevDumpStore>());
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-        Services.AddSingleton<IWarashiSettingsService>(new WarashiSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
@@ -361,7 +317,6 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton(Substitute.For<IR18DevDumpStore>());
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-        Services.AddSingleton<IWarashiSettingsService>(new WarashiSettingsService(factory));
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));

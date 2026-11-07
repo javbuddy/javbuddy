@@ -1,6 +1,6 @@
 namespace Javbuddy.Models;
 
-/// <summary>The settings shape shared by the scraped actor-metadata sources (Warashi, minnano-av.com):
+/// <summary>The settings shape shared by the scraped actor-metadata sources (minnano-av.com):
 /// an on/off switch, the site's base URL and request throttle, whether enrichment overwrites
 /// existing values, and the last batch run's outcome.</summary>
 public interface IEnrichmentSourceSettings

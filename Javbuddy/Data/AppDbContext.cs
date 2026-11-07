@@ -29,7 +29,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<R18DevSettings> R18DevSettings => Set<R18DevSettings>();
     public DbSet<PathMapping> PathMappings => Set<PathMapping>();
     public DbSet<MediaInfoSettings> MediaInfoSettings => Set<MediaInfoSettings>();
-    public DbSet<WarashiSettings> WarashiSettings => Set<WarashiSettings>();
     public DbSet<MinnanoAvSettings> MinnanoAvSettings => Set<MinnanoAvSettings>();
     public DbSet<FlareSolverrSettings> FlareSolverrSettings => Set<FlareSolverrSettings>();
     public DbSet<Tag> Tags => Set<Tag>();

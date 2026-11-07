@@ -2,7 +2,7 @@ using Javbuddy.Services.Actors;
 
 namespace Javbuddy.Services.MinnanoAv;
 
-/// <summary>A candidate performer from a minnano-av.com search. Unlike WAPdB, the site's primary
+/// <summary>A candidate performer from a minnano-av.com search. The site's primary
 /// name is the Japanese kanji spelling; kana and romaji come from the same "furigana" line.</summary>
 public record MinnanoAvSearchResult(
     string Name,

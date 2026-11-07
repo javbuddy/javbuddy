@@ -9,7 +9,6 @@
 @using Javbuddy.Services.R18Dev
 @using Javbuddy.Services.Tasks
 @using Javbuddy.Services.Trickplay
-@using Javbuddy.Services.Warashi
 @using Javbuddy.Services.Infrastructure
 @using Javbuddy.Services.MinnanoAv
 @using Javbuddy.Components.Pages.SettingsMetadataSections
@@ -19,7 +18,6 @@
 @inject IConnectionStatusService ConnectionStatusService
 @inject IR18DevDumpStore DumpStore
 @inject IConfiguration Configuration
-@inject IWarashiSettingsService WarashiSettingsService
 @inject IMinnanoAvSettingsService MinnanoAvSettingsService
 @inject ITrickplaySettingsService TrickplaySettingsService
 @inject ScheduledTaskLauncher TaskLauncher
@@ -30,7 +28,7 @@
 
 <h1>Metadata</h1>
 
-@if (settings is null || mediaInfoSettings is null || warashiSettings is null || minnanoAvSettings is null || localLibraryStatus is null || discoverySources is null)
+@if (settings is null || mediaInfoSettings is null || minnanoAvSettings is null || localLibraryStatus is null || discoverySources is null)
 {
     <LoadingIndicator />
 }
@@ -49,7 +47,6 @@ else
         <section class="metadata-section">
             <h2 class="metadata-section-title">Actors</h2>
             <div class="metadata-grid">
-                <StatusTile Title="WAPdB (warashi-asian-pornstars.fr)" Description="Search, match, and import actor metadata (measurements, cup size, height, birthdate, aliases) from warashi-asian-pornstars.fr." Configured="warashiSettings.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenWarashiModal" />
                 <StatusTile Title="minnano-av.com" Description="Search, match, and import actor metadata (measurements, cup size, height, birthdate, kana, aliases) from minnano-av.com." Configured="minnanoAvSettings.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenMinnanoAvModal" />
             </div>
         </section>
@@ -197,80 +194,6 @@ else
     </SlideOverDrawer>
 }
 
-@if (warashiSettings is not null)
-{
-    <SlideOverDrawer Show="showWarashiModal" Title="WAPdB (warashi-asian-pornstars.fr)" OnClose="CloseWarashiModal">
-        <p class="text-muted">
-            Warashi Asian Pornstars Database (WAPdB) provides detailed biographical and physical attributes for
-            Japanese AV performers (measurements, bra cup size, height, birthdate, retirement status, and alternative names).
-            Run batch enrichment for all actors below, or search and enrich individual performers directly from their actor detail page.
-        </p>
-
-        <EditForm Model="warashiSettings" OnValidSubmit="SaveWarashi" FormName="warashi-settings">
-            <DataAnnotationsValidator />
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="warashi-enabled" @bind="warashiSettings.Enabled" />
-                <label class="form-check-label" for="warashi-enabled">Enable the WAPdB metadata provider</label>
-            </div>
-
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="warashi-overwrite" @bind="warashiSettings.OverwriteExisting" />
-                <label class="form-check-label" for="warashi-overwrite">Overwrite existing physical attributes when enriching</label>
-            </div>
-
-            <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="warashi-challenge-solver" @bind="warashiSettings.UseChallengeSolver" disabled="@(WarashiSolverEnv is not null)" />
-                <label class="form-check-label" for="warashi-challenge-solver">Use the challenge solver when WAPdB serves a Cloudflare challenge</label>
-                <div class="form-text">
-                    Needs a FlareSolverr or Trawl service under Settings → Connections; plain requests are still tried first.
-                    @if (WarashiSolverEnv is not null)
-                    {
-                        <span>Set by <code>Warashi__UseChallengeSolver</code>.</span>
-                    }
-                </div>
-            </div>
-
-            <div class="mb-3">
-                <label class="form-label" for="warashi-delay">Request throttling delay (ms)</label>
-                <InputNumber id="warashi-delay" class="form-control" @bind-Value="warashiSettings.RequestDelayMs" min="200" max="5000" />
-                <div class="form-text">Delay between consecutive web requests during batch lookups (default: 750 ms).</div>
-            </div>
-
-            <div class="metadata-modal-status">
-                @if (warashiSettings.LastEnrichedAt is null)
-                {
-                    <span class="text-muted">Never enriched in batch.</span>
-                }
-                else
-                {
-                    <div class="text-muted">Last batch enrichment: @warashiSettings.LastEnrichedAt.Value.ToLocalTime().ToString("MMM d, yyyy, h:mm tt")</div>
-                    @if (!string.IsNullOrWhiteSpace(warashiSettings.LastEnrichSummary))
-                    {
-                        <div class="text-muted">@warashiSettings.LastEnrichSummary</div>
-                    }
-                }
-            </div>
-
-            <div class="d-flex gap-2">
-                <button class="btn btn-primary" type="submit">Save settings</button>
-                <button class="btn btn-outline-secondary" type="button" @onclick="BatchEnrichNow" disabled="@(batchEnriching || !warashiSettings.Enabled)">
-                    @(batchEnriching ? "Enriching…" : "Enrich all actors now")
-                </button>
-            </div>
-
-            @if (warashiSaved)
-            {
-                <div class="alert alert-success mt-3 mb-0">Saved.</div>
-            }
-
-            @if (batchEnrichMessage is not null)
-            {
-                <div class="alert alert-info mt-3 mb-0">@batchEnrichMessage</div>
-            }
-        </EditForm>
-    </SlideOverDrawer>
-}
-
 @if (minnanoAvSettings is not null)
 {
     <SlideOverDrawer Show="showMinnanoAvModal" Title="minnano-av.com" OnClose="CloseMinnanoAvModal">
@@ -368,16 +291,9 @@ else
     private bool discoverySaved;
     private bool mediaInfoSaved;
 
-    private WarashiSettings? warashiSettings;
-    private bool showWarashiModal;
-    private bool warashiSaved;
-    private bool batchEnriching;
-    private string? batchEnrichMessage;
-
     private MinnanoAvSettings? minnanoAvSettings;
 
     // <Source>__UseChallengeSolver overrides (and locks) the checkbox.
-    private bool? WarashiSolverEnv => ScrapeSourceEnvConfig.GetUseChallengeSolver(Configuration, "Warashi");
     private bool? MinnanoAvSolverEnv => ScrapeSourceEnvConfig.GetUseChallengeSolver(Configuration, "MinnanoAv");
     private bool showMinnanoAvModal;
     private bool minnanoAvSaved;
@@ -398,8 +314,6 @@ else
         localLibraryStatus = await ConnectionStatusService.GetLocalLibraryStatusAsync();
         settings = await R18DevSettingsService.GetAsync();
         mediaInfoSettings = await MediaInfoSettingsService.GetAsync();
-        warashiSettings = await WarashiSettingsService.GetAsync();
-        if (WarashiSolverEnv is { } warashiSolver) warashiSettings.UseChallengeSolver = warashiSolver;
         minnanoAvSettings = await MinnanoAvSettingsService.GetAsync();
         if (MinnanoAvSolverEnv is { } minnanoAvSolver) minnanoAvSettings.UseChallengeSolver = minnanoAvSolver;
         discoverySources = await DiscoverySettingsService.GetSourcesAsync();
@@ -515,43 +429,6 @@ else
         mediaInfoSaved = true;
     }
 
-    private void OpenWarashiModal()
-    {
-        warashiSaved = false;
-        batchEnrichMessage = null;
-        showWarashiModal = true;
-    }
-
-    private void CloseWarashiModal() => showWarashiModal = false;
-
-    private async Task SaveWarashi()
-    {
-        if (warashiSettings is null) return;
-
-        await WarashiSettingsService.SaveAsync(warashiSettings);
-        warashiSaved = true;
-    }
-
-    private async Task BatchEnrichNow()
-    {
-        if (warashiSettings is null) return;
-        await SaveWarashi();
-
-        batchEnriching = true;
-        batchEnrichMessage = null;
-        StateHasChanged();
-
-        // Runs on application-owned background execution, the same way ImportNow queues "r18.dev
-        // Dump Import" — it keeps running (and reporting to the sidebar) even if the user navigates
-        // away from Settings. The job only captures the overwrite flag, never this component.
-        _ = EnrichmentLauncher.QueueWarashi(warashiSettings.OverwriteExisting);
-
-        await Task.Delay(500);
-        batchEnriching = false;
-        await LoadAsync();
-        batchEnrichMessage = "Enrichment queued — see the sidebar for progress.";
-    }
-
     private void OpenMinnanoAvModal()
     {
         minnanoAvSaved = false;
@@ -578,7 +455,9 @@ else
         minnanoAvBatchEnrichMessage = null;
         StateHasChanged();
 
-        // See BatchEnrichNow's comment.
+        // Runs on application-owned background execution, the same way ImportNow queues "r18.dev
+        // Dump Import" — it keeps running (and reporting to the sidebar) even if the user navigates
+        // away from Settings. The job only captures the overwrite flag, never this component.
         _ = EnrichmentLauncher.QueueMinnanoAv(minnanoAvSettings.OverwriteExisting);
 
         await Task.Delay(500);

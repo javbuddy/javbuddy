@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Infrastructure;
 
-/// <summary>Shared plumbing for the HTML-scraping actor-metadata clients (Warashi, minnano-av.com):
+/// <summary>Shared plumbing for the HTML-scraping actor-metadata clients (minnano-av.com):
 /// effective settings from the single settings row, a per-instance request throttle so batch
 /// enrichment doesn't hammer the site, a browser-like configured <see cref="HttpClient"/>, and the
 /// connection test that is identical across sources.</summary>

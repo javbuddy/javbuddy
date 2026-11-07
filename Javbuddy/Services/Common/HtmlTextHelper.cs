@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace Javbuddy.Services.Common;
 
-/// <summary>Text helpers shared by the HTML-scraping parsers (Warashi, MinnanoAv).</summary>
+/// <summary>Text helpers shared by the HTML-scraping parsers (MinnanoAv).</summary>
 public static partial class HtmlTextHelper
 {
     [GeneratedRegex(@"<[^>]+>")]

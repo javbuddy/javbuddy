@@ -3,7 +3,6 @@ using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.MinnanoAv;
 using Javbuddy.Services.Monitoring;
 using Javbuddy.Services.Tasks;
-using Javbuddy.Services.Warashi;
 
 namespace Javbuddy.Services.ActorEnrichment;
 
@@ -16,11 +15,6 @@ public sealed class ActorBatchEnrichmentLauncher(BackgroundJobRunner jobs, TaskA
 {
     private readonly BackgroundJobRunner jobs = jobs;
     private readonly TaskActivityTracker activities = activities;
-
-    public Task QueueWarashi(bool overwriteExisting) =>
-        Queue("WAPdB enrichment", WarashiActorMetadataSource.SourceNameConstant, overwriteExisting,
-            (services, enrichedAt, summary, ct) =>
-                services.GetRequiredService<IWarashiSettingsService>().SaveEnrichmentOutcomeAsync(enrichedAt, summary, ct));
 
     public Task QueueMinnanoAv(bool overwriteExisting) =>
         Queue("minnano-av.com enrichment", MinnanoAvActorMetadataSource.SourceNameConstant, overwriteExisting,

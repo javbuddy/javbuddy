@@ -22,5 +22,4 @@ Javbuddy stands on other projects' work, borrowing their ideas, designs and data
 ## External data sources
 
 - [r18.dev](https://r18.dev/)
-- [WAPdB](https://warashi-asian-pornstars.fr/)
 - [minnano-av](https://www.minnano-av.com/)

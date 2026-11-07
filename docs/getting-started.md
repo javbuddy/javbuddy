@@ -184,7 +184,7 @@ Open <http://localhost:8080>.
    - **Destination aliases**: named folders that Torrent sort can move finished downloads into. They can only be set through environment variables on Javbuddy, e.g. `Javinizer__DestinationAliases__0__Name: jav` and `Javinizer__DestinationAliases__0__Path: /media/jav`. The path is as *javinizer-go* sees it, and should be inside one of your library roots.
 
    Anything you set through an environment variable locks that field in the UI. Anything you leave unset is configured in the UI.
-2. **Settings → Metadata** (`/settings/metadata`): check that your library folder is listed, and enable the optional metadata sources (r18.dev, WAPdB) if you want them.
+2. **Settings → Metadata** (`/settings/metadata`): check that your library folder is listed, and enable the optional metadata sources (r18.dev, minnano-av.com) if you want them.
 3. Bring in what you already have with **Movies → Library Import** (`/add/import`), see the [library guide](library-guide.md#importing-an-existing-collection). Or start a wanted list with **Movies → Add New** (`/add/new`) by typing a release code.
 4. **System → Tasks** (`/system/tasks`): review the schedules and run the first library rescan, image cache and r18.dev import now instead of waiting.
 5. **System → Status** (`/system/status`) shows the health of every integration and your disk space. Check it if something doesn't connect.

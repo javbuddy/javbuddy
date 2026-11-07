@@ -9,7 +9,6 @@ using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.MinnanoAv;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Nfo;
-using Javbuddy.Services.Warashi;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Actors;
@@ -119,7 +118,6 @@ public interface IActorService
     Task<ActorOperationResult> AddAliasAsync(int actorId, string aliasName, CancellationToken ct = default);
     Task<ActorOperationResult> RemoveAliasAsync(int actorId, int aliasId, CancellationToken ct = default);
     Task<Actor?> FindMatchingActorAsync(string name, string? japaneseName = null, IReadOnlyList<string>? aliases = null, CancellationToken ct = default);
-    Task<ActorOperationResult> ImportOrEnrichFromWarashiAsync(WarashiPerformerDetail detail, int? targetActorId = null, WarashiImportOptions? options = null, CancellationToken ct = default);
     Task<ActorOperationResult> ImportOrEnrichFromMinnanoAvAsync(MinnanoAvPerformerDetail detail, int? targetActorId = null, MinnanoAvImportOptions? options = null, CancellationToken ct = default);
 }
 
@@ -130,8 +128,7 @@ public class ActorService(
     IActorEnrichmentService? actorEnrichmentService = null,
     IActorPhotoService? actorPhotoService = null,
     IActorImageDataStore? dataStore = null,
-    IJellyfinClient? jellyfinClient = null,
-    IWarashiClient? warashiClient = null) : IActorService
+    IJellyfinClient? jellyfinClient = null) : IActorService
 {
     public async Task<Actor?> GetByRouteNameAsync(string routeName, CancellationToken ct = default)
     {
@@ -1033,23 +1030,6 @@ public class ActorService(
             : await db.Actors.AsNoTracking().Include(a => a.Aliases).FirstOrDefaultAsync(a => a.Id == matched.Id, ct);
     }
 
-    public Task<ActorOperationResult> ImportOrEnrichFromWarashiAsync(
-        WarashiPerformerDetail detail,
-        int? targetActorId = null,
-        WarashiImportOptions? options = null,
-        CancellationToken ct = default)
-    {
-        options ??= new WarashiImportOptions();
-        return ImportOrEnrichAsync(
-            targetActorId,
-            (detail.Name, detail.JapaneseName, detail.Aliases),
-            detail.ToImportedData(),
-            ImportSelection.From(options),
-            () => WarashiNewActorNames(detail),
-            options.ImportPhotos ? (db, actorId, token) => ImportWarashiPhotosAsync(db, actorId, detail, token) : null,
-            ct);
-    }
-
     public Task<ActorOperationResult> ImportOrEnrichFromMinnanoAvAsync(
         MinnanoAvPerformerDetail detail,
         int? targetActorId = null,
@@ -1122,24 +1102,8 @@ public class ActorService(
         return photoWarning is null ? ActorOperationResult.Ok(actor) : ActorOperationResult.OkWithWarning(actor, photoWarning);
     }
 
-    private static (string FirstName, string? LastName) WarashiNewActorNames(WarashiPerformerDetail detail)
-    {
-        if (!string.IsNullOrWhiteSpace(detail.GivenName))
-        {
-            return (
-                NormalizeNameCasing(detail.GivenName),
-                !string.IsNullOrWhiteSpace(detail.FamilyName) ? NormalizeNameCasing(detail.FamilyName) : null);
-        }
-
-        var parts = detail.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length >= 2
-            ? (NormalizeNameCasing(parts[0]), NormalizeNameCasing(string.Join(" ", parts.Skip(1))))
-            : (NormalizeNameCasing(detail.Name), null);
-    }
-
     // minnano-av.com's romaji reading is family-name-first (e.g. "Tohno Miho" for 通野未帆),
-    // matching Javbuddy's own LastName-FirstName DisplayName convention directly — unlike
-    // WAPdB, where the romanized name is given-name-first.
+    // matching Javbuddy's own LastName-FirstName DisplayName convention directly.
     private static (string FirstName, string? LastName) MinnanoAvNewActorNames(MinnanoAvPerformerDetail detail)
     {
         var romajiParts = (detail.Romaji ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -1149,96 +1113,6 @@ public class ActorService(
             1 => (NormalizeNameCasing(romajiParts[0]), null),
             _ => (detail.Name, null),
         };
-    }
-
-    /// <summary>Downloads and saves the performer's WAPdB photos. Returns null on full success (or
-    /// when there was nothing to import), or a warning message describing what failed — the caller
-    /// still treats the overall enrichment as successful since text-field updates already saved.</summary>
-    private async Task<string?> ImportWarashiPhotosAsync(
-        AppDbContext db,
-        int actorId,
-        WarashiPerformerDetail detail,
-        CancellationToken ct)
-    {
-        var photoUrls = new List<string>();
-        if (!string.IsNullOrWhiteSpace(detail.MainPhotoUrl))
-        {
-            photoUrls.Add(detail.MainPhotoUrl);
-        }
-        foreach (var url in detail.AdditionalPhotoUrls)
-        {
-            if (!string.IsNullOrWhiteSpace(url) && !photoUrls.Contains(url, StringComparer.OrdinalIgnoreCase))
-            {
-                photoUrls.Add(url);
-            }
-        }
-
-        if (photoUrls.Count == 0) return null;
-
-        var downloadedBytes = new List<byte[]>();
-        foreach (var url in photoUrls)
-        {
-            byte[]? bytes = null;
-            if (warashiClient != null)
-            {
-                bytes = await warashiClient.DownloadImageAsync(url, ct);
-            }
-            else if (imageCacheService != null)
-            {
-                var dl = await imageCacheService.DownloadImageFromUrlAsync(url, ct);
-                if (dl.Success && dl.Bytes is { Length: > 0 })
-                {
-                    bytes = dl.Bytes;
-                }
-            }
-
-            if (bytes is { Length: > 0 })
-            {
-                downloadedBytes.Add(bytes);
-            }
-        }
-
-        if (downloadedBytes.Count == 0) return "No photos could be downloaded from WAPdB.";
-
-        // If the actor does not currently have a portrait, set the first image as their portrait
-        var hasPortrait = await db.ActorImages.AnyAsync(ai => ai.ActorId == actorId, ct);
-        if (imageCacheService != null && !hasPortrait)
-        {
-            try
-            {
-                await imageCacheService.SaveCustomImageAsync(actorId, downloadedBytes[0], cropRect: null, ct);
-            }
-            catch
-            {
-                // Ignore portrait save failure
-            }
-        }
-
-        // Add photos to the "WAPdB" album
-        if (actorPhotoService != null)
-        {
-            var album = await db.ActorAlbums.FirstOrDefaultAsync(a => a.ActorId == actorId && a.Name == "WAPdB", ct);
-            int albumId;
-            if (album is not null)
-            {
-                albumId = album.Id;
-            }
-            else
-            {
-                var newAlbum = new ActorAlbum { ActorId = actorId, Name = "WAPdB" };
-                db.ActorAlbums.Add(newAlbum);
-                await db.SaveChangesAsync(ct);
-                albumId = newAlbum.Id;
-            }
-
-            var uploadResult = await actorPhotoService.UploadAsync(actorId, downloadedBytes, albumId, ct);
-            if (!uploadResult.Success)
-            {
-                return uploadResult.ErrorMessage ?? "Failed to save photos to the WAPdB album.";
-            }
-        }
-
-        return null;
     }
 
     /// <summary>Downloads the performer's minnano-av.com image and saves it as the actor's portrait,

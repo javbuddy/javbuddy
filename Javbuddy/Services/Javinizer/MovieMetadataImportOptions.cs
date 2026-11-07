@@ -1,8 +1,8 @@
 namespace Javbuddy.Services.Javinizer;
 
 /// <summary>Movie Detail's "Refresh with Javinizer" field picker — which of a fresh
-/// javinizer-go scrape's fields to apply onto the movie. Mirrors WarashiImportOptions' shape
-/// (Services/Warashi/WarashiModels.cs) for the actor-side metadata-review modal.</summary>
+/// javinizer-go scrape's fields to apply onto the movie. Mirrors MinnanoAvImportOptions' shape
+/// (Services/MinnanoAv/MinnanoAvModels.cs) for the actor-side metadata-review modal.</summary>
 public class MovieMetadataImportOptions
 {
     public bool ImportTitle { get; set; }

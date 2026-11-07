@@ -6,7 +6,6 @@ using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.MinnanoAv;
 using Javbuddy.Services.Monitoring;
 using Javbuddy.Services.Tasks;
-using Javbuddy.Services.Warashi;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,7 +30,6 @@ public class ActorBatchEnrichmentLauncherTests
 
         var services = new ServiceCollection();
         services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
-        services.AddScoped<IWarashiSettingsService, WarashiSettingsService>();
         services.AddScoped<IMinnanoAvSettingsService, MinnanoAvSettingsService>();
         services.AddSingleton(enrichment);
         var provider = services.BuildServiceProvider();
@@ -42,13 +40,13 @@ public class ActorBatchEnrichmentLauncherTests
     }
 
     [Fact]
-    public async Task QueueWarashi_SettingsEditedWhileRunning_KeepsTheEditsAndRecordsOnlyTheOutcome()
+    public async Task QueueMinnanoAv_SettingsEditedWhileRunning_KeepsTheEditsAndRecordsOnlyTheOutcome()
     {
         var h = CreateHarness();
         using var factory = h.Factory;
         await using (var db = await factory.CreateDbContextAsync())
         {
-            db.WarashiSettings.Add(new WarashiSettings { Enabled = true, BaseUrl = "https://old.test", RequestDelayMs = 750 });
+            db.MinnanoAvSettings.Add(new MinnanoAvSettings { Enabled = true, BaseUrl = "https://old.test", RequestDelayMs = 750 });
             await db.SaveChangesAsync();
         }
 
@@ -56,10 +54,10 @@ public class ActorBatchEnrichmentLauncherTests
         h.Enrichment.EnrichAllAsync(Arg.Any<ActorEnrichmentOptions>(), Arg.Any<IProgress<TaskProgress>>(), Arg.Any<CancellationToken>())
             .Returns(batch.Task);
 
-        var job = h.Launcher.QueueWarashi(overwriteExisting: true);
+        var job = h.Launcher.QueueMinnanoAv(overwriteExisting: true);
 
         // The user changes the provider's settings while the batch is still running.
-        await new WarashiSettingsService(factory).SaveAsync(new WarashiSettings
+        await new MinnanoAvSettingsService(factory).SaveAsync(new MinnanoAvSettings
         {
             Enabled = false,
             BaseUrl = "https://new.test",
@@ -71,7 +69,7 @@ public class ActorBatchEnrichmentLauncherTests
         await job.WaitAsync(TimeSpan.FromSeconds(5));
 
         await using var verifyDb = await factory.CreateDbContextAsync();
-        var row = await verifyDb.WarashiSettings.SingleAsync();
+        var row = await verifyDb.MinnanoAvSettings.SingleAsync();
         Assert.False(row.Enabled);
         Assert.Equal("https://new.test", row.BaseUrl);
         Assert.Equal(250, row.RequestDelayMs);
@@ -80,10 +78,10 @@ public class ActorBatchEnrichmentLauncherTests
         Assert.Equal("Enriched 9 of 10 actors (30 fields updated).", row.LastEnrichSummary);
 
         await h.Enrichment.Received(1).EnrichAllAsync(
-            Arg.Is<ActorEnrichmentOptions>(o => o.Source == WarashiActorMetadataSource.SourceNameConstant && o.OverwriteExisting),
+            Arg.Is<ActorEnrichmentOptions>(o => o.Source == MinnanoAvActorMetadataSource.SourceNameConstant && o.OverwriteExisting),
             Arg.Any<IProgress<TaskProgress>>(),
             Arg.Any<CancellationToken>());
-        Assert.Equal(new TaskActivity("WAPdB enrichment", "Enriched 9 of 10 actors (30 fields updated).", IsRunning: false), h.Tracker.Current);
+        Assert.Equal(new TaskActivity("minnano-av.com enrichment", "Enriched 9 of 10 actors (30 fields updated).", IsRunning: false), h.Tracker.Current);
     }
 
     [Fact]
@@ -108,7 +106,7 @@ public class ActorBatchEnrichmentLauncherTests
     }
 
     [Fact]
-    public async Task QueueWarashi_ApplicationShutsDownMidBatch_CancelsTheBatch()
+    public async Task QueueMinnanoAv_ApplicationShutsDownMidBatch_CancelsTheBatch()
     {
         var h = CreateHarness();
         using var factory = h.Factory;
@@ -121,7 +119,7 @@ public class ActorBatchEnrichmentLauncherTests
                 return new ActorBatchEnrichmentResult(0, 0, 0, 0);
             });
 
-        var job = h.Launcher.QueueWarashi(overwriteExisting: false);
+        var job = h.Launcher.QueueMinnanoAv(overwriteExisting: false);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await h.Runner.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
 

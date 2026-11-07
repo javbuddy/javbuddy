@@ -76,7 +76,7 @@ public class SlideOverDrawerTests : BunitContext
         var cut = Render<SlideOverDrawer>(p =>
         {
             p.Add(x => x.Show, true);
-            p.Add(x => x.Title, "WAPdB");
+            p.Add(x => x.Title, "minnano-av.com");
             p.Add(x => x.OnClose, EventCallback.Empty);
             p.AddChildContent("<input id=\"test-input\" />");
         });

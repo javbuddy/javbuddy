@@ -66,7 +66,7 @@ public class FlareSolverrClientTests
 
     [Theory]
     [InlineData("minnano-av.com", "javbuddy-minnano-av-com")]
-    [InlineData("Warashi Asian Pornstars Database", "javbuddy-Warashi-Asian-Pornstars-Database")]
+    [InlineData("Some Source Name", "javbuddy-Some-Source-Name")]
     [InlineData("a_b-C9", "javbuddy-a_b-C9")]
     [InlineData("  ", null)]
     [InlineData(null, null)]

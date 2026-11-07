@@ -37,7 +37,7 @@ public static class ScrapeChallenge
 }
 
 /// <summary>The environment override a scraped source offers for using the challenge solver
-/// (<c>MinnanoAv__UseChallengeSolver</c>, <c>Warashi__UseChallengeSolver</c>).</summary>
+/// (<c>MinnanoAv__UseChallengeSolver</c>).</summary>
 public static class ScrapeSourceEnvConfig
 {
     public static bool? GetUseChallengeSolver(IConfiguration? configuration, string section) =>

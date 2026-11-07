@@ -69,14 +69,13 @@ Set on **System → Backups**; each setting here overrides its field there and l
 
 #### Challenge solver (FlareSolverr / Trawl)
 
-Optional. A service speaking FlareSolverr's `/v1` API that opens a real browser to pass a Cloudflare challenge, for the metadata sources minnano-av.com and WAPdB. They ask the site directly first and use the solver only when it serves a challenge. Once a solver is configured they use it by default; the per-source settings below (or the checkbox on **Settings > Metadata**) switch that off. Keep the solver on your private network.
+Optional. A service speaking FlareSolverr's `/v1` API that opens a real browser to pass a Cloudflare challenge, for the minnano-av.com metadata source. It asks the site directly first and uses the solver only when it serves a challenge. Once a solver is configured it is used by default; the setting below (or the checkbox on **Settings > Metadata**) switch that off. Keep the solver on your private network.
 
 | Key | Environment Variable | Default | Description |
 |---|---|---|---|
 | `FlareSolverr:BaseUrl` | `FlareSolverr__BaseUrl` | *(none)* | Address of the solver (e.g. `http://flaresolverr:8191`). Locks the form on **Settings > Connections**. |
 | `FlareSolverr:MaxTimeoutMs` | `FlareSolverr__MaxTimeoutMs` | `60000` | How long the solver may spend on one page, challenge included. |
 | `MinnanoAv:UseChallengeSolver` | `MinnanoAv__UseChallengeSolver` | `true` | Whether minnano-av.com may be fetched through the solver on a challenge. Overrides, and locks, the checkbox on **Settings > Metadata**. |
-| `Warashi:UseChallengeSolver` | `Warashi__UseChallengeSolver` | `true` | The same for WAPdB. |
 
 Add either one next to Javbuddy in Compose (Trawl is a self-hosted alternative that answers the same API on the same port):
 

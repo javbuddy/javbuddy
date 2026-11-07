@@ -33,7 +33,6 @@ using Javbuddy.Services.Torrents.SortWizard;
 using Javbuddy.Services.Trickplay;
 using Javbuddy.Services.VideoRepair;
 using Javbuddy.Services.VrMerge;
-using Javbuddy.Services.Warashi;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 
@@ -192,14 +191,11 @@ public static class ServiceRegistration
 
     public static IServiceCollection AddMetadataServices(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddScoped<IWarashiClient, WarashiClient>();
-        services.AddScoped<IWarashiSettingsService, WarashiSettingsService>();
         services.AddScoped<IR18DevSettingsService, R18DevSettingsService>();
         services.AddScoped<IMediaInfoSettingsService, MediaInfoSettingsService>();
         services.AddScoped<IMinnanoAvClient, MinnanoAvClient>();
         services.AddScoped<IMinnanoAvSettingsService, MinnanoAvSettingsService>();
         services.AddScoped<IActorMetadataSource, LocalActorMetadataSource>();
-        services.AddScoped<IActorMetadataSource, WarashiActorMetadataSource>();
         services.AddScoped<IActorMetadataSource, MinnanoAvActorMetadataSource>();
         services.AddScoped<IActorEnrichmentService, ActorEnrichmentService>();
         // Each logo's size is the bundled PNG's own pixel size, so Discover can reserve its box.

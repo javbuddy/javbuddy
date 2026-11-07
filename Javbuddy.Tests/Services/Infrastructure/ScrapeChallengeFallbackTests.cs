@@ -2,7 +2,6 @@ using System.Net;
 using Javbuddy.Models;
 using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.MinnanoAv;
-using Javbuddy.Services.Warashi;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.Configuration;
 using NSubstitute;
@@ -10,7 +9,7 @@ using NSubstitute;
 namespace Javbuddy.Tests.Services.Infrastructure;
 
 /// <summary>The plain-first / solver-on-challenge fetch shared by the scraped actor sources, exercised
-/// through the minnano-av.com and Warashi clients with a fake site and a substitute solver.</summary>
+/// through the minnano-av.com client with a fake site and a substitute solver.</summary>
 public class ScrapeChallengeFallbackTests
 {
     private const string ListHtml = """
@@ -259,38 +258,15 @@ public class ScrapeChallengeFallbackTests
     }
 
     [Fact]
-    public async Task EnvironmentOverride_IsPerSource()
+    public async Task EnvironmentOverride_CanSwitchTheSolverOffForTheSource()
     {
         using var dbFactory = new TestDbContextFactory();
+        await SaveMinnanoAsync(dbFactory, useSolver: true);
         var solver = Solver();
-        var client = new WarashiClient(new FakeHttpClientFactory(Challenge()), dbFactory, challengeSolver: solver,
-            configuration: Env(("MinnanoAv:UseChallengeSolver", "true"), ("Warashi:UseChallengeSolver", "false")));
+        var client = new MinnanoAvClient(new FakeHttpClientFactory(Challenge()), dbFactory, challengeSolver: solver,
+            configuration: Env(("MinnanoAv:UseChallengeSolver", "false")));
 
-        await Assert.ThrowsAsync<ScrapeBlockedException>(() => client.SearchPerformersAsync("Yua Mikami"));
+        await Assert.ThrowsAsync<ScrapeBlockedException>(() => client.SearchPerformersAsync("美帆"));
         await solver.DidNotReceiveWithAnyArgs().PostFormAsync(default!, default!, default, default);
-    }
-
-    [Fact]
-    public async Task WarashiSearch_PostsTheFormThroughTheSolverWhenChallenged()
-    {
-        using var dbFactory = new TestDbContextFactory();
-        await using (var db = await dbFactory.CreateDbContextAsync())
-        {
-            db.WarashiSettings.Add(new WarashiSettings { UseChallengeSolver = true, RequestDelayMs = 0 });
-            await db.SaveChangesAsync();
-        }
-
-        var solver = Substitute.For<IChallengeSolverClient>();
-        solver.IsConfiguredAsync(Arg.Any<CancellationToken>()).Returns(true);
-        solver.PostFormAsync(Arg.Any<Uri>(), Arg.Any<IReadOnlyList<KeyValuePair<string, string>>>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(Solved("<html></html>", "https://warashi-asian-pornstars.fr/en/s-12/search"));
-        var client = new WarashiClient(new FakeHttpClientFactory(Challenge()), dbFactory, challengeSolver: solver);
-
-        await client.SearchPerformersAsync("Yua Mikami");
-
-        await solver.Received(1).PostFormAsync(
-            Arg.Is<Uri>(u => u.AbsolutePath == "/en/s-12/search"),
-            Arg.Is<IReadOnlyList<KeyValuePair<string, string>>>(f => f.Any(p => p.Key == "recherche_valeur" && p.Value == "Yua Mikami")),
-            Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 }

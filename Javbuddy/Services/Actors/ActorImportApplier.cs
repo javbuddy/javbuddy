@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Actors;
 
-/// <summary>What an external actor source (WAPdB, minnano-av) offers, in the shape the import needs.</summary>
+/// <summary>What an external actor source (minnano-av) offers, in the shape the import needs.</summary>
 public sealed record ImportedActorData(
     int? HeightCm,
     string? CupSize,
