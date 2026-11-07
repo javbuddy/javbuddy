@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- The minnano-av.com search modal title now separates the site name and actor name with a colon instead of an em dash. (#115)
+
 ### Fixed
 
 - minnano-av.com actor detail pages whose performer name or aliases include a parenthesized qualifier (such as `みさ（同人モデル）` or `みさちゃん（FC2）`) now parse and keep the qualifier instead of failing to load or truncating at the first parenthesis. (#105)

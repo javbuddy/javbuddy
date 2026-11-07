@@ -7,7 +7,7 @@
 @if (Show && Actor is not null)
 {
     <ModalShell MaxWidth="680px" OnClose="CloseAsync" Busy="@isEnriching">
-        <TitleContent>Search minnano-av.com — @Actor.DisplayName</TitleContent>
+        <TitleContent>Search minnano-av.com: @Actor.DisplayName</TitleContent>
         <ChildContent>
             @if (errorMessage is not null)
             {
