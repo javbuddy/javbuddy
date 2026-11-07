@@ -40,6 +40,28 @@ public partial class MinnanoAvClient(
     [GeneratedRegex(@"/actress\d+\.html$", RegexOptions.IgnoreCase)]
     private static partial Regex DetailPagePathRegex();
 
+    [GeneratedRegex(@"^/actress(\d+)\.html$", RegexOptions.IgnoreCase)]
+    private static partial Regex ActressPathRegex();
+
+    /// <summary>
+    /// Extracts the actress ID when <paramref name="query"/> is a bare numeric ID or a minnano-av.com
+    /// <c>actress&lt;id&gt;.html</c> URL (query string ignored); null for a name search.
+    /// </summary>
+    public static string? TryExtractPerformerId(string query)
+    {
+        var q = query.Trim();
+        if (q.Length > 0 && q.All(char.IsAsciiDigit)) return q;
+
+        if (Uri.TryCreate(q, UriKind.Absolute, out var uri)
+            && uri.Host.EndsWith("minnano-av.com", StringComparison.OrdinalIgnoreCase)
+            && ActressPathRegex().Match(uri.AbsolutePath) is { Success: true } m)
+        {
+            return m.Groups[1].Value;
+        }
+
+        return null;
+    }
+
     public async Task<IReadOnlyList<MinnanoAvSearchResult>> SearchPerformersAsync(string query, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query)) return Array.Empty<MinnanoAvSearchResult>();
@@ -47,7 +69,11 @@ public partial class MinnanoAvClient(
         try
         {
             var (baseUrl, delayMs, useSolver) = await GetEffectiveSettingsAsync(ct);
-            var searchUrl = $"{baseUrl}/search_result.php?search_scope=actress&search_word={Uri.EscapeDataString(query.Trim())}";
+            // An ID or detail URL goes straight to that actress's page, which the detail-page branch
+            // below turns into a single exact match — same path as the name search's redirect.
+            var searchUrl = TryExtractPerformerId(query) is { } id
+                ? $"{baseUrl}/actress{id}.html"
+                : $"{baseUrl}/search_result.php?search_scope=actress&search_word={Uri.EscapeDataString(query.Trim())}";
 
             var page = await FetchHtmlAsync(searchUrl, delayMs, useSolver, null, ct);
             if (page.Html is not { } html)

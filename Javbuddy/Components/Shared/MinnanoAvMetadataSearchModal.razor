@@ -15,7 +15,7 @@
             }
 
             <div class="input-group mb-3">
-                <input type="text" class="form-control search-input" placeholder="Search performer name (kanji) or alias…"
+                <input type="text" class="form-control search-input" placeholder="Search performer name (kanji), alias, ID or minnano-av.com URL…"
                        @bind="searchQuery" @bind:event="oninput" @onkeydown="HandleInputKeyDown" disabled="@isSearching" />
                 <button class="btn btn-primary" type="button" @onclick="ExecuteSearch" disabled="@(isSearching || string.IsNullOrWhiteSpace(searchQuery))">
                     @(isSearching ? "Searching…" : "Search")

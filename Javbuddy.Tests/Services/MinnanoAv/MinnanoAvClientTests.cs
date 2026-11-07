@@ -76,6 +76,38 @@ public class MinnanoAvClientTests
         Assert.Contains("148426.jpg", results[0].ImageUrl);
     }
 
+    [Theory]
+    [InlineData("148426")]
+    [InlineData(" 148426 ")]
+    [InlineData("https://www.minnano-av.com/actress148426.html?%E5%A4%A7%E5%8E%9F")]
+    public async Task SearchPerformersAsync_WithIdOrUrl_FetchesDetailPageDirectly(string query)
+    {
+        var handler = new FakeHttpMessageHandler((request, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(SampleDetailHtml),
+                RequestMessage = request
+            }));
+        var client = new MinnanoAvClient(new FakeHttpClientFactory(handler), new TestDbContextFactory());
+
+        var results = await client.SearchPerformersAsync(query);
+
+        Assert.Equal("https://www.minnano-av.com/actress148426.html", handler.LastRequest!.RequestUri!.ToString());
+        Assert.Single(results);
+        Assert.True(results[0].IsExactMatch);
+        Assert.Equal("actress148426.html", results[0].PathOrUrl);
+    }
+
+    [Theory]
+    [InlineData("148426", "148426")]
+    [InlineData("https://www.minnano-av.com/actress141240.html?x", "141240")]
+    [InlineData("https://example.com/actress141240.html", null)]
+    [InlineData("https://www.minnano-av.com/search_result.php", null)]
+    [InlineData("通野未帆", null)]
+    [InlineData("abc123", null)]
+    public void TryExtractPerformerId_RecognisesIdsAndUrlsOnly(string query, string? expected)
+        => Assert.Equal(expected, MinnanoAvClient.TryExtractPerformerId(query));
+
     [Fact]
     public async Task GetPerformerDetailAsync_FetchesAndParsesPerformer()
     {

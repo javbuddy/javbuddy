@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- The minnano-av.com actor search now accepts an actress ID (`141240`) or a full `actress<id>.html` URL (query string ignored) as well as a name, and opens that actress directly. (#114)
+
 ### Changed
 
 - The minnano-av.com search modal title now separates the site name and actor name with a colon instead of an em dash. (#115)
