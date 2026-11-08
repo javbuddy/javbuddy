@@ -94,6 +94,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(nameof(Movie.Status), Movie.DateAddedColumn);
             entity.HasIndex(Movie.DateAddedColumn);
             entity.HasIndex(m => m.JellyfinLibraryName);
+            entity.HasIndex(m => m.LocalRootPath);
             // A full index, not a partial one on <> 'None': the drift filter's IN (...) can't use the partial one.
             entity.HasIndex(m => m.NfoDriftKind);
             entity.HasIndex(m => m.ClipActorsStale).HasFilter("\"ClipActorsStale\"");

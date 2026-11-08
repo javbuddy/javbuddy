@@ -16,6 +16,7 @@ public static class LocalLibraryMetadataMapper
     {
         ApplyDescriptiveMetadata(movie, metadata);
 
+        movie.LocalRootPath = metadata.LocalRootPath;
         movie.LocalFileSizeBytes = metadata.VideoFileSizeBytes;
         movie.MediaVideoFileName = metadata.VideoFileName;
         movie.MediaHasSubtitleFile = metadata.HasSubtitleFile;
@@ -168,6 +169,7 @@ public static class LocalLibraryMetadataMapper
     /// reverts to Missing.</summary>
     public static void ClearLocalFileData(Movie movie)
     {
+        movie.LocalRootPath = null;
         movie.LocalFileSizeBytes = null;
         movie.MediaVideoFileName = null;
         movie.MediaHasSubtitleFile = false;

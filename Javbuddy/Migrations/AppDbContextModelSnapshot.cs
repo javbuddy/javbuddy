@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261107222831_AddNewMovieArtwork";
+    public override string LastMigrationId => "20261108214253_AddMovieLocalRootPath";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -1021,6 +1021,10 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<long?>("LocalFileSizeBytes")
                     .HasColumnType("INTEGER");
 
+                b.Property<string>("LocalRootPath")
+                    .HasMaxLength(1000)
+                    .HasColumnType("TEXT");
+
                 b.Property<string>("MediaAspectRatio")
                     .HasColumnType("TEXT");
 
@@ -1311,6 +1315,8 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasFilter("\"IsFavorite\"");
 
                 b.HasIndex("JellyfinLibraryName");
+
+                b.HasIndex("LocalRootPath");
 
                 b.HasIndex("NfoDriftKind");
 

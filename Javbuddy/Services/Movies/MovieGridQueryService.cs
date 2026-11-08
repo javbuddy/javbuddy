@@ -152,8 +152,8 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         // matching ActorMissing.razor's availableMakers/availableYears, so the lists don't shrink
         // as other filters narrow the grid.
         var libraryNames = await db.Movies
-            .Where(m => m.JellyfinLibraryName != null && m.JellyfinLibraryName != "")
-            .Select(m => m.JellyfinLibraryName!)
+            .Where(m => m.LocalRootPath != null && m.LocalRootPath != "")
+            .Select(m => m.LocalRootPath!)
             .Distinct()
             .OrderBy(n => n)
             .ToListAsync(ct);
@@ -421,7 +421,7 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         if (!string.IsNullOrEmpty(filter.Library))
         {
             var library = filter.Library;
-            query = query.Where(m => m.JellyfinLibraryName == library);
+            query = query.Where(m => m.LocalRootPath == library);
         }
         query = MovieFilterPredicates.WhereResolutions(query, filter.Resolutions);
         query = MovieFilterPredicates.WhereScanTypes(query, filter.ScanTypes);

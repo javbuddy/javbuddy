@@ -701,10 +701,14 @@ else
 
         // A remembered selection the library no longer offers (a cup nobody has, a limit outside the new
         // bounds) is corrected here, and the caller re-counts with the corrected filter.
+        // A remembered library the library no longer lists (e.g. an old Jellyfin library name) is dropped, not left as an invisible filter.
+        var libraryStale = !string.IsNullOrEmpty(filters.Library) && !libraryNames.Contains(filters.Library);
+        if (libraryStale) filters.Library = null;
+
         var normalized = MovieFilterOptions.NormalizeActorAttributes(filters.ActorAttributes, actorAttributeOptions);
         var normalizedCounts = MovieFilterOptions.NormalizeCounts(filters.Counts, countOptions);
         var normalizedRanges = MovieFilterOptions.NormalizeRanges(filters.Ranges, rangeOptions);
-        if (normalized.SameAs(filters.ActorAttributes) && normalizedCounts == filters.Counts && normalizedRanges == filters.Ranges) return false;
+        if (!libraryStale && normalized.SameAs(filters.ActorAttributes) && normalizedCounts == filters.Counts && normalizedRanges == filters.Ranges) return false;
 
         filters.ActorAttributes = normalized;
         filters.Counts = normalizedCounts;

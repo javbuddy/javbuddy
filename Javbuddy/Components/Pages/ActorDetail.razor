@@ -555,8 +555,8 @@ else
         rangeFilter = MovieFilterOptions.NormalizeRanges(rangeFilter, rangeOptions);
 
         libraryNames = allMovies
-            .Where(m => !string.IsNullOrWhiteSpace(m.JellyfinLibraryName))
-            .Select(m => m.JellyfinLibraryName!)
+            .Where(m => !string.IsNullOrWhiteSpace(m.LocalRootPath))
+            .Select(m => m.LocalRootPath!)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(l => l)
             .ToList();
@@ -600,7 +600,7 @@ else
 
         if (!string.IsNullOrEmpty(libraryFilter))
         {
-            query = query.Where(m => m.JellyfinLibraryName == libraryFilter);
+            query = query.Where(m => m.LocalRootPath == libraryFilter);
         }
 
         query = MovieFilterPredicates.WhereResolutions(query.AsQueryable(), resolutionFilter);

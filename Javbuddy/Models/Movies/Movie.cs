@@ -82,6 +82,11 @@ public class Movie : IMediaTechnicalInfo
     public string? JellyfinLibraryName { get; set; }
     public DateTime? JellyfinCheckedAt { get; set; }
 
+    /// <summary>The configured local library root (LocalLibrary:RootPaths) this movie's folder lives under. Set by the
+    /// library scan, import and rescan; null for a movie with no local folder, or not yet rescanned since this was added.</summary>
+    [StringLength(1000)]
+    public string? LocalRootPath { get; set; }
+
     // Local file-based metadata source (Stage 7): file size of the video found in the
     // movie's local folder, if one was resolved. No codec/resolution probing — just size.
     public long? LocalFileSizeBytes { get; set; }

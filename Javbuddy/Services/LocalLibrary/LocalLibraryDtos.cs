@@ -8,6 +8,9 @@ public class LocalMovieMetadata
 {
     public string? Title { get; set; }
 
+    /// <summary>The configured library root the movie's folder lives under.</summary>
+    public string? LocalRootPath { get; set; }
+
     /// <summary>True when the movie's folder has no .nfo, so there is no descriptive metadata to read — the movie is
     /// tracked with only what the files themselves provide (see LocalLibraryMetadataMapper.GeneratedSourceName).</summary>
     public bool IsGenerated { get; set; }

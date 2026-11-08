@@ -64,8 +64,8 @@ public class LibraryStatisticsCache
 }
 
 /// <summary>Aggregates counts across movies, scenes, highlights, apexes, actors and tags for the Statistics page
-///. The per-root breakdown resolves each local movie's root on the filesystem (no stored
-/// LocalRootPath column), so the result is cached briefly.</summary>
+///. The per-root breakdown resolves each local movie's root on the filesystem (not from
+/// Movie.LocalRootPath, which is only filled in by a rescan), so the result is cached briefly.</summary>
 public class LibraryStatisticsService(IDbContextFactory<AppDbContext> dbFactory, ILocalLibraryClient localLibrary, LibraryStatisticsCache cache) : ILibraryStatisticsService
 {
     public Task<LibraryStatistics> GetAsync(CancellationToken ct = default) =>

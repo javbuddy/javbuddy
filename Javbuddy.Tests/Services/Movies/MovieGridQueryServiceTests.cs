@@ -23,18 +23,18 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         using (var db = factory.CreateDbContext())
         {
             db.Movies.AddRange(
-                new Movie { Code = "ABC-001", Status = MovieStatus.Got, MediaWidth = 1920, MetaStudio = "S1", JellyfinLibraryName = "Main" },
-                new Movie { Code = "ABC-002", Status = MovieStatus.Got, MediaWidth = 3840, MetaStudio = "S1", JellyfinLibraryName = "Main" },
-                new Movie { Code = "ABC-003", Status = MovieStatus.Missing, MediaWidth = 1920, MetaStudio = "S1", JellyfinLibraryName = "Main" },
-                new Movie { Code = "ABC-004", Status = MovieStatus.Got, MediaWidth = 1920, MetaStudio = "Moodyz", JellyfinLibraryName = "Main" },
-                new Movie { Code = "XYZ-005", Status = MovieStatus.Got, MediaWidth = 1280, MetaStudio = "S1", JellyfinLibraryName = "Main" },
-                new Movie { Code = "ABC-006", Status = MovieStatus.Got, MediaWidth = 1920, MetaStudio = "S1", JellyfinLibraryName = "Other" });
+                new Movie { Code = "ABC-001", Status = MovieStatus.Got, MediaWidth = 1920, MetaStudio = "S1", LocalRootPath = "/media/main" },
+                new Movie { Code = "ABC-002", Status = MovieStatus.Got, MediaWidth = 3840, MetaStudio = "S1", LocalRootPath = "/media/main" },
+                new Movie { Code = "ABC-003", Status = MovieStatus.Missing, MediaWidth = 1920, MetaStudio = "S1", LocalRootPath = "/media/main" },
+                new Movie { Code = "ABC-004", Status = MovieStatus.Got, MediaWidth = 1920, MetaStudio = "Moodyz", LocalRootPath = "/media/main" },
+                new Movie { Code = "XYZ-005", Status = MovieStatus.Got, MediaWidth = 1280, MetaStudio = "S1", LocalRootPath = "/media/main" },
+                new Movie { Code = "ABC-006", Status = MovieStatus.Got, MediaWidth = 1920, MetaStudio = "S1", LocalRootPath = "/media/other" });
             db.SaveChanges();
         }
 
         var filter = new MovieGridFilter(
             Status: MovieStatus.Got,
-            Library: "Main",
+            Library: "/media/main",
             Resolutions: [MovieResolutionFilterOption.Hd],
             Studios: ["S1"],
             Text: "ABC");
@@ -219,9 +219,9 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         using (var db = factory.CreateDbContext())
         {
             db.Movies.AddRange(
-                new Movie { Code = "ABC-001", Status = MovieStatus.Got, MetaStudio = "S1", MediaVideoCodec = "h264", LocalFileSizeBytes = 100, JellyfinLibraryName = "Main" },
+                new Movie { Code = "ABC-001", Status = MovieStatus.Got, MetaStudio = "S1", MediaVideoCodec = "h264", LocalFileSizeBytes = 100, LocalRootPath = "/media/main" },
                 new Movie { Code = "ABC-002", Status = MovieStatus.Missing, MetaStudio = "S1" },
-                new Movie { Code = "ABC-003", Status = MovieStatus.Got, MetaStudio = "Moodyz", MediaVideoCodec = "hevc", LocalFileSizeBytes = 50, JellyfinLibraryName = "Other" });
+                new Movie { Code = "ABC-003", Status = MovieStatus.Got, MetaStudio = "Moodyz", MediaVideoCodec = "hevc", LocalFileSizeBytes = 50, LocalRootPath = "/media/other" });
             db.SaveChanges();
         }
 
@@ -230,7 +230,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         Assert.Equal((2, 1, 1), (summary.TotalCount, summary.MissingCount, summary.GotCount));
         Assert.Equal(2, summary.FilesCount);
         Assert.Equal(150, summary.TotalFileSizeBytes);
-        Assert.Equal(["Main", "Other"], summary.LibraryNames);
+        Assert.Equal(["/media/main", "/media/other"], summary.LibraryNames);
         Assert.Equal(["h264", "hevc"], summary.Codecs);
         Assert.Equal(["Moodyz", "S1"], summary.Studios);
     }

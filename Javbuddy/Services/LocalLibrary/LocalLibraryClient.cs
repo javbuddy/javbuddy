@@ -252,7 +252,7 @@ public class LocalLibraryClient(
 
     public async Task<LocalLookupResult> TryGetMetadataAsync(string code, CancellationToken ct = default, bool includeMediaInfo = true)
     {
-        var folder = await FindMovieFolderAsync(code, ct);
+        var (root, folder) = await FindMovieFolderWithRootAsync(code, ct);
         if (folder is null)
         {
             return new LocalLookupResult(false, null, null, "No local folder found for this code.");
@@ -261,6 +261,7 @@ public class LocalLibraryClient(
         var nfoPath = FindNfoFile(folder, code);
         var metadata = nfoPath is not null ? await LocalNfoParser.ParseAsync(nfoPath, ct) : null;
         metadata ??= new LocalMovieMetadata { IsGenerated = nfoPath is null };
+        metadata.LocalRootPath = root;
 
         metadata.LocalPosterFileName = PosterFileNames.FirstOrDefault(name => File.Exists(Path.Combine(folder, name)));
         metadata.HasLocalFanart = FanartFileNames.Any(name => File.Exists(Path.Combine(folder, name)));
@@ -965,11 +966,13 @@ public class LocalLibraryClient(
             return new OperationResult(false, "Movie not found.");
         }
 
-        var folder = await FindMovieFolderAsync(movie.Code, ct);
+        var (root, folder) = await FindMovieFolderWithRootAsync(movie.Code, ct);
         if (folder is null)
         {
             return new OperationResult(false, "No local folder found for this code.");
         }
+
+        movie.LocalRootPath = root;
 
         // Independent of whether a video file resolves below — sidecar subtitle/trailer file
         // presence is a property of the folder's contents, not coupled to the video probe's own outcome.
@@ -1041,7 +1044,9 @@ public class LocalLibraryClient(
         {
             // Still re-derived without a probe: it depends on the file names (and the genres, which
             // a metadata refresh can change), and rows scanned before don't have it yet.
-            if (LocalLibraryMetadataMapper.ApplyVrFormats(movie))
+            // Also saves LocalRootPath, set above, for a movie scanned before that column existed.
+            var vrChanged = LocalLibraryMetadataMapper.ApplyVrFormats(movie);
+            if (vrChanged || db.ChangeTracker.HasChanges())
             {
                 await db.SaveChangesAsync(ct);
             }

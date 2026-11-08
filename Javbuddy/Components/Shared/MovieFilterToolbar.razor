@@ -382,7 +382,7 @@
     // The library filter holds one library, so picking another replaces it and re-picking the active one clears it.
     private IReadOnlyList<MultiSelectOption> LibraryFilterOptions => LibraryNames
         .Select(name => new MultiSelectOption(
-            name,
+            Javbuddy.Services.LocalLibrary.LocalLibraryNames.Label(name, LibraryNames),
             LibraryFilter == name,
             EventCallback.Factory.Create(this, () => OnLibraryFilterChanged.InvokeAsync(LibraryFilter == name ? null : name))))
         .ToList();

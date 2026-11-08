@@ -393,6 +393,50 @@ public class LocalLibraryClientTests
     }
 
     [Fact]
+    public async Task RefreshMediaInfoOnlyAsync_UnchangedMovie_SavesLocalRootPath()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        var moviePath = Path.Combine(folder, "ABC-123.mkv");
+        await File.WriteAllTextAsync(moviePath, "x");
+        var info = new FileInfo(moviePath);
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie
+            {
+                Code = "ABC-123",
+                Status = MovieStatus.Got,
+                FileAddedAt = info.CreationTimeUtc,
+                MediaScannedAt = DateTime.UtcNow,
+            };
+            movie.MovieFiles.Add(new MovieFile
+            {
+                FileName = "ABC-123.mkv",
+                FileSizeBytes = info.Length,
+                LastWriteUtc = info.LastWriteTimeUtc,
+                IsPrimary = true,
+                MediaScannedAt = DateTime.UtcNow,
+            });
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        var prober = Substitute.For<IMediaInfoProber>();
+        var client = CreateClientFor(factory, root, prober);
+
+        var result = await client.RefreshMediaInfoOnlyAsync(movieId);
+
+        Assert.True(result.Success);
+        await prober.DidNotReceive().ProbeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        using var check = factory.CreateDbContext();
+        Assert.Equal(root.Path, check.Movies.Single(m => m.Id == movieId).LocalRootPath);
+    }
+
+    [Fact]
     public async Task RefreshMediaInfoOnlyAsync_SuffixedWebmFileName_StillExcludesTrailer()
     {
         // The movie file isn't
