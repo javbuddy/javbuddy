@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Javbuddy.Tests.Services.Tasks;
 
+[Collection(Javbuddy.Tests.TestSupport.SqlitePoolCollection.Name)]
 public sealed class DatabaseMaintenanceTaskTests : IDisposable
 {
     private readonly DirectoryInfo dir = Directory.CreateTempSubdirectory("javbuddy-dbmaint-");

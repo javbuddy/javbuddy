@@ -12,7 +12,7 @@ namespace Javbuddy.Tests.Services.R18Dev;
 /// <summary>The catalog browse's store queries, against a dump built by the real importer
 /// from a small synthetic pg_dump — so the facet columns and indexes R18DevCatalogFacets adds at import
 /// are exercised along with the queries that read them.</summary>
-[Collection(R18DevDumpImportCollection.Name)]
+[Collection(SqlitePoolCollection.Name)]
 public class R18DevDumpStoreCatalogTests : IDisposable
 {
     private readonly string tempDir;

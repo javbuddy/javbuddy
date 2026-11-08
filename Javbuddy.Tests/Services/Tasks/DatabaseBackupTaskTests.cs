@@ -5,6 +5,7 @@ using Javbuddy.Tests.Services.Backups;
 
 namespace Javbuddy.Tests.Services.Tasks;
 
+[Collection(Javbuddy.Tests.TestSupport.SqlitePoolCollection.Name)]
 public sealed class DatabaseBackupTaskTests : IDisposable
 {
     private readonly BackupTestEnvironment env = new();

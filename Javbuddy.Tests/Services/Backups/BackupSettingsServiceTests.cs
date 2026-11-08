@@ -2,6 +2,7 @@ using Javbuddy.Models;
 
 namespace Javbuddy.Tests.Services.Backups;
 
+[Collection(Javbuddy.Tests.TestSupport.SqlitePoolCollection.Name)]
 public sealed class BackupSettingsServiceTests
 {
     [Fact]

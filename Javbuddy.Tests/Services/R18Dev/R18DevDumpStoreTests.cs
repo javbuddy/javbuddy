@@ -8,6 +8,7 @@ namespace Javbuddy.Tests.Services.R18Dev;
 /// <summary>Exercises GetFilmographyForActorAsync against a real (temp-file) sidecar SQLite
 /// database shaped like R18DevDumpImporter's schema — the actress-identity bootstrap logic runs
 /// hand-written SQL directly against that file, so an in-memory EF context can't stand in for it.</summary>
+[Collection(Javbuddy.Tests.TestSupport.SqlitePoolCollection.Name)]
 public class R18DevDumpStoreTests : IDisposable
 {
     private readonly string tempDir;

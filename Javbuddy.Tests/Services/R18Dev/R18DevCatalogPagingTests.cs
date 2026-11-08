@@ -14,7 +14,7 @@ namespace Javbuddy.Tests.Services.R18Dev;
 /// retailer-suffixed and distributor-prefixed rows used up the cap and a series search stopped partway
 /// (MIDE ended around MIDE-511). Pages through a dump built by the real importer, where every release
 /// has those extra rows, with the real store and browse service the way "Show more" does.</summary>
-[Collection(R18DevDumpImportCollection.Name)]
+[Collection(SqlitePoolCollection.Name)]
 public class R18DevCatalogPagingTests : IDisposable
 {
     private const int Releases = 250;

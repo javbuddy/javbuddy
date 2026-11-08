@@ -13,7 +13,7 @@ namespace Javbuddy.Tests.Services.R18Dev;
 /// through R18Dev:DumpSourceOverride so the test never touches the network. Focused on the
 /// progress reporting added for the r18.dev import task's System &gt; Tasks live progress —
 /// row counts and dump parsing itself are covered separately by DumpParserTests.</summary>
-[Collection(R18DevDumpImportCollection.Name)]
+[Collection(SqlitePoolCollection.Name)]
 public class R18DevDumpImporterTests : IDisposable
 {
     private readonly string tempDir;

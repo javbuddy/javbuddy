@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Javbuddy.Tests.Data;
 
+[Collection(Javbuddy.Tests.TestSupport.SqlitePoolCollection.Name)]
 public sealed class SqlitePragmaInterceptorTests : IDisposable
 {
     private readonly DirectoryInfo dir = Directory.CreateTempSubdirectory("javbuddy-pragma-");

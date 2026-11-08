@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Javbuddy.Tests.Services.Backups;
 
+[Collection(Javbuddy.Tests.TestSupport.SqlitePoolCollection.Name)]
 public sealed class BackupServiceTests : IDisposable
 {
     private readonly BackupTestEnvironment env = new();
