@@ -234,6 +234,35 @@ public class MovieRescanServiceTests
     }
 
     [Fact]
+    public async Task RescanAsync_MissingMovieTransitionsToGot_NfoWithoutRuntime_FillsRuntimeFromVideoDuration()
+    {
+        using var factory = new TestDbContextFactory();
+        int movieId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // The mocked MediaInfo refresh stores nothing, so the duration it would have probed is preset.
+            var movie = new Movie { Code = "ABC-123", Status = MovieStatus.Missing, MediaDurationSeconds = 5400 };
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+            movieId = movie.Id;
+        }
+
+        var localMetadata = new LocalMovieMetadata { Title = "Local Title", VideoFileName = "ABC-123.mp4", VideoFileSizeBytes = 5000 };
+        var localLibraryClient = Substitute.For<ILocalLibraryClient>();
+        localLibraryClient.TryGetMetadataAsync("ABC-123", Arg.Any<CancellationToken>(), false)
+            .Returns(new LocalLookupResult(true, "/media/ABC-123", localMetadata, null));
+        localLibraryClient.RefreshMediaInfoOnlyAsync(movieId, Arg.Any<CancellationToken>())
+            .Returns(new OperationResult(true, null));
+        localLibraryClient.SyncImagesSignatureAsync(movieId, Arg.Any<CancellationToken>())
+            .Returns(new OperationResult(true, null));
+
+        await CreateService(factory, localLibraryClient: localLibraryClient).RescanAsync(movieId);
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.Equal(90, (await verifyDb.Movies.SingleAsync(m => m.Id == movieId)).MetaRuntimeMinutes);
+    }
+
+    [Fact]
     public async Task RescanAsync_MissingMovieTransitionsToGot_OverwritesExistingMetadataFromNfo()
     {
         using var factory = new TestDbContextFactory();

@@ -328,6 +328,42 @@ public class LocalLibraryClientTests
         Assert.Null(await client.ResolveFirstExistingLocalFilePathAsync("ABC-123", ["ABC-123.nfo", "../secret.jpg"]));
     }
 
+    [Theory]
+    [InlineData(true, 90)]
+    [InlineData(false, null)]
+    public async Task RefreshLocalMetadataAsync_NfoWithoutRuntime_TakesTheRuntimeFromTheProbedVideoOnlyWhenAnNfoExists(bool withNfo, int? expectedRuntime)
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        await File.WriteAllTextAsync(Path.Combine(folder, "ABC-123.mp4"), "x");
+        if (withNfo)
+        {
+            await File.WriteAllTextAsync(Path.Combine(folder, "ABC-123.nfo"), "<movie><title>Local Title</title></movie>");
+        }
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            // A runtime filled earlier is blanked by re-reading the .nfo, then filled again from the probe.
+            var movie = new Movie { Code = "ABC-123", MetaRuntimeMinutes = withNfo ? 50 : null };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        var prober = Substitute.For<IMediaInfoProber>();
+        prober.ProbeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new MediaProbeResult { Success = true, DurationSeconds = 5400 });
+        var client = CreateClientFor(factory, root, prober);
+
+        var result = await client.RefreshLocalMetadataAsync(movieId);
+
+        Assert.True(result.Success);
+        using var verifyDb = factory.CreateDbContext();
+        Assert.Equal(expectedRuntime, verifyDb.Movies.Single().MetaRuntimeMinutes);
+    }
+
     [Fact]
     public async Task RefreshMediaInfoOnlyAsync_PrefersWebmMovieFileOverMp4Trailer()
     {

@@ -945,6 +945,12 @@ public class LocalLibraryClient(
         }
         await db.SaveChangesAsync(ct);
         await RefreshMediaInfoOnlyAsync(movieId, ct);
+
+        // The video was probed just now (the .nfo was applied without a probe), so a runtime the .nfo lacks can
+        // be taken from its duration. Re-applying the .nfo above blanks one filled earlier.
+        await db.Entry(movie).ReloadAsync(ct);
+        LocalLibraryMetadataMapper.FillMissingRuntimeFromMedia(movie, result.Metadata);
+        await db.SaveChangesAsync(ct);
         return new OperationResult(true, null);
     }
 

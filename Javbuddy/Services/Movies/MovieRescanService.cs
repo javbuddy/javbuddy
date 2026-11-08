@@ -120,6 +120,7 @@ public class MovieRescanService(
                     if ((wasMissing || !hasExistingMetadata) && local.Metadata is not null)
                     {
                         LocalLibraryMetadataMapper.ApplyDescriptiveMetadata(movie, local.Metadata);
+                        LocalLibraryMetadataMapper.FillMissingRuntimeFromMedia(movie, local.Metadata);
                         nfoApplied = true;
                         // A folder without an .nfo has no genres to offer: leave the movie's tags alone.
                         rawGenres = local.Metadata.IsGenerated ? null : local.Metadata.Genres;
