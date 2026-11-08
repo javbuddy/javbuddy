@@ -1,6 +1,7 @@
 using Javbuddy.Services.ActorEnrichment;
 using Javbuddy.Services.ActorEnrichment.Sources;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Api;
 using Javbuddy.Services.Backups;
 using Javbuddy.Services.DeoVr;
 using Javbuddy.Services.Ffmpeg;
@@ -169,6 +170,7 @@ public static class ServiceRegistration
         services.AddSingleton<LibraryStatisticsCache>();
         services.AddScoped<ILibraryStatisticsService, LibraryStatisticsService>();
         services.AddScoped<IMovieDetailQueryService, MovieDetailQueryService>();
+        services.AddScoped<ILibraryApiService, LibraryApiService>();
         services.AddScoped<IActorDetailQueryService, ActorDetailQueryService>();
         services.AddScoped<ISearchService, SearchService>();
 
