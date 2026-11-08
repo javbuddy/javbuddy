@@ -149,8 +149,12 @@ public class MovieStillsGenerateModalTests : BunitContext
         await Task.Delay(100);
         Assert.NotEmpty(cut.FindAll(".stills-saving"));
         // ...and gives way to the result once the minimum has passed.
-        await cut.WaitForAssertionAsync(() => Assert.Equal(1, closedCount), TimeSpan.FromSeconds(5));
-        Assert.Empty(cut.FindAll(".stills-saving"));
+        // The saving flag is cleared (and rendered) just after OnClose is raised, so wait for it rather than read it at once.
+        await cut.WaitForAssertionAsync(() =>
+        {
+            Assert.Equal(1, closedCount);
+            Assert.Empty(cut.FindAll(".stills-saving"));
+        }, TimeSpan.FromSeconds(5));
     }
 
     [Fact]
