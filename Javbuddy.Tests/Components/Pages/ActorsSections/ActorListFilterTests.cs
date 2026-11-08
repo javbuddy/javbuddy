@@ -1,4 +1,5 @@
 using Javbuddy.Components.Pages.ActorsSections;
+using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 
 namespace Javbuddy.Tests.Components.Pages.ActorsSections;
@@ -41,6 +42,59 @@ public class ActorListFilterTests
         filter.CycleStatus();
         Assert.Equal([3], Ids(filter));
         Assert.Equal("Retired only", filter.StatusFilterLabel);
+    }
+
+    [Fact]
+    public void ContentTypes_KeepActorsWithAnySelectedType_AndRoundTripThroughTheViewState()
+    {
+        var actors = new[]
+        {
+            new ActorCardModel(1, "A", 2, false, CensoredCount: 2),
+            new ActorCardModel(2, "B", 2, false, CensoredCount: 1, UncensoredCount: 1),
+            new ActorCardModel(3, "C", 1, false, DecensoredCount: 1),
+        };
+        var filter = new ActorListFilter();
+
+        filter.ContentTypes.Add(MovieContentType.Uncensored);
+        Assert.Equal([2], filter.Apply(actors).Select(a => a.Id).ToList());
+        Assert.Equal(1, filter.ActiveFilterCount);
+
+        var restored = new ActorListFilter();
+        restored.Apply(filter.ToViewState());
+        Assert.Contains(MovieContentType.Uncensored, restored.ContentTypes);
+
+        filter.ContentTypes.Add(MovieContentType.Decensored);
+        Assert.Equal([2, 3], filter.Apply(actors).Select(a => a.Id).ToList());
+
+        filter.ClearContentTypes();
+        filter.CycleContentType(MovieContentType.Decensored);
+        filter.CycleContentType(MovieContentType.Decensored);
+        Assert.Contains(MovieContentType.Decensored, filter.ExcludedContentTypes);
+        Assert.Equal([1, 2], filter.Apply(actors).Select(a => a.Id).ToList());
+
+        var restoredExcluded = new ActorListFilter();
+        restoredExcluded.Apply(filter.ToViewState());
+        Assert.Contains(MovieContentType.Decensored, restoredExcluded.ExcludedContentTypes);
+
+        filter.Clear();
+        Assert.Equal(0, filter.ActiveFilterCount);
+    }
+
+    [Fact]
+    public void SortByContentTypeCount_OrdersByThatCount_AndShowsItAsTheCardBadge()
+    {
+        var actors = new[]
+        {
+            new ActorCardModel(1, "A", 1, false, UncensoredCount: 1),
+            new ActorCardModel(2, "B", 3, false, UncensoredCount: 3),
+        };
+        var filter = new ActorListFilter();
+
+        filter.SetSort("uncensored");
+
+        Assert.Equal([2, 1], filter.Apply(actors).Select(a => a.Id).ToList());
+        Assert.Equal("3 uncensored", ActorCardText.SortValueBadge(actors[1], "uncensored"));
+        Assert.True(ActorCardText.SortsByAttribute("uncensored"));
     }
 
     [Fact]
@@ -105,7 +159,7 @@ public class ActorListFilterTests
         var restored = CreateFilter();
         restored.Apply(filter.ToViewState());
 
-        Assert.Equal(filter.ToViewState() with { CupSizeFilter = null }, restored.ToViewState() with { CupSizeFilter = null });
+        Assert.Equal(filter.ToViewState() with { CupSizeFilter = null, ContentTypeFilter = null, ExcludedContentTypeFilter = null }, restored.ToViewState() with { CupSizeFilter = null, ContentTypeFilter = null, ExcludedContentTypeFilter = null });
         Assert.Equal(["B"], restored.CupSizes);
     }
 

@@ -1,4 +1,6 @@
+using Javbuddy.Models;
 using Javbuddy.Services.Actors;
+using Javbuddy.Services.Common;
 
 namespace Javbuddy.Components.Pages.ActorsSections;
 
@@ -14,7 +16,7 @@ public enum ActorViewMode { Grid, Table }
 /// over the full actor list.</summary>
 public sealed class ActorListFilter
 {
-    public static readonly string[] SortFields = ["name", "movie_count", "owned", "missing", "image_count", "recent", "favorites", "age", "height", "cup_size"];
+    public static readonly string[] SortFields = ["name", "movie_count", "owned", "missing", "image_count", "censored", "uncensored", "decensored", "recent", "favorites", "age", "height", "cup_size"];
 
     public string Text { get; set; } = "";
     public ActorMovieFilter Movies { get; set; } = ActorMovieFilter.All;
@@ -22,6 +24,23 @@ public sealed class ActorListFilter
     public ActorImageFilter Images { get; set; } = ActorImageFilter.All;
     public ActorStatusFilter Status { get; set; } = ActorStatusFilter.All;
     public ActorTransgenderFilter Transgender { get; set; } = ActorTransgenderFilter.All;
+    /// <summary>Keeps actors with at least one movie of any selected type; empty means no filtering.</summary>
+    public HashSet<MovieContentType> ContentTypes { get; } = [];
+
+    /// <summary>Drops actors with any movie of a selected type.</summary>
+    public HashSet<MovieContentType> ExcludedContentTypes { get; } = [];
+
+    /// <summary>Steps a content type through include, exclude and off, as the Movies page's excludable groups do.</summary>
+    public void CycleContentType(MovieContentType type)
+    {
+        ContentTypes.CycleInclusion(ExcludedContentTypes, type);
+    }
+
+    public void ClearContentTypes()
+    {
+        ContentTypes.Clear();
+        ExcludedContentTypes.Clear();
+    }
     public bool JellyfinLinkedOnly { get; set; }
     public bool FavoritesOnly { get; set; }
     public bool NoMetadataOnly { get; set; }
@@ -45,6 +64,7 @@ public sealed class ActorListFilter
         (Movies != ActorMovieFilter.All ? 1 : 0) +
         (Photo != ActorPhotoFilter.All ? 1 : 0) +
         (Images != ActorImageFilter.All ? 1 : 0) +
+        ContentTypes.Count + ExcludedContentTypes.Count +
         (JellyfinLinkedOnly ? 1 : 0) +
         (FavoritesOnly ? 1 : 0) +
         (NoMetadataOnly ? 1 : 0) +
@@ -60,6 +80,7 @@ public sealed class ActorListFilter
     /// favorites yet" rather than "nothing matches".</summary>
     public bool OnlyFavoritesFiltered =>
         FavoritesOnly && Movies == ActorMovieFilter.All && Photo == ActorPhotoFilter.All && Images == ActorImageFilter.All
+        && ContentTypes.Count == 0 && ExcludedContentTypes.Count == 0
         && !JellyfinLinkedOnly && CupSizes.Count == 0 && string.IsNullOrWhiteSpace(Text);
 
     public string MovieFilterLabel => Movies == ActorMovieFilter.NoMovies ? "No Movies" : "Has Movies";
@@ -146,6 +167,7 @@ public sealed class ActorListFilter
         Movies = ActorMovieFilter.All;
         Photo = ActorPhotoFilter.All;
         Images = ActorImageFilter.All;
+        ClearContentTypes();
         Status = ActorStatusFilter.All;
         Transgender = ActorTransgenderFilter.All;
         JellyfinLinkedOnly = false;
@@ -163,7 +185,8 @@ public sealed class ActorListFilter
         JellyfinLinkedOnly, FavoritesOnly, CupSizes.ToList(), HeightMin, HeightMax,
         SortField, SortDescending,
         NoMetadataOnly: NoMetadataOnly, MissingMoviesOnly: MissingMoviesOnly,
-        TransgenderFilter: Transgender);
+        TransgenderFilter: Transgender,
+        ContentTypeFilter: ContentTypes.ToList(), ExcludedContentTypeFilter: ExcludedContentTypes.ToList());
 
     public void Apply(ActorsViewState state)
     {
@@ -186,6 +209,15 @@ public sealed class ActorListFilter
         NoMetadataOnly = state.NoMetadataOnly;
         MissingMoviesOnly = state.MissingMoviesOnly;
         Transgender = state.TransgenderFilter;
+        ClearContentTypes();
+        if (state.ContentTypeFilter is not null)
+        {
+            ContentTypes.UnionWith(state.ContentTypeFilter);
+        }
+        if (state.ExcludedContentTypeFilter is not null)
+        {
+            ExcludedContentTypes.UnionWith(state.ExcludedContentTypeFilter);
+        }
     }
 
     public IEnumerable<ActorCardModel> Apply(IEnumerable<ActorCardModel> actors)
@@ -227,6 +259,16 @@ public sealed class ActorListFilter
         else if (Images == ActorImageFilter.NoImages)
         {
             query = query.Where(a => a.ImageCount == 0);
+        }
+
+        if (ContentTypes.Count > 0)
+        {
+            query = query.Where(a => ContentTypes.Any(type => a.CountOf(type) > 0));
+        }
+
+        if (ExcludedContentTypes.Count > 0)
+        {
+            query = query.Where(a => !ExcludedContentTypes.Any(type => a.CountOf(type) > 0));
         }
 
         if (JellyfinLinkedOnly)
@@ -295,6 +337,12 @@ public sealed class ActorListFilter
             ("height", true) => query.OrderBy(a => !a.HeightCm.HasValue).ThenByDescending(a => a.HeightCm).ThenBy(a => a.DisplayName),
             ("age", false) => query.OrderBy(a => !a.Age.HasValue).ThenBy(a => a.Age).ThenBy(a => a.DisplayName),
             ("age", true) => query.OrderBy(a => !a.Age.HasValue).ThenByDescending(a => a.Age).ThenBy(a => a.DisplayName),
+            ("censored", false) => query.OrderBy(a => a.CensoredCount).ThenBy(a => a.DisplayName),
+            ("censored", true) => query.OrderByDescending(a => a.CensoredCount).ThenBy(a => a.DisplayName),
+            ("uncensored", false) => query.OrderBy(a => a.UncensoredCount).ThenBy(a => a.DisplayName),
+            ("uncensored", true) => query.OrderByDescending(a => a.UncensoredCount).ThenBy(a => a.DisplayName),
+            ("decensored", false) => query.OrderBy(a => a.DecensoredCount).ThenBy(a => a.DisplayName),
+            ("decensored", true) => query.OrderByDescending(a => a.DecensoredCount).ThenBy(a => a.DisplayName),
             ("owned", false) => query.OrderBy(a => a.OwnedCount).ThenBy(a => a.DisplayName),
             ("owned", true) => query.OrderByDescending(a => a.OwnedCount).ThenBy(a => a.DisplayName),
             ("missing", false) => query.OrderBy(a => a.MissingCount).ThenBy(a => a.DisplayName),
@@ -333,7 +381,9 @@ public sealed record ActorsViewState(
     bool NoMetadataOnly = false,
     bool MissingMoviesOnly = false,
     List<string>? TableColumns = null,
-    ActorTransgenderFilter TransgenderFilter = ActorTransgenderFilter.All)
+    ActorTransgenderFilter TransgenderFilter = ActorTransgenderFilter.All,
+    List<MovieContentType>? ContentTypeFilter = null,
+    List<MovieContentType>? ExcludedContentTypeFilter = null)
 {
     public const string CookieName = "javbuddy-actors-view";
     public const int MaxSizeStep = 3;

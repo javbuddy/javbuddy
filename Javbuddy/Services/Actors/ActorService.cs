@@ -82,9 +82,19 @@ public record ActorCardModel(
     bool IsRetired = false,
     int? HeightCm = null,
     int OwnedCount = 0,
-    bool IsTransgender = false)
+    bool IsTransgender = false,
+    int CensoredCount = 0,
+    int UncensoredCount = 0,
+    int DecensoredCount = 0)
 {
     public int MissingCount => Math.Max(0, MovieCount - OwnedCount);
+
+    public int CountOf(MovieContentType type) => type switch
+    {
+        MovieContentType.Uncensored => UncensoredCount,
+        MovieContentType.Decensored => DecensoredCount,
+        _ => CensoredCount
+    };
 
     public int? Age => ActorPhysicalAttributesHelper.CalculateAge(BirthDate);
 
@@ -874,6 +884,9 @@ public class ActorService(
                 a.JellyfinPersonId,
                 MovieCount = a.MovieActors.Count,
                 OwnedCount = a.MovieActors.Count(ma => ma.Movie.Status == MovieStatus.Got),
+                CensoredCount = a.MovieActors.Count(ma => ma.Movie.ContentType == MovieContentType.Censored),
+                UncensoredCount = a.MovieActors.Count(ma => ma.Movie.ContentType == MovieContentType.Uncensored),
+                DecensoredCount = a.MovieActors.Count(ma => ma.Movie.ContentType == MovieContentType.Decensored),
                 ImageCount = db.ActorPhotos.Count(photo => photo.ActorId == a.Id),
                 ImageUpdatedAt = db.ActorImages
                     .Where(ai => ai.ActorId == a.Id && ai.Variant == "thumb")
@@ -906,7 +919,10 @@ public class ActorService(
             a.IsRetired,
             a.HeightCm,
             a.OwnedCount,
-            a.IsTransgender
+            a.IsTransgender,
+            a.CensoredCount,
+            a.UncensoredCount,
+            a.DecensoredCount
         )).ToList();
     }
 

@@ -844,6 +844,36 @@ public class ActorServiceTests
     }
 
     [Fact]
+    public async Task GetActorCardsAsync_CountsMoviesPerContentType()
+    {
+        using var factory = new TestDbContextFactory();
+        int actorId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Yua", LastName = "Mikami" };
+            var movies = new[]
+            {
+                new Movie { Code = "CEN-001", ContentType = MovieContentType.Censored },
+                new Movie { Code = "UNC-001", ContentType = MovieContentType.Uncensored },
+                new Movie { Code = "UNC-002", ContentType = MovieContentType.Uncensored },
+                new Movie { Code = "DEC-001", ContentType = MovieContentType.Decensored },
+            };
+            db.Actors.Add(actor);
+            db.Movies.AddRange(movies);
+            await db.SaveChangesAsync();
+            actorId = actor.Id;
+            db.MovieActors.AddRange(movies.Select(m => new MovieActor { MovieId = m.Id, ActorId = actorId }));
+            await db.SaveChangesAsync();
+        }
+
+        var card = (await new ActorService(factory).GetActorCardsAsync()).Single(c => c.Id == actorId);
+
+        Assert.Equal(1, card.CensoredCount);
+        Assert.Equal(2, card.UncensoredCount);
+        Assert.Equal(1, card.DecensoredCount);
+    }
+
+    [Fact]
     public async Task MergeAsync_MovesApexActorsOntoTheTarget()
     {
         using var factory = new TestDbContextFactory();

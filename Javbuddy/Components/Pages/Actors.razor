@@ -105,6 +105,7 @@ else
                     }
                 </button>
                 <div class="sort-dropdown-divider"></div>
+                <MultiSelectFilterGroup GroupLabel="Content Type" Options="@ContentTypeFilterOptions" Excludable="true" />
                 <ChipMultiSelectGroup GroupLabel="Cup Size" Options="@CupSizeFilterOptions" OnSelectAll="() => ApplyFilterAsync(() => filter.CupSizes.UnionWith(availableCupSizes))" OnSelectNone="() => ApplyFilterAsync(filter.CupSizes.Clear)" />
                 @if (filter.HeightBounds is { } heightBounds)
                 {
@@ -528,6 +529,14 @@ else
         change();
         return ResetWindow();
     }
+
+    private IReadOnlyList<MultiSelectOption> ContentTypeFilterOptions => MovieFilterOptions.ContentTypes
+        .Select(type => new MultiSelectOption(
+            MovieFilterOptions.ContentTypeLabel(type),
+            filter.ContentTypes.Contains(type),
+            EventCallback.Factory.Create(this, () => ApplyFilterAsync(() => filter.CycleContentType(type))),
+            IsExcluded: filter.ExcludedContentTypes.Contains(type)))
+        .ToList();
 
     private IReadOnlyList<MultiSelectOption> CupSizeFilterOptions => availableCupSizes
         .Select(cup => new MultiSelectOption(

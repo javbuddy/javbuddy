@@ -460,6 +460,25 @@ public class MovieFilterToolbarTests : BunitContext
     }
 
     [Fact]
+    public void ExcludedContentTypes_ShowStruckThroughWithACross_AndCountInTheBadges()
+    {
+        var cut = Render<MovieFilterToolbar>(p => p
+            .Add(x => x.Excludable, true)
+            .Add(x => x.ContentTypeFilter, new HashSet<MovieContentType> { MovieContentType.Censored })
+            .Add(x => x.ExcludedContentTypeFilter, new HashSet<MovieContentType> { MovieContentType.Uncensored }));
+
+        Assert.Contains("Filter (2)", cut.Markup);
+        OpenFilterMenu(cut);
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Content Type")).Click();
+
+        var items = cut.FindAll("button.sort-dropdown-subitem");
+        var uncensored = items.Single(b => b.TextContent.Contains("Uncensored"));
+        Assert.Contains("multiselect-excluded", uncensored.ClassList);
+        Assert.Contains("✕", uncensored.TextContent);
+        Assert.Equal("Click to clear", uncensored.GetAttribute("title"));
+    }
+
+    [Fact]
     public void ReleasesBrowseMode_DoesNotShowExcludedStudios()
     {
         var cut = Render<MovieFilterToolbar>(p => p

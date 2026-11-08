@@ -815,6 +815,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         Assert.Equal(["CT-002", "CT-003"], await FilteredCodes(new(ContentTypes: [MovieContentType.Uncensored, MovieContentType.Decensored])));
         Assert.Equal(["CT-001"], await FilteredCodes(new(ContentTypes: [MovieContentType.Censored])));
         Assert.Equal(["CT-001", "CT-002", "CT-003"], await FilteredCodes(new()));
+        Assert.Equal(["CT-001", "CT-003"], await FilteredCodes(new(ExcludedContentTypes: [MovieContentType.Uncensored])));
     }
 
     [Fact]

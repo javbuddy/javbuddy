@@ -32,7 +32,8 @@ public sealed record MovieGridFilter(
     IReadOnlyCollection<string>? ExcludedGenres = null,
     IReadOnlyCollection<int>? ExcludedActorIds = null,
     IReadOnlyCollection<int>? ExcludedActorTagIds = null,
-    IReadOnlyCollection<MovieContentType>? ContentTypes = null);
+    IReadOnlyCollection<MovieContentType>? ContentTypes = null,
+    IReadOnlyCollection<MovieContentType>? ExcludedContentTypes = null);
 
 /// <summary>A tracked actor offered by an actor-name filter.</summary>
 public sealed record MovieActorOption(int Id, string Name);
@@ -425,6 +426,7 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         query = MovieFilterPredicates.WhereResolutions(query, filter.Resolutions);
         query = MovieFilterPredicates.WhereScanTypes(query, filter.ScanTypes);
         query = MovieFilterPredicates.WhereContentTypes(query, filter.ContentTypes);
+        query = MovieFilterPredicates.WhereNotContentTypes(query, filter.ExcludedContentTypes);
         query = MovieFilterPredicates.WhereCodecs(query, filter.Codecs);
         query = MovieFilterPredicates.WhereStudios(query, filter.Studios);
         query = MovieFilterPredicates.WhereNotStudios(query, filter.ExcludedStudios);

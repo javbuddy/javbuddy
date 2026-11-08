@@ -52,6 +52,31 @@ public class MovieGridFilterStateTests
     }
 
     [Fact]
+    public void ClearBesidesNavigationTargets_WithAContentTypeTarget_ClearsExcludedTypesAndReportsTheChange()
+    {
+        var state = new MovieGridFilterState();
+        state.ContentTypes.Add(MovieContentType.Uncensored);
+        state.ExcludedContentTypes.Add(MovieContentType.Decensored);
+
+        Assert.True(state.ClearBesidesNavigationTargets(contentTypeTarget: MovieContentType.Uncensored));
+        Assert.Empty(state.ExcludedContentTypes);
+    }
+
+    [Fact]
+    public void ExcludedContentTypes_FlowIntoTheFilter_TheCount_AndTheSavedView()
+    {
+        var state = new MovieGridFilterState();
+        state.ExcludedContentTypes.Add(MovieContentType.Decensored);
+
+        Assert.Equal([MovieContentType.Decensored], state.ToFilter().ExcludedContentTypes);
+        Assert.True(state.HasActiveFilters);
+
+        var restored = new MovieGridFilterState();
+        restored.Apply(state.ToViewState());
+        Assert.Equal([MovieContentType.Decensored], restored.ExcludedContentTypes);
+    }
+
+    [Fact]
     public void ClearBesidesNavigationTargets_WithAContentTypeTargetOnAnUnfilteredGrid_ReportsAChange()
     {
         var state = new MovieGridFilterState();

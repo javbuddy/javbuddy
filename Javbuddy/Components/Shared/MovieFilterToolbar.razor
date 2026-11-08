@@ -38,7 +38,7 @@
                 }
                 <MultiSelectFilterGroup GroupLabel="Resolution" Options="@ResolutionFilterOptions" />
                 <MultiSelectFilterGroup GroupLabel="Scan Type" Options="@ScanTypeFilterOptions" />
-                <MultiSelectFilterGroup GroupLabel="Content Type" Options="@ContentTypeFilterOptions" />
+                <MultiSelectFilterGroup GroupLabel="Content Type" Options="@ContentTypeFilterOptions" Excludable="@(Excludable && ExcludedContentTypeFilter is not null)" />
                 @if (AvailableCodecs.Count > 0)
                 {
                     <MultiSelectFilterGroup GroupLabel="Codec" Options="@CodecFilterOptions" />
@@ -166,6 +166,8 @@
     [Parameter] public EventCallback<MovieScanTypeFilterOption> OnToggleScanType { get; set; }
     [Parameter] public IReadOnlySet<MovieContentType> ContentTypeFilter { get; set; } = new HashSet<MovieContentType>();
     [Parameter] public EventCallback<MovieContentType> OnToggleContentType { get; set; }
+    /// <summary>The content types to exclude; null on a page that can't, which leaves the group include-only.</summary>
+    [Parameter] public IReadOnlySet<MovieContentType>? ExcludedContentTypeFilter { get; set; }
     [Parameter] public IReadOnlySet<NfoDriftKind> NfoDriftFilter { get; set; } = new HashSet<NfoDriftKind>();
     [Parameter] public EventCallback<NfoDriftKind> OnToggleNfoDrift { get; set; }
 
@@ -292,6 +294,7 @@
             + ResolutionFilter.Count
             + ScanTypeFilter.Count
             + ContentTypeFilter.Count
+            + (ExcludedContentTypeFilter?.Count ?? 0)
             + NfoDriftFilter.Count
             + CodecFilter.Count
             + StudioFilter.Count
@@ -402,7 +405,8 @@
         .Select(type => new MultiSelectOption(
             MovieFilterOptions.ContentTypeLabel(type),
             ContentTypeFilter.Contains(type),
-            EventCallback.Factory.Create(this, () => OnToggleContentType.InvokeAsync(type))))
+            EventCallback.Factory.Create(this, () => OnToggleContentType.InvokeAsync(type)),
+            IsExcluded: ExcludedContentTypeFilter?.Contains(type) ?? false))
         .ToList();
 
     private IReadOnlyList<MultiSelectOption> NfoDriftFilterOptions => MovieFilterOptions.NfoDriftKinds

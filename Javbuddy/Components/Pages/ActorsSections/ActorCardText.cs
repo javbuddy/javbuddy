@@ -17,6 +17,9 @@ public static class ActorCardText
         new("cup", "Cup", "60px", "cup_size", a => a.CupSize ?? "—"),
         new("owned", "Owned", "75px", "owned", a => a.OwnedCount.ToString()),
         new("missing", "Missing", "80px", "missing", a => a.MissingCount.ToString()),
+        new("censored", "Censored", "90px", "censored", a => a.CensoredCount.ToString()),
+        new("uncensored", "Uncensored", "100px", "uncensored", a => a.UncensoredCount.ToString()),
+        new("decensored", "Decensored", "100px", "decensored", a => a.DecensoredCount.ToString()),
         new("images", "Images", "75px", "image_count", a => a.ImageCount.ToString()),
         new("added", "Added", "110px", "recent", a => a.CreatedAt.ToString("yyyy-MM-dd")),
         new("state", "State", "minmax(160px, 1.5fr)", null, _ => ""),
@@ -29,6 +32,9 @@ public static class ActorCardText
         "missing" => "Missing",
         "age" => "Age",
         "image_count" => "Image Count",
+        "censored" => "Censored Count",
+        "uncensored" => "Uncensored Count",
+        "decensored" => "Decensored Count",
         "recent" => "Recently Added",
         "favorites" => "Favorites",
         "height" => "Height",
@@ -39,13 +45,16 @@ public static class ActorCardText
     // Surfaces the value being sorted on directly on each card, since the grid's reordering
     // alone gives no visible indication of the value it's ordering by (unlike Movie Count,
     // Image Count, etc. which are already shown in actor-meta).
-    public static bool SortsByAttribute(string sortField) => sortField is "age" or "height" or "cup_size";
+    public static bool SortsByAttribute(string sortField) => sortField is "age" or "height" or "cup_size" or "censored" or "uncensored" or "decensored";
 
     public static string? SortValueBadge(ActorCardModel actor, string sortField) => sortField switch
     {
         "age" => actor.Age is int age ? $"{age} yrs" : null,
         "height" => ActorPhysicalAttributesHelper.FormatHeight(actor.HeightCm),
         "cup_size" => actor.CupSize is null ? null : $"Cup {actor.CupSize}",
+        "censored" => $"{actor.CensoredCount} censored",
+        "uncensored" => $"{actor.UncensoredCount} uncensored",
+        "decensored" => $"{actor.DecensoredCount} decensored",
         _ => null
     };
 
