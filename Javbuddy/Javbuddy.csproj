@@ -26,6 +26,8 @@
          image doesn't use it: `-r linux-x64` skips the distro-specific RIDs, and the Dockerfile
          installs libmediainfo0v5 from apt instead. -->
     <PackageReference Include="MediaInfo.Wrapper.Core" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

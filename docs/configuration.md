@@ -24,6 +24,7 @@ In Linux, Docker, and shell environments, nested JSON configuration keys use dou
 | `ImageUpload:MaxSizeMb` | `ImageUpload__MaxSizeMb` |
 | `ImageUpload:MaxBatchFiles` | `ImageUpload__MaxBatchFiles` |
 | `ObjectStore:Path` | `ObjectStore__Path` |
+| `Api:AllowedOrigins` | `Api__AllowedOrigins` |
 
 ---
 
@@ -121,6 +122,14 @@ It overrides the **Enable DeoVR** setting of **Settings > DeoVR**, which then sh
 | Key | Environment Variable | Default | Description |
 |---|---|---|---|
 | `DeoVr:Enabled` | `DeoVr__Enabled` | `false` | Serves the `/deovr` JSON API for the DeoVR player. Off, every `/deovr` route answers 404. |
+
+### Public API & MCP
+
+`/api/v1` and `/mcp` are unauthenticated, like the UI (see [REST API and MCP server](api.md)). Requests carrying an `Origin` header (browsers) are accepted only from the app's own origin or one listed here; requests without one (curl, MCP clients) always pass. The own origin is taken from the request as Javbuddy sees it, not from `X-Forwarded-*`, so behind a TLS-terminating reverse proxy list the public `https://` origin.
+
+| Key | Environment Variable | Default | Description |
+|---|---|---|---|
+| `Api:AllowedOrigins` | `Api__AllowedOrigins` | *(empty)* | Comma-separated extra origins (`scheme://host[:port]`) allowed to call the API and MCP from a browser, e.g. a browser extension's `chrome-extension://<id>`. |
 
 ### Path Mapping
 

@@ -45,6 +45,9 @@ Javbuddy is a self-hosted manager for JAV collections, modeled on Sonarr/Radarr:
 - **Activity** shows the live download queue and history, with an active-download count in the sidebar.
 - **Torrent sort** is a wizard for a finished download: it identifies the movie codes in it, scrapes their metadata through javinizer-go, lets you review posters and screenshots, then renames and moves the files into your library. Multi-part VR videos can be merged into one file first, and the download can be cleaned up from qBittorrent at the end.
 
+### API & MCP
+- A JSON **REST API** (`/api/v1`, with an OpenAPI document) to look codes up, add movies, edit metadata and grab releases from scripts or a browser extension, and an **MCP server** (`/mcp`) so an AI assistant like Claude Code can read and tidy up metadata, tags and cast. Both are unauthenticated like the UI, so keep them off the internet. See [REST API and MCP server](docs/api.md).
+
 ### System
 - **Status**: integration health checks and disk space.
 - **Backups**: automatic and on-demand database backups with retention, restore (applied on the next start), and import/export of backup files.
@@ -123,6 +126,7 @@ dotnet run --project Javbuddy
 - [Library guide](docs/library-guide.md) — folder layout, importing an existing collection, Torrent sort, path mappings
 - [Configuration reference](docs/configuration.md) — every setting, storage tiers, Compose and Kubernetes examples
 - [Local library format](docs/local-library-format.md) — folder layout, `.nfo` dialects, `.actors/`
+- [REST API and MCP server](docs/api.md) — `/api/v1`, `/mcp`, the Origin guard, Claude Code setup
 - [Jellyfin integration](docs/jellyfin-integration.md) — ownership sync, linking, library selection
 - [Screenshots](docs/screenshots.md) — the main pages, shown with a fictional demo library
 - [Credits & inspirations](docs/credits.md) — the projects and data sources Javbuddy builds on

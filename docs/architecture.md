@@ -40,6 +40,15 @@ The same long-lived-circuit reasoning is why Blazor CSS isolation (`.razor.css`)
 
 Dependency direction: Razor pages/components → concrete services (`Services/<Group>/*Service.cs`) → integration clients / `Infrastructure/` / `IDbContextFactory<AppDbContext>`. Components should not inject `IDbContextFactory<AppDbContext>` or an integration client directly for anything beyond a single read-only display query — mutation and non-trivial or cross-cutting queries belong in a service.
 
+## Public API and MCP
+
+`Services/Api/` holds `ILibraryApiService` / `LibraryApiService` and `IReleaseApiService` / `ReleaseApiService`, the **facade** both public surfaces call. It resolves movie codes (zero-padding tolerant), composes the existing movie, tag, cast, `.nfo`, Prowlarr and qBittorrent services, validates input (`MovieMetadataPatch`) and returns an `ApiResult<T>` (ok, not found, conflict, invalid, upstream, not configured, gone) instead of throwing or knowing about HTTP. Its DTOs live in `Services/Api/Contracts/`.
+
+- `Startup/ApiEndpoints.cs` maps `/api/v1` and turns `ApiResult` into JSON or RFC 7807 problems (`ApiResults.cs`, `ApiBody.cs`). `OriginGuardFilter.cs` guards `/api/v1` and `/mcp`; the OpenAPI document is served at `/openapi/v1.json`.
+- `Mcp/` holds the MCP tool classes (`MovieTools`, `TagTools`, `CastTools`, `NfoTools`), thin wrappers over the same facade; `Startup/McpRegistration.cs` registers them and maps `/mcp`.
+
+A new API capability goes into the facade first, then gets a REST route and (if useful) an MCP tool, so the two surfaces stay in sync and neither grows its own logic. Both surfaces are unauthenticated; see `docs/api.md`.
+
 ## Data layer
 
 EF Core + SQLite, via `AppDbContext` and `IDbContextFactory<AppDbContext>` (see above). Schema changes ship as EF Core migrations that upgrade existing databases in place; recreating the DB from scratch is not an acceptable fallback.

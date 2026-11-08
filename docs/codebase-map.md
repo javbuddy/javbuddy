@@ -153,7 +153,7 @@ Per-integration subfolders (`Services/<Integration>/`):
 | `Ffmpeg/` | `FfmpegClient`, `FfmpegBinaryResolver`, `FfmpegModels` | Wraps `ffmpeg` for video processing (used by `VrMerge/`) |
 | `VrMerge/` | `VrMergeService`, `VrPartDetector`, `VrMergeJobTracker`, `VrMergeModels` | VR multi-part file merge workflow |
 
-`Startup/` (outside `Services/`) — `ServiceRegistration` holds Program.cs's DI registrations as `Add*` extension methods (order matters for multi-registrations such as `IActorMetadataSource` and `IScheduledTask`), `MediaEndpoints.MapMediaEndpoints` the image/stream/trickplay/scene-media endpoints, and `DeoVrEndpoints.MapDeoVrEndpoints` the DeoVR JSON API.
+`Startup/` (outside `Services/`) — `ServiceRegistration` holds Program.cs's DI registrations as `Add*` extension methods (order matters for multi-registrations such as `IActorMetadataSource` and `IScheduledTask`), `MediaEndpoints.MapMediaEndpoints` the image/stream/trickplay/scene-media endpoints, `DeoVrEndpoints.MapDeoVrEndpoints` the DeoVR JSON API, and the public API and MCP (see `Api/` and `Mcp/` below): `ApiEndpoints.MapPublicApi` (`/api/v1`), `ApiResults` / `ApiBody` (ApiResult → JSON or problem details, JSON-only request bodies), `OriginGuardFilter` (the Origin check on `/api/v1` and `/mcp`), `McpRegistration` (`/mcp`).
 
 `Tasks/ScheduledTaskOverviewService.cs` is System > Tasks' read model (per-task last run and next due, recent history, the active run for the sidebar, a task's latest/last-completed run). Single-row settings are read with `ReadSingleRowAsync` (`Data/SingleRowSettingsQueryExtensions.cs`, untracked) or through `SingleRowSettingsRepository.GetAsync`; `R18DevSettingsService` and `MediaInfoSettingsService` are the per-source settings services for those two tiles.
 
@@ -165,6 +165,10 @@ Per-integration subfolders (`Services/<Integration>/`):
 
 `Trickplay/` — `TrickplayService` (a movie's scrub-bar trickplay: its locally generated set, else Jellyfin's when the fallback setting allows), `TrickplayStore` (the object store's `trickplay/<CODE>/<identity>/N.webp` sheets; `TrickplaySet` rows index them and are written last as the commit marker,; keyed by `TrickplayIdentity` = file name + duration + resolution), `TrickplayGenerator` (ffmpeg → a set), `TrickplayQueue` (one background worker, one movie at a time, progress in the sidebar via `TaskActivityTracker`), `TrickplayTrigger` (called by `LocalLibraryClient.RefreshMediaInfoOnlyAsync` when a video file changed), `TrickplayMainFiles` (the main file the way `MovieVideoFiles` picks it), `TrickplaySettingsService` (single-row settings, per-field `Trickplay__*` env overrides), `TrickplayLayout` + `TrickplayTiles` (the provider-neutral layout the ScrubBar/ClipEditor draw from). Local tiles are served at `/trickplay/{movieId}/{identity}/{index}.webp`. `HighlightTrickplayService` + `HighlightTrickplay` (a highlight's own denser set for the clip player, keyed by its range and the file's identity, generated on the `SceneMediaQueue`,; queued by `HighlightMediaService` and the backfill, never by playing). `TrickplayGenerationTracker` (which sets are generating right now and their percent, reported by `TrickplayGenerator`; the players show it in the scrub-bar preview via `TrickplayGeneratingPreview` and reload the set when it ends).
 
+`Api/` — the facade behind the public REST API and MCP server (docs/api.md): `LibraryApiService` (movie list/lookup/detail/add, metadata patch, tags, cast, `.nfo` preview/push, javinizer fetch; resolves codes zero-padding tolerantly), `ReleaseApiService` + `ReleaseSearchCache` (Prowlarr search and grab by guid, remembered 15 minutes), `MovieMetadataPatch` (applies `set`/`clear`), `MovieApiMapper`, `ApiResult`, `ApiLinks` (absolute `webUrl`), `ApiJson`, and `Contracts/` (the wire DTOs). Tests under `Javbuddy.Tests/Services/Api/`.
+
+`Mcp/` (outside `Services/`) — the MCP tools, thin wrappers over `ILibraryApiService`: `MovieTools`, `TagTools`, `CastTools`, `NfoTools`, plus `McpResults`. Tests under `Javbuddy.Tests/Mcp/`.
+
 `Tasks/` — `ScheduledTaskHostedService` + `ScheduledTaskRunner` run the background scheduler (System > Tasks); `IScheduledTask` implementations: `ImageCacheTask`, `JellyfinLinkSyncTask`, `QBittorrentSyncTask`, `LibraryRescanTask`, `R18DevImportTask`, `TrickplayBackfillTask` (only queues; the scheduler runs tasks one after another, so long work goes to a background queue), `DatabaseMaintenanceTask` (weekly `PRAGMA optimize`, plus `VACUUM` once free pages reach 10% of the file; runs inline), `DatabaseBackupTask` (opts into `IScheduledTask.RunImmediatelyWhenNeverRun`; creates the automatic database backups on System > Backups' frequency; `GetInterval()` reads the cached setting). The backup download endpoint is `Startup/BackupEndpoints.cs`.
 
 Unit tests for all of the above mirror this structure 1:1 under `Javbuddy.Tests/Services/` (namespace `Javbuddy.Tests.Services.<Folder>`) (e.g. `Services/Ffmpeg/FfmpegClient.cs` → `Javbuddy.Tests/Services/Ffmpeg/FfmpegClientTests.cs`) — a service file with no matching test file has no unit test coverage.
@@ -174,12 +178,14 @@ Unit tests for all of the above mirror this structure 1:1 under `Javbuddy.Tests/
 `Javbuddy.Tests/` (xUnit + bUnit + NSubstitute) mirrors the source tree:
 - `Components/Pages/`, `Components/Layout/`, `Components/Shared/` — bUnit render tests, one `*Tests.cs` per tested component (not every component has one — see tables above).
 - `Services/` (+ per-integration subfolders matching `Services/<Integration>/`) — unit tests for service/mapper/helper logic.
+- `Mcp/`, `Startup/` — tests for the MCP result helpers and the API's result mapping and Origin guard.
 - `Data/AppDbContextTests.cs` — EF Core/SQLite schema tests.
 - `TestSupport/` — `TestDbContextFactory` (in-memory SQLite), `FakeHttpClientFactory`/`FakeHttpMessageHandler` (HTTP client fakes), `ControlledStream` (chunked/blocking/failing response bodies), `StreamServiceStubs` (an `IMovieStreamService` where every movie is playable, for tests that render a player).
 
 `Javbuddy.E2ETests/` (xUnit + Playwright, real Kestrel) is organized by test *kind*, not by mirroring `Services/`/`Components/`:
 - `SmokeTests/` — one `<Page>PageTests.cs` per page, asserting it renders. Naming ties directly back to the page: `MoviesPageTests.cs` ↔ `Movies.razor`.
 - `Flows/` — multi-step interaction tests spanning one or more pages (e.g. `AddMovieFlowTests.cs`, `SettingsConnectionsFlowTests.cs`).
+- `Api/` — `ReadApiTests`, `WriteApiTests`, `ReleasesApiTests`, `McpTests`: the REST API and `/mcp` over real HTTP against the fake integrations.
 - `Fixtures/` — `E2EFixture`/`JavbuddyAppFactory` (shared real app+browser instance), `FakeServices/` (in-process fake `Javinizer`/`Jellyfin`/`Prowlarr`/`QBittorrent` servers).
 - `Support/DbSeeding.cs` — seed data for E2E runs.
 
