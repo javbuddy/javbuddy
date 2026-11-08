@@ -34,7 +34,7 @@
                     @HeaderActions
                     @if (!string.IsNullOrWhiteSpace(streamUrl) && versions.Count > 1)
                     {
-                        <select class="video-player-version-select" aria-label="Version" title="Switch to another version of this movie"
+                        <select class="video-player-version-select" aria-label="Version" @onkeydown="OnVersionKeyDown" @onkeydown:stopPropagation="true" title="Switch to another version of this movie"
                                 value="@playingFileId" @onchange="SwitchVersionAsync">
                             @foreach (var version in versions)
                             {
@@ -119,7 +119,10 @@
                                        SeekMaxSeconds="SeekMaxSeconds"
                                        HighlightJumpTargets="highlightJumpTargets"
                                        ApexJumpTargets="apexJumpTargets"
-                                       ScrubBarShownChanged="shown => scrubBarShown = shown" />
+                                       ScrubBarShownChanged="shown => scrubBarShown = shown"
+                                       OnNext="OnNext"
+                                       OnPrevious="OnPrevious"
+                                       HasPrevious="CanPrevious" />
                     @if (SidePanel is not null)
                     {
                         <aside class="video-player-side-panel">
@@ -151,6 +154,15 @@
 
     [Parameter] public string? ExternalWebUrl { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Set in a movie playlist (the Movies page's Play all / Shuffle): the scrub bar shows
+    /// Previous / Next movie arrows and N / P do the same.</summary>
+    [Parameter] public EventCallback OnNext { get; set; }
+
+    [Parameter] public EventCallback OnPrevious { get; set; }
+
+    /// <summary>Whether there is an earlier movie to go back to; Previous is disabled otherwise.</summary>
+    [Parameter] public bool CanPrevious { get; set; }
 
     [Parameter] public double? DurationSeconds { get; set; }
 
@@ -214,6 +226,9 @@
     /// before the ones the shell provides itself: seeking, fullscreen and Esc.</summary>
     [Parameter] public IReadOnlyList<KeyboardShortcut> Shortcuts { get; set; } = [];
 
+    private static readonly KeyboardShortcut[] PlaylistShortcuts =
+        [new(["N"], "Next movie"), new(["P"], "Previous movie")];
+
     private static readonly KeyboardShortcut CloseShortcut = new(["Esc"], "Close the player (in fullscreen: leave fullscreen first)");
 
     // F comes from the ScrubBar, the VR viewer, or the host's Controls; the browser's own
@@ -221,6 +236,7 @@
     private IReadOnlyList<KeyboardShortcut> AllShortcuts =>
     [
         .. Shortcuts,
+        .. (OnNext.HasDelegate ? PlaylistShortcuts : Array.Empty<KeyboardShortcut>()),
         .. (scrubBarShown && !vrMode ? [KeyboardShortcut.PlayPause] : Array.Empty<KeyboardShortcut>()),
         KeyboardShortcut.Seek,
         KeyboardShortcut.FrameStep,
@@ -550,11 +566,20 @@
         await CloseAsync();
     }
 
+    // The version list keeps its own keys (type-ahead, arrows) from reaching the player's N / P, but
+    // Escape still closes the player.
+    private Task OnVersionKeyDown(KeyboardEventArgs e) => e.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Escape")
         {
             await CloseAsync();
+        }
+        else if (OnNext.HasDelegate && SidePanel is null && !e.CtrlKey && !e.MetaKey && !e.AltKey && !e.ShiftKey)
+        {
+            if (e.Key is "n" or "N") await OnNext.InvokeAsync();
+            else if ((e.Key is "p" or "P") && CanPrevious) await OnPrevious.InvokeAsync();
         }
     }
 

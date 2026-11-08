@@ -9,6 +9,7 @@ using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Prowlarr;
 using Javbuddy.Services.R18Dev;
 using Javbuddy.Services.Torrents;
+using Javbuddy.Services.Trickplay;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Http;
@@ -121,6 +122,74 @@ public class MoviesTests : BunitContext
         Assert.Contains("All (2)", cut.Markup);
         Assert.Contains("Missing (1)", cut.Markup);
         Assert.Contains("Got (1)", cut.Markup);
+    }
+
+    private static bool IsDisabled(Bunit.IRenderedComponent<Movies> cut, string label) =>
+        cut.FindAll("button").Single(b => b.TextContent.Trim() == label).HasAttribute("disabled");
+
+    [Fact]
+    public void PlayButtons_AreDisabledForAnEmptyLibrary_AndForTheMissingFilter()
+    {
+        using var factory = SetUpServices();
+        var cut = Render<Movies>();
+        Assert.True(IsDisabled(cut, "Play all"));
+        Assert.True(IsDisabled(cut, "Shuffle"));
+
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "AAA-001", Status = MovieStatus.Missing });
+            db.Movies.Add(new Movie { Code = "AAA-002", Status = MovieStatus.Got });
+            db.SaveChanges();
+        }
+        cut = Render<Movies>();
+        Assert.False(IsDisabled(cut, "Play all"));
+        Assert.False(IsDisabled(cut, "Shuffle"));
+
+        cut.FindAll("button").Single(b => b.TextContent.Contains("Missing (")).Click();
+        cut.WaitForAssertion(() => Assert.True(IsDisabled(cut, "Play all")));
+        Assert.True(IsDisabled(cut, "Shuffle"));
+    }
+
+    [Fact]
+    public void PlayAll_PlaysOnlyGotMoviesWithAFile_WithNextAndPreviousKeys()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            var a = new Movie { Code = "AAA-001", Status = MovieStatus.Got };
+            var b = new Movie { Code = "AAA-002", Status = MovieStatus.Got };
+            var noFile = new Movie { Code = "AAA-003", Status = MovieStatus.Got };
+            var missing = new Movie { Code = "AAA-004", Status = MovieStatus.Missing };
+            db.Movies.AddRange(a, b, noFile, missing);
+            db.SaveChanges();
+            db.MovieFiles.AddRange(
+                new MovieFile { MovieId = a.Id, FileName = "AAA-001.mp4" },
+                new MovieFile { MovieId = b.Id, FileName = "AAA-002.mp4" });
+            db.SaveChanges();
+        }
+        Services.AddSingleton(StreamServiceStubs.AllPlayable());
+        Services.AddSingleton(Substitute.For<IMovieSubtitleService>());
+        Services.AddSingleton(Substitute.For<ITrickplayService>());
+        Services.AddSingleton(new TrickplayGenerationTracker());
+        var cut = Render<Movies>();
+
+        cut.FindAll("button").Single(b => b.TextContent.Trim() == "Play all").Click();
+        var first = cut.Find(".video-player-modal-code").TextContent;
+        var backdrop = cut.Find(".video-player-modal-backdrop");
+
+        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "p" });
+        Assert.Equal(first, cut.Find(".video-player-modal-code").TextContent);
+
+        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "n" });
+        var second = cut.Find(".video-player-modal-code").TextContent;
+        Assert.NotEqual(first, second);
+
+        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "p" });
+        Assert.Equal(first, cut.Find(".video-player-modal-code").TextContent);
+
+        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "n" });
+        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "n" });
+        Assert.Empty(cut.FindAll(".video-player-modal-backdrop"));
     }
 
     /// <summary>Seeds <paramref name="count"/> movies whose "added" sort order (CreatedAt

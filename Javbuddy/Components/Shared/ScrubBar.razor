@@ -14,6 +14,14 @@
 <div class="scrub-bar" @ref="root">
     @if (PlayerControls)
     {
+        @if (Playlist)
+        {
+            <button type="button" class="scrub-bar-btn" aria-label="Previous movie" title="Previous movie (P)" disabled="@(!HasPrevious)" @onclick="OnPrevious">
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                    <path d="M4 4a.5.5 0 0 1 1 0v3.248l6.267-3.636c.52-.302 1.233.043 1.233.696v7.384c0 .653-.713.998-1.233.696L5 8.752V12a.5.5 0 0 1-1 0V4z" />
+                </svg>
+            </button>
+        }
         <button type="button" class="scrub-bar-btn scrub-bar-play" aria-label="Play or pause" title="Play/pause (space)">
             <svg class="scrub-bar-icon-play" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
                 <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
@@ -22,6 +30,14 @@
                 <path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z" />
             </svg>
         </button>
+        @if (Playlist)
+        {
+            <button type="button" class="scrub-bar-btn" aria-label="Next movie" title="Next movie (N)" @onclick="OnNext">
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                    <path d="M12.5 4a.5.5 0 0 0-1 0v3.248L5.233 3.612C4.713 3.31 4 3.655 4 4.308v7.384c0 .653.713.998 1.233.696L11.5 8.752V12a.5.5 0 0 0 1 0V4z" />
+                </svg>
+            </button>
+        }
     }
     <div class="scrub-bar-track-wrap" aria-hidden="true" title="Click to jump to that point">
         <div class="scrub-bar-preview">
@@ -69,6 +85,17 @@
 </div>
 
 @code {
+    /// <summary>Set in a movie playlist (the Movies page's Play all / Shuffle): Previous / Next movie
+    /// arrows beside play/pause.</summary>
+    [Parameter] public EventCallback OnNext { get; set; }
+
+    [Parameter] public EventCallback OnPrevious { get; set; }
+
+    /// <summary>Whether there is an earlier movie; Previous is disabled otherwise.</summary>
+    [Parameter] public bool HasPrevious { get; set; }
+
+    private bool Playlist => OnNext.HasDelegate;
+
     /// <summary>Trickplay layout and tile URL template for the item being played; the bar shows no
     /// thumbnails when null.</summary>
     [Parameter] public TrickplayLayout? Trickplay { get; set; }

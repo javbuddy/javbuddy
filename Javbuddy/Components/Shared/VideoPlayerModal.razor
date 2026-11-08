@@ -1,6 +1,6 @@
 @using Javbuddy.Services.Trickplay
 
-@* Movie Detail's player: the shared VideoPlayerShell, with the scene and highlight
+@* The movie player (Movie Detail, and the Movies page's Play all / Shuffle): the shared VideoPlayerShell, with the scene and highlight
    editors in its side panel when opened for editing. *@
 <VideoPlayerShell Show="Show"
                   Title="@Title"
@@ -20,6 +20,9 @@
                   SidePanel="@(EditorShown ? EditorPanel(MovieId!.Value) : null)"
                   Shortcuts="@(EditorShown ? SceneShortcuts : [])"
                   MarkerJumpKeys="!EditorShown"
+                  OnNext="OnNext"
+                  OnPrevious="OnPrevious"
+                  CanPrevious="CanPrevious"
                   OnClose="CloseAsync" />
 
 @code {
@@ -28,6 +31,13 @@
     [Parameter] public string? Code { get; set; }
     [Parameter] public string? ExternalWebUrl { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Set to play a list of movies (the Movies page's Play all / Shuffle): Previous / Next buttons and N / P.</summary>
+    [Parameter] public EventCallback OnNext { get; set; }
+
+    [Parameter] public EventCallback OnPrevious { get; set; }
+
+    [Parameter] public bool CanPrevious { get; set; }
 
     /// <summary>The movie played.</summary>
     [Parameter] public int? MovieId { get; set; }

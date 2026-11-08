@@ -117,12 +117,41 @@ else
             </button>
         }
         <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="() => showOptionsModal = true">Options</button>
+        @* Every Got movie with a file the filters match, one after another in the player. *@
+        <button type="button" class="btn btn-sm btn-outline-secondary movies-play-btn" disabled="@PlayDisabled" @onclick="() => PlayAllAsync(shuffle: false)"
+                title="Play every movie shown that has a file, in this order">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
+                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
+            </svg>
+            Play all
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary movies-play-btn" disabled="@PlayDisabled" @onclick="() => PlayAllAsync(shuffle: true)"
+                title="Play every movie shown that has a file, in random order">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
+                <path fill-rule="evenodd" d="M0 3.5A.5.5 0 0 1 .5 3H1c2.202 0 3.827 1.24 4.874 2.418.49.552.865 1.102 1.126 1.532.26-.43.636-.98 1.126-1.532C9.173 4.24 10.798 3 13 3v1c-1.798 0-3.173 1.01-4.126 2.082A9.624 9.624 0 0 0 7.556 8a9.624 9.624 0 0 0 1.317 1.918C9.828 10.99 11.204 12 13 12v1c-2.202 0-3.827-1.24-4.874-2.418A10.595 10.595 0 0 1 7 9.05c-.26.43-.636.98-1.126 1.532C4.827 11.76 3.202 13 1 13H.5a.5.5 0 0 1 0-1H1c1.798 0 3.173-1.01 4.126-2.082A9.624 9.624 0 0 0 6.444 8a9.624 9.624 0 0 0-1.317-1.918C4.172 5.01 2.796 4 1 4H.5a.5.5 0 0 1-.5-.5z" />
+                <path d="M13 5.466V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192zm0 9v-3.932a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192z" />
+            </svg>
+            Shuffle
+        </button>
         </ChildContent>
     </MovieFilterToolbar>
 
     @if (showNfoPushModal)
     {
         <NfoDriftPushModal Filter="@filters.ToFilter()" OnClose="() => showNfoPushModal = false" />
+    }
+
+    @if (playingMovie is not null)
+    {
+        <VideoPlayerModal Show="true"
+                          Title="@playingMovie.DisplayName"
+                          Code="@playingMovie.Code"
+                          MovieId="@playingMovie.Id"
+                          DurationSeconds="@playingMovie.MediaDurationSeconds"
+                          CanPrevious="@(playlistIndex > 0)"
+                          OnNext="NextMovie"
+                          OnPrevious="PreviousMovie"
+                          OnClose="ClosePlayer" />
     }
 
     @if (showOptionsModal)
@@ -246,6 +275,50 @@ else
     private MovieRangeOptions rangeOptions = MovieRangeOptions.None;
 
     private bool showOptionsModal;
+    // Play all / Shuffle: the playable movies the filters match, fixed when the player opens (like the
+    // Scenes wall's playlist), and which one is on screen.
+    private Movie[]? playlist;
+    private int playlistIndex;
+    private Movie? playingMovie => playlist is null ? null : playlist[playlistIndex];
+
+    // Nothing to play when no movie matches, or when only Missing ones can (the Missing status filter).
+    private bool PlayDisabled => playlistLoading || BrowseActive || window.FilteredCount == 0 || filters.Status == MovieStatus.Missing;
+    private bool playlistLoading;
+
+    // Got movies with a local video file, in the grid's sort order, shuffled for Shuffle. Missing
+    // movies (and Got ones with no file) have nothing to play; if none match, nothing opens.
+    private async Task PlayAllAsync(bool shuffle)
+    {
+        if (playlistLoading) return;
+        playlistLoading = true;
+        try
+        {
+            var movies = (await GridQueries.GetWithFilesAsync(filters.ToFilter(), filters.ToSort())).ToArray();
+            if (movies.Length == 0) return;
+            if (shuffle) Random.Shared.Shuffle(movies);
+            playlist = movies;
+            playlistIndex = 0;
+        }
+        finally
+        {
+            playlistLoading = false;
+        }
+    }
+
+    // Next, or closing after the last movie.
+    private void NextMovie()
+    {
+        if (playlist is not null && playlistIndex + 1 < playlist.Length) playlistIndex++;
+        else ClosePlayer();
+    }
+
+    private void PreviousMovie()
+    {
+        if (playlistIndex > 0) playlistIndex--;
+    }
+
+    private void ClosePlayer() => playlist = null;
+
     private bool showNfoPushModal;
 
     // The bulk .nfo push is only offered while the grid is narrowed to drifting movies.

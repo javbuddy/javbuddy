@@ -81,3 +81,8 @@
 .movies-grid-hidden {
     display: none;
 }
+
+.movies-play-btn {
+    display: inline-flex;
+    align-items: center;
+}

@@ -11,7 +11,9 @@
     <div class="video-player-area">
         @if (Src is not null)
         {
-            <video class="video-player-media @VideoClass @(ScrubBarShown ? "video-player-scrub" : null) @(VrMode ? "video-player-vr" : null)"
+            @* Keyed by stream: another movie gets a fresh <video> (and its text tracks and drawn cue) instead of
+               the last one's. A clip of the same movie keeps it. *@
+            <video @key="videoStream" class="video-player-media @VideoClass @(ScrubBarShown ? "video-player-scrub" : null) @(VrMode ? "video-player-vr" : null)"
                    src="@Src"
                    controls="@(NativeControls && !OwnControls)"
                    controlslist="@(ScrubBarShown ? "nofullscreen" : null)"
@@ -19,7 +21,9 @@
                    autoplay>
                 @for (var i = 0; i < Subtitles.Count; i++)
                 {
-                    <track kind="subtitles" src="@Subtitles[i].Url" label="@Subtitles[i].Label" srclang="@Subtitles[i].Language" default="@(i == 0 && subtitlesEnabled)" />
+                    @* Keyed by file, so another movie gets fresh <track> elements (and cue lists) rather than the
+                       last movie's, whose line some browsers leave on screen when a track's src changes. *@
+                    <track @key="Subtitles[i].Url" kind="subtitles" src="@Subtitles[i].Url" label="@Subtitles[i].Label" srclang="@Subtitles[i].Language" default="@(i == 0 && subtitlesEnabled)" />
                 }
             </video>
             @if (Subtitles.Count > 0 && !VrMode && !OwnControls)
@@ -47,7 +51,8 @@
         }
         else if (ScrubBarShown)
         {
-            <ScrubBar Trickplay="Trickplay" Generating="Trickplay is null ? Generating : null" DurationSeconds="TimelineDurationSeconds" VideoSelector="@VideoSelector" Scenes="Scenes" Suggestions="Suggestions" Highlights="Highlights" Apexes="Apexes" PlayerControls="OwnControls">
+            <ScrubBar @key="videoStream" Trickplay="Trickplay" Generating="Trickplay is null ? Generating : null" DurationSeconds="TimelineDurationSeconds" VideoSelector="@VideoSelector" Scenes="Scenes" Suggestions="Suggestions" Highlights="Highlights" Apexes="Apexes" PlayerControls="OwnControls"
+                      OnNext="OnNext" OnPrevious="OnPrevious" HasPrevious="HasPrevious">
                 <ExtraControls>
                     @if (Subtitles.Count > 0)
                     {
@@ -124,6 +129,13 @@
 
     /// <summary>Raised when the scrub bar appears or goes, so the host can list its F shortcut.</summary>
     [Parameter] public EventCallback<bool> ScrubBarShownChanged { get; set; }
+
+    /// <summary>A movie playlist's Next / Previous, drawn as arrows on the scrub bar.</summary>
+    [Parameter] public EventCallback OnNext { get; set; }
+
+    [Parameter] public EventCallback OnPrevious { get; set; }
+
+    [Parameter] public bool HasPrevious { get; set; }
 
     /// <summary>Shown in the video area after the video.</summary>
     [Parameter] public RenderFragment? ChildContent { get; set; }
