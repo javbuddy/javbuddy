@@ -170,8 +170,14 @@ public sealed partial class LibraryApiService(
         var take = Math.Clamp(query.Take, 1, MaxPageSize);
 
         var total = await gridQuery.CountAsync(filter, ct);
-        var movies = await gridQuery.GetRangeAsync(filter, new MovieGridSort("added", true, 0), skip, take, ct);
-        return ApiResult<MovieListPage>.Ok(new MovieListPage(total, movies.Select(MovieApiMapper.ToSummary).ToList()));
+        // The grid query gives the filtered, ordered page, but it loads only the poster-card columns (no release date,
+        // studio, content type or .nfo drift), so the page's movies are re-read in full and kept in its order.
+        var page = await gridQuery.GetRangeAsync(filter, new MovieGridSort("added", true, 0), skip, take, ct);
+        var ids = page.Select(m => m.Id).ToList();
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var full = await db.Movies.AsNoTracking().Where(m => ids.Contains(m.Id)).ToDictionaryAsync(m => m.Id, ct);
+        var items = ids.Where(full.ContainsKey).Select(id => MovieApiMapper.ToSummary(full[id])).ToList();
+        return ApiResult<MovieListPage>.Ok(new MovieListPage(total, items));
     }
 
     public async Task<ApiResult<MovieDetail>> GetDetailAsync(string code, CancellationToken ct = default)

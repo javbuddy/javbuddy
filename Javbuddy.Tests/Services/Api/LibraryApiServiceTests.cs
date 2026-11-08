@@ -154,6 +154,36 @@ public class LibraryApiServiceTests
     }
 
     [Fact]
+    public async Task ListAsync_ItemsCarryTheFullSummary_InPageOrder()
+    {
+        // The grid query only loads poster-card columns; the list must still report these.
+        using var fixture = new Fixture();
+        await using (var db = await fixture.Factory.CreateDbContextAsync())
+        {
+            db.Movies.Add(new Movie
+            {
+                Code = "AAA-001",
+                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                MetaStudio = "Studio A",
+                MetaReleaseDate = new DateTime(2023, 5, 1),
+                ContentType = MovieContentType.Uncensored,
+                NfoDriftKind = NfoDriftKind.JavbuddyChanged,
+            });
+            db.Movies.Add(new Movie { Code = "AAA-002", CreatedAt = new DateTime(2024, 2, 1, 0, 0, 0, DateTimeKind.Utc) });
+            await db.SaveChangesAsync();
+        }
+
+        var page = (await fixture.Service.ListAsync(new MovieListQuery())).Value!;
+
+        Assert.Equal(["AAA-002", "AAA-001"], page.Items.Select(m => m.Code));
+        var first = page.Items[1];
+        Assert.Equal("Studio A", first.Studio);
+        Assert.Equal(new DateOnly(2023, 5, 1), first.ReleaseDate);
+        Assert.Equal("uncensored", first.ContentType);
+        Assert.Equal("javbuddyChanged", first.NfoDriftKind);
+    }
+
+    [Fact]
     public async Task ListAsync_BadStatusOrDrift_IsInvalid()
     {
         using var fixture = new Fixture();
