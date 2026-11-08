@@ -234,7 +234,8 @@
                     StateHasChanged();
                 }
             }
-            catch (JSDisconnectedException)
+            // ObjectDisposedException: the player closed (disposing the module) while this render's JS call was in flight.
+            catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException)
             {
                 return;
             }
@@ -251,12 +252,12 @@
             if (style) await videoModule!.InvokeVoidAsync("applySubtitleStyle", VideoSelector, subtitleSize, subtitleBackground);
             if (tracks) await videoModule!.InvokeVoidAsync("setSubtitleTrack", VideoSelector, subtitleIndex);
         }
-        catch (JSDisconnectedException)
+        catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException)
         {
         }
     }
 
-    // Every caller catches JSDisconnectedException.
+    // Every caller catches JSDisconnectedException (and ObjectDisposedException, once the player has closed).
 #pragma warning disable BL0016
     private async Task EnsureModuleAsync() =>
         videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");

@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - A library rescan now queues the artwork a newly imported movie came without, generated in the background from frames of its own video once MediaInfo has scanned it (a restart or a cancelled run picks up what is left): 10 extrafanart stills when it has none, and a poster and fanart image when it has neither. Each is a toggle (on by default) in **Settings → Metadata → New movie artwork**, or the `NewMovieArtwork__GenerateExtraFanart` / `NewMovieArtwork__GeneratePosterAndFanart` environment variables. Existing images are never replaced, and a movie whose metadata already has a cover URL gets no generated poster. (#118, #119)
 
 ### Fixed
+- Closing the video player right after it opens no longer ends the page's session when a late subtitle call hits the already-closed player.
 
 - Moving to another movie in the player (Movies' Play all / Shuffle, or switching versions) now starts a fresh video element with its own subtitle tracks instead of reusing the previous one's, so the last movie's subtitle line no longer stays on screen. (#122)
 
