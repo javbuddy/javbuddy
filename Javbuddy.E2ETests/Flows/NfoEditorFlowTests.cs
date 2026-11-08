@@ -590,7 +590,11 @@ public class NfoEditorFlowTests : IAsyncLifetime
         // The job writes in the background; once it's done the drift clears and the grid
         // (filtered to Javbuddy changed) empties via MovieChangeNotifier.
         await Expect(page.Locator(".poster-card")).ToHaveCountAsync(0);
-        Assert.Equal("<movie>\n  <title>New Title</title>\n</movie>", await File.ReadAllTextAsync(nfoPath));
+        // The sync also creates the elements the .nfo lacked (here the release date), so check the
+        // values it must write rather than the whole file.
+        var written = System.Xml.Linq.XDocument.Parse(await File.ReadAllTextAsync(nfoPath)).Root!;
+        Assert.Equal("New Title", written.Element("title")?.Value);
+        Assert.Equal("2024-01-01", written.Element("releasedate")?.Value);
         Assert.False(File.Exists(nfoPath + ".bak"));
         await using (var verify = await fixture.DbFactory.CreateDbContextAsync())
         {
