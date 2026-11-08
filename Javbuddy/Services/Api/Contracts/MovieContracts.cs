@@ -2,7 +2,7 @@ namespace Javbuddy.Services.Api.Contracts;
 
 /// <summary>A movie in a list or lookup. Field names are the public wire contract (camelCase on the wire).
 /// <see cref="WebPath"/> is relative ("/movies/ABP-123"); the endpoint layer makes it an absolute <c>webUrl</c>.</summary>
-public sealed record MovieSummary(
+public record MovieSummary(
     int Id,
     string Code,
     string? Title,
@@ -28,7 +28,7 @@ public sealed record MovieNfoInfo(string DriftKind, string? Details);
 
 /// <summary>Everything the API shows of a movie. <c>Title</c> is the fetched title, <c>TitleOverride</c> the manual one; runtime, rating
 /// and cover URLs are read-only.</summary>
-public sealed record MovieDetail(
+public record MovieDetail(
     int Id,
     string Code,
     string? Title,

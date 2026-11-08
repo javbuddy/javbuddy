@@ -109,6 +109,20 @@ builder.Services.AddDbContextFactory<AppDbContext>((sp, options) =>
     options.AddInterceptors(sp.GetRequiredService<ClipActorStaleInterceptor>());
 });
 
+// The public API (/api/v1) answers errors as RFC 7807 problem details, and serves its OpenAPI document at
+// /openapi/v1.json — limited to the /api/v1 routes (the media, DeoVR and backup routes are internal).
+builder.Services.AddProblemDetails();
+builder.Services.AddOpenApi(options =>
+{
+    options.ShouldInclude = description => description.RelativePath?.StartsWith("api/v1/", StringComparison.Ordinal) == true;
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Info.Title = "Javbuddy API";
+        document.Info.Description = "Unauthenticated, like the Javbuddy UI — do not expose it publicly.";
+        return Task.CompletedTask;
+    });
+});
+
 builder.Services
     .AddJavbuddyHttpClients(builder.Configuration)
     .AddIntegrationAndMovieServices(builder.Configuration)
@@ -169,5 +183,7 @@ app.MapRazorComponents<App>()
 app.MapMediaEndpoints();
 app.MapDeoVrEndpoints();
 app.MapBackupEndpoints();
+app.MapPublicApi();
+app.MapOpenApi();
 
 app.Run();
