@@ -118,7 +118,7 @@ public interface IMovieService
     /// <summary>Applies only the fields selected in <paramref name="options"/> from a previously
     /// fetched javinizer-go scrape (see <see cref="FetchJavinizerMetadataAsync"/>) onto the movie.
     /// Synchronizes actor associations and tag normalization only if cast or genres were among the
-    /// selected fields, then flags .nfo drift via strict field matching
+    /// selected fields, then flags .nfo drift
     /// (<see cref="INfoSyncService.CheckMovieMetadataConflictAsync"/>) without modifying the on-disk
     /// .nfo directly, mirroring <see cref="UpdateMetadataAsync"/>.</summary>
     Task<OperationResult> ApplyJavinizerMetadataAsync(int movieId, MovieViewDto scraped, MovieMetadataImportOptions options, CancellationToken ct = default);
@@ -442,8 +442,8 @@ public class MovieService(
         await db.SaveChangesAsync(ct);
         movieChangeNotifier?.NotifyChanged();
 
-        // Never overwrites an existing .nfo — CheckMovieMetadataConflictAsync's strict
-        // field matching is what turns any resulting drift into a "Resolve .nfo Conflict" the
+        // Never overwrites an existing .nfo — CheckMovieMetadataConflictAsync's
+        // drift check is what turns any resulting drift into a "Resolve .nfo Conflict" the
         // user reviews as a diff and applies (or not) themselves, mirroring how cast/tag editing
         // already only ever touch the DB. The one exception is a folder with no .nfo at all: there is
         // nothing to conflict with, so the first save creates it.
@@ -588,8 +588,8 @@ public class MovieService(
         await db.SaveChangesAsync(ct);
         movieChangeNotifier?.NotifyChanged();
 
-        // Never writes to the .nfo directly — CheckMovieMetadataConflictAsync's strict
-        // field matching flags any resulting drift as a "Resolve .nfo Conflict" the
+        // Never writes to the .nfo directly — CheckMovieMetadataConflictAsync's
+        // drift check flags any resulting drift as a "Resolve .nfo Conflict" the
         // user reviews as a diff and applies (or not) themselves, mirroring UpdateMetadataAsync,
         // cast editing, and tag editing.
         if (nfoSyncService is not null)

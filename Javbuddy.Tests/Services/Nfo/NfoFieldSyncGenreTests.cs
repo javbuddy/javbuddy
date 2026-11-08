@@ -4,7 +4,7 @@ using Javbuddy.Services.Nfo;
 
 namespace Javbuddy.Tests.Services.Nfo;
 
-/// <summary>Creating the &lt;genre&gt; elements of an .nfo that has none — the one element NfoFieldSync invents.</summary>
+/// <summary>Creating the &lt;genre&gt; elements of an .nfo that has none (see NfoFieldSyncTests for the scalar fields).</summary>
 public class NfoFieldSyncGenreTests
 {
     private static Movie MovieWithTags(params string[] tags)
@@ -56,7 +56,7 @@ public class NfoFieldSyncGenreTests
         NfoFieldSync.ApplyFieldUpdates(movie, root);
 
         Assert.Equal(["Play", "Play##Rough"], root.Elements("genre").Select(e => e.Value));
-        var outcome = NfoDriftDetector.Evaluate(movie, NfoDriftDetector.ReadNfo(root), baseline: null, strict: false);
+        var outcome = NfoDriftDetector.Evaluate(movie, NfoDriftDetector.ReadNfo(root), baseline: null);
         Assert.DoesNotContain("Genres:", outcome.Details ?? "");
     }
 

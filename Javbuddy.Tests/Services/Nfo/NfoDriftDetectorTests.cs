@@ -25,7 +25,7 @@ public class NfoDriftDetectorTests
 
     /// <summary>A baseline recorded while Javbuddy and disk agreed on title "Title A" / plot "Plot A".</summary>
     private static NfoBaselineState AgreedBaseline() =>
-        NfoDriftDetector.Evaluate(MovieWith(), DiskWith(), baseline: null, strict: false).Baseline;
+        NfoDriftDetector.Evaluate(MovieWith(), DiskWith(), baseline: null).Baseline;
 
     [Fact]
     public void CanonicalGenres_IncludeTagsTheMovieOnlyHasThroughItsClips()
@@ -48,9 +48,9 @@ public class NfoDriftDetectorTests
     [Fact]
     public void Evaluate_TagsAddedToAMovieWhoseNfoHasNoGenres_IsJavbuddyChanged()
     {
-        var baseline = NfoDriftDetector.Evaluate(MovieWithTags(), DiskWith(), baseline: null, strict: false).Baseline;
+        var baseline = NfoDriftDetector.Evaluate(MovieWithTags(), DiskWith(), baseline: null).Baseline;
 
-        var outcome = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), DiskWith(), baseline, strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), DiskWith(), baseline);
 
         Assert.Equal(NfoDriftKind.JavbuddyChanged, outcome.Kind);
         Assert.Equal("[Javbuddy changed] Genres: .nfo has '(none)', canonical is 'Drama'", outcome.Details);
@@ -60,7 +60,7 @@ public class NfoDriftDetectorTests
     public void Evaluate_AMovieWithTagsCheckedForTheFirstTimeAgainstAnNfoWithNoGenres_IsJavbuddyChanged()
     {
         // The upgrade case: no baseline for the field, tags already there, the file never had genres.
-        var outcome = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), DiskWith(), baseline: null, strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), DiskWith(), baseline: null);
 
         Assert.Equal(NfoDriftKind.JavbuddyChanged, outcome.Kind);
         Assert.Contains("Genres: .nfo has '(none)', canonical is 'Drama'", outcome.Details);
@@ -70,9 +70,9 @@ public class NfoDriftDetectorTests
     public void Evaluate_AnOutsideToolStrippingTheGenresFromAnInSyncNfo_IsAnExternalEdit()
     {
         var withGenres = Disk("<movie><title>Title A</title><plot>Plot A</plot><genre>Drama</genre></movie>");
-        var baseline = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), withGenres, baseline: null, strict: false).Baseline;
+        var baseline = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), withGenres, baseline: null).Baseline;
 
-        var outcome = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), DiskWith(), baseline, strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWithTags("Drama"), DiskWith(), baseline);
 
         Assert.Equal(NfoDriftKind.ExternalEdit, outcome.Kind);
     }
@@ -80,10 +80,10 @@ public class NfoDriftDetectorTests
     [Fact]
     public void Evaluate_NoTagsAndNoGenres_IsNotDrift_AndNeitherIsAnNfoWithGenresForAMovieWithoutTags()
     {
-        Assert.Equal(NfoDriftKind.None, NfoDriftDetector.Evaluate(MovieWithTags(), DiskWith(), baseline: null, strict: false).Kind);
+        Assert.Equal(NfoDriftKind.None, NfoDriftDetector.Evaluate(MovieWithTags(), DiskWith(), baseline: null).Kind);
         // Javbuddy has no tags to push, so the file's own genres are not drift.
         var disk = Disk("<movie><title>Title A</title><plot>Plot A</plot><genre>Drama</genre></movie>");
-        Assert.Equal(NfoDriftKind.None, NfoDriftDetector.Evaluate(MovieWithTags(), disk, baseline: null, strict: false).Kind);
+        Assert.Equal(NfoDriftKind.None, NfoDriftDetector.Evaluate(MovieWithTags(), disk, baseline: null).Kind);
     }
 
     [Fact]
@@ -91,13 +91,13 @@ public class NfoDriftDetectorTests
     {
         var disk = Disk("<movie><title>Title A</title><plot>Plot A</plot><genre>drama</genre></movie>");
 
-        Assert.Equal(NfoDriftKind.None, NfoDriftDetector.Evaluate(MovieWithTags("Drama"), disk, baseline: null, strict: false).Kind);
+        Assert.Equal(NfoDriftKind.None, NfoDriftDetector.Evaluate(MovieWithTags("Drama"), disk, baseline: null).Kind);
     }
 
     [Fact]
     public void Evaluate_NoDrift_ReturnsNoneAndBaselinesEveryField()
     {
-        var outcome = NfoDriftDetector.Evaluate(MovieWith(), DiskWith(), baseline: null, strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWith(), DiskWith(), baseline: null);
 
         Assert.Equal(NfoDriftKind.None, outcome.Kind);
         Assert.Null(outcome.Details);
@@ -108,7 +108,7 @@ public class NfoDriftDetectorTests
     [Fact]
     public void Evaluate_OnlyJavbuddyChangedSinceBaseline_IsJavbuddyChanged()
     {
-        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(), AgreedBaseline(), strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(), AgreedBaseline());
 
         Assert.Equal(NfoDriftKind.JavbuddyChanged, outcome.Kind);
         Assert.Equal("[Javbuddy changed] Title: .nfo has 'Title A', canonical is 'Title B'", outcome.Details);
@@ -117,7 +117,7 @@ public class NfoDriftDetectorTests
     [Fact]
     public void Evaluate_OnlyDiskChangedSinceBaseline_IsExternalEdit()
     {
-        var outcome = NfoDriftDetector.Evaluate(MovieWith(), DiskWith(title: "Title C"), AgreedBaseline(), strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWith(), DiskWith(title: "Title C"), AgreedBaseline());
 
         Assert.Equal(NfoDriftKind.ExternalEdit, outcome.Kind);
         Assert.Equal("[External edit] Title: .nfo has 'Title C', canonical is 'Title A'", outcome.Details);
@@ -126,7 +126,7 @@ public class NfoDriftDetectorTests
     [Fact]
     public void Evaluate_BothChangedDifferently_IsBothChanged()
     {
-        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(title: "Title C"), AgreedBaseline(), strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(title: "Title C"), AgreedBaseline());
 
         Assert.Equal(NfoDriftKind.BothChanged, outcome.Kind);
         Assert.StartsWith("[Both changed] Title:", outcome.Details);
@@ -135,18 +135,18 @@ public class NfoDriftDetectorTests
     [Fact]
     public void Evaluate_BothChangedToTheSameValue_IsNoDriftAndAdvancesTheBaseline()
     {
-        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(title: "Title B"), AgreedBaseline(), strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(title: "Title B"), AgreedBaseline());
         Assert.Equal(NfoDriftKind.None, outcome.Kind);
 
         // Advanced: an external edit back to the old value now reads as external, not "both".
-        var next = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(title: "Title A"), outcome.Baseline, strict: false);
+        var next = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(title: "Title A"), outcome.Baseline);
         Assert.Equal(NfoDriftKind.ExternalEdit, next.Kind);
     }
 
     [Fact]
     public void Evaluate_FirstObservationAlreadyDiffering_IsExternalEdit()
     {
-        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(), baseline: null, strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(), baseline: null);
 
         Assert.Equal(NfoDriftKind.ExternalEdit, outcome.Kind);
         Assert.False(outcome.Baseline.Fields.ContainsKey(NfoField.Title));
@@ -156,9 +156,9 @@ public class NfoDriftDetectorTests
     [Fact]
     public void Evaluate_NoHistoryAndValueMissingOnDisk_IsJavbuddyChanged()
     {
-        // Only strict matching flags a value the .nfo lacks entirely; with no history to go on,
+        // A value the .nfo lacks entirely is flagged; with no history to go on,
         // that's something Javbuddy has that the file doesn't, not an outside edit.
-        var outcome = NfoDriftDetector.Evaluate(MovieWith(), Disk("<movie><plot>Plot A</plot></movie>"), baseline: null, strict: true);
+        var outcome = NfoDriftDetector.Evaluate(MovieWith(), Disk("<movie><plot>Plot A</plot></movie>"), baseline: null);
 
         Assert.Equal(NfoDriftKind.JavbuddyChanged, outcome.Kind);
         Assert.Equal("[Javbuddy changed] Title: .nfo has '(none)', canonical is 'Title A'", outcome.Details);
@@ -168,11 +168,11 @@ public class NfoDriftDetectorTests
     public void Evaluate_DriftingFieldKeepsItsBaselineWhileOtherFieldsAdvance()
     {
         // Title drifts (Javbuddy changed); plot changes on both sides to the same value.
-        var first = NfoDriftDetector.Evaluate(MovieWith(title: "Title B", plot: "Plot B"), DiskWith(plot: "Plot B"), AgreedBaseline(), strict: false);
+        var first = NfoDriftDetector.Evaluate(MovieWith(title: "Title B", plot: "Plot B"), DiskWith(plot: "Plot B"), AgreedBaseline());
         Assert.Equal(NfoDriftKind.JavbuddyChanged, first.Kind);
 
         // Now disk edits title too: still judged against the original agreed title, so "both".
-        var second = NfoDriftDetector.Evaluate(MovieWith(title: "Title B", plot: "Plot B"), DiskWith(title: "Title C", plot: "Plot B"), first.Baseline, strict: false);
+        var second = NfoDriftDetector.Evaluate(MovieWith(title: "Title B", plot: "Plot B"), DiskWith(title: "Title C", plot: "Plot B"), first.Baseline);
         Assert.Equal(NfoDriftKind.BothChanged, second.Kind);
         Assert.DoesNotContain("Plot", second.Details);
     }
@@ -180,7 +180,7 @@ public class NfoDriftDetectorTests
     [Fact]
     public void Evaluate_KindIsTheWorstAcrossFields_AndDetailsListEachField()
     {
-        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(plot: "Plot C"), AgreedBaseline(), strict: false);
+        var outcome = NfoDriftDetector.Evaluate(MovieWith(title: "Title B"), DiskWith(plot: "Plot C"), AgreedBaseline());
 
         Assert.Equal(NfoDriftKind.ExternalEdit, outcome.Kind);
         Assert.Equal(
@@ -192,7 +192,7 @@ public class NfoDriftDetectorTests
     public void Evaluate_JavbuddysOwnWriteToAStillDriftingField_IsNotMistakenForAnExternalEdit()
     {
         const string agreedXml = "<movie><title>Title A</title><plot>Plot A</plot><actor><name>Test Aoi</name></actor></movie>";
-        var baseline = NfoDriftDetector.Evaluate(MovieWith(null, null, "Aoi"), Disk(agreedXml), baseline: null, strict: false).Baseline;
+        var baseline = NfoDriftDetector.Evaluate(MovieWith(null, null, "Aoi"), Disk(agreedXml), baseline: null).Baseline;
 
         // Javbuddy links a second actor; an actor sync writes a partial fix to the actors on disk
         // (e.g. renaming an alias) that still leaves the second actor missing.
@@ -200,7 +200,7 @@ public class NfoDriftDetectorTests
         var preWrite = Disk(agreedXml);
         var postWrite = Disk("<movie><title>Title A</title><plot>Plot A</plot><actor><name>Test Aoi</name><thumb>x</thumb><alias>Aoi T</alias></actor></movie>");
 
-        var outcome = NfoDriftDetector.Evaluate(movie, postWrite, baseline, strict: false, preWriteDisk: preWrite);
+        var outcome = NfoDriftDetector.Evaluate(movie, postWrite, baseline, preWriteDisk: preWrite);
 
         Assert.Equal(NfoDriftKind.JavbuddyChanged, outcome.Kind);
         Assert.Equal("[Javbuddy changed] Actor 'Test Rin' missing in .nfo", outcome.Details);
@@ -210,12 +210,12 @@ public class NfoDriftDetectorTests
     public void Evaluate_FirstNameOnlyActorMissingFromNfo_IsJavbuddyChanged_AndLastNameOnlyActorIsIgnored()
     {
         const string diskXml = "<movie><title>Title A</title><plot>Plot A</plot><actor><name>Test Aoi</name></actor></movie>";
-        var baseline = NfoDriftDetector.Evaluate(MovieWith(null, null, "Aoi"), Disk(diskXml), baseline: null, strict: false).Baseline;
+        var baseline = NfoDriftDetector.Evaluate(MovieWith(null, null, "Aoi"), Disk(diskXml), baseline: null).Baseline;
         var movie = MovieWith(null, null, "Aoi");
         movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "Madonna", LastName = null } });
         movie.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "", LastName = "Smith" } });
 
-        var outcome = NfoDriftDetector.Evaluate(movie, Disk(diskXml), baseline, strict: false);
+        var outcome = NfoDriftDetector.Evaluate(movie, Disk(diskXml), baseline);
 
         Assert.Equal(NfoDriftKind.JavbuddyChanged, outcome.Kind);
         Assert.Equal("[Javbuddy changed] Actor 'Madonna' missing in .nfo", outcome.Details);
@@ -227,7 +227,7 @@ public class NfoDriftDetectorTests
         var movie = MovieWith(null, null, "Aoi");
         var disk = Disk("<movie><actor><name>Someone Else</name><alias>Test Aoi</alias></actor><actor><name>Other</name></actor></movie>");
 
-        var outcome = NfoDriftDetector.Evaluate(movie, disk, baseline: null, strict: false);
+        var outcome = NfoDriftDetector.Evaluate(movie, disk, baseline: null);
 
         Assert.Equal("[External edit] .nfo has 'Someone Else', canonical is 'Test Aoi'", outcome.Details);
     }
@@ -238,7 +238,7 @@ public class NfoDriftDetectorTests
         var baseline = NfoDriftDetector.Evaluate(
             MovieWith(null, null, "Aoi"),
             Disk("<movie><title>T</title><releasedate>2020-05-01</releasedate><rating>7.5</rating><genre>Drama</genre><actor><name>Test Aoi</name><altname>葵</altname></actor></movie>"),
-            baseline: null, strict: false).Baseline;
+            baseline: null).Baseline;
 
         var roundTripped = NfoBaselineState.FromJson(baseline.ToJson());
 

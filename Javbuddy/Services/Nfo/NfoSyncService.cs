@@ -83,7 +83,7 @@ public sealed record MovieNfoConflictResolutionResult(bool Success, bool FileCha
 
 /// <summary>Outcome of a bulk .nfo push. StillDrifting counts movies that are still
 /// drifting afterwards — written but with drift left over, or with nothing the proposal could
-/// write (it never invents a missing element, except the title and the genres of an .nfo that has none).</summary>
+/// write (the sync creates the elements an .nfo lacks, so this is rare).</summary>
 public sealed record NfoDriftPushResult(int Written, int SkippedExternal, int Failed, int StillDrifting);
 
 public interface INfoSyncService
@@ -106,12 +106,9 @@ public interface INfoSyncService
         int movieId,
         CancellationToken ct = default);
 
-    /// <summary>The metadata editor modal's "Save" check — same shape as
-    /// CheckMovieNfoConflictAsync, but flags drift more strictly for every field that modal can
-    /// edit (title, original title, plot, director, studio, label, series, release date,
-    /// runtime): the modal never writes to the .nfo itself, so a field whose target element is
-    /// blank or entirely absent still needs to surface as a conflict rather than silently vanish
-    /// — see NfoDriftDetector.AppendFieldConflicts' remarks for the full leniency rationale.</summary>
+    /// <summary>The metadata editor modal's "Save" check: the same drift check as
+    /// CheckMovieNfoConflictAsync. The modal never writes to the .nfo itself, so a field edited
+    /// there whose .nfo element is blank or absent surfaces as a conflict the user can resolve.</summary>
     Task<ActorNfoConflictCheckResult> CheckMovieMetadataConflictAsync(
         int movieId,
         CancellationToken ct = default);
@@ -137,11 +134,11 @@ public interface INfoSyncService
     /// <summary>The "Refresh with Javinizer" field picker's apply step: writes the movie's
     /// current descriptive Meta* fields into its local .nfo file, if one exists, via the same
     /// conservative element-reconciliation ApplyFieldUpdates already uses for the diff preview
-    /// (GenerateProposedNfoAsync) — only updates an element that already exists on disk with some
-    /// value, never invents one (except the &lt;title&gt; and &lt;genre&gt; elements of an .nfo that has none). A deliberate departure from MovieService.UpdateMetadataAsync's
+    /// (GenerateProposedNfoAsync) — updates the element a field already has on disk, and creates it
+    /// when the .nfo has none (or an empty one). A deliberate departure from MovieService.UpdateMetadataAsync's
     /// DB-only precedent, since the spec explicitly asks for a direct .nfo write on
-    /// confirm. Re-checks remaining .nfo drift afterward, since a selected field with no matching
-    /// on-disk element (or an unselected field) can still leave real drift. No-ops (returns false)
+    /// confirm. Re-checks remaining .nfo drift afterward, since an unselected field can still leave
+    /// real drift. No-ops (returns false)
     /// when the movie has no local .nfo file or it's read-only. Returns whether anything was
     /// actually written.</summary>
     Task<bool> SyncMovieMetadataToNfoAsync(int movieId, CancellationToken ct = default);
@@ -623,39 +620,10 @@ public class NfoSyncService(
         return result;
     }
 
-    /// <summary>The metadata editor modal's "Save" check: like CheckMovieNfoConflictAsync,
-    /// but with <c>strictFieldMatching: true</c>. The modal never writes to the .nfo directly —
-    /// Save only updates the DB, and this is what turns that into a visible "Resolve .nfo
-    /// Conflict" the user can review as a diff, for every field the modal can edit (title,
-    /// original title, plot, director, studio, label, series, release date, runtime), not just
-    /// the subset the lenient passive-rescan check already flags. See NfoDriftDetector.AppendFieldConflicts'
-    /// remarks for why the two checks need different leniency.</summary>
-    public async Task<ActorNfoConflictCheckResult> CheckMovieMetadataConflictAsync(int movieId, CancellationToken ct = default)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var movie = await db.Movies
-            .AsSplitQuery()
-            .Include(m => m.MovieActors)
-            .ThenInclude(ma => ma.Actor)
-            .ThenInclude(a => a.Aliases)
-            .Include(m => m.MovieTags)
-            .ThenInclude(mt => mt.Tag)
-            .ThenInclude(t => t.ParentTag)
-            .FirstOrDefaultAsync(m => m.Id == movieId, ct);
-
-        if (movie is null || string.IsNullOrWhiteSpace(movie.Code) || movie.Status != MovieStatus.Got)
-        {
-            return new ActorNfoConflictCheckResult(movieId, movie?.Code ?? "", false, null);
-        }
-
-        var (result, changed) = await CheckMovieNfoConflictInMemoryAsync(movie, ct, strictFieldMatching: true);
-        if (changed)
-        {
-            await db.SaveChangesAsync(ct);
-        }
-
-        return result;
-    }
+    /// <summary>The metadata editor modal's "Save" check; the same drift check as
+    /// <see cref="CheckMovieNfoConflictAsync"/>, under the name its callers use.</summary>
+    public Task<ActorNfoConflictCheckResult> CheckMovieMetadataConflictAsync(int movieId, CancellationToken ct = default) =>
+        CheckMovieNfoConflictAsync(movieId, ct);
 
     public async Task<ActorNfoConflictBatchResult> DetectAllMovieConflictsAsync(
         IProgress<TaskProgress>? progress = null,
@@ -708,10 +676,9 @@ public class NfoSyncService(
     /// responsible for calling SaveChangesAsync on the owning context. The .nfo is only re-read
     /// when its last-write time or size differs from the fingerprint of the values cached in
     /// NfoBaselineJson — an unchanged file costs one stat, so a library-wide rescan only parses
-    /// the files that actually changed. <paramref name="strictFieldMatching"/> is forwarded to
-    /// NfoDriftDetector.AppendFieldConflicts — see its remarks.</summary>
+    /// the files that actually changed.</summary>
     private async Task<(ActorNfoConflictCheckResult result, bool changed)> CheckMovieNfoConflictInMemoryAsync(
-        Movie movie, CancellationToken ct, bool strictFieldMatching = false)
+        Movie movie, CancellationToken ct)
     {
         var nfoPath = await localLibraryClient.ResolveNfoFilePathAsync(movie.Code!, ct);
         var info = nfoPath is null ? null : new FileInfo(nfoPath);
@@ -754,7 +721,7 @@ public class NfoSyncService(
             }
         }
 
-        var outcome = NfoDriftDetector.Evaluate(movie, disk, baseline, strictFieldMatching);
+        var outcome = NfoDriftDetector.Evaluate(movie, disk, baseline);
         return ApplyOutcome(movie, outcome, info.LastWriteTimeUtc, info.Length);
 
         static (ActorNfoConflictCheckResult, bool) SetUnreadable(Movie m, string detail)
@@ -797,7 +764,6 @@ public class NfoSyncService(
             movie,
             NfoDriftDetector.ReadNfo(writtenRoot),
             NfoBaselineState.FromJson(movie.NfoBaselineJson),
-            strict: false,
             preWriteDisk: preWrite);
         ApplyOutcome(movie, outcome, written.LastWriteUtc!.Value, written.Size!.Value);
     }
@@ -896,7 +862,7 @@ public class NfoSyncService(
         {
             // Nothing to write, but the actors being in sync doesn't mean every field is — report
             // whatever drift the file (already parsed above) really has.
-            var outcome = NfoDriftDetector.Evaluate(movie, preWrite, NfoBaselineState.FromJson(movie.NfoBaselineJson), strict: false);
+            var outcome = NfoDriftDetector.Evaluate(movie, preWrite, NfoBaselineState.FromJson(movie.NfoBaselineJson));
             ApplyOutcome(movie, outcome, fileInfo.LastWriteTimeUtc, fileInfo.Length);
         }
 
@@ -954,9 +920,8 @@ public class NfoSyncService(
             return false;
         }
 
-        // Re-check remaining drift either way: a selected field whose target .nfo element didn't
-        // exist is deliberately left untouched by ApplyFieldUpdates (see its remarks; title and genres are the exceptions), and an
-        // unselected field can still differ — both are real drift the user should still see.
+        // Re-check remaining drift either way: rating and actor differences are not written by ApplyFieldUpdates and
+        // are real drift the user should still see.
         var preWrite = NfoDriftDetector.ReadNfo(root);
         var changed = ApplyFieldUpdates(movie, root);
         if (changed)

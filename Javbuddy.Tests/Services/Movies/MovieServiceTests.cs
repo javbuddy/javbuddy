@@ -1504,7 +1504,7 @@ public class MovieServiceTests
     }
 
     [Fact]
-    public async Task ApplyJavinizerMetadataAsync_FieldMissingFromNfo_FlagsStrictConflict()
+    public async Task ApplyJavinizerMetadataAsync_FieldMissingFromNfo_FlagsConflict()
     {
         using var factory = new TestDbContextFactory();
         using var root = new TempRoot();

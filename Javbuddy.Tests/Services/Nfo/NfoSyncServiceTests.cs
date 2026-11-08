@@ -1119,12 +1119,14 @@ public class NfoSyncServiceTests
         var client = CreateClientFor(factory, root);
         var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
 
-        // .nfo has no <plot>/<director>/<label> at all; Javbuddy has no MetaTitle yet.
+        // The .nfo has a <plot>/<director>; Javbuddy has no value for either yet.
         var folder = root.AddMovieFolder("FLD-003");
         var nfo = """
             <?xml version="1.0" encoding="UTF-8"?>
             <movie>
               <title>Only Title</title>
+              <plot>Only plot</plot>
+              <director>Only director</director>
             </movie>
             """;
         await File.WriteAllTextAsync(Path.Combine(folder, "FLD-003.nfo"), nfo);
@@ -1135,8 +1137,7 @@ public class NfoSyncServiceTests
             var movie = new Movie
             {
                 Code = "FLD-003",
-                Status = MovieStatus.Got,
-                MetaDescription = "Javbuddy-only plot, .nfo has none."
+                Status = MovieStatus.Got
             };
             db.Movies.Add(movie);
             db.SaveChanges();
@@ -1370,7 +1371,7 @@ public class NfoSyncServiceTests
     }
 
     [Fact]
-    public async Task GenerateProposedNfoAsync_DoesNotInventReleaseDateOrRuntimeElements()
+    public async Task GenerateProposedNfoAsync_CreatesMissingReleaseDateAndRuntimeElements()
     {
         using var factory = new TestDbContextFactory();
         using var root = new TempRoot();
@@ -1400,8 +1401,8 @@ public class NfoSyncServiceTests
 
         Assert.NotNull(proposed);
         var proposedDoc = XDocument.Parse(proposed);
-        Assert.Null(proposedDoc.Root!.Element("releasedate"));
-        Assert.Null(proposedDoc.Root!.Element("runtime"));
+        Assert.Equal("2024-06-15", proposedDoc.Root!.Element("releasedate")?.Value);
+        Assert.Equal("118", proposedDoc.Root!.Element("runtime")?.Value);
     }
 
     [Fact]
@@ -1414,8 +1415,7 @@ public class NfoSyncServiceTests
 
         // The metadata editor modal never writes to the .nfo directly — Save only updates
         // the DB, so even a field whose .nfo element already has *some* value must still be
-        // flagged here (unlike the lenient CheckMovieNfoConflictAsync, nothing will silently fix
-        // this by writing the new value in).
+        // flagged here (nothing will silently fix this by writing the new value in).
         var folder = root.AddMovieFolder("STR-001");
         var nfoPath = Path.Combine(folder, "STR-001.nfo");
         await File.WriteAllTextAsync(nfoPath, "<movie><studio>Old Studio</studio></movie>");
@@ -1556,11 +1556,11 @@ public class NfoSyncServiceTests
     }
 
     [Fact]
-    public async Task CheckMovieMetadataConflictAsync_RatingDriftWithNoNfoElement_StaysLenient()
+    public async Task CheckMovieMetadataConflictAsync_RatingDriftWithNoNfoElement_IsNotFlagged()
     {
-        // Rating/rating votes/genres aren't editable through the metadata editor modal, so strict
-        // matching must never apply to them — otherwise every movie whose .nfo simply doesn't
-        // carry a <rating> would start showing a conflict the modal had nothing to do with.
+        // Rating/rating votes aren't editable through the metadata editor modal and the sync never
+        // writes them, so a missing <rating> must not be drift — otherwise every movie whose .nfo
+        // simply doesn't carry one would show a conflict nothing can resolve.
         using var factory = new TestDbContextFactory();
         using var root = new TempRoot();
         var client = CreateClientFor(factory, root);
@@ -1656,8 +1656,8 @@ public class NfoSyncServiceTests
         Assert.True(wrote);
         var nfoXml = await File.ReadAllTextAsync(nfoPath);
         Assert.Contains("<title>New Title</title>", nfoXml);
-        // <director> exists but was blank on disk — ApplyFieldUpdates never invents a value for it.
-        Assert.Contains("<director></director>", nfoXml);
+        // <director> exists but was blank on disk — it is filled in place.
+        Assert.Contains("<director>New Director</director>", nfoXml);
         Assert.Equal([(NfoWriteTrigger.MetadataSync, "<movie><title>Old Title</title><director></director></movie>")], NfoHistory(factory, "SYN-001"));
 
         using var verifyDb = factory.CreateDbContext();
@@ -2049,9 +2049,11 @@ public class NfoSyncServiceTests
         using var factory = new TestDbContextFactory();
         using var root = new TempRoot();
         var (service, _, movieId, nfoPath) = await SeedDriftMovieAsync(factory, root);
-        // No <director> element: the metadata editor's strict check flags it, but the proposal
-        // never invents an element, so there's nothing a push can write.
-        UpdateMovie(factory, movieId, m => m.MetaDirector = "Someone");
+        // The rating is only drift-checked, never written to the .nfo, so there's nothing a push can write.
+        await File.WriteAllTextAsync(nfoPath, "<movie><title>Title A</title><plot>Plot A</plot><rating>5</rating><actor><name>Mikami Yua</name></actor></movie>");
+        UpdateMovie(factory, movieId, m => m.MetaRatingScore = 5);
+        await service.CheckMovieNfoConflictAsync(movieId);
+        UpdateMovie(factory, movieId, m => m.MetaRatingScore = 8);
         await service.CheckMovieMetadataConflictAsync(movieId);
         Assert.Equal(NfoDriftKind.JavbuddyChanged, Reload(factory, movieId).NfoDriftKind);
         var before = await File.ReadAllTextAsync(nfoPath);

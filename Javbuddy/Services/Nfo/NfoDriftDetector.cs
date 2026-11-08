@@ -100,16 +100,20 @@ public static class NfoDriftDetector
         ReadGenres(root),
         root.Elements("actor").Select(ReadActor).ToList());
 
+    /// <summary>A Javbuddy-side value as the .nfo will hold it: trimmed, with CRLF as LF, because XML parsing
+    /// normalizes line endings and a stored <c>\r\n</c> would otherwise never read back equal.</summary>
+    private static string? Normalized(string? value) => value?.Replace("\r\n", "\n").TrimToNull();
+
     /// <summary>Javbuddy's side. Requires movie.MovieActors (with Actor and its Aliases) and
     /// movie.MovieTags (with Tag and its ParentTag) to be loaded.</summary>
     public static NfoFieldValues ReadMovie(Movie movie) => new(
-        movie.MetaTitle.TrimToNull(),
-        movie.MetaOriginalTitle.TrimToNull(),
-        movie.MetaDescription.TrimToNull(),
-        movie.MetaDirector.TrimToNull(),
-        movie.MetaStudio.TrimToNull(),
-        movie.MetaLabel.TrimToNull(),
-        movie.MetaSeries.TrimToNull(),
+        Normalized(movie.MetaTitle),
+        Normalized(movie.MetaOriginalTitle),
+        Normalized(movie.MetaDescription),
+        Normalized(movie.MetaDirector),
+        Normalized(movie.MetaStudio),
+        Normalized(movie.MetaLabel),
+        Normalized(movie.MetaSeries),
         movie.MetaReleaseDate?.Date,
         movie.MetaRatingScore,
         movie.MetaRatingVotes,
@@ -133,18 +137,17 @@ public static class NfoDriftDetector
     /// produced <paramref name="disk"/>: a field that write changed has its baseline disk value
     /// moved to the written one, so Javbuddy's own write to a still-drifting field (e.g. an actor
     /// sync that fixes one actor but not another) is never mistaken for an outside edit.
-    /// <paramref name="strict"/> is forwarded to AppendFieldConflicts — see its remarks.</summary>
+    /// </summary>
     public static NfoDriftOutcome Evaluate(
         Movie movie,
         NfoFieldValues disk,
         NfoBaselineState? baseline,
-        bool strict,
         NfoFieldValues? preWriteDisk = null)
     {
         var db = ReadMovie(movie);
         var drifts = new List<(NfoField Field, string Message)>();
         AppendActorConflicts(drifts, movie, disk);
-        AppendFieldConflicts(drifts, db, disk, strict);
+        AppendFieldConflicts(drifts, db, disk);
 
         var fields = baseline?.Fields.ToDictionary() ?? [];
         var directions = new Dictionary<NfoField, NfoDriftKind>();
@@ -266,33 +269,23 @@ public static class NfoDriftDetector
     /// field besides actors — title, original title, plot, director, studio, label, series,
     /// release date, rating, rating votes, runtime, and genres.
     ///
-    /// <paramref name="strict"/> controls the metadata-editor-modal fields only (title, original
-    /// title, plot, director, studio, label, series, release date, runtime — everything
-    /// MovieService.UpdateMetadataAsync can edit): lenient (the default, used by the passive
-    /// periodic rescan/CheckMovieNfoConflictAsync) only flags a field when both Javbuddy's
-    /// canonical value and the corresponding .nfo element are present and non-empty — a field
-    /// Javbuddy hasn't fetched yet, or an element style the on-disk .nfo simply doesn't use, isn't
-    /// drift, mirroring the existing actor-conflict rule of only flagging a missing actor when the
-    /// .nfo has *some* actor elements at all. Strict (CheckMovieMetadataConflictAsync only) drops
-    /// that "both present" requirement for just those fields, because the metadata editor modal
-    /// never writes to the .nfo itself — an edit whose target element is blank or entirely
-    /// absent needs to surface as a conflict too, not silently vanish. Rating/rating
-    /// votes always stay lenient regardless of <paramref name="strict"/>: they aren't
-    /// editable through that modal, so this method being called from it is no reason to newly
-    /// flag drift in fields it never touched. Genres are compared the same way in both modes, and
-    /// flag an .nfo with no genres at all when the movie has tags (see the genre check below).</summary>
-    private static void AppendFieldConflicts(List<(NfoField, string)> drifts, NfoFieldValues db, NfoFieldValues disk, bool strict)
+    /// A field Javbuddy has a value for is drift when the .nfo's element is blank or absent
+    /// (NfoFieldSync creates the element when it is resolved); a field Javbuddy has no value for is
+    /// never drift. Rating and rating votes are never written to the .nfo, so they are only
+    /// flagged when both sides have a value. Genres are flagged when the movie has tags and
+    /// the .nfo's set differs, including an .nfo with no genres at all (see the genre check below).</summary>
+    private static void AppendFieldConflicts(List<(NfoField, string)> drifts, NfoFieldValues db, NfoFieldValues disk)
     {
-        AppendScalarConflict(drifts, NfoField.Title, "Title", db.Title, disk.Title, strict);
-        AppendScalarConflict(drifts, NfoField.OriginalTitle, "Original title", db.OriginalTitle, disk.OriginalTitle, strict);
-        AppendScalarConflict(drifts, NfoField.Plot, "Plot", db.Plot, disk.Plot, strict);
-        AppendScalarConflict(drifts, NfoField.Director, "Director", db.Director, disk.Director, strict);
-        AppendScalarConflict(drifts, NfoField.Studio, "Studio", db.Studio, disk.Studio, strict);
-        AppendScalarConflict(drifts, NfoField.Label, "Label", db.Label, disk.Label, strict);
-        AppendScalarConflict(drifts, NfoField.Series, "Series", db.Series, disk.Series, strict);
+        AppendScalarConflict(drifts, NfoField.Title, "Title", db.Title, disk.Title);
+        AppendScalarConflict(drifts, NfoField.OriginalTitle, "Original title", db.OriginalTitle, disk.OriginalTitle);
+        AppendScalarConflict(drifts, NfoField.Plot, "Plot", db.Plot, disk.Plot);
+        AppendScalarConflict(drifts, NfoField.Director, "Director", db.Director, disk.Director);
+        AppendScalarConflict(drifts, NfoField.Studio, "Studio", db.Studio, disk.Studio);
+        AppendScalarConflict(drifts, NfoField.Label, "Label", db.Label, disk.Label);
+        AppendScalarConflict(drifts, NfoField.Series, "Series", db.Series, disk.Series);
 
         if (db.ReleaseDate is { } dbDate
-            && (strict ? disk.ReleaseDate != dbDate : disk.ReleaseDate is { } d && dbDate != d))
+            && disk.ReleaseDate != dbDate)
         {
             var nfoDisplay = disk.ReleaseDate is { } shown ? shown.ToString("yyyy-MM-dd") : "(none)";
             drifts.Add((NfoField.ReleaseDate, $"Release date: .nfo has '{nfoDisplay}', canonical is '{dbDate:yyyy-MM-dd}'"));
@@ -309,7 +302,7 @@ public static class NfoDriftDetector
         }
 
         if (db.RuntimeMinutes is { } dbRuntime
-            && (strict ? disk.RuntimeMinutes != dbRuntime : disk.RuntimeMinutes is { } r && dbRuntime != r))
+            && disk.RuntimeMinutes != dbRuntime)
         {
             var nfoDisplay = disk.RuntimeMinutes is { } shown ? shown.ToString(CultureInfo.InvariantCulture) : "(none)";
             drifts.Add((NfoField.Runtime, $"Runtime: .nfo has '{nfoDisplay}' minutes, canonical is '{dbRuntime}' minutes"));
@@ -326,10 +319,9 @@ public static class NfoDriftDetector
         }
     }
 
-    private static void AppendScalarConflict(List<(NfoField, string)> drifts, NfoField field, string label, string? canonicalValue, string? nfoValue, bool strict)
+    private static void AppendScalarConflict(List<(NfoField, string)> drifts, NfoField field, string label, string? canonicalValue, string? nfoValue)
     {
         if (canonicalValue is null) return;
-        if (!strict && nfoValue is null) return;
         if (string.Equals(canonicalValue, nfoValue, StringComparison.Ordinal)) return;
 
         drifts.Add((field, $"{label}: .nfo has '{nfoValue ?? "(none)"}', canonical is '{canonicalValue}'"));
@@ -348,10 +340,11 @@ public static class NfoDriftDetector
         return null;
     }
 
+    // The flat <set>Series</set> form only counts for a <set> without children: with children its text is theirs.
     private static string? ReadSeries(XElement root) =>
         root.Element("set")?.Element("name")?.Value?.Trim() is { Length: > 0 } nested
             ? nested
-            : ReadScalarElement(root, "set");
+            : root.Element("set") is { HasElements: false } ? ReadScalarElement(root, "set") : null;
 
     private static double? ReadRating(XElement root)
     {
