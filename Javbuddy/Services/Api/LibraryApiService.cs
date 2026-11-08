@@ -65,7 +65,7 @@ public sealed partial class LibraryApiService(
     public const int MaxLookupCodes = 100;
     public const int MaxPageSize = 200;
     private const int MaxSearchResults = 50;
-    private const string JavinizerNotConfigured = "javinizer-go is not configured.";
+    private const string JavinizerNotConfigured = "javinizer-go is not configured";
 
     [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_\-]{0,49}$")]
     private static partial Regex ValidCodeRegex();
@@ -328,7 +328,7 @@ public sealed partial class LibraryApiService(
         if (!fetched.Success || fetched.Scraped is null)
         {
             var message = fetched.ErrorMessage ?? $"javinizer-go found no metadata for {movie.Code}.";
-            return message == JavinizerNotConfigured
+            return message.StartsWith(JavinizerNotConfigured, StringComparison.Ordinal)
                 ? ApiResult<JavinizerPreview>.NotConfigured(message)
                 : ApiResult<JavinizerPreview>.Upstream(message);
         }

@@ -21,6 +21,6 @@ public sealed record JavinizerPreview(
     IReadOnlyList<string> Genres,
     string? CoverUrl);
 
-public sealed record IntegrationStatus(bool Javinizer, bool Prowlarr, bool QBittorrent, bool Jellyfin);
+public sealed record IntegrationStatus(bool Javinizer, bool Prowlarr, [property: System.Text.Json.Serialization.JsonPropertyName("qbittorrent")] bool QBittorrent, bool Jellyfin);
 
 public sealed record SystemInfo(string Version, IntegrationStatus Integrations);

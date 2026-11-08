@@ -385,6 +385,8 @@ public class LibraryApiServiceTests
         fixture.MovieService.FetchJavinizerMetadataAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(
                 new MovieMetadataFetchResult(false, "javinizer-go is not configured."),
+                // JavinizerClient's own wording, which MovieService passes through.
+                new MovieMetadataFetchResult(false, "javinizer-go is not configured. Set a base URL and API token in Settings."),
                 new MovieMetadataFetchResult(false, "boom"),
                 new MovieMetadataFetchResult(true, null, new MovieViewDto
                 {
@@ -396,6 +398,7 @@ public class LibraryApiServiceTests
                     Genres = [new GenreViewDto { Name = "Drama" }],
                 }));
 
+        Assert.Equal(ApiStatus.NotConfigured, (await fixture.Service.FetchJavinizerAsync("ABP-123")).Status);
         Assert.Equal(ApiStatus.NotConfigured, (await fixture.Service.FetchJavinizerAsync("ABP-123")).Status);
         Assert.Equal(ApiStatus.Upstream, (await fixture.Service.FetchJavinizerAsync("ABP-123")).Status);
         var ok = await fixture.Service.FetchJavinizerAsync("ABP-123");
