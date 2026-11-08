@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 - **Play all** and **Shuffle** buttons on the Movies page, next to Options, play every Got movie with a local video file from the current filter results, in the grid's order or at random, in the player. In the player, arrows on the scrub bar (and the N / P keys) go to the next or previous movie; the last movie's Next closes it. Both are disabled when nothing matches or the Missing filter is on. (#122)
 - A library rescan now queues the artwork a newly imported movie came without, generated in the background from frames of its own video once MediaInfo has scanned it (a restart or a cancelled run picks up what is left): 10 extrafanart stills when it has none, and a poster and fanart image when it has neither. Each is a toggle (on by default) in **Settings → Metadata → New movie artwork**, or the `NewMovieArtwork__GenerateExtraFanart` / `NewMovieArtwork__GeneratePosterAndFanart` environment variables. Existing images are never replaced, and a movie whose metadata already has a cover URL gets no generated poster. (#118, #119)
+- **Generate stills** can now be stopped while it is running: the Cancel button becomes **Stop**, which aborts the frame extraction and returns the dialog to idle. (#125)
 
 ### Fixed
 - Closing the video player right after it opens no longer ends the page's session when a late subtitle call hits the already-closed player.

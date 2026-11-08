@@ -171,6 +171,35 @@ public class MovieStillsGenerateModalTests : BunitContext
     }
 
     [Fact]
+    public async Task Stop_CancelsTheRunningGeneration_AndReturnsTheDialogToIdle()
+    {
+        CancellationToken seen = default;
+        service.PreviewAsync(7, 10, ExtraFanartStillsMode.Append, false, Arg.Any<Action<ExtraFanartStill>?>(), Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                seen = call.Arg<CancellationToken>();
+                call.Arg<Action<ExtraFanartStill>?>()?.Invoke(new ExtraFanartStill(1, 90, [1, 2, 3]));
+                await Task.Delay(Timeout.Infinite, seen);
+                return new ExtraFanartStillsPreviewResult(null);
+            });
+        var cut = RenderModal();
+        cut.FindAll("button").First(b => b.TextContent.Contains("Generate previews")).Click();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".stills-tile img")));
+        Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent.Trim() == "Cancel");
+
+        cut.FindAll("button").First(b => b.TextContent.Trim() is "Stop").Click();
+
+        await cut.WaitForAssertionAsync(() =>
+        {
+            Assert.True(seen.IsCancellationRequested);
+            Assert.Contains(cut.FindAll("button"), b => b.TextContent.Contains("Generate previews"));
+            Assert.Empty(cut.FindAll(".stills-tile"));
+            Assert.Empty(cut.FindAll(".alert-danger"));
+        });
+        Assert.Equal(0, closedCount);
+    }
+
+    [Fact]
     public void Generate_Failure_ShowsTheError()
     {
         service.PreviewAsync(7, 10, ExtraFanartStillsMode.Append, false, Arg.Any<Action<ExtraFanartStill>?>(), Arg.Any<CancellationToken>()).Returns(new ExtraFanartStillsPreviewResult(null, "No local video."));

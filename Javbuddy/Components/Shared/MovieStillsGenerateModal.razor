@@ -69,7 +69,14 @@
             }
         </ChildContent>
         <FooterContent>
-            <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@Busy">Cancel</button>
+            @if (generating)
+            {
+                <button type="button" class="btn btn-outline-danger stills-stop" @onclick="StopGenerating" disabled="@stopping">@(stopping ? "Stopping…" : "Stop")</button>
+            }
+            else
+            {
+                <button type="button" class="btn btn-outline-secondary" @onclick="CloseAsync" disabled="@Busy">Cancel</button>
+            }
             <button type="button" class="btn btn-outline-primary" @onclick="GenerateAsync" disabled="@Busy">@(generating ? "Generating…" : preview is null ? "Generate previews" : "Regenerate")</button>
             @if (preview is not null)
             {
@@ -115,6 +122,8 @@
     private int requested;
     private string? errorMessage;
     private bool generating;
+    private bool stopping;
+    private CancellationTokenSource? generateCts;
     private bool saving;
     private bool disposed;
     private readonly CancellationTokenSource cts = new();
@@ -148,8 +157,11 @@
         if (Busy) return;
 
         generating = true;
+        stopping = false;
         errorMessage = null;
         DiscardPreview();
+        using var runCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        generateCts = runCts;
         count = Math.Clamp(count, MovieExtraFanartStillsService.MinCount, MovieExtraFanartStillsService.MaxCount);
         requested = count;
         try
@@ -157,12 +169,13 @@
             // Each still is shown (and ticked) the moment its slot of the video is done.
             void OnStill(ExtraFanartStill still) => _ = InvokeAsync(() =>
             {
-                if (disposed) return;
+                // A frame reported just before a stop landed must not reappear after the dialog went idle.
+                if (disposed || !generating || runCts.IsCancellationRequested) return;
                 arrived.Add(still);
                 selected.Add(still.Id);
                 StateHasChanged();
             });
-            var result = await StillsService.PreviewAsync(MovieId, count, mode, leftEyeOnly, OnStill, cts.Token);
+            var result = await StillsService.PreviewAsync(MovieId, count, mode, leftEyeOnly, OnStill, runCts.Token);
             if (disposed)
             {
                 result.Preview?.Dispose();
@@ -187,10 +200,26 @@
         catch (OperationCanceledException) when (disposed)
         {
         }
+        catch (OperationCanceledException) when (runCts.IsCancellationRequested)
+        {
+            // Stopped by the user: back to idle, nothing half-built kept (the service removed its scratch frames).
+            arrived.Clear();
+            selected.Clear();
+        }
         finally
         {
             generating = false;
+            stopping = false;
+            generateCts = null;
         }
+    }
+
+    private void StopGenerating()
+    {
+        if (!generating || stopping) return;
+        stopping = true;
+        try { generateCts?.Cancel(); }
+        catch (ObjectDisposedException) { }
     }
 
     private async Task SaveAsync()
