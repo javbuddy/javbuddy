@@ -8,7 +8,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Javbuddy.Services.Movies;
 
-public record MovieCropSource(string Key, string Label, string Url);
+/// <summary>One image a cover can be cropped from. <paramref name="ThumbnailUrl"/> is a small variant for the source strip
+/// (the full URL is used when it is null).</summary>
+public record MovieCropSource(string Key, string Label, string Url, string? ThumbnailUrl = null);
 
 /// <param name="HasLocalFolder">Whether a save writes poster.jpg into the movie's library folder,
 /// or (false) only replaces Javbuddy's cached poster.</param>
@@ -99,7 +101,7 @@ public class MovieCoverCropService(
 
         if (hasFanart)
         {
-            sources.Add(new MovieCropSource("backdrop", "Backdrop / Jacket", $"/image-cache/{Uri.EscapeDataString(code)}/fanart/full"));
+            sources.Add(new MovieCropSource("backdrop", "Backdrop / Jacket", $"/image-cache/{Uri.EscapeDataString(code)}/fanart/full", $"/image-cache/{Uri.EscapeDataString(code)}/fanart/thumb"));
         }
 
         var hasPoster = false;
@@ -115,13 +117,13 @@ public class MovieCoverCropService(
 
         if (hasPoster)
         {
-            sources.Add(new MovieCropSource("poster", "Current Poster", $"/image-cache/{Uri.EscapeDataString(code)}/poster/full"));
+            sources.Add(new MovieCropSource("poster", "Current Poster", $"/image-cache/{Uri.EscapeDataString(code)}/poster/full", $"/image-cache/{Uri.EscapeDataString(code)}/poster/thumb"));
         }
 
         var extraFiles = await localLibraryClient.ListExtraFanartFileNamesAsync(code, ct);
         for (var i = 0; i < extraFiles.Count; i++)
         {
-            sources.Add(new MovieCropSource($"extrafanart-{i}", $"Gallery #{i + 1}", $"/image-cache/{Uri.EscapeDataString(code)}/extrafanart/{i}/full"));
+            sources.Add(new MovieCropSource($"extrafanart-{i}", $"Gallery #{i + 1}", $"/image-cache/{Uri.EscapeDataString(code)}/extrafanart/{i}/full", $"/image-cache/{Uri.EscapeDataString(code)}/extrafanart/{i}/thumb"));
         }
 
         var defaultSourceKey = sources.FirstOrDefault(s => s.Key == "backdrop")?.Key

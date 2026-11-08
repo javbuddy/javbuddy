@@ -23,6 +23,19 @@ public class ModalShellTests : BunitContext
         });
 
     [Fact]
+    public void HeaderActions_RenderBesideTheCloseButton()
+    {
+        var cut = Render<ModalShell>(p => p
+            .Add(x => x.Title, "Edit things")
+            .Add(x => x.HeaderActions, (RenderFragment)(b => b.AddMarkupContent(0, "<span id=\"hint\">i</span>"))));
+
+        var actions = cut.Find(".modal-shell-header-actions");
+        Assert.NotNull(actions.QuerySelector("#hint"));
+        Assert.NotNull(actions.QuerySelector(".modal-shell-close-btn"));
+        Assert.True(actions.InnerHtml.IndexOf("hint", StringComparison.Ordinal) < actions.InnerHtml.IndexOf("modal-shell-close-btn", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void RendersTitleBodyAndFooter()
     {
         var cut = RenderShell();

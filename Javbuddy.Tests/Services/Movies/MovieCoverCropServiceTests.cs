@@ -44,7 +44,7 @@ public class MovieCoverCropServiceTests
         client.TryGetMetadataAsync("IPX-535", Arg.Any<CancellationToken>(), false)
             .Returns(new LocalLookupResult(false, null, null, null));
         client.ListExtraFanartFileNamesAsync("IPX-535", Arg.Any<CancellationToken>())
-            .Returns(new List<string>());
+            .Returns(new List<string> { "a.jpg", "b.jpg" });
 
         var cache = Substitute.For<ILocalImageCache>();
         var maintenance = Substitute.For<IImageCacheMaintenanceService>();
@@ -58,6 +58,11 @@ public class MovieCoverCropServiceTests
         Assert.False(result.HasLocalFolder);
         Assert.Contains(result.Sources, s => s.Key == "backdrop");
         Assert.Contains(result.Sources, s => s.Key == "poster");
+
+        // Every source gets a small variant for the source strip alongside its full image.
+        Assert.Equal(4, result.Sources.Count);
+        Assert.All(result.Sources, s => Assert.Equal(s.Url.Replace("/full", "/thumb"), s.ThumbnailUrl));
+        Assert.Equal("/image-cache/IPX-535/extrafanart/1/thumb", result.Sources.Single(s => s.Key == "extrafanart-1").ThumbnailUrl);
     }
 
     [Fact]

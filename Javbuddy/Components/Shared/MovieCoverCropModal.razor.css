@@ -1,45 +1,107 @@
-/* Source Selection Tabs */
-.source-selection-bar {
+/* Source strip */
+.source-strip {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid #35394a;
+    align-items: flex-start; /* keeps Upload level with the thumbnails when their scrollbar adds height */
+    gap: 0.9rem; /* same gap as .cropper-workspace, so the strip lines up with the image and preview below */
+    margin-bottom: 0.75rem;
 }
 
-.source-tab-btn {
-    background-color: #2b303c;
+/* Only the thumbnails scroll; the Upload button stays pinned at the right edge. */
+.source-thumbs {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    padding: 2px;
+}
+
+.source-thumb {
+    position: relative;
+    flex: none;
+    width: 40px;
+    height: 54px;
+    padding: 0;
+    overflow: hidden;
+    background-color: #1b1e27;
     border: 1px solid #3d4354;
-    color: #cfd3de;
-    font-size: 0.82rem;
-    padding: 0.35rem 0.75rem;
-    border-radius: 4px;
+    border-radius: 3px;
     cursor: pointer;
+}
+
+.source-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.source-thumb span {
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    max-width: 100%;
+    padding: 2px 4px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1;
+    color: #ffffff;
+    background-color: rgba(20, 22, 29, 0.8);
+    border-top-right-radius: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.source-thumb .source-thumb-icon {
     display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    padding: 3px 4px;
 }
 
-.source-tab-btn:hover {
-    background-color: #35394a;
-    color: #ffffff;
+.source-thumb:hover:not(:disabled) {
+    border-color: #6c7488;
 }
 
-.source-tab-btn.active {
-    background-color: #2f8fd6;
+.source-thumb.active {
     border-color: #2f8fd6;
+    box-shadow: 0 0 0 1px #2f8fd6;
+}
+
+.source-thumb:disabled,
+.source-add:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.source-add {
+    flex: none;
+    /* Same footprint as .source-thumb, icon only; the margin matches .source-thumbs' padding. */
+    margin-top: 2px;
+    width: 40px;
+    height: 54px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    color: #9aa1af;
+    background: transparent;
+    border: 1px dashed #3d4354;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.source-add:hover:not(:disabled),
+.source-add.active {
     color: #ffffff;
-    font-weight: 500;
+    border-color: #2f8fd6;
 }
 
 /* Upload & URL Import Sections */
 .upload-dropzone {
     border: 2px dashed #454a5e;
     border-radius: 6px;
-    padding: 2.5rem 1.5rem;
+    padding: 1.75rem 1.5rem;
     text-align: center;
     background-color: #1b1e27;
     cursor: pointer;
@@ -71,7 +133,7 @@
     display: flex;
     align-items: center;
     text-align: center;
-    margin: 1.25rem 0;
+    margin: 0.75rem 0;
     color: #9aa1af;
     font-size: 0.75rem;
     font-weight: 600;
@@ -122,16 +184,26 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid #35394a;
+    gap: 0.6rem 1.1rem;
+    margin-top: 0.75rem;
 }
 
 .ratio-group {
-    display: flex;
-    gap: 0.35rem;
+    display: inline-flex;
+}
+
+.ratio-group .btn-tool {
+    border-radius: 0;
+    margin-left: -1px;
+}
+
+.ratio-group .btn-tool:first-child {
+    border-radius: 4px 0 0 4px;
+    margin-left: 0;
+}
+
+.ratio-group .btn-tool:last-child {
+    border-radius: 0 4px 4px 0;
 }
 
 .btn-tool {
@@ -142,6 +214,14 @@
     padding: 0.25rem 0.6rem;
     border-radius: 4px;
     cursor: pointer;
+}
+
+.btn-tool.btn-icon {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
 }
 
 .btn-tool:hover:not(:disabled) {
@@ -158,6 +238,7 @@
     background-color: #2f8fd6;
     border-color: #2f8fd6;
     color: #ffffff;
+    position: relative;
 }
 
 .straighten-controls,
@@ -165,37 +246,40 @@
 .zoom-controls {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
 }
 
-.straighten-label {
-    font-size: 0.8rem;
-    color: #cfd3de;
+.zoom-controls,
+.straighten-controls {
+    flex: 1 1 160px;
+    min-width: 150px;
+}
+
+.slider-label {
+    font-size: 0.78rem;
+    color: #9aa1af;
     margin: 0;
 }
 
-.straighten-slider {
-    width: 140px;
-    cursor: pointer;
-}
-
-.straighten-value {
-    min-width: 3.2rem;
-    font-size: 0.8rem;
+.slider-value {
+    min-width: 2.8rem;
+    font-size: 0.78rem;
     color: #cfd3de;
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
 
-.zoom-slider {
-    width: 110px;
+.zoom-slider,
+.straighten-slider {
+    flex: 1;
+    min-width: 60px;
     cursor: pointer;
 }
 
 /* Workspace */
 .cropper-workspace {
     display: flex;
-    gap: 1.25rem;
+    gap: 0.9rem;
     align-items: flex-start;
 }
 
@@ -206,36 +290,82 @@
 }
 
 .cropper-viewport-wrapper {
+    position: relative;
     flex: 1;
     min-width: 0;
 }
 
-/* Poster Preview Card */
-.cropper-previews {
-    width: 160px;
-    flex-shrink: 0;
+.cropper-busy {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    background-color: #1b1e27;
-    padding: 0.85rem;
+    justify-content: center;
+    color: #ffffff;
+    background-color: rgba(20, 22, 29, 0.7);
     border-radius: 4px;
-    border: 1px solid #35394a;
 }
 
-.preview-title {
-    font-size: 0.8rem;
+.header-info {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    font-size: 0.72rem;
     font-weight: 600;
-    text-transform: uppercase;
+    font-style: italic;
     color: #9aa1af;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.5rem;
+    border: 1px solid #5a6177;
+    border-radius: 50%;
+    cursor: help;
+}
+
+/* A CSS tooltip, because a title attribute doesn't show on keyboard focus. */
+.header-info:hover::after,
+.header-info:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 10;
+    width: max-content;
+    max-width: 240px;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: left;
+    color: #cfd3de;
+    background-color: #14161d;
+    border: 1px solid #3d4354;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.header-info:hover,
+.header-info:focus-visible {
+    color: #ffffff;
+    border-color: #ffffff;
+}
+
+.cropper-previews {
+    width: 150px;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    background-color: #1b1e27;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #35394a;
 }
 
 .preview-poster-wrapper {
     width: 130px;
     height: 185px;
-    border-radius: 4px;
+    border-radius: 2px;
     overflow: hidden;
     background: #14161d;
     border: 1px solid #3d4354;
@@ -247,13 +377,6 @@
     height: 100%;
     display: block;
     object-fit: cover;
-}
-
-.preview-hint {
-    margin-top: 0.5rem;
-    font-size: 0.72rem;
-    color: #8c93a4;
-    text-align: center;
 }
 
 /* Footer */
