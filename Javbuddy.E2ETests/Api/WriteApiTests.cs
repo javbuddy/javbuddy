@@ -60,6 +60,10 @@ public class WriteApiTests(E2EFixture fixture) : IDisposable
         var problem = await BodyAsync(duplicate);
         Assert.Equal(code, problem.GetProperty("code").GetString());
         Assert.Equal($"{fixture.App.ServerAddress}movies/{code}", problem.GetProperty("webUrl").GetString());
+
+        // The shared database outlives this test: don't leave a Missing movie behind for tests that count them.
+        await using var db = await fixture.DbFactory.CreateDbContextAsync();
+        await db.Movies.Where(m => m.Code == code).ExecuteDeleteAsync();
     }
 
     [Theory]

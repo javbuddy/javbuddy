@@ -63,8 +63,14 @@ public class McpTests(E2EFixture fixture)
             Assert.True(annotations?.IdempotentHint, writer);
         }
         Assert.True(byName["fetch_javinizer_metadata"].ProtocolTool.Annotations?.OpenWorldHint);
-        Assert.True(byName["push_nfo"].ProtocolTool.Annotations?.DestructiveHint);
-        Assert.False(byName["update_movie_metadata"].ProtocolTool.Annotations?.DestructiveHint);
+        foreach (var destructive in new[] { "push_nfo", "remove_movie_tag", "remove_movie_cast" })
+        {
+            Assert.True(byName[destructive].ProtocolTool.Annotations?.DestructiveHint, destructive);
+        }
+        foreach (var additive in new[] { "update_movie_metadata", "add_movie_tag", "add_movie_cast" })
+        {
+            Assert.False(byName[additive].ProtocolTool.Annotations?.DestructiveHint, additive);
+        }
         Assert.All(tools, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
     }
 

@@ -27,7 +27,7 @@ public sealed class CastTools(ILibraryApiService library, IHttpContextAccessor h
         CancellationToken ct = default) =>
         McpResults.From(await library.AddCastAsync(code, actor_id, ct), d => ApiLinks.WithUrl(http.HttpContext?.Request, d));
 
-    [McpServerTool(Name = "remove_movie_cast", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "remove_movie_cast", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Removes one cast entry from a movie: either a tracked actor (give actor_id, as shown in the movie's cast) or a cast name that matches no tracked actor "
         + "(give name). Provide exactly one of the two. Returns the updated movie. Database only; the .nfo file is not updated until push_nfo.")]
     public async Task<CallToolResult> RemoveMovieCast(

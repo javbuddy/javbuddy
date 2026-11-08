@@ -26,7 +26,7 @@ public sealed class TagTools(ILibraryApiService library, IHttpContextAccessor ht
         CancellationToken ct = default) =>
         McpResults.From(await library.AddTagAsync(code, tag_id, ct), d => ApiLinks.WithUrl(http.HttpContext?.Request, d));
 
-    [McpServerTool(Name = "remove_movie_tag", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = false)]
+    [McpServerTool(Name = "remove_movie_tag", ReadOnly = false, Destructive = true, Idempotent = true, OpenWorld = false)]
     [Description("Removes a tag that was added to a movie directly (no change when it hasn't it). A tag the movie only carries through its scenes or highlights "
         + "(fromClips) stays. Returns the updated movie. Database only; the .nfo file is not updated until push_nfo.")]
     public async Task<CallToolResult> RemoveMovieTag(
