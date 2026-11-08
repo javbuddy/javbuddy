@@ -2,6 +2,7 @@ using Javbuddy.Models;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
+using Javbuddy.Services.MediaInfo;
 using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Movies;
 using Javbuddy.Tests.TestSupport;
@@ -139,6 +140,29 @@ public class MovieAddServiceTests
         var movie = await db.Movies.SingleAsync();
         Assert.Equal("Local Title", movie.MetaTitle);
         Assert.Equal("Local", movie.MetaSourceName);
+    }
+
+    [Theory]
+    [InlineData(false, 90)]
+    [InlineData(true, null)]
+    public async Task AddAsync_LocalMetadataWithoutRuntime_FillsRuntimeFromVideoDurationOnlyWhenAnNfoExists(bool isGenerated, int? expectedRuntime)
+    {
+        using var factory = new TestDbContextFactory();
+        var localLibraryClient = Substitute.For<ILocalLibraryClient>();
+        var metadata = new LocalMovieMetadata
+        {
+            Title = isGenerated ? null : "Local Title",
+            IsGenerated = isGenerated,
+            MediaProbe = new MediaProbeResult { Success = true, DurationSeconds = 5400 },
+        };
+        localLibraryClient.TryGetMetadataAsync("ABC-123", Arg.Any<CancellationToken>())
+            .Returns(new LocalLookupResult(true, "/media/ABC-123", metadata, null));
+
+        await CreateService(factory, localLibraryClient: localLibraryClient).AddAsync("ABC-123");
+
+        await using var db = await factory.CreateDbContextAsync();
+        var movie = await db.Movies.SingleAsync();
+        Assert.Equal(expectedRuntime, movie.MetaRuntimeMinutes);
     }
 
     [Fact]

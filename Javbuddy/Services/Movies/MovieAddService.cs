@@ -78,6 +78,7 @@ public class MovieAddService(
             if (tracked is not null)
             {
                 LocalLibraryMetadataMapper.Apply(tracked, local.Metadata);
+                LocalLibraryMetadataMapper.FillMissingRuntimeFromMedia(tracked, local.Metadata);
                 await MovieActorAssociation.SynchronizeAsync(db, tracked, ct);
                 if (!local.Metadata.IsGenerated)
                 {

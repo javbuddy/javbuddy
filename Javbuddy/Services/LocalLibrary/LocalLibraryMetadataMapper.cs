@@ -24,6 +24,18 @@ public static class LocalLibraryMetadataMapper
         ApplyMediaProbe(movie, metadata.MediaProbe);
     }
 
+    /// <summary>For a newly added movie whose .nfo has no runtime: takes the runtime in minutes from the probed video
+    /// duration. Never overwrites a runtime that is already set, and does nothing for a folder without an .nfo — a filled
+    /// runtime would make the placeholder count as existing metadata (<see cref="HasExistingMetadata"/>) and keep an
+    /// .nfo added later from being imported.</summary>
+    public static void FillMissingRuntimeFromMedia(Movie movie, LocalMovieMetadata metadata)
+    {
+        if (!metadata.IsGenerated && movie.MetaRuntimeMinutes is null && movie.MediaDurationSeconds is > 0)
+        {
+            movie.MetaRuntimeMinutes = Math.Max(1, (int)Math.Round(movie.MediaDurationSeconds.Value / 60));
+        }
+    }
+
     /// <summary>Whether the movie already holds descriptive metadata that a rescan must not replace: any descriptive field
     /// (MetaGenres mirrors the movie's tags), or a source other than "Local"/"Generated". A "Local" or "Generated"
     /// movie with none of that is a placeholder (what a folder without an .nfo was imported as), so an .nfo found

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- A newly added movie (added by code, or imported by a library rescan) whose `.nfo` has no runtime now gets its runtime from the video file's duration, if MediaInfo is on and the scan succeeds at that moment. An existing runtime is never replaced, and a folder without an `.nfo` is left alone so an `.nfo` added later is still imported.
+
 ## [0.5.1] - 2026-11-08
 
 ### Added

@@ -345,4 +345,33 @@ public class GeneratedMetadataTests
         Assert.True(LocalLibraryMetadataMapper.HasExistingMetadata(new Javbuddy.Models.Movie { MetaReleaseDate = new DateTime(2024, 1, 1) }));
         Assert.False(LocalLibraryMetadataMapper.HasExistingMetadata(new Javbuddy.Models.Movie { MetaSourceName = "Local" }));
     }
+
+    [Theory]
+    [InlineData(null, 5400.0, 90)]
+    [InlineData(null, 5429.0, 90)]
+    [InlineData(null, 10.0, 1)]
+    [InlineData(69, 5400.0, 69)]
+    [InlineData(null, null, null)]
+    [InlineData(null, 0.0, null)]
+    public void FillMissingRuntimeFromMedia_FillsOnlyWhenRuntimeIsMissing(int? runtime, double? durationSeconds, int? expected)
+    {
+        var movie = new Movie { MetaRuntimeMinutes = runtime, MediaDurationSeconds = durationSeconds };
+
+        LocalLibraryMetadataMapper.FillMissingRuntimeFromMedia(movie, new LocalMovieMetadata());
+
+        Assert.Equal(expected, movie.MetaRuntimeMinutes);
+    }
+
+    [Fact]
+    public void FillMissingRuntimeFromMedia_LeavesAFolderWithoutNfoAPlaceholder()
+    {
+        var movie = new Movie { Code = "abc-001", MediaDurationSeconds = 5400 };
+        var metadata = new LocalMovieMetadata { IsGenerated = true };
+        LocalLibraryMetadataMapper.ApplyDescriptiveMetadata(movie, metadata);
+
+        LocalLibraryMetadataMapper.FillMissingRuntimeFromMedia(movie, metadata);
+
+        Assert.Null(movie.MetaRuntimeMinutes);
+        Assert.False(LocalLibraryMetadataMapper.HasExistingMetadata(movie));
+    }
 }

@@ -218,6 +218,7 @@ public class LibraryRescanTask(
         if (tracked is null) return;
 
         LocalLibraryMetadataMapper.Apply(tracked, local.Metadata);
+        LocalLibraryMetadataMapper.FillMissingRuntimeFromMedia(tracked, local.Metadata);
         await MovieActorAssociation.SynchronizeAsync(trackedDb, tracked, ct);
         if (!local.Metadata.IsGenerated)
         {
