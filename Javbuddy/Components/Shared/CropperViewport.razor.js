@@ -79,6 +79,11 @@ export class ImageCropper {
     init() {
         if (!this.img.complete) {
             this.img.onload = () => this.setupGeometry();
+            // An undecodable image would otherwise stay hidden (see data-ready) with no explanation.
+            this.img.onerror = () => {
+                this.container.dataset.ready = '1';
+                this.onImageError?.();
+            };
         } else {
             this.setupGeometry();
         }
@@ -111,6 +116,8 @@ export class ImageCropper {
 
         this.applyZoom(1.0);
         this.resetCrop();
+        // Everything stays hidden until the first layout, so no empty/broken <img> or stray crop box shows.
+        this.container.dataset.ready = '1';
     }
 
     applyZoom(newZoom) {
@@ -154,11 +161,13 @@ export class ImageCropper {
         this.resetCrop();
     }
 
-    /** Straightens the image by `degrees` (clockwise) and lays the view out again. */
+    /** Straightens the image by `degrees` (clockwise) and lays the view out again; the zoom level is kept. */
     setRotation(degrees) {
         this.rotation = (Number(degrees) || 0) * Math.PI / 180;
         if (this.img.complete && this.img.naturalWidth) {
+            const zoom = this.zoom;
             this.setupGeometry();
+            this.applyZoom(zoom);
         }
     }
 
@@ -273,6 +282,7 @@ export class ImageCropper {
         e.preventDefault();
         const delta = e.deltaY < 0 ? 0.1 : -0.1;
         this.applyZoom(this.zoom + delta);
+        this.onZoomChanged?.(this.zoom);
     }
 
     handlePointerDown(e) {
@@ -415,6 +425,7 @@ export class ImageCropper {
 export function createCropperSession(createCropper) {
     let activeCropper = null;
     let activeObjectUrl = null;
+    let host = null;
 
     function revokeImageSource() {
         if (activeObjectUrl) {
@@ -431,6 +442,7 @@ export function createCropperSession(createCropper) {
     return {
         async setImageSource(img, streamRef, contentType) {
             revokeImageSource();
+            delete img.parentElement.dataset.ready;
             const buffer = await streamRef.arrayBuffer();
             activeObjectUrl = URL.createObjectURL(new Blob([buffer], { type: contentType }));
             img.src = activeObjectUrl;
@@ -438,9 +450,13 @@ export function createCropperSession(createCropper) {
         initCropper(container, img, ...previewCanvases) {
             destroyActiveCropper();
             activeCropper = createCropper(container, img, ...previewCanvases);
+            // Wheel zoom and load failures happen in JS only; tell the .NET host (OnZoomChanged / OnImageError).
+            activeCropper.onZoomChanged = (zoom) => host?.invokeMethodAsync('OnZoomChanged', zoom).catch(() => {});
+            activeCropper.onImageError = () => host?.invokeMethodAsync('OnImageError').catch(() => {});
             activeCropper.init();
             return true;
         },
+        setHost(dotNetRef) { host = dotNetRef; },
         setAspectRatio: (ratio) => activeCropper?.setAspectRatio(ratio),
         setZoom: (zoom) => activeCropper?.applyZoom(zoom),
         setRotation: (degrees) => activeCropper?.setRotation(degrees),

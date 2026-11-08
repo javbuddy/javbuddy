@@ -69,9 +69,9 @@ public class ActorPhotoUploadFlowTests
 
             // 4. Cropper toolbar and previews should appear
             await Expect(modal.Locator(".cropper-toolbar")).ToBeVisibleAsync();
-            await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "1:1 Square" })).ToBeVisibleAsync();
-            await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "Free-form" })).ToBeVisibleAsync();
-            await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "2:3 Portrait" })).ToBeVisibleAsync();
+            await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "1:1", Exact = true })).ToBeVisibleAsync();
+            await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "Free", Exact = true })).ToBeVisibleAsync();
+            await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "2:3", Exact = true })).ToBeVisibleAsync();
             await Expect(modal.Locator(".preview-canvas").First).ToBeVisibleAsync();
 
             // 5. Save photo

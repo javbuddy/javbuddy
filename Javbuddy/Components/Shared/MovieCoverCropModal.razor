@@ -9,34 +9,58 @@
 {
     <ModalShell MaxWidth="880px" OnClose="CloseAsync" Busy="@rotating">
         <TitleContent>Crop Cover — @(string.IsNullOrWhiteSpace(Title) ? Code : Title)</TitleContent>
+        <HeaderActions>
+            @if (selectedImageBytes is not null)
+            {
+                <span class="header-info" tabindex="0" role="img" aria-label="Drag inside the box to pan. Drag handles to resize. Scroll to zoom." data-tip="Drag inside the box to pan. Drag handles to resize. Scroll to zoom.">i</span>
+            }
+        </HeaderActions>
         <ChildContent>
             @if (errorMessage is not null)
             {
                 <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
             }
 
-            @* Source selection bar *@
-            <div class="source-selection-bar">
+            @* Source selection strip *@
+            <div class="source-strip">
+                <div class="source-thumbs">
                 @foreach (var src in availableSources)
                 {
                     <button type="button"
-                            class="source-tab-btn @(activeTab == src.Key ? "active" : "")"
+                            class="source-thumb @(activeTab == src.Key ? "active" : "")"
+                            title="@src.Label"
+                            aria-label="@src.Label"
+                            aria-pressed="@(activeTab == src.Key ? "true" : "false")"
                             @onclick="() => SelectSourceTabAsync(src.Key)"
-                            disabled="@(loadingSource || saving || rotating)">
-                        @src.Label
+                            disabled="@IsBusy">
+                        <img src="@(src.ThumbnailUrl ?? src.Url)" alt="" loading="lazy" decoding="async" />
+                        @if (src.Key == "backdrop")
+                        {
+                            <span class="source-thumb-icon" aria-hidden="true">
+                                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="m2.5 11.5 3.5-3.5 2.5 2.5 2-2 3 3"/><circle cx="11" cy="6" r="1" fill="currentColor" stroke="none"/></svg>
+                            </span>
+                        }
+                        else if (src.Key == "poster")
+                        {
+                            <span class="source-thumb-icon" aria-hidden="true">
+                                <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><rect x="3.5" y="1.5" width="9" height="13" rx="1.5"/><path d="M6 11.5h4"/><path d="M6 4.5h4v4H6z"/></svg>
+                            </span>
+                        }
+                        else
+                        {
+                            <span>@SourceCaption(src)</span>
+                        }
                     </button>
                 }
+                </div>
                 <button type="button"
-                        class="source-tab-btn @(activeTab == "upload" ? "active" : "")"
+                        class="source-add @(activeTab == "upload" ? "active" : "")"
+                        title="Upload a file or import from a URL"
+                        aria-label="Upload"
+                        aria-pressed="@(activeTab == "upload" ? "true" : "false")"
                         @onclick='() => SelectSourceTabAsync("upload")'
-                        disabled="@(loadingSource || saving || rotating)">
-                    Upload File
-                </button>
-                <button type="button"
-                        class="source-tab-btn @(activeTab == "url" ? "active" : "")"
-                        @onclick='() => SelectSourceTabAsync("url")'
-                        disabled="@(loadingSource || saving || rotating)">
-                    Import URL
+                        disabled="@IsBusy">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M.5 10a.5.5 0 0 1 .5.5V13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0V13a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.65 1.15a.5.5 0 0 1 .7 0l3 3a.5.5 0 0 1-.7.7L8.5 2.7v8.8a.5.5 0 0 1-1 0V2.7L5.35 4.85a.5.5 0 1 1-.7-.7z"/></svg>
                 </button>
             </div>
 
@@ -52,7 +76,7 @@
                 <div class="upload-dropzone">
                     <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
                     <div class="upload-icon">
-                        <svg viewBox="0 0 16 16" width="48" height="48" fill="currentColor" aria-hidden="true">
+                        <svg viewBox="0 0 16 16" width="36" height="36" fill="currentColor" aria-hidden="true">
                             <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
                             <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
                         </svg>
@@ -60,9 +84,9 @@
                     <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
                     <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
                 </div>
-            }
-            else if (activeTab == "url" && selectedImageBytes is null)
-            {
+
+                <div class="upload-divider" aria-hidden="true"><span>OR</span></div>
+
                 <div class="upload-url-section">
                     <label class="form-label text-light small mb-1" for="cover-image-url-input">Import from URL</label>
                     <div class="input-group">
@@ -85,54 +109,56 @@
             }
             else if (selectedImageBytes is not null)
             {
-                <div class="cropper-toolbar">
-                    <div class="ratio-group">
-                        <button type="button" class="btn-tool @(IsRatioActive(1.0 / 1.42) ? "active" : "")" @onclick="() => SetAspectRatio(1.0 / 1.42)" title="Standard DVD front cover ratio (~1:1.42)">
-                            DVD Case (1:1.42)
-                        </button>
-                        <button type="button" class="btn-tool @(IsRatioActive(2.0 / 3.0) ? "active" : "")" @onclick="() => SetAspectRatio(2.0 / 3.0)" title="Standard 2:3 media poster ratio">
-                            2:3 Poster
-                        </button>
-                        <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)" title="Free-form unconstrained crop">
-                            Free-form
-                        </button>
-                    </div>
-
-                    <div class="zoom-controls">
-                        <button type="button" class="btn-tool" @onclick="() => AdjustZoom(-0.1)" title="Zoom out">-</button>
-                        <input type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom" @oninput="HandleZoomInput" />
-                        <button type="button" class="btn-tool" @onclick="() => AdjustZoom(0.1)" title="Zoom in">+</button>
-                        <button type="button" class="btn-tool ms-2" @onclick="ResetCrop" title="Reset crop box to proposed front cover">Reset</button>
-                    </div>
-
-                    <div class="straighten-controls">
-                        <label class="straighten-label" for="cover-straighten">Straighten</label>
-                        <input id="cover-straighten" type="range" class="form-range straighten-slider" min="-45" max="45" step="0.1"
-                               value="@straightenDegrees.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)"
-                               @oninput="HandleStraightenInput" disabled="@(rotating || saving)" />
-                        <span class="straighten-value">@straightenDegrees.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)°</span>
-                        <button type="button" class="btn-tool straighten-reset-btn" @onclick="ResetStraightenAsync" disabled="@(rotating || saving || straightenDegrees == 0)" title="Set the fine rotation back to 0°">0°</button>
-                    </div>
-
-                    <div class="rotate-controls">
-                        <button type="button" class="btn-tool rotate-left-btn" @onclick="() => RotateAsync(clockwise: false)" disabled="@(rotating || saving)" title="Rotate the image 90° counter-clockwise">&#8634; Rotate left</button>
-                        <button type="button" class="btn-tool rotate-right-btn" @onclick="() => RotateAsync(clockwise: true)" disabled="@(rotating || saving)" title="Rotate the image 90° clockwise">Rotate right &#8635;</button>
-                    </div>
-                </div>
-
                 <div class="cropper-workspace">
                     <div class="cropper-viewport-wrapper">
                         <CropperViewport HeightPx="400" @ref="viewport" />
-                        <small class="text-muted d-block mt-1">Drag inside box to pan • Drag handles to resize • Scroll to zoom</small>
+                        @if (rotating || preparingImage)
+                        {
+                            <div class="cropper-busy" role="status">
+                                <span class="spinner-border" aria-hidden="true"></span>
+                                <span class="visually-hidden">@(rotating ? "Rotating image" : "Preparing image")</span>
+                            </div>
+                        }
                     </div>
 
-                    <div class="cropper-previews">
-                        <span class="preview-title">Cover Preview</span>
-                        <div class="preview-poster-wrapper" title="Poster Card Preview">
+                    <div class="cropper-previews" title="Poster card preview">
+                        <div class="preview-poster-wrapper">
                             <canvas width="130" height="185" class="preview-canvas" @ref="previewPosterCanvasRef"></canvas>
                         </div>
-                        <span class="preview-hint">Proposed front cover crop</span>
                     </div>
+                </div>
+
+                <div class="cropper-toolbar">
+                    <div class="ratio-group">
+                        <button type="button" class="btn-tool @(IsRatioActive(1.0 / 1.42) ? "active" : "")" @onclick="() => SetAspectRatio(1.0 / 1.42)" title="Standard DVD front cover ratio (~1:1.42)">DVD</button>
+                        <button type="button" class="btn-tool @(IsRatioActive(2.0 / 3.0) ? "active" : "")" @onclick="() => SetAspectRatio(2.0 / 3.0)" title="Standard 2:3 media poster ratio">2:3</button>
+                        <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)" title="Free-form unconstrained crop">Free</button>
+                    </div>
+
+                    <div class="rotate-controls">
+                        <button type="button" class="btn-tool btn-icon rotate-left-btn" @onclick="() => RotateAsync(clockwise: false)" disabled="@IsBusy" title="Rotate the image 90° counter-clockwise" aria-label="Rotate left">
+                            <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6V2.5M3 6h3.5"/><path d="M3.4 6A5.5 5.5 0 1 1 2.6 9.5"/></svg>
+                        </button>
+                        <button type="button" class="btn-tool btn-icon rotate-right-btn" @onclick="() => RotateAsync(clockwise: true)" disabled="@IsBusy" title="Rotate the image 90° clockwise" aria-label="Rotate right">
+                            <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 6V2.5M13 6H9.5"/><path d="M12.6 6A5.5 5.5 0 1 0 13.4 9.5"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="straighten-controls">
+                        <label class="slider-label" for="cover-straighten">Straighten</label>
+                        <input id="cover-straighten" type="range" class="form-range straighten-slider" min="-45" max="45" step="0.1"
+                               value="@straightenDegrees.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)"
+                               @oninput="HandleStraightenInput" disabled="@IsBusy" />
+                        <span class="slider-value">@straightenDegrees.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)°</span>
+                    </div>
+
+                    <div class="zoom-controls">
+                        <label class="slider-label" for="cover-zoom">Zoom</label>
+                        <input id="cover-zoom" type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" @oninput="HandleZoomInput" />
+                        <span class="slider-value">@currentZoom.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)×</span>
+                    </div>
+
+                    <button type="button" class="btn-tool" @onclick="ResetAll" disabled="@IsBusy" title="Reset the crop box, zoom and straighten">Reset</button>
                 </div>
             }
         </ChildContent>
@@ -143,7 +169,7 @@
                     <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@(saving || rotating)">
                         Cancel
                     </button>
-                    <button type="button" class="btn btn-primary btn-sm crop-save-btn" @onclick="SaveCroppedAsync" disabled="@(saving || rotating)" title="@SaveDestinationHint">
+                    <button type="button" class="btn btn-primary btn-sm crop-save-btn" @onclick="SaveCroppedAsync" disabled="@IsBusy" title="@SaveDestinationHint">
                         @(saving ? "Saving…" : "Save Cropped Cover")
                     </button>
                 </div>
@@ -173,10 +199,15 @@
     private bool loadingSource;
     private string? selectedImageContentType;
     private byte[]? selectedImageBytes;
+    // The image as loaded, before any 90° turns, so Reset can undo them.
+    private byte[]? originalImageBytes;
+    private string? originalImageContentType;
     private double? currentAspectRatio = 1.0 / 1.42;
     private double currentZoom = 1.0;
     private bool saving;
     private bool rotating;
+    // True from loading new bytes into the cropper until it has been set up on them.
+    private bool preparingImage;
     private double straightenDegrees;
     private string? errorMessage;
     private bool hasLocalFolder;
@@ -187,12 +218,16 @@
     private bool shouldInitCropper;
     private string imageUrlInput = string.Empty;
     private bool fetchingUrl;
+
+    // Everything that changes the image or saves is locked while it loads, rotates or saves.
+    private bool IsBusy => loadingSource || saving || rotating || preparingImage;
     private string? loadedCode;
 
     private CropperViewport? viewport;
     private ElementReference previewPosterCanvasRef;
 
     private IJSObjectReference? jsModule;
+    private DotNetObjectReference<MovieCoverCropModal>? selfRef;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -222,6 +257,8 @@
                 // data: URL, which kept a multi-MB string in the render tree and SignalR frame.
                 using var streamRef = new DotNetStreamReference(new MemoryStream(selectedImageBytes, writable: false));
                 await jsModule.InvokeVoidAsync("setImageSource", viewport!.Image, streamRef, selectedImageContentType);
+                selfRef ??= DotNetObjectReference.Create(this);
+                await jsModule.InvokeVoidAsync("setHost", selfRef);
                 await jsModule.InvokeVoidAsync("initCropper", viewport!.Container, viewport.Image, previewPosterCanvasRef);
                 if (straightenDegrees != 0)
                 {
@@ -240,8 +277,30 @@
             {
                 errorMessage = $"Could not initialize cropper: {ex.Message}";
             }
+            finally
+            {
+                preparingImage = false;
+                StateHasChanged();
+            }
         }
     }
+
+    /// <summary>Called from JS when the mouse wheel zooms the image, so the slider and readout follow.</summary>
+    [JSInvokable]
+    public Task OnZoomChanged(double zoom) => InvokeAsync(() =>
+    {
+        currentZoom = Math.Round(Math.Clamp(zoom, 1.0, 3.0), 2);
+        StateHasChanged();
+    });
+
+    /// <summary>Called from JS when the browser can't decode the loaded image.</summary>
+    [JSInvokable]
+    public Task OnImageError() => InvokeAsync(() =>
+    {
+        errorMessage = "The image could not be displayed. It may be corrupt or in an unsupported format.";
+        preparingImage = false;
+        StateHasChanged();
+    });
 
     private async Task LoadSourcesAndDefaultImageAsync()
     {
@@ -276,14 +335,18 @@
 
     private async Task SelectSourceTabAsync(string tabKey)
     {
-        if (activeTab == tabKey && selectedImageBytes is not null) return;
+        // Clicking Upload again always brings the upload options back, even with an image loaded.
+        if (activeTab == tabKey && tabKey != "upload" && selectedImageBytes is not null) return;
         activeTab = tabKey;
         errorMessage = null;
 
-        if (tabKey == "upload" || tabKey == "url")
+        if (tabKey == "upload")
         {
             selectedImageContentType = null;
             selectedImageBytes = null;
+            originalImageBytes = null;
+            originalImageContentType = null;
+            await DestroyCropperAsync();
             return;
         }
 
@@ -345,10 +408,17 @@
         }
     }
 
-    private void LoadSelectedImage(byte[] bytes, string contentType)
+    private void LoadSelectedImage(byte[] bytes, string contentType, bool isOriginal = true)
     {
+        if (isOriginal)
+        {
+            originalImageBytes = bytes;
+            originalImageContentType = contentType;
+        }
+
         selectedImageBytes = bytes;
         selectedImageContentType = contentType;
+        preparingImage = true;
         straightenDegrees = 0;
         currentZoom = 1.0;
         currentAspectRatio = 1.0 / 1.42;
@@ -396,20 +466,6 @@
         }
     }
 
-    private async Task AdjustZoom(double delta)
-    {
-        currentZoom = Math.Clamp(currentZoom + delta, 1.0, 3.0);
-        if (jsModule is not null)
-        {
-            try
-            {
-                await jsModule.InvokeVoidAsync("setZoom", currentZoom);
-            }
-            catch (JSDisconnectedException) { }
-            catch (InvalidOperationException) { }
-        }
-    }
-
     private async Task RotateAsync(bool clockwise)
     {
         if (selectedImageBytes is null || rotating) return;
@@ -418,13 +474,17 @@
         errorMessage = null;
         try
         {
-            var rotated = await CoverCropService.RotateImageAsync(selectedImageBytes, clockwise);
+            // Render the spinner now: the rotation is CPU-bound and may not yield on its own, which would
+            // hold the render back until it finishes. Running it on the thread pool also keeps the circuit responsive.
+            StateHasChanged();
+            var bytes = selectedImageBytes;
+            var rotated = await Task.Run(() => CoverCropService.RotateImageAsync(bytes, clockwise));
             if (rotated is { Length: > 0 })
             {
                 // Reloads the cropper on the rotated image, which resets the crop box and zoom.
                 var ratio = currentAspectRatio;
                 var straighten = straightenDegrees;
-                LoadSelectedImage(rotated, "image/png");
+                LoadSelectedImage(rotated, "image/png", isOriginal: false);
                 currentAspectRatio = ratio;
                 straightenDegrees = straighten;
             }
@@ -446,13 +506,10 @@
         await SetStraightenAsync(Math.Clamp(Math.Round(degrees, 1), -45, 45));
     }
 
-    private Task ResetStraightenAsync() => SetStraightenAsync(0);
-
-    // The cropper lays the rotated image out again, which resets its zoom and crop box.
+    // The cropper lays the rotated image out again, which resets its crop box but keeps the zoom.
     private async Task SetStraightenAsync(double degrees)
     {
         straightenDegrees = degrees;
-        currentZoom = 1.0;
         if (jsModule is not null)
         {
             try
@@ -464,13 +521,30 @@
         }
     }
 
-    private async Task ResetCrop()
+    private static string SourceCaption(MovieCropSource src) =>
+        src.Key.StartsWith("extrafanart-", StringComparison.Ordinal) && int.TryParse(src.Key["extrafanart-".Length..], out var index)
+            ? (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : src.Label;
+
+    // Zoom, fine rotation and the crop box go back to their starting state; a 90° turn is undone by reloading the original image.
+    private async Task ResetAll()
     {
+        if (originalImageBytes is not null && !ReferenceEquals(selectedImageBytes, originalImageBytes))
+        {
+            // The image was turned by 90° steps: reload the original, which also resets the crop box, zoom and straighten.
+            var ratio = currentAspectRatio;
+            LoadSelectedImage(originalImageBytes, originalImageContentType ?? "image/jpeg");
+            currentAspectRatio = ratio;
+            return;
+        }
+
         currentZoom = 1.0;
+        straightenDegrees = 0;
         if (jsModule is not null)
         {
             try
             {
+                await jsModule.InvokeVoidAsync("setRotation", 0.0);
                 await jsModule.InvokeVoidAsync("setZoom", 1.0);
                 await jsModule.InvokeVoidAsync("resetCrop");
             }
@@ -483,6 +557,9 @@
     {
         selectedImageContentType = null;
         selectedImageBytes = null;
+        originalImageBytes = null;
+        originalImageContentType = null;
+        preparingImage = false;
         straightenDegrees = 0;
         errorMessage = null;
         shouldInitCropper = false;
@@ -561,23 +638,27 @@
         }
     }
 
+    private async Task DestroyCropperAsync()
+    {
+        if (jsModule is null) return;
+        try
+        {
+            await jsModule.InvokeVoidAsync("destroyCropper");
+        }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+    }
+
     private async Task CloseAsync()
     {
         ResetSelection();
-        if (jsModule is not null)
-        {
-            try
-            {
-                await jsModule.InvokeVoidAsync("destroyCropper");
-            }
-            catch (JSDisconnectedException) { }
-            catch (InvalidOperationException) { }
-        }
+        await DestroyCropperAsync();
         await OnClose.InvokeAsync();
     }
 
     public async ValueTask DisposeAsync()
     {
+        selfRef?.Dispose();
         if (jsModule is not null)
         {
             try

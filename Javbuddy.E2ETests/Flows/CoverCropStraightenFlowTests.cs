@@ -43,7 +43,7 @@ public class CoverCropStraightenFlowTests
 
             var modal = page.Locator(".modal-shell-panel");
             await Expect(modal).ToBeVisibleAsync();
-            await modal.GetByRole(AriaRole.Button, new() { Name = "Upload File" }).ClickAsync();
+            await modal.GetByRole(AriaRole.Button, new() { Name = "Upload" }).ClickAsync();
             await modal.Locator("input[type='file']").SetInputFilesAsync(tempImagePath);
 
             var slider = modal.Locator(".straighten-slider");
@@ -53,7 +53,7 @@ public class CoverCropStraightenFlowTests
 
             // Straighten by 20° (the Blazor oninput handler lays the cropper out again).
             await slider.FillAsync("20");
-            await Expect(modal.Locator(".straighten-value")).ToContainTextAsync("20.0");
+            await Expect(modal.Locator(".straighten-controls .slider-value")).ToContainTextAsync("20.0");
             await Expect(image).ToHaveCSSAsync("transform", new System.Text.RegularExpressions.Regex("^matrix\\("));
 
             // Every corner of the crop box must lie inside the rotated image (2px inset tolerance).
@@ -75,8 +75,8 @@ public class CoverCropStraightenFlowTests
                 """);
             Assert.True(inside, "the crop box left the rotated image");
 
-            // The 0° button restores the unrotated layout.
-            await modal.Locator(".straighten-reset-btn").ClickAsync();
+            // Reset restores the unrotated layout.
+            await modal.Locator(".cropper-toolbar > .btn-tool", new() { HasTextString = "Reset" }).ClickAsync();
             await Expect(image).ToHaveCSSAsync("transform", "none");
             await Expect(page.Locator("#blazor-error-ui")).ToBeHiddenAsync();
         }

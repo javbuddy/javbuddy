@@ -287,6 +287,90 @@ public class ActorImageUploadModalTests : BunitContext
         cut.WaitForAssertion(() => Assert.False(SavePhotoButton(cut).HasAttribute("disabled")));
     }
 
+    private async Task<IRenderedComponent<ActorImageUploadModal>> RenderWithImageAsync(BunitJSModuleInterop module)
+    {
+        var cacheService = Substitute.For<IActorImageCacheService>();
+        cacheService.HasCustomImageAsync(1, Arg.Any<CancellationToken>()).Returns(false);
+        cacheService.DownloadImageFromUrlAsync("https://example.com/photo.png", Arg.Any<CancellationToken>())
+            .Returns(new ActorImageDownloadResult(true, Bytes: [1, 2, 3, 4], ContentType: "image/png"));
+        Services.AddSingleton(cacheService);
+
+        var cut = Render<ActorImageUploadModal>(p => p
+            .Add(m => m.Show, true)
+            .Add(m => m.ActorId, 1)
+            .Add(m => m.ActorName, "Yua Mikami"));
+        cut.Find("input[type='url']").Input("https://example.com/photo.png");
+        await cut.InvokeAsync(() => cut.Find("button.fetch-btn").Click());
+        cut.WaitForAssertion(() => module.VerifyInvoke("initCropper"));
+        return cut;
+    }
+
+    [Fact]
+    public async Task ActorImageUploadModal_UsesTheSharedCropLayout_WithPortraitPreviewsKept()
+    {
+        var module = JSInterop.SetupModule("./Components/Shared/ActorImageUploadModal.razor.js");
+        module.Mode = JSRuntimeMode.Loose;
+        var cut = await RenderWithImageAsync(module);
+
+        // Ratio group (short labels), zoom slider with a readout, and Reset sit in one toolbar under the image.
+        Assert.Equal(["1:1", "2:3", "Free"], cut.FindAll(".ratio-group .btn-tool").Select(b => b.TextContent.Trim()));
+        Assert.Equal("1.0×", cut.Find(".zoom-controls .slider-value").TextContent);
+        Assert.Empty(cut.FindAll(".zoom-controls .btn-tool"));
+        Assert.Contains(cut.FindAll(".cropper-toolbar > .btn-tool"), b => b.TextContent == "Reset");
+        // The hint moved into the header, and the preview caption is gone, but both avatar previews stay.
+        Assert.Contains("Scroll to zoom", cut.Find(".modal-shell-header-actions .header-info").GetAttribute("data-tip"));
+        Assert.Empty(cut.FindAll(".preview-title"));
+        Assert.NotEmpty(cut.FindAll(".preview-circle-wrapper canvas"));
+        Assert.NotEmpty(cut.FindAll(".preview-square-wrapper canvas"));
+        // The portrait-only footer actions are untouched.
+        Assert.Contains(cut.FindAll("button"), b => b.TextContent.Contains("Choose Different Image"));
+        Assert.Contains(cut.FindAll("button"), b => b.TextContent.Contains("Upload Full (Skip Crop)"));
+    }
+
+    [Fact]
+    public async Task ActorImageUploadModal_ShowsASpinnerUntilTheCropperIsUp()
+    {
+        var module = JSInterop.SetupModule("./Components/Shared/ActorImageUploadModal.razor.js");
+        module.Mode = JSRuntimeMode.Loose;
+        var initCropper = module.SetupVoid("initCropper", _ => true);
+        var cut = await RenderWithImageAsync(module);
+
+        Assert.NotNull(cut.Find(".cropper-busy .spinner-border"));
+        Assert.Equal("Preparing image", cut.Find(".cropper-busy .visually-hidden").TextContent);
+
+        initCropper.SetVoidResult();
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".cropper-busy")));
+    }
+
+    [Fact]
+    public async Task ActorImageUploadModal_WheelZoomFromJs_MovesTheSliderAndReadout()
+    {
+        var module = JSInterop.SetupModule("./Components/Shared/ActorImageUploadModal.razor.js");
+        module.Mode = JSRuntimeMode.Loose;
+        var cut = await RenderWithImageAsync(module);
+
+        await cut.InvokeAsync(() => cut.Instance.OnZoomChanged(1.7000000000000002));
+
+        Assert.Equal("1.7×", cut.Find(".zoom-controls .slider-value").TextContent);
+        Assert.Equal("1.70", cut.Find(".zoom-slider").GetAttribute("value"));
+    }
+
+    [Fact]
+    public async Task ActorImageUploadModal_ImageDecodeFailure_ShowsAnError_AndKeepsSaveDisabled()
+    {
+        var module = JSInterop.SetupModule("./Components/Shared/ActorImageUploadModal.razor.js");
+        module.Mode = JSRuntimeMode.Loose;
+        var initCropper = module.SetupVoid("initCropper", _ => true);
+        var cut = await RenderWithImageAsync(module);
+
+        await cut.InvokeAsync(() => cut.Instance.OnImageError());
+
+        Assert.Contains("could not be displayed", cut.Find(".alert-danger").TextContent);
+        Assert.Empty(cut.FindAll(".cropper-busy"));
+        Assert.True(SavePhotoButton(cut).HasAttribute("disabled"));
+        initCropper.SetVoidResult();
+    }
+
     private static AngleSharp.Dom.IElement SavePhotoButton(IRenderedComponent<ActorImageUploadModal> cut) =>
         cut.FindAll("button").Single(b => b.TextContent.Contains("Save Photo"));
 }

@@ -1,7 +1,7 @@
 .upload-dropzone {
     border: 2px dashed #454a5e;
     border-radius: 6px;
-    padding: 2.5rem 1.5rem;
+    padding: 1.75rem 1.5rem;
     text-align: center;
     background-color: #1b1e27;
     cursor: pointer;
@@ -33,7 +33,7 @@
     display: flex;
     align-items: center;
     text-align: center;
-    margin: 1.25rem 0;
+    margin: 0.75rem 0;
     color: #9aa1af;
     font-size: 0.75rem;
     font-weight: 600;
@@ -83,16 +83,26 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid #35394a;
+    gap: 0.6rem 1.1rem;
+    margin-top: 0.75rem;
 }
 
 .ratio-group {
-    display: flex;
-    gap: 0.35rem;
+    display: inline-flex;
+}
+
+.ratio-group .btn-tool {
+    border-radius: 0;
+    margin-left: -1px;
+}
+
+.ratio-group .btn-tool:first-child {
+    border-radius: 4px 0 0 4px;
+    margin-left: 0;
+}
+
+.ratio-group .btn-tool:last-child {
+    border-radius: 0 4px 4px 0;
 }
 
 .btn-tool {
@@ -117,19 +127,36 @@
 }
 
 .zoom-controls {
+    flex: 1 1 160px;
+    min-width: 150px;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
+}
+
+.slider-label {
+    font-size: 0.78rem;
+    color: #9aa1af;
+    margin: 0;
+}
+
+.slider-value {
+    min-width: 2.8rem;
+    font-size: 0.78rem;
+    color: #cfd3de;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .zoom-slider {
-    width: 110px;
+    flex: 1;
+    min-width: 60px;
     cursor: pointer;
 }
 
 .cropper-workspace {
     display: flex;
-    gap: 1.25rem;
+    gap: 0.9rem;
     align-items: flex-start;
 }
 
@@ -140,8 +167,65 @@
 }
 
 .cropper-viewport-wrapper {
+    position: relative;
     flex: 1;
     min-width: 0;
+}
+
+.cropper-busy {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    background-color: rgba(20, 22, 29, 0.7);
+    border-radius: 4px;
+}
+
+.header-info {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-style: italic;
+    color: #9aa1af;
+    border: 1px solid #5a6177;
+    border-radius: 50%;
+    cursor: help;
+}
+
+/* A CSS tooltip, because a title attribute doesn't show on keyboard focus. */
+.header-info:hover::after,
+.header-info:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 10;
+    width: max-content;
+    max-width: 240px;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: left;
+    color: #cfd3de;
+    background-color: #14161d;
+    border: 1px solid #3d4354;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.header-info:hover,
+.header-info:focus-visible {
+    color: #ffffff;
+    border-color: #ffffff;
 }
 
 .cropper-previews {
@@ -150,20 +234,11 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
     background-color: #1b1e27;
-    padding: 1rem;
+    padding: 0.75rem;
     border-radius: 4px;
     border: 1px solid #35394a;
-}
-
-.preview-title {
-    font-size: 0.8rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: #9aa1af;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.25rem;
 }
 
 .preview-circle-wrapper {

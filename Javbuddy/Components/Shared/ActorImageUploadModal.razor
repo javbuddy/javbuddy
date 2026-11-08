@@ -9,6 +9,12 @@
 {
     <ModalShell SpreadFooter="true" MaxWidth="780px" OnClose="CloseAsync">
         <TitleContent>Change Portrait — @ActorName</TitleContent>
+        <HeaderActions>
+            @if (selectedImageBytes is not null)
+            {
+                <span class="header-info" tabindex="0" role="img" aria-label="Drag inside the box to pan. Drag handles to resize. Scroll to zoom." data-tip="Drag inside the box to pan. Drag handles to resize. Scroll to zoom.">i</span>
+            }
+        </HeaderActions>
         <ChildContent>
             @if (errorMessage is not null)
             {
@@ -20,7 +26,7 @@
                 <div class="upload-dropzone">
                     <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
                     <div class="upload-icon">
-                        <svg viewBox="0 0 16 16" width="48" height="48" fill="currentColor" aria-hidden="true">
+                        <svg viewBox="0 0 16 16" width="36" height="36" fill="currentColor" aria-hidden="true">
                             <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
                             <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
                         </svg>
@@ -68,35 +74,19 @@
             }
             else
             {
-                <div class="cropper-toolbar">
-                    <div class="ratio-group">
-                        <button type="button" class="btn-tool @(currentAspectRatio == 1.0 ? "active" : "")" @onclick="() => SetAspectRatio(1.0)">
-                            1:1 Square
-                        </button>
-                        <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)">
-                            Free-form
-                        </button>
-                        <button type="button" class="btn-tool @(Math.Abs((currentAspectRatio ?? 0) - (2.0/3.0)) < 0.01 ? "active" : "")" @onclick="() => SetAspectRatio(2.0/3.0)">
-                            2:3 Portrait
-                        </button>
-                    </div>
-
-                    <div class="zoom-controls">
-                        <button type="button" class="btn-tool" @onclick="() => AdjustZoom(-0.1)" title="Zoom out">-</button>
-                        <input type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom" @oninput="HandleZoomInput" />
-                        <button type="button" class="btn-tool" @onclick="() => AdjustZoom(0.1)" title="Zoom in">+</button>
-                        <button type="button" class="btn-tool ms-2" @onclick="ResetCrop" title="Reset crop box">Reset</button>
-                    </div>
-                </div>
-
                 <div class="cropper-workspace">
                     <div class="cropper-viewport-wrapper">
                         <CropperViewport HeightPx="380" @ref="viewport" />
-                        <small class="text-muted d-block mt-1">Drag inside box to pan • Drag handles to resize • Scroll to zoom</small>
+                        @if (!cropperReady && !imageFailed)
+                        {
+                            <div class="cropper-busy" role="status">
+                                <span class="spinner-border" aria-hidden="true"></span>
+                                <span class="visually-hidden">Preparing image</span>
+                            </div>
+                        }
                     </div>
 
                     <div class="cropper-previews">
-                        <span class="preview-title">Avatar Preview</span>
                         <div class="preview-circle-wrapper" title="Circular Avatar Preview">
                             <canvas width="96" height="96" class="preview-canvas" @ref="circleCanvasRef"></canvas>
                         </div>
@@ -104,6 +94,22 @@
                             <canvas width="80" height="80" class="preview-canvas" @ref="squareCanvasRef"></canvas>
                         </div>
                     </div>
+                </div>
+
+                <div class="cropper-toolbar">
+                    <div class="ratio-group">
+                        <button type="button" class="btn-tool @(currentAspectRatio == 1.0 ? "active" : "")" @onclick="() => SetAspectRatio(1.0)" title="Square crop (1:1)">1:1</button>
+                        <button type="button" class="btn-tool @(Math.Abs((currentAspectRatio ?? 0) - (2.0/3.0)) < 0.01 ? "active" : "")" @onclick="() => SetAspectRatio(2.0/3.0)" title="Portrait crop (2:3)">2:3</button>
+                        <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)" title="Free-form unconstrained crop">Free</button>
+                    </div>
+
+                    <div class="zoom-controls">
+                        <label class="slider-label" for="actor-zoom">Zoom</label>
+                        <input id="actor-zoom" type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" @oninput="HandleZoomInput" />
+                        <span class="slider-value">@currentZoom.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)×</span>
+                    </div>
+
+                    <button type="button" class="btn-tool" @onclick="ResetCrop" title="Reset the crop box and zoom">Reset</button>
                 </div>
             }
         </ChildContent>
@@ -174,6 +180,8 @@
     // Whether the cropper for the selected image is up, so Save Photo can read its crop rect;
     // until then a click would have nothing to save.
     private bool cropperReady;
+    // The browser couldn't decode the image: stop the spinner, but keep Save Photo disabled.
+    private bool imageFailed;
     private string imageUrlInput = string.Empty;
     private bool fetchingUrl;
     private InitialImageSource? loadedInitialImage;
@@ -183,6 +191,7 @@
     private ElementReference squareCanvasRef;
 
     private IJSObjectReference? jsModule;
+    private DotNetObjectReference<ActorImageUploadModal>? selfRef;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -214,6 +223,8 @@
                 // data: URL, which kept a multi-MB string in the render tree and SignalR frame.
                 using var streamRef = new DotNetStreamReference(new MemoryStream(selectedImageBytes, writable: false));
                 await jsModule.InvokeVoidAsync("setImageSource", viewport!.Image, streamRef, selectedImageContentType);
+                selfRef ??= DotNetObjectReference.Create(this);
+                await jsModule.InvokeVoidAsync("setHost", selfRef);
                 await jsModule.InvokeVoidAsync("initCropper", viewport!.Container, viewport.Image, circleCanvasRef, squareCanvasRef);
                 if (currentAspectRatio.HasValue)
                 {
@@ -232,6 +243,23 @@
             }
         }
     }
+
+    /// <summary>Called from JS when the mouse wheel zooms the image, so the slider and readout follow.</summary>
+    [JSInvokable]
+    public Task OnZoomChanged(double zoom) => InvokeAsync(() =>
+    {
+        currentZoom = Math.Round(Math.Clamp(zoom, 1.0, 3.0), 2);
+        StateHasChanged();
+    });
+
+    /// <summary>Called from JS when the browser can't decode the loaded image.</summary>
+    [JSInvokable]
+    public Task OnImageError() => InvokeAsync(() =>
+    {
+        errorMessage = "The image could not be displayed. It may be corrupt or in an unsupported format.";
+        imageFailed = true;
+        StateHasChanged();
+    });
 
     private async Task HandleFileSelected(InputFileChangeEventArgs e)
     {
@@ -274,6 +302,7 @@
         currentAspectRatio = 1.0;
         shouldInitCropper = true;
         cropperReady = false;
+        imageFailed = false;
     }
 
     private async Task SetAspectRatio(double? ratio)
@@ -314,20 +343,6 @@
         }
     }
 
-    private async Task AdjustZoom(double delta)
-    {
-        currentZoom = Math.Clamp(currentZoom + delta, 1.0, 3.0);
-        if (jsModule is not null)
-        {
-            try
-            {
-                await jsModule.InvokeVoidAsync("setZoom", currentZoom);
-            }
-            catch (JSDisconnectedException) { }
-            catch (InvalidOperationException) { }
-        }
-    }
-
     private async Task ResetCrop()
     {
         currentZoom = 1.0;
@@ -350,6 +365,7 @@
         errorMessage = null;
         shouldInitCropper = false;
         cropperReady = false;
+        imageFailed = false;
         currentZoom = 1.0;
         currentAspectRatio = 1.0;
         imageUrlInput = string.Empty;
@@ -480,6 +496,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        selfRef?.Dispose();
         if (jsModule is not null)
         {
             try

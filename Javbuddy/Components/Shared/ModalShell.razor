@@ -5,9 +5,12 @@
     <div class="modal-shell-panel" role="dialog" aria-modal="true" aria-labelledby="@titleId" style="max-width: @MaxWidth" @onclick:stopPropagation="true">
         <div class="modal-shell-header">
             <h5 id="@titleId" class="modal-shell-title">@(TitleContent ?? (builder => builder.AddContent(0, Title)))</h5>
+            <div class="modal-shell-header-actions">
+            @HeaderActions
             <button type="button" class="modal-shell-close-btn" @onclick="CloseAsync" aria-label="Close" disabled="@Busy">
                 <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
             </button>
+            </div>
         </div>
 
         <div class="modal-shell-body">
@@ -28,6 +31,9 @@
     [Parameter] public string? Title { get; set; }
 
     [Parameter] public RenderFragment? TitleContent { get; set; }
+
+    /// <summary>Optional controls drawn in the header, just left of the close button.</summary>
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
 
     /// <summary>The scrolling body.</summary>
     [Parameter] public RenderFragment? ChildContent { get; set; }
