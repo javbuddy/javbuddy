@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-08
+
 ### Added
 
 - **Crop Cover** can rotate the image: **Rotate left** and **Rotate right** turn the source 90° at a time, and a **Straighten** slider (±45°, 0.1° steps) fine-tunes a crooked scan. The crop box can't leave the rotated image, so no empty corner is saved. A 90° turn resets the crop box and zoom, and a move of the slider resets the crop box but keeps the zoom (the chosen aspect ratio is kept either way). The straighten angle is applied when the cover is saved, after any 90° turns. A photo's EXIF orientation is now applied to the image before it is rotated or cropped, so the crop matches what the cropper shows.
