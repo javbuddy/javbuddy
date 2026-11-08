@@ -1,4 +1,5 @@
 using Javbuddy.Data;
+using Javbuddy.Models;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 
@@ -257,5 +258,40 @@ public class AppDbContextImageCacheExtensionsTests
         Assert.Equal(2, rows.Count);
         Assert.All(rows, r => Assert.Equal(newStorageId, r.StorageId));
         Assert.Equal(2, await db.CachedImages.CountAsync(c => c.Code == "Abc-123" && c.Role == "poster" && c.Index == 0));
+    }
+
+    [Theory]
+    [InlineData(typeof(ActorImage))]
+    [InlineData(typeof(CachedImage))]
+    public async Task Upsert_CoversEveryMappedColumn_OrDeclaresItUnwritten(Type entity)
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+
+        var written = AppDbContextImageCacheExtensions.GetWrittenProperties(entity);
+        var unwritten = AppDbContextImageCacheExtensions.GetUnwrittenProperties(entity);
+        var mapped = db.Model.FindEntityType(entity)!.GetProperties().Select(p => p.Name).ToHashSet();
+
+        Assert.Empty(written.Intersect(unwritten));
+        Assert.Equal(written.Count, written.Distinct().Count());
+        // A column added to the entity must be written by the upsert or explicitly listed as unwritten.
+        Assert.Equal(mapped.OrderBy(n => n), written.Concat(unwritten).OrderBy(n => n));
+    }
+
+    [Theory]
+    [InlineData(typeof(ActorImage))]
+    [InlineData(typeof(CachedImage))]
+    public async Task Upsert_ConflictKey_IsAUniqueIndexOfWrittenColumns(Type entity)
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+
+        var key = AppDbContextImageCacheExtensions.GetConflictKey(entity);
+        var entityType = db.Model.FindEntityType(entity)!;
+
+        Assert.All(key, k => Assert.Contains(k, AppDbContextImageCacheExtensions.GetWrittenProperties(entity)));
+        Assert.Contains(
+            entityType.GetIndexes(),
+            i => i.IsUnique && i.Properties.Select(p => p.Name).SequenceEqual(key));
     }
 }
