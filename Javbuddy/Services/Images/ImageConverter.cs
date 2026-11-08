@@ -184,7 +184,7 @@ public static class ImageConverter
         using (var canvas = new SKCanvas(upright))
         {
             canvas.SetMatrix(matrix);
-            canvas.DrawBitmap(original, 0, 0);
+            canvas.DrawBitmap(original, 0, 0, SKSamplingOptions.Default);
         }
 
         using var data = upright.Encode(SKEncodedImageFormat.Png, 100);
@@ -218,7 +218,7 @@ public static class ImageConverter
                     canvas.Translate(0, original.Width);
                     canvas.RotateDegrees(-90);
                 }
-                canvas.DrawBitmap(original, 0, 0);
+                canvas.DrawBitmap(original, 0, 0, SKSamplingOptions.Default);
             }
 
             using var data = rotated.Encode(SKEncodedImageFormat.Png, 100);
