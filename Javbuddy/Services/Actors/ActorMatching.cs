@@ -114,6 +114,22 @@ public static class ActorMatching
             return _actors[first];
         }
 
+        /// <summary>The one actor whose known identities match <paramref name="name"/>, or null when
+        /// none or several do.</summary>
+        public ActorLookup? FindSingleMatch(string name)
+        {
+            ActorLookup? match = null;
+            var positions = (_byName.GetValueOrDefault(name) ?? [])
+                .Concat(_byCompactName.GetValueOrDefault(Compact(name)!) ?? []);
+            foreach (var position in positions)
+            {
+                var actor = _actors[position];
+                if (match is null) match = actor;
+                else if (match.Id != actor.Id) return null;
+            }
+            return match;
+        }
+
         /// <summary>Adds the id of every actor matching <paramref name="name"/> to
         /// <paramref name="actorIds"/>; returns whether any did.</summary>
         public bool AddMatchingIds(string name, ISet<int> actorIds)

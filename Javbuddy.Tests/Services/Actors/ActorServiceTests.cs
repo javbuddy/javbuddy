@@ -1359,8 +1359,9 @@ public class ActorServiceTests
             aliasId = alias.Id;
             movieId = movie.Id;
 
-            // Link movie to actor via alias
-            await MovieActorAssociation.SynchronizeAllAsync(db);
+            // Link movie to actor via alias. Seeded directly: a sync would also rewrite the cast to
+            // the main name, after which removing the alias no longer unlinks it (by design).
+            db.MovieActors.Add(new MovieActor { MovieId = movie.Id, ActorId = actor.Id });
             await db.SaveChangesAsync();
         }
 
@@ -1384,6 +1385,33 @@ public class ActorServiceTests
             var link = await db.MovieActors.FirstOrDefaultAsync(ma => ma.MovieId == movieId && ma.ActorId == actorId);
             Assert.Null(link);
         }
+    }
+
+    [Fact]
+    public async Task RemoveAliasAsync_KeepsAMovieWhoseCastWasAlreadyNormalizedToTheMainName()
+    {
+        using var factory = new TestDbContextFactory();
+        int actorId, aliasId, movieId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Yua", LastName = "Mikami" };
+            var alias = new ActorAlias { Name = "Momona Kito" };
+            actor.Aliases.Add(alias);
+            var movie = new Movie { Code = "SSNI-001", MetaActresses = "Momona Kito" };
+            db.AddRange(actor, movie);
+            await db.SaveChangesAsync();
+            await MovieActorAssociation.SynchronizeAllAsync(db);
+            await db.SaveChangesAsync();
+            (actorId, aliasId, movieId) = (actor.Id, alias.Id, movie.Id);
+        }
+
+        var result = await new ActorService(factory).RemoveAliasAsync(actorId, aliasId);
+
+        // The sync already rewrote the alias credit to the main name, so the movie stays linked.
+        Assert.True(result.Success);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Equal("Mikami Yua", (await verify.Movies.SingleAsync(m => m.Id == movieId)).MetaActresses);
+        Assert.True(await verify.MovieActors.AnyAsync(ma => ma.MovieId == movieId && ma.ActorId == actorId));
     }
 
     [Fact]

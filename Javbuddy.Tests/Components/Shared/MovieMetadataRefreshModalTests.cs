@@ -109,6 +109,26 @@ public class MovieMetadataRefreshModalTests : BunitContext
     }
 
     [Fact]
+    public void Modal_ComparesTheCastAsItWouldBeStored_NotTheRawScrapedCast()
+    {
+        var movieService = Substitute.For<IMovieService>();
+        var movie = new Movie { Id = 1, Code = "ABC-100", MetaActresses = "Mikami Yua" };
+        var scraped = CreateScrapedMovie();
+        // The raw scrape also credits her alias; applying it would store just "Mikami Yua".
+        scraped.Actresses = [new ActressViewDto { FirstName = "Yua", LastName = "Mikami" }, new ActressViewDto { FirstName = "Riona", LastName = "Minami" }];
+        movieService.FetchJavinizerMetadataAsync(1, Arg.Any<CancellationToken>())
+            .Returns(new MovieMetadataFetchResult(true, null, scraped, "Mikami Yua"));
+        Services.AddSingleton(movieService);
+
+        var cut = Render<MovieMetadataRefreshModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.Movie, movie));
+
+        Assert.False(cut.Find("#field-actresses").HasAttribute("checked"));
+        Assert.Equal("Mikami Yua", cut.Find("#field-actresses").Closest(".import-field-item")!.QuerySelector(".field-new-value")!.TextContent);
+    }
+
+    [Fact]
     public async Task Modal_KeepAllCurrent_UnchecksEveryField()
     {
         var movieService = Substitute.For<IMovieService>();

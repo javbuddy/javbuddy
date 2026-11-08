@@ -374,7 +374,8 @@ public class MovieDiscoveryServiceTests
         Assert.DoesNotContain(links, l => l.ActorId == maleActorId);
 
         var movieResult = await db2.Movies.SingleAsync(m => m.Id == movieId);
-        Assert.Equal("白石透羽", movieResult.MetaActresses);
+        // The kanji credit resolves to a tracked actor, so it's stored under her main name.
+        Assert.Equal("Shiraishi Tou", movieResult.MetaActresses);
         Assert.False(movieResult.HasUnmatchedActors);
     }
 

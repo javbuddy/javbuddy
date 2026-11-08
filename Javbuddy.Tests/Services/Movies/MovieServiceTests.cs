@@ -1276,6 +1276,32 @@ public class MovieServiceTests
     }
 
     [Fact]
+    public async Task FetchJavinizerMetadataAsync_ReturnsTheScrapedCastAsApplyingItWouldStoreIt()
+    {
+        using var factory = new TestDbContextFactory();
+        int movieId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Yua", LastName = "Mikami" };
+            actor.Aliases.Add(new ActorAlias { Name = "Minami Riona" });
+            var movie = new Movie { Code = "ABC-100", MetaActresses = "Mikami Yua" };
+            db.AddRange(actor, movie);
+            await db.SaveChangesAsync();
+            movieId = movie.Id;
+        }
+
+        var scraped = CreateScrapedMovie();
+        scraped.Actresses = [new ActressViewDto { FirstName = "Yua", LastName = "Mikami" }, new ActressViewDto { FirstName = "Riona", LastName = "Minami" }];
+        var javinizerClient = Substitute.For<IJavinizerClient>();
+        javinizerClient.ScrapeAsync("ABC-100", Arg.Any<CancellationToken>())
+            .Returns(new JavinizerScrapeResult(true, scraped, null));
+
+        var result = await new MovieService(factory, javinizerClient: javinizerClient).FetchJavinizerMetadataAsync(movieId);
+
+        Assert.Equal("Mikami Yua", result.Actresses);
+    }
+
+    [Fact]
     public async Task FetchJavinizerMetadataAsync_ScrapeFails_ReturnsError()
     {
         using var factory = new TestDbContextFactory();

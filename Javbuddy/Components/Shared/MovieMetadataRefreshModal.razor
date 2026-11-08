@@ -230,11 +230,13 @@
     private bool isApplying;
     private string? errorMessage;
     private MovieViewDto? scraped;
+    // The scraped cast as applying it would store it (see MovieMetadataFetchResult.Actresses).
+    private string? scrapedActresses;
     private int? lastMovieId;
     private MovieMetadataImportOptions importOptions = new();
 
     private string? NewTitle => scraped is null ? null : MovieMetadataMapper.ResolveTitle(scraped, Movie?.Code);
-    private string? NewActresses => scraped is null ? null : MovieMetadataMapper.FormatActresses(scraped.Actresses);
+    private string? NewActresses => scraped is null ? null : scrapedActresses;
     private string? NewGenres => scraped is null ? null : MovieMetadataMapper.FormatGenres(scraped.Genres);
     private string? NewCoverUrl => scraped is null ? null : MovieMetadataMapper.ResolveCoverUrl(scraped);
 
@@ -267,6 +269,7 @@
             if (result.Success)
             {
                 scraped = result.Scraped;
+                scrapedActresses = result.Actresses;
                 InitializeImportOptions();
             }
             else

@@ -320,4 +320,178 @@ public class MovieActorAssociationTests
         var link = await db.MovieActors.SingleAsync();
         Assert.Equal(actor.Id, link.ActorId);
     }
+
+    [Fact]
+    public async Task SynchronizeAsync_CollapsesAnAliasNextToTheMainNameOntoTheMainName()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var actor = new Actor { FirstName = "Yua", LastName = "Mikami", JapaneseNameKanji = "三上悠亜" };
+        actor.Aliases.Add(new ActorAlias { Name = "Riona Minami" });
+        var movie = new Movie { Code = "ABC-123", MetaActresses = "Mikami Yua, Riona Minami, 三上 悠亜, Untracked Actor" };
+        db.AddRange(actor, movie);
+        await db.SaveChangesAsync();
+
+        await MovieActorAssociation.SynchronizeAsync(db, movie);
+        await db.SaveChangesAsync();
+
+        Assert.Equal("Mikami Yua, Untracked Actor", movie.MetaActresses);
+        Assert.Equal(actor.Id, (await db.MovieActors.SingleAsync()).ActorId);
+        Assert.Equal("Untracked Actor", movie.UnmatchedActorNames);
+    }
+
+    [Fact]
+    public async Task SynchronizeAsync_RenamesALoneAliasOrOtherIdentityToTheMainName()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var yua = new Actor { FirstName = "Yua", LastName = "Mikami" };
+        yua.Aliases.Add(new ActorAlias { Name = "Riona Minami" });
+        var yui = new Actor { FirstName = "Yui", LastName = "Hatano" };
+        var movie = new Movie { Code = "ABC-123", MetaActresses = "Riona Minami, Yui Hatano" };
+        db.AddRange(yua, yui, movie);
+        await db.SaveChangesAsync();
+
+        await MovieActorAssociation.SynchronizeAsync(db, movie);
+
+        Assert.Equal("Mikami Yua, Hatano Yui", movie.MetaActresses);
+    }
+
+    [Fact]
+    public async Task SynchronizeAsync_KeepsANameMatchingSeveralActorsAsWritten()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var first = new Actor { FirstName = "Yua", LastName = "Mikami" };
+        first.Aliases.Add(new ActorAlias { Name = "Shared Name" });
+        var second = new Actor { FirstName = "Yui", LastName = "Hatano" };
+        second.Aliases.Add(new ActorAlias { Name = "Shared Name" });
+        var movie = new Movie { Code = "ABC-123", MetaActresses = "Shared Name" };
+        db.AddRange(first, second, movie);
+        await db.SaveChangesAsync();
+
+        await MovieActorAssociation.SynchronizeAsync(db, movie);
+        await db.SaveChangesAsync();
+
+        Assert.Equal("Shared Name", movie.MetaActresses);
+        Assert.Equal(2, await db.MovieActors.CountAsync());
+    }
+
+    [Fact]
+    public async Task SynchronizeAsync_KeepsANameWhoseMainNameIsAlsoAnotherActorsAlias()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var yua = new Actor { FirstName = "Yua", LastName = "Mikami" };
+        yua.Aliases.Add(new ActorAlias { Name = "Riona Minami" });
+        var other = new Actor { FirstName = "Yui", LastName = "Hatano" };
+        other.Aliases.Add(new ActorAlias { Name = "MikamiYua" });
+        var movie = new Movie { Code = "ABC-123", MetaActresses = "Riona Minami" };
+        db.AddRange(yua, other, movie);
+        await db.SaveChangesAsync();
+
+        await MovieActorAssociation.SynchronizeAsync(db, movie);
+        await db.SaveChangesAsync();
+        await MovieActorAssociation.SynchronizeAsync(db, movie);
+        await db.SaveChangesAsync();
+
+        // Rewriting to "Mikami Yua" would make the second sync link Hatano Yui as well.
+        Assert.Equal("Riona Minami", movie.MetaActresses);
+        Assert.Equal(yua.Id, (await db.MovieActors.SingleAsync()).ActorId);
+    }
+
+    [Fact]
+    public async Task SynchronizeAsync_CollapsesRepeatsIgnoringCaseAndKeepsAnAmbiguousNameBesideThem()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var yua = new Actor { FirstName = "Yua", LastName = "Mikami" };
+        yua.Aliases.Add(new ActorAlias { Name = "Shared Name" });
+        var yui = new Actor { FirstName = "Yui", LastName = "Hatano" };
+        yui.Aliases.Add(new ActorAlias { Name = "Shared Name" });
+        var movie = new Movie { Code = "ABC-123", MetaActresses = "mikami yua, Mikami Yua, Shared Name, Untracked, UNTRACKED" };
+        db.AddRange(yua, yui, movie);
+        await db.SaveChangesAsync();
+
+        await MovieActorAssociation.SynchronizeAsync(db, movie);
+
+        Assert.Equal("Mikami Yua, Shared Name, Untracked", movie.MetaActresses);
+        Assert.Equal("Untracked", movie.UnmatchedActorNames);
+    }
+
+    [Fact]
+    public async Task SynchronizeAllAsync_NormalizesTheUnsavedCastOfAMovieTheContextAlreadyTracks()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var actor = new Actor { FirstName = "Yua", LastName = "Mikami" };
+        actor.Aliases.Add(new ActorAlias { Name = "Riona Minami" });
+        var movie = new Movie { Code = "ABC-123", MetaActresses = "Untracked Person" };
+        db.AddRange(actor, movie);
+        await db.SaveChangesAsync();
+
+        movie.MetaActresses = "Mikami Yua, Riona Minami";
+        await MovieActorAssociation.SynchronizeAllAsync(db);
+        await db.SaveChangesAsync();
+
+        Assert.Equal("Mikami Yua", movie.MetaActresses);
+        Assert.Equal(actor.Id, (await db.MovieActors.SingleAsync()).ActorId);
+    }
+
+    [Fact]
+    public async Task NormalizeCastAsync_ReturnsTheCastAsASyncWouldStoreItWithoutChangingAnything()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var actor = new Actor { FirstName = "Yua", LastName = "Mikami" };
+        actor.Aliases.Add(new ActorAlias { Name = "Riona Minami" });
+        db.Add(actor);
+        await db.SaveChangesAsync();
+
+        Assert.Equal("Mikami Yua, Untracked", await MovieActorAssociation.NormalizeCastAsync(db, "Riona Minami, Mikami Yua, Untracked"));
+        Assert.Null(await MovieActorAssociation.NormalizeCastAsync(db, null));
+        Assert.False(db.ChangeTracker.HasChanges());
+    }
+
+    [Fact]
+    public async Task SynchronizeAsync_LeavesAnAlreadyNormalizedCastStringUntouched()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        var movie = new Movie { Code = "ABC-123", MetaActresses = "Hatano Yui、Untracked Actor" };
+        db.AddRange(new Actor { FirstName = "Yui", LastName = "Hatano" }, movie);
+        await db.SaveChangesAsync();
+
+        await MovieActorAssociation.SynchronizeAsync(db, movie);
+
+        Assert.Equal("Hatano Yui、Untracked Actor", movie.MetaActresses);
+    }
+
+    [Fact]
+    public async Task SynchronizeAllAsync_NormalizesTheCastOfMoviesTheContextDoesNotTrack()
+    {
+        using var factory = new TestDbContextFactory();
+        int duplicatedId, cleanId;
+        await using (var seed = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Yua", LastName = "Mikami" };
+            actor.Aliases.Add(new ActorAlias { Name = "Riona Minami" });
+            var duplicated = new Movie { Code = "ABC-123", MetaActresses = "Mikami Yua, Riona Minami" };
+            var clean = new Movie { Code = "DEF-456", MetaActresses = "Mikami Yua" };
+            seed.AddRange(actor, duplicated, clean);
+            await seed.SaveChangesAsync();
+            (duplicatedId, cleanId) = (duplicated.Id, clean.Id);
+        }
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            await MovieActorAssociation.SynchronizeAllAsync(db);
+            Assert.Equal([duplicatedId], db.ChangeTracker.Entries<Movie>().Select(entry => entry.Entity.Id));
+            await db.SaveChangesAsync();
+        }
+
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Equal("Mikami Yua", (await verify.Movies.SingleAsync(movie => movie.Id == duplicatedId)).MetaActresses);
+        Assert.Equal("Mikami Yua", (await verify.Movies.SingleAsync(movie => movie.Id == cleanId)).MetaActresses);
+    }
 }

@@ -36,8 +36,9 @@ public sealed record MovieMetadataUpdate(
 /// <summary>Result of FetchJavinizerMetadataAsync — the "Refresh with Javinizer" field picker's
 /// fetch step, which makes no DB changes; <see cref="Scraped"/> is held in memory by the
 /// caller for review until the user confirms which fields to apply via
-/// ApplyJavinizerMetadataAsync.</summary>
-public sealed record MovieMetadataFetchResult(bool Success, string? ErrorMessage = null, MovieViewDto? Scraped = null);
+/// ApplyJavinizerMetadataAsync. <see cref="Actresses"/> is the scraped cast as applying it would
+/// store it (tracked actors' aliases resolved to their main name), so the preview compares like with like.</summary>
+public sealed record MovieMetadataFetchResult(bool Success, string? ErrorMessage = null, MovieViewDto? Scraped = null, string? Actresses = null);
 
 /// <summary>One file in a movie's folder, as listed by the Delete dialog's "Delete files from disk"
 /// preview. <see cref="RelativePath"/> is relative to the movie folder.</summary>
@@ -510,7 +511,9 @@ public class MovieService(
             return new MovieMetadataFetchResult(false, scrapeResult.ErrorMessage ?? $"javinizer-go found no metadata for {movie.Code}.");
         }
 
-        return new MovieMetadataFetchResult(true, null, scrapeResult.Movie);
+        var actresses = await MovieActorAssociation.NormalizeCastAsync(
+            db, MovieMetadataMapper.FormatActresses(scrapeResult.Movie.Actresses), ct);
+        return new MovieMetadataFetchResult(true, null, scrapeResult.Movie, actresses);
     }
 
     public async Task<OperationResult> ApplyJavinizerMetadataAsync(int movieId, MovieViewDto scraped, MovieMetadataImportOptions options, CancellationToken ct = default)

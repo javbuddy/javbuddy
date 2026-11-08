@@ -64,6 +64,38 @@ public class ActorEnrichmentServiceTests
     }
 
     [Fact]
+    public async Task EnrichActorAsync_LinksAndTidiesMoviesCreditedUnderTheNamesItFinds()
+    {
+        using var factory = new TestDbContextFactory();
+        int actorId, movieId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Yua", LastName = "Mikami" };
+            var movie = new Movie { Code = "ABC-123", MetaActresses = "Yuachan, 三上悠亜" };
+            db.AddRange(actor, movie);
+            await db.SaveChangesAsync();
+            (actorId, movieId) = (actor.Id, movie.Id);
+        }
+
+        var source = Substitute.For<IActorMetadataSource>();
+        source.SourceName.Returns("Local");
+        source.Priority.Returns(10);
+        source.CanAutoEnrich.Returns(true);
+        source.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        source.LookupAsync(Arg.Any<ActorEnrichmentContext>(), Arg.Any<CancellationToken>())
+            .Returns(new ActorMetadataResult { SourceName = "Local", JapaneseNameKanji = "三上悠亜", Aliases = ["Yuachan"] });
+
+        var result = await new ActorEnrichmentService([source], factory).EnrichActorAsync(actorId);
+
+        Assert.True(result.Success);
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        var movieResult = await verifyDb.Movies.SingleAsync(m => m.Id == movieId);
+        Assert.Equal("Mikami Yua", movieResult.MetaActresses);
+        Assert.False(movieResult.HasUnmatchedActors);
+        Assert.Equal(actorId, (await verifyDb.MovieActors.SingleAsync()).ActorId);
+    }
+
+    [Fact]
     public async Task EnrichActorAsync_RespectsOverwriteExistingPolicy()
     {
         using var factory = new TestDbContextFactory();

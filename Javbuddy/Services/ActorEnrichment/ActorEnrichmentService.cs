@@ -289,12 +289,14 @@ public class ActorEnrichmentService(
             }
         }
 
+        // Saved before syncing: the sync reads actor names and aliases from the database, so the
+        // ones just found must be stored for movies credited under them to be linked and tidied.
+        await db.SaveChangesAsync(ct);
         if (updatedFields.Count > 0 || addedAliases.Count > 0)
         {
             await MovieActorAssociation.SynchronizeAllAsync(db, ct);
+            await db.SaveChangesAsync(ct);
         }
-
-        await db.SaveChangesAsync(ct);
 
         var imageRefreshed = false;
         if (options.RefreshImageCache && imageCacheService is not null)

@@ -5,25 +5,35 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Movies;
 
-/// <summary>Keeps tracked-actor links in sync with a movie's metadata cast summary.</summary>
+/// <summary>Keeps tracked-actor links in sync with a movie's metadata cast summary, and normalizes
+/// that summary so each tracked actor appears once, under their main name.</summary>
 public static class MovieActorAssociation
 {
     public static async Task SynchronizeAsync(AppDbContext db, Movie movie, CancellationToken ct = default)
     {
         var actors = new ActorMatching.ActorIndex(await ActorMatching.LoadActorLookupsAsync(db, ct));
-        var (actorIds, unmatchedNames) = GetActorIds(movie.MetaActresses, actors);
-        ApplyUnmatchedActors(movie, unmatchedNames);
+        var cast = ResolveCast(movie.MetaActresses, actors);
+        ApplyCast(movie, cast);
 
         var existingLinks = await db.MovieActors
             .Where(link => link.MovieId == movie.Id)
             .ToListAsync(ct);
-        db.MovieActors.RemoveRange(existingLinks.Where(link => !actorIds.Contains(link.ActorId)));
+        db.MovieActors.RemoveRange(existingLinks.Where(link => !cast.ActorIds.Contains(link.ActorId)));
 
         var existingActorIds = existingLinks.Select(link => link.ActorId).ToHashSet();
-        foreach (var actorId in actorIds.Where(actorId => !existingActorIds.Contains(actorId)))
+        foreach (var actorId in cast.ActorIds.Where(actorId => !existingActorIds.Contains(actorId)))
         {
             db.MovieActors.Add(new MovieActor { MovieId = movie.Id, ActorId = actorId });
         }
+    }
+
+    /// <summary>The cast summary as a sync would store it (see <see cref="ResolveCast"/>), for
+    /// previewing an incoming cast against the stored one without changing anything.</summary>
+    public static async Task<string?> NormalizeCastAsync(AppDbContext db, string? metaActresses, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(metaActresses)) return metaActresses;
+        var actors = new ActorMatching.ActorIndex(await ActorMatching.LoadActorLookupsAsync(db, ct));
+        return ResolveCast(metaActresses, actors).MetaActresses;
     }
 
     public static async Task SynchronizeAllAsync(AppDbContext db, CancellationToken ct = default)
@@ -42,70 +52,101 @@ public static class MovieActorAssociation
         var linksByMovie = (await db.MovieActors.ToListAsync(ct))
             .GroupBy(link => link.MovieId)
             .ToDictionary(group => group.Key, group => group.ToList());
-        var changedFlags = new Dictionary<int, List<string>>();
+        var changedCasts = new Dictionary<int, ResolvedCast>();
 
         foreach (var row in movies)
         {
             var trackedMovie = trackedMovies.GetValueOrDefault(row.Id);
-            var (actorIds, unmatchedNames) = GetActorIds(trackedMovie is not null ? trackedMovie.MetaActresses : row.MetaActresses, actors);
+            var cast = ResolveCast(trackedMovie is not null ? trackedMovie.MetaActresses : row.MetaActresses, actors);
             if (trackedMovie is not null)
             {
-                ApplyUnmatchedActors(trackedMovie, unmatchedNames);
+                ApplyCast(trackedMovie, cast);
             }
-            else if (row.HasUnmatchedActors != unmatchedNames.Count > 0 || row.UnmatchedActorNames != JoinUnmatchedNames(unmatchedNames))
+            else if (row.MetaActresses != cast.MetaActresses
+                || row.HasUnmatchedActors != cast.UnmatchedNames.Count > 0
+                || row.UnmatchedActorNames != JoinUnmatchedNames(cast.UnmatchedNames))
             {
-                changedFlags[row.Id] = unmatchedNames;
+                changedCasts[row.Id] = cast;
             }
 
             var existingLinks = linksByMovie.GetValueOrDefault(row.Id, []);
-            db.MovieActors.RemoveRange(existingLinks.Where(link => !actorIds.Contains(link.ActorId)));
+            db.MovieActors.RemoveRange(existingLinks.Where(link => !cast.ActorIds.Contains(link.ActorId)));
 
             var existingActorIds = existingLinks.Select(link => link.ActorId).ToHashSet();
-            foreach (var actorId in actorIds.Where(actorId => !existingActorIds.Contains(actorId)))
+            foreach (var actorId in cast.ActorIds.Where(actorId => !existingActorIds.Contains(actorId)))
             {
                 db.MovieActors.Add(new MovieActor { MovieId = row.Id, ActorId = actorId });
             }
         }
 
-        // Only movies whose flags actually change are loaded as tracked entities to be updated —
-        // typically a handful, since per-movie SynchronizeAsync keeps them current in between.
-        if (changedFlags.Count > 0)
+        // Only movies whose cast or flags actually change are loaded as tracked entities to be
+        // updated — typically a handful, since per-movie SynchronizeAsync keeps them current in between.
+        if (changedCasts.Count > 0)
         {
-            var changedIds = changedFlags.Keys.ToList();
+            var changedIds = changedCasts.Keys.ToList();
             var changedMovies = await db.Movies
                 .Where(movie => changedIds.Contains(movie.Id))
                 .ToListAsync(ct);
             foreach (var movie in changedMovies)
             {
-                ApplyUnmatchedActors(movie, changedFlags[movie.Id]);
+                ApplyCast(movie, changedCasts[movie.Id]);
             }
         }
     }
 
     private sealed record MovieCastRow(int Id, string? MetaActresses, bool HasUnmatchedActors, string? UnmatchedActorNames);
 
-    private static (HashSet<int> ActorIds, List<string> UnmatchedNames) GetActorIds(string? metaActresses, ActorMatching.ActorIndex actors)
+    private sealed record ResolvedCast(string? MetaActresses, HashSet<int> ActorIds, List<string> UnmatchedNames);
+
+    /// <summary>Resolves a cast summary against the tracked actors. An actor is linked if any cast
+    /// name matches one of its identities (display name, reversed order, Japanese kanji/kana,
+    /// R18Dev name, or alias); a name is unmatched if no tracked actor's identity resolves to it.
+    /// A name resolving to exactly one actor is rewritten to that actor's main name, and repeats
+    /// collapse onto the first, so "Julia, Kyoko" with Kyoko an alias of Julia becomes "Julia". A
+    /// name matching several actors is ambiguous and kept as written. The summary is returned
+    /// unchanged (delimiters included) when no name was rewritten or dropped.</summary>
+    private static ResolvedCast ResolveCast(string? metaActresses, ActorMatching.ActorIndex actors)
     {
-        // An actor is linked if any cast name matches one of its identities (display name,
-        // reversed order, Japanese kanji/kana, R18Dev name, or alias); a name is unmatched if no
-        // tracked actor's identity resolves to it. One index lookup per name answers both.
         var actorIds = new HashSet<int>();
         var unmatchedNames = new List<string>();
-        foreach (var name in ActorMatching.SplitNames(metaActresses))
+        var names = ActorMatching.SplitNames(metaActresses).ToList();
+        var normalized = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in names)
         {
             if (!actors.AddMatchingIds(name, actorIds))
             {
-                unmatchedNames.Add(name);
+                if (seen.Add(name))
+                {
+                    unmatchedNames.Add(name);
+                    normalized.Add(name);
+                }
+                continue;
+            }
+
+            // The main name must itself resolve only to that actor (another actor's alias could
+            // match it), or the next sync would read the rewritten name as ambiguous and link both.
+            var match = actors.FindSingleMatch(name);
+            var resolved = match is not null && actors.FindSingleMatch(match.DisplayName)?.Id == match.Id
+                ? match.DisplayName
+                : name;
+            if (seen.Add(resolved))
+            {
+                normalized.Add(resolved);
             }
         }
 
-        return (actorIds, unmatchedNames);
+        var cast = normalized.SequenceEqual(names, StringComparer.Ordinal)
+            ? metaActresses
+            : (normalized.Count > 0 ? string.Join(", ", normalized) : null);
+        return new ResolvedCast(cast, actorIds, unmatchedNames);
     }
 
-    private static void ApplyUnmatchedActors(Movie movie, List<string> unmatchedNames)
+    private static void ApplyCast(Movie movie, ResolvedCast cast)
     {
-        movie.HasUnmatchedActors = unmatchedNames.Count > 0;
-        movie.UnmatchedActorNames = JoinUnmatchedNames(unmatchedNames);
+        movie.MetaActresses = cast.MetaActresses;
+        movie.HasUnmatchedActors = cast.UnmatchedNames.Count > 0;
+        movie.UnmatchedActorNames = JoinUnmatchedNames(cast.UnmatchedNames);
     }
 
     private static string? JoinUnmatchedNames(List<string> unmatchedNames) =>

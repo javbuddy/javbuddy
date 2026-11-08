@@ -88,6 +88,17 @@ public class ActorMatchingTests
         Assert.Equal(actorIds.Count > 1, matched);
     }
 
+    [Theory]
+    [MemberData(nameof(IndexNames))]
+    public void ActorIndex_FindSingleMatch_ReturnsTheActorOnlyWhenExactlyOneMatches(string name)
+    {
+        var index = new ActorMatching.ActorIndex(IndexActors);
+
+        var matches = IndexActors.Where(actor => actor.Matches(SingleNameSet(name))).ToList();
+
+        Assert.Equal(matches.Count == 1 ? matches[0].Id : null, index.FindSingleMatch(name)?.Id);
+    }
+
     [Fact]
     public void ActorIndex_FindMatch_PrefersTheEarlierActorWhenSeveralMatch()
     {
