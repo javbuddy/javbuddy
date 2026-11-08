@@ -812,7 +812,7 @@ public class MovieServiceTests
         int movieId;
         await using (var db = await factory.CreateDbContextAsync())
         {
-            var movie = new Movie { Code = "ABC-100" };
+            var movie = new Movie { Code = "ABC-100", MetaRuntimeMinutes = 120 };
             db.Movies.Add(movie);
             await db.SaveChangesAsync();
             movieId = movie.Id;
@@ -828,7 +828,6 @@ public class MovieServiceTests
             MetaLabel: "Label",
             MetaSeries: "Series",
             MetaDirector: "Director",
-            MetaRuntimeMinutes: 120,
             MetaDescription: "Overview text.");
 
         var service = new MovieService(factory);
@@ -845,6 +844,7 @@ public class MovieServiceTests
         Assert.Equal("Label", reloaded.MetaLabel);
         Assert.Equal("Series", reloaded.MetaSeries);
         Assert.Equal("Director", reloaded.MetaDirector);
+        // Runtime isn't editable here — saving leaves the stored value as it was.
         Assert.Equal(120, reloaded.MetaRuntimeMinutes);
         Assert.Equal("Overview text.", reloaded.MetaDescription);
     }
@@ -934,7 +934,7 @@ public class MovieServiceTests
             movieId = movie.Id;
         }
 
-        var update = new MovieMetadataUpdate(null, null, null, null, "   ", null, null, null, null, null);
+        var update = new MovieMetadataUpdate(null, null, null, null, "   ", null, null, null, null);
 
         var service = new MovieService(factory);
         var result = await service.UpdateMetadataAsync(movieId, update);
@@ -948,34 +948,12 @@ public class MovieServiceTests
     }
 
     [Fact]
-    public async Task UpdateMetadataAsync_RejectsNegativeRuntime()
-    {
-        using var factory = new TestDbContextFactory();
-        int movieId;
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            var movie = new Movie { Code = "ABC-100" };
-            db.Movies.Add(movie);
-            await db.SaveChangesAsync();
-            movieId = movie.Id;
-        }
-
-        var update = new MovieMetadataUpdate(null, null, null, null, null, null, null, null, -5, null);
-
-        var service = new MovieService(factory);
-        var result = await service.UpdateMetadataAsync(movieId, update);
-
-        Assert.False(result.Success);
-        Assert.Contains("Runtime", result.ErrorMessage);
-    }
-
-    [Fact]
     public async Task UpdateMetadataAsync_UnknownMovie_Fails()
     {
         using var factory = new TestDbContextFactory();
         var service = new MovieService(factory);
 
-        var update = new MovieMetadataUpdate(null, null, null, null, null, null, null, null, null, null);
+        var update = new MovieMetadataUpdate(null, null, null, null, null, null, null, null, null);
         var result = await service.UpdateMetadataAsync(999, update);
 
         Assert.False(result.Success);
@@ -999,7 +977,7 @@ public class MovieServiceTests
         notifier.Changed += () => notified = true;
 
         var service = new MovieService(factory, notifier);
-        var update = new MovieMetadataUpdate(null, null, null, null, null, null, null, null, null, null);
+        var update = new MovieMetadataUpdate(null, null, null, null, null, null, null, null, null);
         await service.UpdateMetadataAsync(movieId, update);
 
         Assert.True(notified);
@@ -1028,7 +1006,7 @@ public class MovieServiceTests
         int movieId;
         await using (var db = await factory.CreateDbContextAsync())
         {
-            var movie = new Movie { Code = "MET-001", Status = MovieStatus.Got };
+            var movie = new Movie { Code = "MET-001", Status = MovieStatus.Got, MetaRuntimeMinutes = 105 };
             db.Movies.Add(movie);
             await db.SaveChangesAsync();
             movieId = movie.Id;
@@ -1044,7 +1022,6 @@ public class MovieServiceTests
             MetaLabel: null,
             MetaSeries: null,
             MetaDirector: null,
-            MetaRuntimeMinutes: 105,
             MetaDescription: null);
 
         var result = await service.UpdateMetadataAsync(movieId, update);
@@ -1079,7 +1056,7 @@ public class MovieServiceTests
         }
 
         var (service, _) = CreateServiceWithRealNfoSync(factory, root);
-        var update = new MovieMetadataUpdate(null, "New Title", null, null, null, null, null, null, null, null);
+        var update = new MovieMetadataUpdate(null, "New Title", null, null, null, null, null, null, null);
 
         var result = await service.UpdateMetadataAsync(movieId, update);
 
@@ -1110,7 +1087,7 @@ public class MovieServiceTests
         }
 
         var (service, _) = CreateServiceWithRealNfoSync(factory, root);
-        var update = new MovieMetadataUpdate(null, null, null, null, null, null, null, "New Director", null, null);
+        var update = new MovieMetadataUpdate(null, null, null, null, null, null, null, "New Director", null);
 
         var result = await service.UpdateMetadataAsync(movieId, update);
         Assert.True(result.Success);
@@ -1145,7 +1122,7 @@ public class MovieServiceTests
         }
 
         var (service, _) = CreateServiceWithRealNfoSync(factory, root);
-        var update = new MovieMetadataUpdate(null, null, null, null, null, "New Label", null, null, null, null);
+        var update = new MovieMetadataUpdate(null, null, null, null, null, "New Label", null, null, null);
 
         var result = await service.UpdateMetadataAsync(movieId, update);
         Assert.True(result.Success);
@@ -1182,7 +1159,7 @@ public class MovieServiceTests
         }
 
         var (service, _) = CreateServiceWithRealNfoSync(factory, root);
-        var update = new MovieMetadataUpdate(null, null, null, null, null, "Matching", null, null, null, null);
+        var update = new MovieMetadataUpdate(null, null, null, null, null, "Matching", null, null, null);
 
         var result = await service.UpdateMetadataAsync(movieId, update);
         Assert.True(result.Success);
@@ -1225,7 +1202,7 @@ public class MovieServiceTests
         // Title now matches the .nfo's existing (non-blank) value, so it contributes no new
         // conflict — but the real, pre-existing actor mismatch (Yua Mikami vs. "Someone Else")
         // must still be recomputed and reported, not silently dropped.
-        var update = new MovieMetadataUpdate(null, "Old", null, null, null, null, null, null, null, null);
+        var update = new MovieMetadataUpdate(null, "Old", null, null, null, null, null, null, null);
 
         var result = await service.UpdateMetadataAsync(movieId, update);
         Assert.True(result.Success);

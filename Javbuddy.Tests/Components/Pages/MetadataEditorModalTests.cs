@@ -47,7 +47,7 @@ public class MetadataEditorModalTests : BunitContext
         Assert.NotEmpty(cut.FindAll(".metadata-editor-modal-backdrop"));
         Assert.Equal("Display Title", cut.Find("#metadata-meta-title").GetAttribute("value"));
         Assert.Equal("Studio Name", cut.Find("#metadata-studio").GetAttribute("value"));
-        Assert.Equal("115", cut.Find("#metadata-runtime").GetAttribute("value"));
+        Assert.Empty(cut.FindAll("#metadata-runtime"));
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class MetadataEditorModalTests : BunitContext
     {
         var movieService = SetUpMovieService();
         movieService.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>())
-            .Returns(OperationResult.Fail("Runtime must be zero or greater."));
+            .Returns(OperationResult.Fail("Save failed."));
         var movie = new Movie { Id = 1, Code = "ABC-123" };
 
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
@@ -160,7 +160,7 @@ public class MetadataEditorModalTests : BunitContext
         await cut.InvokeAsync(() => cut.Find("form").Submit());
 
         Assert.NotEmpty(cut.FindAll(".metadata-editor-modal-backdrop"));
-        Assert.Contains("Runtime must be zero or greater.", cut.Markup);
+        Assert.Contains("Save failed.", cut.Markup);
     }
 
     private static Movie VrMovie()

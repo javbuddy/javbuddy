@@ -16,7 +16,7 @@ namespace Javbuddy.Services.Movies;
 /// core movie field it's allowed to edit (README's "Non-goals": no MediaInfo-probed technical
 /// fields, no external integration IDs). Saving only ever updates the DB — never the local .nfo
 /// directly — so <see cref="Title"/> (Javbuddy-only, no .nfo counterpart at all) isn't
-/// functionally different from the rest here (as is <see cref="ContentType"/>, where null leaves it unchanged); what differs is that the other nine feed
+/// functionally different from the rest here (as is <see cref="ContentType"/>, where null leaves it unchanged); what differs is that the other eight feed
 /// NfoSyncService's .nfo-drift check (CheckMovieMetadataConflictAsync), surfacing a "Resolve .nfo
 /// Conflict" the user reviews as a diff and applies (or not) themselves, the same way the cast
 /// editing and the tag editing already work. Movie.Notes isn't edited here, so saving
@@ -30,7 +30,6 @@ public sealed record MovieMetadataUpdate(
     string? MetaLabel,
     string? MetaSeries,
     string? MetaDirector,
-    int? MetaRuntimeMinutes,
     string? MetaDescription,
     MovieContentType? ContentType = null);
 
@@ -415,11 +414,6 @@ public class MovieService(
 
     public async Task<OperationResult> UpdateMetadataAsync(int movieId, MovieMetadataUpdate update, CancellationToken ct = default)
     {
-        if (update.MetaRuntimeMinutes is < 0)
-        {
-            return OperationResult.Fail("Runtime must be zero or greater.");
-        }
-
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies.FindAsync([movieId], ct);
         if (movie is null)
@@ -435,7 +429,6 @@ public class MovieService(
         movie.MetaLabel = update.MetaLabel.TrimToNull();
         movie.MetaSeries = update.MetaSeries.TrimToNull();
         movie.MetaDirector = update.MetaDirector.TrimToNull();
-        movie.MetaRuntimeMinutes = update.MetaRuntimeMinutes;
         movie.MetaDescription = update.MetaDescription.TrimToNull();
         if (update.ContentType is { } contentType) movie.ContentType = contentType;
 

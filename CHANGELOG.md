@@ -8,6 +8,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 - A newly added movie (added by code, or imported by a library rescan) whose `.nfo` has no runtime now gets its runtime from the video file's duration, if MediaInfo is on and the scan succeeds at that moment. An existing runtime is never replaced, and a folder without an `.nfo` is left alone so an `.nfo` added later is still imported. The same fill applies when a finished torrent is sorted into the library, on a manual rescan that finds a missing movie's files, and on **Refresh from local**.
 
+### Changed
+
+- Runtime is no longer editable: the movie metadata editor drops its Runtime field, and the torrent-sort metadata editor shows it read-only. It comes from the scraped or `.nfo` value, or from the video's duration when missing.
+
 ### Fixed
 
 - Syncing to the `.nfo` now creates the elements a file lacks (or has empty) — Overview (`<plot>`), original title, director, studio, label, series, release date and runtime — and the passive drift check reports them, so a value added or fetched in Javbuddy after the import reaches the `.nfo`. After upgrading, the first rescan may show drift on many movies whose `.nfo` lacks a value Javbuddy has; **Push** writes them.

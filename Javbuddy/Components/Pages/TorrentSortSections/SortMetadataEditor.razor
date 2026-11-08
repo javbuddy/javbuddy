@@ -87,7 +87,7 @@
         </div>
         <div class="sme-field">
             <span class="sme-label"><label for="sme-runtime">Runtime (minutes)</label> @SourceBadge("runtime")</span>
-            <input type="number" id="sme-runtime" class="form-control" data-field="runtime" @bind="movie.Runtime" @bind:after="OnFieldChanged" />
+            <input type="number" id="sme-runtime" class="form-control" data-field="runtime" value="@movie.Runtime" readonly />
             @SourcePanel("runtime")
         </div>
     </div>

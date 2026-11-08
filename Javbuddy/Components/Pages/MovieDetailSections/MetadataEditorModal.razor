@@ -59,10 +59,6 @@
                             <InputText id="metadata-director" class="form-control" @bind-Value="model.MetaDirector" disabled="@saving" />
                         </div>
                         <div class="col-md-4">
-                            <label class="form-label" for="metadata-runtime">Runtime (minutes)</label>
-                            <InputNumber id="metadata-runtime" class="form-control" @bind-Value="model.MetaRuntimeMinutes" min="0" disabled="@saving" />
-                        </div>
-                        <div class="col-md-4">
                             <label class="form-label" for="metadata-content-type">Content Type</label>
                             <InputSelect id="metadata-content-type" class="form-select" @bind-Value="model.ContentType" disabled="@saving">
                                 @foreach (var type in MovieFilterOptions.ContentTypes)
@@ -133,7 +129,6 @@
         public string? MetaLabel { get; set; }
         public string? MetaSeries { get; set; }
         public string? MetaDirector { get; set; }
-        public int? MetaRuntimeMinutes { get; set; }
         public string? MetaDescription { get; set; }
         public MovieContentType ContentType { get; set; }
         public List<VrChoice> VrFormats { get; set; } = [];
@@ -183,7 +178,6 @@
             MetaLabel = Movie.MetaLabel,
             MetaSeries = Movie.MetaSeries,
             MetaDirector = Movie.MetaDirector,
-            MetaRuntimeMinutes = Movie.MetaRuntimeMinutes,
             MetaDescription = Movie.MetaDescription,
             ContentType = Movie.ContentType,
             VrFormats = Movie.MovieFiles
@@ -216,7 +210,6 @@
             model.MetaLabel,
             model.MetaSeries,
             model.MetaDirector,
-            model.MetaRuntimeMinutes,
             model.MetaDescription,
             model.ContentType);
 
