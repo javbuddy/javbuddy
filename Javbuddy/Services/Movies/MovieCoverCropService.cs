@@ -32,11 +32,18 @@ public interface IMovieCoverCropService
     Task<MovieCropSources> GetCropSourcesAsync(string code, CancellationToken ct = default);
     Task<byte[]?> GetSourceBytesAsync(string code, string sourceKey, CancellationToken ct = default);
     Task<MovieCoverCropDownloadResult> DownloadImageFromUrlAsync(string url, CancellationToken ct = default);
+    /// <param name="straightenDegrees">The fine rotation (clockwise) the user applied in the cropper.
+    /// <paramref name="cropRect"/> is relative to the rotated image's bounding frame, so the source is
+    /// rotated by this angle before it is cropped.</param>
     Task<MovieCoverCropSaveResult> SaveCroppedCoverAsync(
         string code,
         byte[] sourceBytes,
         NormalizedCropRect cropRect,
+        double straightenDegrees = 0,
         CancellationToken ct = default);
+
+    /// <summary>Rotates the source image a quarter turn; the result is PNG. Null if it can't be decoded.</summary>
+    Task<byte[]?> RotateImageAsync(byte[] sourceBytes, bool clockwise, CancellationToken ct = default);
 }
 
 public class MovieCoverCropService(
@@ -234,10 +241,27 @@ public class MovieCoverCropService(
         });
     }
 
+    public async Task<byte[]?> RotateImageAsync(byte[] sourceBytes, bool clockwise, CancellationToken ct = default)
+    {
+        if (sourceBytes is not { Length: > 0 }) return null;
+
+        try
+        {
+            return await ImageConversionGate.RunAsync(
+                () => ImageConverter.RotateQuarterTurnToPng(ImageConverter.ApplyExifOrientation(sourceBytes), clockwise), ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning(ex, "Failed to rotate cover crop source image");
+            return null;
+        }
+    }
+
     public async Task<MovieCoverCropSaveResult> SaveCroppedCoverAsync(
         string code,
         byte[] sourceBytes,
         NormalizedCropRect cropRect,
+        double straightenDegrees = 0,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(code))
@@ -251,6 +275,24 @@ public class MovieCoverCropService(
         }
 
         var clamped = cropRect.Clamp();
+
+        // The cropper shows the image the way a browser does, EXIF orientation applied, and its crop
+        // rect (and the straighten frame) are relative to that, so bake the orientation in first.
+        try
+        {
+            var original = sourceBytes;
+            sourceBytes = await ImageConversionGate.RunAsync(() => ImageConverter.ApplyExifOrientation(original), ct);
+            if (Math.Abs(straightenDegrees) > 0.001)
+            {
+                var upright = sourceBytes;
+                sourceBytes = await ImageConversionGate.RunAsync(() => ImageConverter.RotateByDegreesToPng(upright, straightenDegrees), ct);
+            }
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning(ex, "Failed to prepare cover image for {Code}", code);
+            return MovieCoverCropSaveResult.Fail($"Failed to rotate image: {ex.Message}");
+        }
 
         byte[] jpegBytes;
         try

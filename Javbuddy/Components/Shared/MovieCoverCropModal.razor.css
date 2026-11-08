@@ -144,9 +144,14 @@
     cursor: pointer;
 }
 
-.btn-tool:hover {
+.btn-tool:hover:not(:disabled) {
     background-color: #35394a;
     color: #ffffff;
+}
+
+.btn-tool:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .btn-tool.active {
@@ -155,10 +160,31 @@
     color: #ffffff;
 }
 
+.straighten-controls,
+.rotate-controls,
 .zoom-controls {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+.straighten-label {
+    font-size: 0.8rem;
+    color: #cfd3de;
+    margin: 0;
+}
+
+.straighten-slider {
+    width: 140px;
+    cursor: pointer;
+}
+
+.straighten-value {
+    min-width: 3.2rem;
+    font-size: 0.8rem;
+    color: #cfd3de;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
 }
 
 .zoom-slider {

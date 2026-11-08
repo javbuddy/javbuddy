@@ -143,6 +143,132 @@ public static class ImageConverter
         }
     }
 
+    /// <summary>Bakes an image's EXIF orientation into its pixels. Browsers show an oriented JPEG
+    /// upright while SkiaSharp's decode returns the raw pixels, so a crop rect (or rotation) the
+    /// browser computed would otherwise hit different pixels here. Returns the bytes unchanged when
+    /// there is no orientation to apply, else a lossless PNG of the upright image.</summary>
+    public static byte[] ApplyExifOrientation(byte[] sourceBytes)
+    {
+        SKEncodedOrigin origin;
+        try
+        {
+            using var stream = new MemoryStream(sourceBytes);
+            using var codec = SKCodec.Create(stream);
+            if (codec is null || codec.EncodedOrigin == SKEncodedOrigin.TopLeft) return sourceBytes;
+            origin = codec.EncodedOrigin;
+        }
+        catch
+        {
+            return sourceBytes;
+        }
+
+        using var original = SKBitmap.Decode(sourceBytes);
+        if (original is null) return sourceBytes;
+
+        float w = original.Width, h = original.Height;
+        var (matrix, swap) = origin switch
+        {
+            SKEncodedOrigin.TopRight => (new SKMatrix(-1, 0, w, 0, 1, 0, 0, 0, 1), false),
+            SKEncodedOrigin.BottomRight => (new SKMatrix(-1, 0, w, 0, -1, h, 0, 0, 1), false),
+            SKEncodedOrigin.BottomLeft => (new SKMatrix(1, 0, 0, 0, -1, h, 0, 0, 1), false),
+            SKEncodedOrigin.LeftTop => (new SKMatrix(0, 1, 0, 1, 0, 0, 0, 0, 1), true),
+            SKEncodedOrigin.RightTop => (new SKMatrix(0, -1, h, 1, 0, 0, 0, 0, 1), true),
+            SKEncodedOrigin.RightBottom => (new SKMatrix(0, -1, h, -1, 0, w, 0, 0, 1), true),
+            SKEncodedOrigin.LeftBottom => (new SKMatrix(0, 1, 0, -1, 0, w, 0, 0, 1), true),
+            _ => (SKMatrix.Identity, false),
+        };
+
+        var info = new SKImageInfo(swap ? original.Height : original.Width, swap ? original.Width : original.Height,
+            original.ColorType, original.AlphaType, original.ColorSpace);
+        using var upright = new SKBitmap(info);
+        using (var canvas = new SKCanvas(upright))
+        {
+            canvas.SetMatrix(matrix);
+            canvas.DrawBitmap(original, 0, 0);
+        }
+
+        using var data = upright.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    /// <summary>Rotates an in-memory image a quarter turn (clockwise or counter-clockwise) and
+    /// re-encodes it as lossless PNG, so repeated rotations don't compound JPEG loss. Decodes at
+    /// most <c>FullMaxEdge * 2</c> on the longer edge (like <see cref="CropImageToJpeg"/>), keeping
+    /// the source's colour space.</summary>
+    public static byte[] RotateQuarterTurnToPng(byte[] sourceBytes, bool clockwise)
+    {
+        using var original = DecodeScaledFromBytes(sourceBytes, FullMaxEdge * 2);
+
+        var pressure = (long)original.Width * original.Height * 4 * 2;
+        GC.AddMemoryPressure(pressure);
+        try
+        {
+            var info = new SKImageInfo(original.Height, original.Width, original.ColorType, original.AlphaType, original.ColorSpace);
+            using var rotated = new SKBitmap(info);
+            using (var canvas = new SKCanvas(rotated))
+            {
+                canvas.Clear(SKColors.Transparent);
+                if (clockwise)
+                {
+                    canvas.Translate(original.Height, 0);
+                    canvas.RotateDegrees(90);
+                }
+                else
+                {
+                    canvas.Translate(0, original.Width);
+                    canvas.RotateDegrees(-90);
+                }
+                canvas.DrawBitmap(original, 0, 0);
+            }
+
+            using var data = rotated.Encode(SKEncodedImageFormat.Png, 100);
+            return data.ToArray();
+        }
+        finally
+        {
+            GC.RemoveMemoryPressure(pressure);
+        }
+    }
+
+    /// <summary>Rotates an in-memory image clockwise by an arbitrary angle (negative = counter-clockwise)
+    /// onto the smallest axis-aligned canvas that holds it — the same "frame" the crop modal's
+    /// straighten preview shows, so a normalized crop rect from that preview applies to this
+    /// result. The corners the rotation uncovers are transparent. Decodes at most
+    /// <c>FullMaxEdge * 2</c> on the longer edge and re-encodes as lossless PNG.</summary>
+    public static byte[] RotateByDegreesToPng(byte[] sourceBytes, double degrees)
+    {
+        using var original = DecodeScaledFromBytes(sourceBytes, FullMaxEdge * 2);
+
+        var rad = degrees * Math.PI / 180.0;
+        var cos = Math.Abs(Math.Cos(rad));
+        var sin = Math.Abs(Math.Sin(rad));
+        var frameWidth = Math.Max(1, (int)Math.Round(original.Width * cos + original.Height * sin));
+        var frameHeight = Math.Max(1, (int)Math.Round(original.Width * sin + original.Height * cos));
+
+        var pressure = ((long)original.Width * original.Height + (long)frameWidth * frameHeight) * 4;
+        GC.AddMemoryPressure(pressure);
+        try
+        {
+            var info = new SKImageInfo(frameWidth, frameHeight, original.ColorType, SKAlphaType.Premul, original.ColorSpace);
+            using var rotated = new SKBitmap(info);
+            using (var canvas = new SKCanvas(rotated))
+            using (var image = SKImage.FromBitmap(original))
+            {
+                canvas.Clear(SKColors.Transparent);
+                canvas.Translate(frameWidth / 2f, frameHeight / 2f);
+                canvas.RotateDegrees((float)degrees);
+                canvas.DrawImage(image, -original.Width / 2f, -original.Height / 2f, new SKSamplingOptions(SKCubicResampler.CatmullRom));
+            }
+
+            using var data = rotated.Encode(SKEncodedImageFormat.Png, 100);
+            return data.ToArray();
+        }
+        finally
+        {
+            GC.RemoveMemoryPressure(pressure);
+        }
+    }
+
     /// <summary>Checks if a physical poster image on disk is landscape (aspect ratio > 1.05),
     /// and if so, crops it to the front cover and overwrites the file as JPEG. Returns true if cropped.</summary>
     public static bool EnsureLocalPosterCropped(string posterFilePath)

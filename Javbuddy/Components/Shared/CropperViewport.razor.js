@@ -1,4 +1,47 @@
 const MIN_CROP_SIZE = 40;
+// Keeps a crop box this many display pixels inside a rotated image's edge, so the antialiased
+// border of a rotated image never ends up in the saved crop.
+const ROTATED_EDGE_INSET = 2;
+
+/** Natural size of the smallest axis-aligned frame holding a width x height image rotated by `rad`. */
+export function rotatedFrameSize(width, height, rad) {
+    const c = Math.abs(Math.cos(rad));
+    const s = Math.abs(Math.sin(rad));
+    return { width: width * c + height * s, height: width * s + height * c };
+}
+
+/**
+ * Shrinks (about its centre, keeping its aspect ratio) and slides `box` so that it lies inside the
+ * rectangle of half-size (halfW, halfH) centred on `center` and rotated clockwise by `rad`.
+ * Works in the rectangle's own axes, where containment is two independent range checks.
+ */
+export function clampBoxInRotatedRect(box, center, halfW, halfH, rad) {
+    const c = Math.cos(rad);
+    const s = Math.sin(rad);
+    const ac = Math.abs(c);
+    const as = Math.abs(s);
+    const a = Math.max(1, halfW - ROTATED_EDGE_INSET);
+    const b = Math.max(1, halfH - ROTATED_EDGE_INSET);
+
+    // Half-extent of the box along each of the rectangle's axes, per unit of box size.
+    const needU = (box.width * ac + box.height * as) / 2;
+    const needV = (box.width * as + box.height * ac) / 2;
+    const f = Math.min(1, needU > 0 ? a / needU : 1, needV > 0 ? b / needV : 1);
+    const width = box.width * f;
+    const height = box.height * f;
+
+    const limU = Math.max(0, a - (width * ac + height * as) / 2);
+    const limV = Math.max(0, b - (width * as + height * ac) / 2);
+
+    const dx = box.x + box.width / 2 - center.x;
+    const dy = box.y + box.height / 2 - center.y;
+    const u = Math.max(-limU, Math.min(limU, dx * c + dy * s));
+    const v = Math.max(-limV, Math.min(limV, -dx * s + dy * c));
+    const cx = center.x + u * c - v * s;
+    const cy = center.y + u * s + v * c;
+
+    return { x: cx - width / 2, y: cy - height / 2, width, height };
+}
 
 export class ImageCropper {
     constructor(container, img, { aspectRatio, fallbackWidth, fallbackHeight }) {
@@ -9,6 +52,7 @@ export class ImageCropper {
 
         this.aspectRatio = aspectRatio;
         this.zoom = 1.0;
+        this.rotation = 0; // radians, clockwise; the image is straightened inside an axis-aligned frame
         this.minZoom = 1.0;
         this.maxZoom = 3.0;
 
@@ -48,9 +92,17 @@ export class ImageCropper {
         const nWidth = this.img.naturalWidth || this.fallbackWidth;
         const nHeight = this.img.naturalHeight || this.fallbackHeight;
 
-        const scale = Math.min(cWidth / nWidth, cHeight / nHeight);
-        const dispW = nWidth * scale;
-        const dispH = nHeight * scale;
+        // With a rotation, imgPos is the frame holding the rotated image, and crop rects are
+        // relative to that frame.
+        const frame = this.rotation === 0
+            ? { width: nWidth, height: nHeight }
+            : rotatedFrameSize(nWidth, nHeight, this.rotation);
+        this.frameNaturalWidth = frame.width;
+        this.frameNaturalHeight = frame.height;
+
+        const scale = Math.min(cWidth / frame.width, cHeight / frame.height);
+        const dispW = frame.width * scale;
+        const dispH = frame.height * scale;
 
         this.baseWidth = dispW;
         this.baseHeight = dispH;
@@ -102,7 +154,20 @@ export class ImageCropper {
         this.resetCrop();
     }
 
+    /** Straightens the image by `degrees` (clockwise) and lays the view out again. */
+    setRotation(degrees) {
+        this.rotation = (Number(degrees) || 0) * Math.PI / 180;
+        if (this.img.complete && this.img.naturalWidth) {
+            this.setupGeometry();
+        }
+    }
+
     clampCropBoxToImage() {
+        if (this.rotation !== 0) {
+            this.clampCropBoxToRotatedImage();
+            return;
+        }
+
         const imgRight = this.imgPos.x + this.imgPos.width;
         const imgBottom = this.imgPos.y + this.imgPos.height;
 
@@ -120,7 +185,32 @@ export class ImageCropper {
         }
     }
 
+    clampCropBoxToRotatedImage() {
+        const scale = this.imgPos.width / this.frameNaturalWidth;
+        const nWidth = this.img.naturalWidth || this.fallbackWidth;
+        const nHeight = this.img.naturalHeight || this.fallbackHeight;
+        this.cropBox = clampBoxInRotatedRect(
+            this.cropBox,
+            { x: this.imgPos.x + this.imgPos.width / 2, y: this.imgPos.y + this.imgPos.height / 2 },
+            nWidth * scale / 2,
+            nHeight * scale / 2,
+            this.rotation);
+    }
+
     updateImgDom() {
+        if (this.rotation !== 0) {
+            const scale = this.imgPos.width / this.frameNaturalWidth;
+            const w = (this.img.naturalWidth || this.fallbackWidth) * scale;
+            const h = (this.img.naturalHeight || this.fallbackHeight) * scale;
+            this.img.style.width = `${w}px`;
+            this.img.style.height = `${h}px`;
+            this.img.style.left = `${this.imgPos.x + (this.imgPos.width - w) / 2}px`;
+            this.img.style.top = `${this.imgPos.y + (this.imgPos.height - h) / 2}px`;
+            this.img.style.transform = `rotate(${this.rotation}rad)`;
+            return;
+        }
+
+        this.img.style.transform = '';
         this.img.style.width = `${this.imgPos.width}px`;
         this.img.style.height = `${this.imgPos.height}px`;
         this.img.style.left = `${this.imgPos.x}px`;
@@ -140,10 +230,13 @@ export class ImageCropper {
         if (!canvas || !this.img.naturalWidth || !this.img.naturalHeight) return;
 
         const rect = this.getCropRect();
-        const srcX = rect.x * this.img.naturalWidth;
-        const srcY = rect.y * this.img.naturalHeight;
-        const srcW = rect.width * this.img.naturalWidth;
-        const srcH = rect.height * this.img.naturalHeight;
+        const rotated = this.rotation !== 0;
+        const frameW = rotated ? this.frameNaturalWidth : this.img.naturalWidth;
+        const frameH = rotated ? this.frameNaturalHeight : this.img.naturalHeight;
+        const srcX = rect.x * frameW;
+        const srcY = rect.y * frameH;
+        const srcW = rect.width * frameW;
+        const srcH = rect.height * frameH;
 
         const ctx = canvas.getContext('2d');
         const cw = canvas.width;
@@ -151,7 +244,16 @@ export class ImageCropper {
         ctx.clearRect(0, 0, cw, ch);
         ctx.save();
         clip?.(ctx, cw, ch);
-        ctx.drawImage(this.img, srcX, srcY, srcW, srcH, 0, 0, cw, ch);
+        if (rotated) {
+            // Draw the rotated image into the frame, then the crop region of the frame onto the canvas.
+            ctx.scale(cw / srcW, ch / srcH);
+            ctx.translate(-srcX, -srcY);
+            ctx.translate(frameW / 2, frameH / 2);
+            ctx.rotate(this.rotation);
+            ctx.drawImage(this.img, -this.img.naturalWidth / 2, -this.img.naturalHeight / 2);
+        } else {
+            ctx.drawImage(this.img, srcX, srcY, srcW, srcH, 0, 0, cw, ch);
+        }
         ctx.restore();
     }
 
@@ -207,6 +309,7 @@ export class ImageCropper {
 
             this.cropBox.x = Math.max(minX, Math.min(maxX, this.cropStart.x + dx));
             this.cropBox.y = Math.max(minY, Math.min(maxY, this.cropStart.y + dy));
+            if (this.rotation !== 0) this.clampCropBoxToImage();
 
             this.updateCropDom();
             this.updatePreviews();
@@ -340,6 +443,7 @@ export function createCropperSession(createCropper) {
         },
         setAspectRatio: (ratio) => activeCropper?.setAspectRatio(ratio),
         setZoom: (zoom) => activeCropper?.applyZoom(zoom),
+        setRotation: (degrees) => activeCropper?.setRotation(degrees),
         resetCrop: () => activeCropper?.resetCrop(),
         getCropRect: () => activeCropper?.getCropRect() ?? { x: 0, y: 0, width: 1, height: 1 },
         destroyCropper() {

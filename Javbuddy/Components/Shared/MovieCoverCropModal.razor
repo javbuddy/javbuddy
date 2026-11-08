@@ -7,7 +7,7 @@
 
 @if (Show)
 {
-    <ModalShell MaxWidth="880px" OnClose="CloseAsync">
+    <ModalShell MaxWidth="880px" OnClose="CloseAsync" Busy="@rotating">
         <TitleContent>Crop Cover — @(string.IsNullOrWhiteSpace(Title) ? Code : Title)</TitleContent>
         <ChildContent>
             @if (errorMessage is not null)
@@ -22,20 +22,20 @@
                     <button type="button"
                             class="source-tab-btn @(activeTab == src.Key ? "active" : "")"
                             @onclick="() => SelectSourceTabAsync(src.Key)"
-                            disabled="@(loadingSource || saving)">
+                            disabled="@(loadingSource || saving || rotating)">
                         @src.Label
                     </button>
                 }
                 <button type="button"
                         class="source-tab-btn @(activeTab == "upload" ? "active" : "")"
                         @onclick='() => SelectSourceTabAsync("upload")'
-                        disabled="@(loadingSource || saving)">
+                        disabled="@(loadingSource || saving || rotating)">
                     Upload File
                 </button>
                 <button type="button"
                         class="source-tab-btn @(activeTab == "url" ? "active" : "")"
                         @onclick='() => SelectSourceTabAsync("url")'
-                        disabled="@(loadingSource || saving)">
+                        disabled="@(loadingSource || saving || rotating)">
                     Import URL
                 </button>
             </div>
@@ -104,6 +104,20 @@
                         <button type="button" class="btn-tool" @onclick="() => AdjustZoom(0.1)" title="Zoom in">+</button>
                         <button type="button" class="btn-tool ms-2" @onclick="ResetCrop" title="Reset crop box to proposed front cover">Reset</button>
                     </div>
+
+                    <div class="straighten-controls">
+                        <label class="straighten-label" for="cover-straighten">Straighten</label>
+                        <input id="cover-straighten" type="range" class="form-range straighten-slider" min="-45" max="45" step="0.1"
+                               value="@straightenDegrees.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)"
+                               @oninput="HandleStraightenInput" disabled="@(rotating || saving)" />
+                        <span class="straighten-value">@straightenDegrees.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)°</span>
+                        <button type="button" class="btn-tool straighten-reset-btn" @onclick="ResetStraightenAsync" disabled="@(rotating || saving || straightenDegrees == 0)" title="Set the fine rotation back to 0°">0°</button>
+                    </div>
+
+                    <div class="rotate-controls">
+                        <button type="button" class="btn-tool rotate-left-btn" @onclick="() => RotateAsync(clockwise: false)" disabled="@(rotating || saving)" title="Rotate the image 90° counter-clockwise">&#8634; Rotate left</button>
+                        <button type="button" class="btn-tool rotate-right-btn" @onclick="() => RotateAsync(clockwise: true)" disabled="@(rotating || saving)" title="Rotate the image 90° clockwise">Rotate right &#8635;</button>
+                    </div>
                 </div>
 
                 <div class="cropper-workspace">
@@ -126,10 +140,10 @@
             @if (selectedImageBytes is not null)
             {
                 <div class="footer-actions-right">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@saving">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@(saving || rotating)">
                         Cancel
                     </button>
-                    <button type="button" class="btn btn-primary btn-sm crop-save-btn" @onclick="SaveCroppedAsync" disabled="@saving" title="@SaveDestinationHint">
+                    <button type="button" class="btn btn-primary btn-sm crop-save-btn" @onclick="SaveCroppedAsync" disabled="@(saving || rotating)" title="@SaveDestinationHint">
                         @(saving ? "Saving…" : "Save Cropped Cover")
                     </button>
                 </div>
@@ -162,6 +176,8 @@
     private double? currentAspectRatio = 1.0 / 1.42;
     private double currentZoom = 1.0;
     private bool saving;
+    private bool rotating;
+    private double straightenDegrees;
     private string? errorMessage;
     private bool hasLocalFolder;
 
@@ -207,6 +223,10 @@
                 using var streamRef = new DotNetStreamReference(new MemoryStream(selectedImageBytes, writable: false));
                 await jsModule.InvokeVoidAsync("setImageSource", viewport!.Image, streamRef, selectedImageContentType);
                 await jsModule.InvokeVoidAsync("initCropper", viewport!.Container, viewport.Image, previewPosterCanvasRef);
+                if (straightenDegrees != 0)
+                {
+                    await jsModule.InvokeVoidAsync("setRotation", straightenDegrees);
+                }
                 if (currentAspectRatio.HasValue)
                 {
                     await jsModule.InvokeVoidAsync("setAspectRatio", currentAspectRatio.Value);
@@ -329,6 +349,7 @@
     {
         selectedImageBytes = bytes;
         selectedImageContentType = contentType;
+        straightenDegrees = 0;
         currentZoom = 1.0;
         currentAspectRatio = 1.0 / 1.42;
         shouldInitCropper = true;
@@ -389,6 +410,60 @@
         }
     }
 
+    private async Task RotateAsync(bool clockwise)
+    {
+        if (selectedImageBytes is null || rotating) return;
+
+        rotating = true;
+        errorMessage = null;
+        try
+        {
+            var rotated = await CoverCropService.RotateImageAsync(selectedImageBytes, clockwise);
+            if (rotated is { Length: > 0 })
+            {
+                // Reloads the cropper on the rotated image, which resets the crop box and zoom.
+                var ratio = currentAspectRatio;
+                var straighten = straightenDegrees;
+                LoadSelectedImage(rotated, "image/png");
+                currentAspectRatio = ratio;
+                straightenDegrees = straighten;
+            }
+            else
+            {
+                errorMessage = "Could not rotate the image.";
+            }
+        }
+        finally
+        {
+            rotating = false;
+        }
+    }
+
+    private async Task HandleStraightenInput(ChangeEventArgs e)
+    {
+        if (!double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var degrees)) return;
+
+        await SetStraightenAsync(Math.Clamp(Math.Round(degrees, 1), -45, 45));
+    }
+
+    private Task ResetStraightenAsync() => SetStraightenAsync(0);
+
+    // The cropper lays the rotated image out again, which resets its zoom and crop box.
+    private async Task SetStraightenAsync(double degrees)
+    {
+        straightenDegrees = degrees;
+        currentZoom = 1.0;
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("setRotation", degrees);
+            }
+            catch (JSDisconnectedException) { }
+            catch (InvalidOperationException) { }
+        }
+    }
+
     private async Task ResetCrop()
     {
         currentZoom = 1.0;
@@ -408,6 +483,7 @@
     {
         selectedImageContentType = null;
         selectedImageBytes = null;
+        straightenDegrees = 0;
         errorMessage = null;
         shouldInitCropper = false;
         currentZoom = 1.0;
@@ -453,7 +529,7 @@
         }
     }
 
-    private record CropRectDto(double x, double y, double width, double height);
+    public record CropRectDto(double x, double y, double width, double height);
 
     private async Task SaveCroppedAsync()
     {
@@ -465,7 +541,7 @@
         {
             var dto = await jsModule.InvokeAsync<CropRectDto>("getCropRect");
             var cropRect = new NormalizedCropRect(dto.x, dto.y, dto.width, dto.height);
-            var result = await CoverCropService.SaveCroppedCoverAsync(Code, selectedImageBytes, cropRect);
+            var result = await CoverCropService.SaveCroppedCoverAsync(Code, selectedImageBytes, cropRect, straightenDegrees);
             if (!result.Success)
             {
                 errorMessage = result.ErrorMessage ?? "Failed to save cropped cover.";

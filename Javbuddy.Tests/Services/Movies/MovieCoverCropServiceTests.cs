@@ -61,6 +61,31 @@ public class MovieCoverCropServiceTests
     }
 
     [Fact]
+    public async Task RotateImageAsync_ReturnsRotatedPng_AndNullForUnusableInput()
+    {
+        using var factory = new TestDbContextFactory();
+        var service = new MovieCoverCropService(
+            factory,
+            Substitute.For<ILocalLibraryClient>(),
+            Substitute.For<ILocalImageCache>(),
+            Substitute.For<IImageCacheMaintenanceService>(),
+            Substitute.For<IHttpClientFactory>());
+
+        using var source = new SKBitmap(6, 3);
+        source.Erase(SKColors.Green);
+        using var image = SKImage.FromBitmap(source);
+        var sourceBytes = image.Encode(SKEncodedImageFormat.Png, 100).ToArray();
+
+        var rotated = await service.RotateImageAsync(sourceBytes, clockwise: true);
+
+        Assert.NotNull(rotated);
+        using var bitmap = SKBitmap.Decode(rotated);
+        Assert.Equal((3, 6), (bitmap.Width, bitmap.Height));
+        Assert.Null(await service.RotateImageAsync([], clockwise: true));
+        Assert.Null(await service.RotateImageAsync([1, 2, 3], clockwise: true));
+    }
+
+    [Fact]
     public async Task SaveCroppedCoverAsync_LocalMovie_WritesPosterJpgAndUpdatesCache()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "javbuddy_test_" + Guid.NewGuid());
@@ -197,6 +222,65 @@ public class MovieCoverCropServiceTests
         Assert.False(File.Exists(Path.Combine(fx.MovieDir, "poster.png")));
         Assert.Equal(fanart, await File.ReadAllBytesAsync(Path.Combine(fx.MovieDir, "fanart.jpg")));
         Assert.Equal("Saved the cropped cover to poster.jpg in the movie folder and removed poster.png, folder.jpg.", result.Message);
+    }
+
+    [Fact]
+    public async Task SaveCroppedCoverAsync_WithStraightenDegrees_CropsTheRotatedFrame()
+    {
+        using var fx = new LocalSaveFixture();
+
+        // A 90° rotation turns a 1000 x 700 source into a 700 x 1000 frame; the full-frame crop is that size.
+        var result = await fx.Service.SaveCroppedCoverAsync(
+            "IPX-535",
+            CreateSampleImageBytes(1000, 700, SKColors.Purple),
+            new NormalizedCropRect(0, 0, 1, 1),
+            straightenDegrees: 90);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        using var poster = SKBitmap.Decode(Path.Combine(fx.MovieDir, "poster.jpg"));
+        Assert.Equal((700, 1000), (poster.Width, poster.Height));
+    }
+
+    [Theory]
+    [InlineData(12.0)]
+    [InlineData(-12.0)]
+    public async Task SaveCroppedCoverAsync_WithAFineAngle_AndACropInsideTheRotatedImage_SavesNoEmptyCorner(double degrees)
+    {
+        using var fx = new LocalSaveFixture();
+
+        // 400 x 300 at 12° has a ~454 x 377 frame; the central 40% box (≈181 x 151) fits well inside the image.
+        var result = await fx.Service.SaveCroppedCoverAsync(
+            "IPX-535",
+            CreateSampleImageBytes(400, 300, SKColors.Yellow),
+            new NormalizedCropRect(0.3, 0.3, 0.4, 0.4),
+            degrees);
+
+        Assert.True(result.Success, result.ErrorMessage);
+        using var poster = SKBitmap.Decode(Path.Combine(fx.MovieDir, "poster.jpg"));
+        Assert.InRange(poster.Width, 175, 190);
+        for (var x = 0; x < poster.Width; x++)
+        {
+            for (var y = 0; y < poster.Height; y++)
+            {
+                var pixel = poster.GetPixel(x, y);
+                Assert.True(pixel.Red > 200 && pixel.Green > 200, $"dark pixel {pixel} at ({x},{y})");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task SaveCroppedCoverAsync_WithoutStraightenDegrees_LeavesTheSourceOrientation()
+    {
+        using var fx = new LocalSaveFixture();
+
+        var result = await fx.Service.SaveCroppedCoverAsync(
+            "IPX-535",
+            CreateSampleImageBytes(1000, 700, SKColors.Purple),
+            new NormalizedCropRect(0, 0, 1, 1));
+
+        Assert.True(result.Success, result.ErrorMessage);
+        using var poster = SKBitmap.Decode(Path.Combine(fx.MovieDir, "poster.jpg"));
+        Assert.Equal((1000, 700), (poster.Width, poster.Height));
     }
 
     [Fact]

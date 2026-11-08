@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Added
 
+- **Crop Cover** can rotate the image: **Rotate left** and **Rotate right** turn the source 90° at a time, and a **Straighten** slider (±45°, 0.1° steps, with a 0° button) fine-tunes a crooked scan. The crop box can't leave the rotated image, so no empty corner is saved. Each rotation — a 90° turn or a move of the slider — resets the crop box and zoom (the chosen aspect ratio is kept). The straighten angle is applied when the cover is saved, after any 90° turns. A photo's EXIF orientation is now applied to the image before it is rotated or cropped, so the crop matches what the cropper shows.
 - A newly added movie (added by code, or imported by a library rescan) whose `.nfo` has no runtime now gets its runtime from the video file's duration, if MediaInfo is on and the scan succeeds at that moment. An existing runtime is never replaced, and a folder without an `.nfo` is left alone so an `.nfo` added later is still imported. The same fill applies when a finished torrent is sorted into the library, on a manual rescan that finds a missing movie's files, and on **Refresh from local**.
 
 ### Changed
