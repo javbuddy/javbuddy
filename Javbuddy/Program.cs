@@ -123,6 +123,8 @@ builder.Services.AddOpenApi(options =>
     });
 });
 
+builder.Services.AddJavbuddyMcp();
+
 builder.Services
     .AddJavbuddyHttpClients(builder.Configuration)
     .AddIntegrationAndMovieServices(builder.Configuration)
@@ -163,6 +165,15 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseResponseCompression();
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+// Not for /mcp: its bodyless answers (405 to the GET a stateless server doesn't support) are protocol replies, not missing pages.
+app.Use((context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments(McpRegistration.Route))
+    {
+        context.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>()?.Enabled = false;
+    }
+    return next(context);
+});
 
 app.UseAntiforgery();
 
@@ -185,5 +196,6 @@ app.MapDeoVrEndpoints();
 app.MapBackupEndpoints();
 app.MapPublicApi();
 app.MapOpenApi();
+app.MapJavbuddyMcp();
 
 app.Run();

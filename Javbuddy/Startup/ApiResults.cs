@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Javbuddy.Services.Api;
 
 namespace Javbuddy.Startup;
@@ -9,11 +8,7 @@ public static class ApiResults
 {
     /// <summary>camelCase with enums as strings. Scoped to the API's own responses (via <see cref="Results.Json(object?, JsonSerializerOptions?, string?, int?)"/>)
     /// rather than the app-wide HTTP JSON options, so the other endpoints can't change.</summary>
-    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.Never,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-    };
+    public static readonly JsonSerializerOptions Json = ApiJson.Options;
 
     public static int StatusCodeOf(ApiStatus status) => status switch
     {

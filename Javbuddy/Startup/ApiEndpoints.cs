@@ -4,23 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Javbuddy.Startup;
 
-/// <summary>An absolute-link wire version of <see cref="MovieSummary"/>: the relative <c>webPath</c> plus <c>webUrl</c>, built from the request.</summary>
-public sealed record ApiMovieSummary : MovieSummary
-{
-    public ApiMovieSummary(MovieSummary summary, string webUrl) : base(summary) => WebUrl = webUrl;
-    public string WebUrl { get; }
-}
-
-public sealed record ApiMovieDetail : MovieDetail
-{
-    public ApiMovieDetail(MovieDetail detail, string webUrl) : base(detail) => WebUrl = webUrl;
-    public string WebUrl { get; }
-}
-
-public sealed record ApiMovieAddResponse(ApiMovieSummary Movie, bool OwnedViaJellyfin, bool MetadataFound, string? MetadataError);
-
-public sealed record ApiMetadataPatchResponse(ApiMovieDetail Movie, string? Warning);
-
 /// <summary>Body of <c>POST /movies</c>.</summary>
 public sealed record AddMovieRequest(string? Code = null);
 
@@ -29,12 +12,6 @@ public sealed record AddCastRequest(int ActorId = 0);
 
 /// <summary>Optional body of <c>POST /movies/{code}/nfo/push</c>; without one, <c>includeExternal</c> is false.</summary>
 public sealed record PushNfoRequest(bool IncludeExternal = false);
-
-public sealed record ApiReleaseGrabResponse(ApiMovieSummary Movie, bool Added, string? ReleaseTitle);
-
-public sealed record ApiMovieListPage(int Total, IReadOnlyList<ApiMovieSummary> Items);
-
-public sealed record ApiMovieLookupResult(string Query, string? Code, bool InLibrary, ApiMovieSummary? Movie);
 
 /// <summary>The public REST API under <c>/api/v1</c> (see docs/api.md). Unauthenticated like the rest of the app, guarded
 /// against cross-site browser calls by <see cref="OriginGuardFilter"/>. A thin layer over <see cref="ILibraryApiService"/>.</summary>
@@ -87,7 +64,7 @@ public static class ApiEndpoints
                 }
 
                 var result = await library.ListAsync(new MovieListQuery(q, status, studio, tag, actorId, nfoDrift, skip ?? 0, pageSize), ct);
-                return result.ToHttp(page => new ApiMovieListPage(page.Total, page.Items.Select(m => WithUrl(request, m)).ToList()));
+                return result.ToHttp(page => ApiLinks.WithUrl(request, page));
             })
             .WithTags("Movies")
             .WithName("ListMovies")
@@ -103,9 +80,7 @@ public static class ApiEndpoints
                     .SelectMany(c => c.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                     .ToList();
                 var result = await library.LookupAsync(list, ct);
-                return result.ToHttp(results => results
-                    .Select(r => new ApiMovieLookupResult(r.Query, r.Code, r.InLibrary, r.Movie is null ? null : WithUrl(request, r.Movie)))
-                    .ToList());
+                return result.ToHttp(results => results.Select(r => ApiLinks.WithUrl(request, r)).ToList());
             })
             .WithTags("Movies")
             .WithName("LookupMovies")
@@ -114,7 +89,7 @@ public static class ApiEndpoints
             .ProducesValidationProblem();
 
         api.MapGet("/movies/{code}", async (string code, HttpRequest request, ILibraryApiService library, CancellationToken ct) =>
-                (await library.GetDetailAsync(code, ct)).ToHttp(d => new ApiMovieDetail(d, AbsoluteUrl(request, d.WebPath))))
+                (await library.GetDetailAsync(code, ct)).ToHttp(d => new ApiMovieDetail(d, ApiLinks.AbsoluteUrl(request, d.WebPath))))
             .WithTags("Movies")
             .WithName("GetMovie")
             .WithSummary("A movie's full detail by code (case and zero-padding tolerant).")
@@ -140,15 +115,15 @@ public static class ApiEndpoints
                         extensions: new Dictionary<string, object?>
                         {
                             ["code"] = existing.Movie.Code,
-                            ["webUrl"] = AbsoluteUrl(request, existing.Movie.WebPath),
+                            ["webUrl"] = ApiLinks.AbsoluteUrl(request, existing.Movie.WebPath),
                         });
                 }
                 if (!result.IsOk) return ApiResults.Problem(result);
 
                 var added = result.Value!;
-                request.HttpContext.Response.Headers.Location = AbsoluteUrl(request, $"{Root}/movies/{Uri.EscapeDataString(added.Movie.Code)}");
+                request.HttpContext.Response.Headers.Location = ApiLinks.AbsoluteUrl(request, $"{Root}/movies/{Uri.EscapeDataString(added.Movie.Code)}");
                 return ApiResults.JsonOk(
-                    new ApiMovieAddResponse(WithUrl(request, added.Movie), added.OwnedViaJellyfin, added.MetadataFound, added.MetadataError),
+                    ApiLinks.WithUrl(request, added),
                     StatusCodes.Status201Created);
             })
             .WithTags("Movies")
@@ -166,7 +141,7 @@ public static class ApiEndpoints
                 if (body is null) return ApiResults.BadRequest("Provide a JSON body like {\"set\": {...}, \"clear\": [...]}.");
 
                 return (await library.PatchMetadataAsync(code, body, ct))
-                    .ToHttp(r => new ApiMetadataPatchResponse(WithUrl(request, r.Movie), r.Warning));
+                    .ToHttp(r => ApiLinks.WithUrl(request, r));
             })
             .WithTags("Movies")
             .WithName("PatchMovieMetadata")
@@ -177,7 +152,7 @@ public static class ApiEndpoints
             .ProducesValidationProblem();
 
         api.MapPut("/movies/{code}/tags/{tagId:int}", async (string code, int tagId, HttpRequest request, ILibraryApiService library, CancellationToken ct) =>
-                (await library.AddTagAsync(code, tagId, ct)).ToHttp(d => WithUrl(request, d)))
+                (await library.AddTagAsync(code, tagId, ct)).ToHttp(d => ApiLinks.WithUrl(request, d)))
             .WithTags("Movies")
             .WithName("AddMovieTag")
             .WithSummary("Adds an existing tag to the movie (a no-op when it already has it).")
@@ -185,7 +160,7 @@ public static class ApiEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         api.MapDelete("/movies/{code}/tags/{tagId:int}", async (string code, int tagId, HttpRequest request, ILibraryApiService library, CancellationToken ct) =>
-                (await library.RemoveTagAsync(code, tagId, ct)).ToHttp(d => WithUrl(request, d)))
+                (await library.RemoveTagAsync(code, tagId, ct)).ToHttp(d => ApiLinks.WithUrl(request, d)))
             .WithTags("Movies")
             .WithName("RemoveMovieTag")
             .WithSummary("Removes the movie's explicit tag (a no-op when it hasn't it).")
@@ -198,7 +173,7 @@ public static class ApiEndpoints
                 if (error is not null) return error;
                 if (body is null || body.ActorId <= 0) return ApiResults.BadRequest("Provide a JSON body like {\"actorId\": 12}.");
 
-                return (await library.AddCastAsync(code, body.ActorId, ct)).ToHttp(d => WithUrl(request, d));
+                return (await library.AddCastAsync(code, body.ActorId, ct)).ToHttp(d => ApiLinks.WithUrl(request, d));
             })
             .WithTags("Movies")
             .WithName("AddMovieCast")
@@ -209,7 +184,7 @@ public static class ApiEndpoints
             .ProducesValidationProblem();
 
         api.MapDelete("/movies/{code}/cast/{actorId:int}", async (string code, int actorId, HttpRequest request, ILibraryApiService library, CancellationToken ct) =>
-                (await library.RemoveCastByActorAsync(code, actorId, ct)).ToHttp(d => WithUrl(request, d)))
+                (await library.RemoveCastByActorAsync(code, actorId, ct)).ToHttp(d => ApiLinks.WithUrl(request, d)))
             .WithTags("Movies")
             .WithName("RemoveMovieCastByActor")
             .WithSummary("Unlinks a tracked actor from the movie's cast.")
@@ -217,7 +192,7 @@ public static class ApiEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         api.MapDelete("/movies/{code}/cast", async (string code, [FromQuery] string? name, HttpRequest request, ILibraryApiService library, CancellationToken ct) =>
-                (await library.RemoveCastByNameAsync(code, name ?? string.Empty, ct)).ToHttp(d => WithUrl(request, d)))
+                (await library.RemoveCastByNameAsync(code, name ?? string.Empty, ct)).ToHttp(d => ApiLinks.WithUrl(request, d)))
             .WithTags("Movies")
             .WithName("RemoveMovieCastByName")
             .WithSummary("Drops a cast name that matches no tracked actor.")
@@ -280,7 +255,7 @@ public static class ApiEndpoints
                 if (string.IsNullOrWhiteSpace(body?.Guid)) return ApiResults.BadRequest("Provide a JSON body like {\"guid\": \"...\"} naming a release from a recent search.");
 
                 return (await releases.GrabAsync(code, body.Guid, ct))
-                    .ToHttp(r => new ApiReleaseGrabResponse(WithUrl(request, r.Movie), r.Added, r.ReleaseTitle));
+                    .ToHttp(r => new ApiReleaseGrabResponse(ApiLinks.WithUrl(request, r.Movie), r.Added, r.ReleaseTitle));
             })
             .WithTags("Releases")
             .WithName("GrabRelease")
@@ -312,14 +287,4 @@ public static class ApiEndpoints
             .Produces<List<ActorSearchHit>>()
             .ProducesValidationProblem();
     }
-
-    /// <summary>The absolute URL for an app-relative path, from the request's scheme, host and PathBase.</summary>
-    public static string AbsoluteUrl(HttpRequest request, string path) =>
-        $"{request.Scheme}://{request.Host}{request.PathBase}{path}";
-
-    private static ApiMovieDetail WithUrl(HttpRequest request, MovieDetail detail) =>
-        new(detail, AbsoluteUrl(request, detail.WebPath));
-
-    private static ApiMovieSummary WithUrl(HttpRequest request, MovieSummary summary) =>
-        new(summary, AbsoluteUrl(request, summary.WebPath));
 }
