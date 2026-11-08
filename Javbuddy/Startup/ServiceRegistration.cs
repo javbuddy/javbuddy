@@ -171,6 +171,8 @@ public static class ServiceRegistration
         services.AddScoped<ILibraryStatisticsService, LibraryStatisticsService>();
         services.AddScoped<IMovieDetailQueryService, MovieDetailQueryService>();
         services.AddScoped<ILibraryApiService, LibraryApiService>();
+        services.AddSingleton<ReleaseSearchCache>();
+        services.AddScoped<IReleaseApiService, ReleaseApiService>();
         services.AddScoped<IActorDetailQueryService, ActorDetailQueryService>();
         services.AddScoped<ISearchService, SearchService>();
 

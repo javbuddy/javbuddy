@@ -1,6 +1,6 @@
 namespace Javbuddy.Services.Api;
 
-/// <summary>Why an API operation didn't (or did) succeed — the endpoint layer maps it to an HTTP status (200/404/409/400/502/503)
+/// <summary>Why an API operation didn't (or did) succeed — the endpoint layer maps it to an HTTP status (200/404/409/400/410/502/503)
 /// and the MCP tools to a tool error.</summary>
 public enum ApiStatus
 {
@@ -10,6 +10,7 @@ public enum ApiStatus
     Invalid,
     Upstream,
     NotConfigured,
+    Gone,
 }
 
 /// <summary>A small discriminated result for <see cref="ILibraryApiService"/>. <see cref="Value"/> is set for Ok, and for
@@ -31,6 +32,7 @@ public sealed record ApiResult<T>
     public static ApiResult<T> Invalid(params string[] errors) => Invalid((IReadOnlyList<string>)errors);
     public static ApiResult<T> Invalid(IReadOnlyList<string> errors) => new() { Status = ApiStatus.Invalid, Errors = errors, Message = string.Join(" ", errors) };
     public static ApiResult<T> Upstream(string message) => new() { Status = ApiStatus.Upstream, Message = message };
+    public static ApiResult<T> Gone(string message) => new() { Status = ApiStatus.Gone, Message = message };
     public static ApiResult<T> NotConfigured(string message) => new() { Status = ApiStatus.NotConfigured, Message = message };
 
     /// <summary>This failure carrying a different payload type, for passing a failed lookup up through another result.</summary>

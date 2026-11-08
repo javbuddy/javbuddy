@@ -12,6 +12,7 @@ public class ApiResultsTests
     [InlineData(ApiStatus.Invalid, 400)]
     [InlineData(ApiStatus.Upstream, 502)]
     [InlineData(ApiStatus.NotConfigured, 503)]
+    [InlineData(ApiStatus.Gone, 410)]
     public void StatusCodeOf_MapsEveryStatus(ApiStatus status, int expected) =>
         Assert.Equal(expected, ApiResults.StatusCodeOf(status));
 

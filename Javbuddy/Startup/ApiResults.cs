@@ -23,6 +23,7 @@ public static class ApiResults
         ApiStatus.Invalid => StatusCodes.Status400BadRequest,
         ApiStatus.Upstream => StatusCodes.Status502BadGateway,
         ApiStatus.NotConfigured => StatusCodes.Status503ServiceUnavailable,
+        ApiStatus.Gone => StatusCodes.Status410Gone,
         _ => StatusCodes.Status500InternalServerError,
     };
 
@@ -48,6 +49,7 @@ public static class ApiResults
                 ApiStatus.Conflict => "Conflict",
                 ApiStatus.Upstream => "Upstream service error",
                 ApiStatus.NotConfigured => "Integration not configured",
+                ApiStatus.Gone => "Gone",
                 _ => "Request failed",
             }),
     };

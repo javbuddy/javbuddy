@@ -30,6 +30,8 @@ public sealed record AddCastRequest(int ActorId = 0);
 /// <summary>Optional body of <c>POST /movies/{code}/nfo/push</c>; without one, <c>includeExternal</c> is false.</summary>
 public sealed record PushNfoRequest(bool IncludeExternal = false);
 
+public sealed record ApiReleaseGrabResponse(ApiMovieSummary Movie, bool Added, string? ReleaseTitle);
+
 public sealed record ApiMovieListPage(int Total, IReadOnlyList<ApiMovieSummary> Items);
 
 public sealed record ApiMovieLookupResult(string Query, string? Code, bool InLibrary, ApiMovieSummary? Movie);
@@ -52,6 +54,7 @@ public static class ApiEndpoints
         MapLookups(api);
         MapMovieWrites(api);
         MapNfo(api);
+        MapReleases(api);
 
         // An unknown /api/v1 path must answer with a problem, not fall through to the HTML not-found page.
         api.MapFallback("{**path}", () => Results.Problem(title: "Not found", detail: "No such API route.", statusCode: StatusCodes.Status404NotFound))
@@ -254,6 +257,38 @@ public static class ApiEndpoints
             .WithSummary("Scrapes the movie's metadata through javinizer-go for comparison. Nothing is stored.")
             .Produces<JavinizerPreview>()
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+    }
+
+    private static void MapReleases(RouteGroupBuilder api)
+    {
+        api.MapGet("/movies/{code}/releases", async (string code, [FromQuery] string? q, IReleaseApiService releases, CancellationToken ct) =>
+                (await releases.SearchAsync(code, q, ct)).ToHttp(r => r))
+            .WithTags("Releases")
+            .WithName("SearchReleases")
+            .WithSummary("Searches Prowlarr for releases (q defaults to the code). Works for codes not in the library. Grab one by its guid within 15 minutes.")
+            .Produces<ReleaseSearchResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status502BadGateway)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+        api.MapPost("/movies/{code}/releases/grab", async (string code, HttpRequest request, IReleaseApiService releases, CancellationToken ct) =>
+            {
+                var (body, error) = await ApiBody.ReadAsync<ReleaseGrabRequest>(request, ct);
+                if (error is not null) return error;
+                if (string.IsNullOrWhiteSpace(body?.Guid)) return ApiResults.BadRequest("Provide a JSON body like {\"guid\": \"...\"} naming a release from a recent search.");
+
+                return (await releases.GrabAsync(code, body.Guid, ct))
+                    .ToHttp(r => new ApiReleaseGrabResponse(WithUrl(request, r.Movie), r.Added, r.ReleaseTitle));
+            })
+            .WithTags("Releases")
+            .WithName("GrabRelease")
+            .WithSummary("Sends a release from a recent search to qBittorrent, adding the movie to the library first when it is missing. Only a guid is accepted.")
+            .Accepts<ReleaseGrabRequest>(isOptional: true, "application/json", "*/*")
+            .Produces<ApiReleaseGrabResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status410Gone)
             .ProducesProblem(StatusCodes.Status502BadGateway)
             .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
     }
