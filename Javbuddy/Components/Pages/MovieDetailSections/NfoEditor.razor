@@ -100,6 +100,13 @@
                         <button class="btn btn-sm btn-outline-secondary" @onclick="ToggleDiffView">Edit manually</button>
                     }
                     <button class="btn btn-sm btn-outline-secondary" @onclick="DiscardNfoChanges" disabled="@savingNfo">Discard changes</button>
+                    @if (isConflictReview)
+                    {
+                        <button class="btn btn-sm btn-outline-primary" @onclick="ImportFromNfo" disabled="@(savingNfo || nfoDirty)"
+                                title="@(nfoDirty ? "Discard your manual edits first — importing keeps the on-disk .nfo as is" : "Keep the on-disk .nfo as is and update Javbuddy's metadata to match it")">
+                            Import from .nfo
+                        </button>
+                    }
                     <button class="btn btn-sm btn-primary" @onclick="SaveNfoAndClose" disabled="@savingNfo">
                         @(savingNfo ? "Saving…" : "Save & close")
                     </button>
@@ -115,6 +122,10 @@
                     <button class="btn btn-sm btn-outline-secondary" @onclick="DiscardNfoChanges" disabled="@(!nfoDirty || savingNfo)">Discard changes</button>
                     @if (isConflictReview)
                     {
+                        <button class="btn btn-sm btn-outline-primary" @onclick="ImportFromNfo" disabled="@(savingNfo || nfoDirty)"
+                                title="@(nfoDirty ? "Discard your manual edits first — importing keeps the on-disk .nfo as is" : "Keep the on-disk .nfo as is and update Javbuddy's metadata to match it")">
+                            Import from .nfo
+                        </button>
                         <button class="btn btn-sm btn-primary" @onclick="SaveNfoAndClose" disabled="@savingNfo">
                             @(savingNfo ? "Saving…" : "Save & close")
                         </button>
@@ -640,6 +651,31 @@
             nfoSaveError = "Failed to save — the local .nfo file could not be found or written.";
         }
 
+        savingNfo = false;
+    }
+
+    private async Task ImportFromNfo()
+    {
+        if (!isConflictReview || MovieId <= 0 || rawNfoContent is null) return;
+
+        nfoSaveError = null;
+        savingNfo = true;
+
+        var result = await NfoSyncService.ImportMovieNfoAsync(MovieId, rawNfoContent);
+        if (result.Success)
+        {
+            diffModifiedSeed = null;
+            nfoDirty = false;
+            await ReleaseEditorsAsync();
+            showRawNfo = false;
+            savingNfo = false;
+            await OnConflictResolved.InvokeAsync();
+            return;
+        }
+
+        nfoSaveError = result.FileChanged
+            ? "The on-disk .nfo changed while you were reviewing it. Reopen the conflict to review the latest version."
+            : "Failed to import — the local .nfo file could not be read or isn't valid XML.";
         savingNfo = false;
     }
 

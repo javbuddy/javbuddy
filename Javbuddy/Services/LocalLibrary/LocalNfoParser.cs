@@ -27,8 +27,14 @@ public static class LocalNfoParser
         }
 
         var root = doc.Root;
-        if (root is null) return null;
+        return root is null ? null : Parse(root);
+    }
 
+    /// <summary>Maps an already-loaded movie .nfo document root — split out of ParseAsync so
+    /// content the caller already holds in memory (the conflict review's on-disk text) is read
+    /// by the exact same rules as a file.</summary>
+    public static LocalMovieMetadata Parse(XElement root)
+    {
         string? El(string name)
         {
             var value = root.Element(name)?.Value?.Trim();

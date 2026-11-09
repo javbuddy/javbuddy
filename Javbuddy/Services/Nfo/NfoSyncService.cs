@@ -3,6 +3,8 @@ using System.Xml.Linq;
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.LocalLibrary;
+using Javbuddy.Services.Movies;
+using Javbuddy.Services.Tags;
 using Javbuddy.Services.Tasks;
 using Microsoft.EntityFrameworkCore;
 using static Javbuddy.Services.Nfo.NfoActorMatching;
@@ -129,6 +131,16 @@ public interface INfoSyncService
         int movieId,
         string expectedOriginalNfoContent,
         string updatedNfoContent,
+        CancellationToken ct = default);
+
+    /// <summary>The conflict review's "Import from .nfo": the opposite resolution to
+    /// ResolveMovieNfoConflictAsync — adopts the on-disk .nfo as the movie's metadata (descriptive
+    /// fields, cast, tags) and leaves the file untouched, then re-checks drift. Only proceeds while the
+    /// file still holds <paramref name="expectedOnDiskNfoContent"/> (what the user reviewed);
+    /// otherwise returns FileChanged. Success is false for a missing or malformed .nfo.</summary>
+    Task<MovieNfoConflictResolutionResult> ImportMovieNfoAsync(
+        int movieId,
+        string expectedOnDiskNfoContent,
         CancellationToken ct = default);
 
     /// <summary>The "Refresh with Javinizer" field picker's apply step: writes the movie's
@@ -1206,5 +1218,126 @@ public class NfoSyncService(
         }
         await db.SaveChangesAsync(ct);
         return new(true, false);
+    }
+
+    public async Task<MovieNfoConflictResolutionResult> ImportMovieNfoAsync(
+        int movieId,
+        string expectedOnDiskNfoContent,
+        CancellationToken ct = default)
+    {
+        DateTime importedWriteUtc;
+        long importedSize;
+        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+        {
+            var movie = await db.Movies.FirstOrDefaultAsync(m => m.Id == movieId, ct);
+            if (movie is null || string.IsNullOrWhiteSpace(movie.Code))
+            {
+                logger.LogWarning("Cannot import .nfo for movie {MovieId}: movie not found or has no code", movieId);
+                return new(false, false);
+            }
+
+            var nfoPath = await localLibraryClient.ResolveNfoFilePathAsync(movie.Code, ct);
+            if (nfoPath is null) return new(false, false);
+
+            // The file is stat'ed before and after it is read: if it moved in between, what was parsed
+            // isn't what was reviewed (or what gets recorded as the file's write time).
+            FileInfo before;
+            XDocument doc;
+            string? current;
+            try
+            {
+                before = new FileInfo(nfoPath);
+                if (!before.Exists) return new(false, false);
+
+                current = await localLibraryClient.GetRawNfoAsync(movie.Code, ct);
+                if (current is null) return new(false, false);
+                if (!string.Equals(current, expectedOnDiskNfoContent, StringComparison.Ordinal)) return new(false, true);
+
+                // Loaded from the file (not the string) so a declared non-UTF-8 encoding is honoured,
+                // as in LocalNfoParser.ParseAsync and the drift check.
+                await using var stream = new FileStream(nfoPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+                doc = await XDocument.LoadAsync(stream, LoadOptions.None, ct);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException)
+            {
+                return new(false, false);
+            }
+            if (doc.Root is null) return new(false, false);
+
+            var after = new FileInfo(nfoPath);
+            if (!after.Exists || after.LastWriteTimeUtc != before.LastWriteTimeUtc || after.Length != before.Length)
+            {
+                return new(false, true);
+            }
+
+            var metadata = LocalNfoParser.Parse(doc.Root);
+
+            // Fields an .nfo Javbuddy writes never holds (rating, remote image URLs) are kept unless the file
+            // itself provides them. The metadata source becomes "Local" like any other adoption of .nfo-backed
+            // metadata, so a rescan doesn't re-scrape over what was just imported.
+            var (score, votes, cover, backdrop) =
+                (movie.MetaRatingScore, movie.MetaRatingVotes, movie.MetaCoverUrl, movie.MetaBackdropUrl);
+            LocalLibraryMetadataMapper.ApplyDescriptiveMetadata(movie, metadata);
+            movie.MetaRatingScore ??= score;
+            movie.MetaRatingVotes ??= votes;
+            movie.MetaCoverUrl ??= cover;
+            movie.MetaBackdropUrl ??= backdrop;
+            LocalLibraryMetadataMapper.FillMissingRuntimeFromMedia(movie, metadata);
+
+            await MovieActorAssociation.SynchronizeAsync(db, movie, ct);
+            // Saves the changes made above along with the tag links.
+            await TagNormalization.ApplyToMovieAsync(db, movie, metadata.Genres, ct);
+            movie.MediaNfoLastWriteUtc = after.LastWriteTimeUtc;
+            await db.SaveChangesAsync(ct);
+            (importedWriteUtc, importedSize) = (after.LastWriteTimeUtc, after.Length);
+        }
+
+        await RecordDriftAfterImportAsync(movieId, importedWriteUtc, importedSize, ct);
+        return new(true, false);
+    }
+
+    /// <summary>Re-checks drift after an import. Importing runs the .nfo through Javbuddy's normalization (actor
+    /// aliases to the main name, tag rules and the ignore list), so the cast or genres can still differ from the
+    /// file even though it was just adopted — and with the old baseline that would read as an outside edit again.
+    /// Those two fields get a baseline saying the file's value was once Javbuddy's too, so they read as Javbuddy's
+    /// own normalized form (JavbuddyChanged, writable to the file) rather than as a conflict to resolve. Skipped
+    /// when the file no longer is the one that was imported: a concurrent outside edit stays an outside edit.</summary>
+    private async Task RecordDriftAfterImportAsync(int movieId, DateTime importedWriteUtc, long importedSize, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var movie = await db.Movies
+            .AsSplitQuery()
+            .Include(m => m.MovieActors)
+            .ThenInclude(ma => ma.Actor)
+            .ThenInclude(a => a.Aliases)
+            .Include(m => m.MovieTags)
+            .ThenInclude(mt => mt.Tag)
+            .ThenInclude(t => t.ParentTag)
+            .FirstOrDefaultAsync(m => m.Id == movieId, ct);
+        if (movie is null || string.IsNullOrWhiteSpace(movie.Code)) return;
+
+        var (result, _) = await CheckMovieNfoConflictInMemoryAsync(movie, ct);
+        if (result.HasConflict
+            && movie.NfoDriftKind != NfoDriftKind.Unreadable
+            && movie.NfoBaselineLastWriteUtc == importedWriteUtc
+            && movie.NfoBaselineSize == importedSize
+            && NfoBaselineState.FromJson(movie.NfoBaselineJson) is { LastDisk: { } disk } baseline)
+        {
+            var dbValues = NfoDriftDetector.ReadMovie(movie);
+            var fields = baseline.Fields.ToDictionary();
+            foreach (var field in new[] { NfoField.Actors, NfoField.Genres })
+            {
+                var diskKey = NfoDriftDetector.ValueKey(disk, field);
+                if (NfoDriftDetector.ValueKey(dbValues, field) != diskKey)
+                {
+                    fields[field] = new NfoFieldBaseline(diskKey, diskKey);
+                }
+            }
+
+            var outcome = NfoDriftDetector.Evaluate(movie, disk, new NfoBaselineState(fields, disk));
+            ApplyOutcome(movie, outcome, importedWriteUtc, importedSize);
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 }

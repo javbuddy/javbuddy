@@ -262,6 +262,57 @@ public class NfoEditorFlowTests : IAsyncLifetime
         Assert.Equal(initialNfo, generation.Content);
     }
 
+    [Fact]
+    public async Task ConflictReview_ImportFromNfo_AdoptsOnDiskFileAndClearsConflict()
+    {
+        var movieFolder = Path.Combine(scratchRoot, "E2E-NFO-IMPORT");
+        Directory.CreateDirectory(movieFolder);
+        var nfoPath = Path.Combine(movieFolder, "E2E-NFO-IMPORT.nfo");
+        var onDiskNfo = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <movie>
+              <title>Edited Outside Javbuddy</title>
+              <id>E2E-NFO-IMPORT</id>
+            </movie>
+            """;
+        await File.WriteAllTextAsync(nfoPath, onDiskNfo);
+
+        var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-NFO-IMPORT", metaTitle: "Old Javbuddy Title");
+        await using (var db = await fixture.DbFactory.CreateDbContextAsync())
+        {
+            var dbMovie = await db.Movies.FindAsync(movie.Id);
+            Assert.NotNull(dbMovie);
+            dbMovie.NfoDriftKind = NfoDriftKind.ExternalEdit;
+            dbMovie.NfoConflictDetails = "[External edit] Title: .nfo has 'Edited Outside Javbuddy', canonical is 'Old Javbuddy Title'";
+            await db.SaveChangesAsync();
+        }
+
+        await DbSeeding.SeedLocalLibraryRootPathAsync(fixture.App.Services, scratchRoot);
+        var page = await fixture.NewPageAsync();
+        await page.GotoInteractiveAsync($"/movies/{movie.Code}");
+
+        var badge = page.Locator(".movie-detail-badge-warning");
+        await Expect(badge).ToBeVisibleAsync();
+        await badge.ClickAsync();
+
+        var modal = page.Locator(".nfo-modal-panel");
+        await Expect(modal.Locator(".nfo-modal-title")).ToContainTextAsync("Resolve .nfo Conflict");
+        await modal.GetByRole(AriaRole.Button, new() { Name = "Import from .nfo" }).ClickAsync();
+
+        await Expect(modal).ToBeHiddenAsync();
+        await Expect(badge).ToBeHiddenAsync();
+        await Expect(page.Locator("#blazor-error-ui")).ToBeHiddenAsync();
+
+        // The file is untouched; the database now holds what it says.
+        Assert.Equal(onDiskNfo, await File.ReadAllTextAsync(nfoPath));
+        await using var verify = await fixture.DbFactory.CreateDbContextAsync();
+        var saved = await verify.Movies.FindAsync(movie.Id);
+        Assert.NotNull(saved);
+        Assert.Equal("Edited Outside Javbuddy", saved.MetaTitle);
+        Assert.Equal(NfoDriftKind.None, saved.NfoDriftKind);
+        Assert.Empty(verify.NfoGenerations.Where(g => g.MovieId == movie.Id));
+    }
+
     /// <summary>Regression: the diff editor's Monaco model URIs were keyed off a per-NfoEditor-
     /// component-instance counter (nfoDiffEditorInstance) that resets to 0 for every movie, but
     /// the browser tab's Monaco "ModelService" — and the models this feature deliberately never

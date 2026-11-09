@@ -724,6 +724,252 @@ public class NfoSyncServiceTests
     }
 
     [Fact]
+    public async Task ImportMovieNfoAsync_AdoptsOnDiskNfo_LeavesFileUntouched_AndClearsDrift()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var client = CreateClientFor(factory, root);
+        var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
+
+        var folder = root.AddMovieFolder("SNIS-128");
+        var nfoPath = Path.Combine(folder, "SNIS-128.nfo");
+        var nfo = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <movie>
+              <title>Edited Externally</title>
+              <plot>New plot</plot>
+              <director>New Director</director>
+              <genre>Drama</genre>
+            </movie>
+            """;
+        await File.WriteAllTextAsync(nfoPath, nfo);
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie
+            {
+                Code = "SNIS-128",
+                Status = MovieStatus.Got,
+                MetaTitle = "Old Title",
+                MetaDirector = "Old Director",
+                NfoDriftKind = NfoDriftKind.ExternalEdit,
+                NfoConflictDetails = "Conflict",
+            };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        var stale = await service.ImportMovieNfoAsync(movieId, nfo + "<!-- stale -->");
+        Assert.False(stale.Success);
+        Assert.True(stale.FileChanged);
+
+        var result = await service.ImportMovieNfoAsync(movieId, nfo);
+        Assert.True(result.Success);
+        Assert.Equal(nfo, await File.ReadAllTextAsync(nfoPath));
+
+        using (var db = factory.CreateDbContext())
+        {
+            var saved = await db.Movies.Include(m => m.MovieTags).ThenInclude(mt => mt.Tag).SingleAsync(m => m.Id == movieId);
+            Assert.Equal("Edited Externally", saved.MetaTitle);
+            Assert.Equal("New plot", saved.MetaDescription);
+            Assert.Equal("New Director", saved.MetaDirector);
+            Assert.Equal("Drama", Assert.Single(saved.MovieTags).Tag.Name);
+            Assert.Equal(NfoDriftKind.None, saved.NfoDriftKind);
+            Assert.Null(saved.NfoConflictDetails);
+            Assert.NotNull(saved.MediaNfoLastWriteUtc);
+        }
+    }
+
+    [Fact]
+    public async Task ImportMovieNfoAsync_KeepsRatingAndCover_AndMovesSourceToLocal()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var client = CreateClientFor(factory, root);
+        var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
+
+        var folder = root.AddMovieFolder("SNIS-129");
+        var nfo = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><movie><title>Fixed Title</title></movie>";
+        var nfoPath = Path.Combine(folder, "SNIS-129.nfo");
+        await File.WriteAllTextAsync(nfoPath, nfo);
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie
+            {
+                Code = "SNIS-129",
+                Status = MovieStatus.Got,
+                MetaTitle = "Scraped",
+                MetaSourceName = "javinizer",
+                MetaRatingScore = 7.5,
+                MetaRatingVotes = 12,
+                MetaCoverUrl = "https://example.test/cover.jpg",
+            };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        Assert.True((await service.ImportMovieNfoAsync(movieId, nfo)).Success);
+
+        using (var db = factory.CreateDbContext())
+        {
+            var saved = await db.Movies.SingleAsync(m => m.Id == movieId);
+            Assert.Equal("Fixed Title", saved.MetaTitle);
+            Assert.Equal("Local", saved.MetaSourceName);
+            Assert.Equal(7.5, saved.MetaRatingScore);
+            Assert.Equal(12, saved.MetaRatingVotes);
+            Assert.Equal("https://example.test/cover.jpg", saved.MetaCoverUrl);
+            Assert.Equal(new FileInfo(nfoPath).LastWriteTimeUtc, saved.MediaNfoLastWriteUtc);
+        }
+    }
+
+    [Fact]
+    public async Task ImportMovieNfoAsync_SyncsActorLinks_AndAliasNormalizationDoesNotLeaveAnExternalEdit()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var client = CreateClientFor(factory, root);
+        var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
+
+        var folder = root.AddMovieFolder("SNIS-130");
+        var nfo = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <movie>
+              <title>SNIS-130</title>
+              <actor><name>Kyoko Alias</name></actor>
+            </movie>
+            """;
+        await File.WriteAllTextAsync(Path.Combine(folder, "SNIS-130.nfo"), nfo);
+
+        int movieId, actorId;
+        using (var db = factory.CreateDbContext())
+        {
+            var actor = new Actor { FirstName = "Julia", LastName = "Main" };
+            actor.Aliases.Add(new ActorAlias { Name = "Julia Main" });
+            actor.Aliases.Add(new ActorAlias { Name = "Kyoko Alias" });
+            db.Actors.Add(actor);
+            var movie = new Movie { Code = "SNIS-130", Status = MovieStatus.Got, NfoDriftKind = NfoDriftKind.ExternalEdit, NfoConflictDetails = "Conflict" };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+            actorId = actor.Id;
+        }
+
+        Assert.True((await service.ImportMovieNfoAsync(movieId, nfo)).Success);
+
+        using (var db = factory.CreateDbContext())
+        {
+            var link = await db.MovieActors.SingleAsync(l => l.MovieId == movieId);
+            Assert.Equal(actorId, link.ActorId);
+            var saved = await db.Movies.SingleAsync(m => m.Id == movieId);
+            // The file names the actor by an alias; Javbuddy's normalized form is Javbuddy's own change, not an outside edit.
+            Assert.Equal("Main Julia", saved.MetaActresses);
+            Assert.Equal(NfoDriftKind.JavbuddyChanged, saved.NfoDriftKind);
+        }
+    }
+
+    [Fact]
+    public async Task ImportMovieNfoAsync_IgnoredGenre_ReadsAsJavbuddyChange_NotAnExternalEdit()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var client = CreateClientFor(factory, root);
+        var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
+
+        var folder = root.AddMovieFolder("SNIS-132");
+        var nfo = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <movie>
+              <title>SNIS-132</title>
+              <genre>Drama</genre>
+              <genre>Banned Genre</genre>
+            </movie>
+            """;
+        await File.WriteAllTextAsync(Path.Combine(folder, "SNIS-132.nfo"), nfo);
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            db.IgnoredTags.Add(new IgnoredTag { Value = "Banned Genre" });
+            var movie = new Movie { Code = "SNIS-132", Status = MovieStatus.Got, NfoDriftKind = NfoDriftKind.ExternalEdit, NfoConflictDetails = "Conflict" };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        Assert.True((await service.ImportMovieNfoAsync(movieId, nfo)).Success);
+
+        using (var db = factory.CreateDbContext())
+        {
+            var saved = await db.Movies.Include(m => m.MovieTags).ThenInclude(mt => mt.Tag).SingleAsync(m => m.Id == movieId);
+            Assert.Equal("Drama", Assert.Single(saved.MovieTags).Tag.Name);
+            Assert.Equal(NfoDriftKind.JavbuddyChanged, saved.NfoDriftKind);
+        }
+    }
+
+    [Fact]
+    public async Task ImportMovieNfoAsync_WithNoRuntimeInNfo_FillsItFromTheProbedDuration()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var client = CreateClientFor(factory, root);
+        var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
+
+        var folder = root.AddMovieFolder("SNIS-133");
+        var nfo = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><movie><title>SNIS-133</title></movie>";
+        await File.WriteAllTextAsync(Path.Combine(folder, "SNIS-133.nfo"), nfo);
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "SNIS-133", Status = MovieStatus.Got, MediaDurationSeconds = 5400 };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        Assert.True((await service.ImportMovieNfoAsync(movieId, nfo)).Success);
+
+        using var check = factory.CreateDbContext();
+        Assert.Equal(90, (await check.Movies.SingleAsync(m => m.Id == movieId)).MetaRuntimeMinutes);
+    }
+
+    [Fact]
+    public async Task ImportMovieNfoAsync_WithMissingNfoInvalidXmlOrUnknownMovie_FailsWithoutChanges()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var client = CreateClientFor(factory, root);
+        var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
+
+        Assert.False((await service.ImportMovieNfoAsync(9999, "<movie/>")).Success);
+
+        var folder = root.AddMovieFolder("SNIS-131");
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "SNIS-131", Status = MovieStatus.Got, MetaTitle = "Keep" };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        Assert.False((await service.ImportMovieNfoAsync(movieId, "<movie/>")).Success);
+
+        await File.WriteAllTextAsync(Path.Combine(folder, "SNIS-131.nfo"), "<<<invalid");
+        var invalid = await service.ImportMovieNfoAsync(movieId, "<<<invalid");
+        Assert.False(invalid.Success);
+        Assert.False(invalid.FileChanged);
+
+        using var check = factory.CreateDbContext();
+        Assert.Equal("Keep", (await check.Movies.SingleAsync(m => m.Id == movieId)).MetaTitle);
+    }
+
+    [Fact]
     public async Task ResolveMovieNfoConflictAsync_WithInvalidXml_ReturnsFalseAndDoesNotModifyDiskOrDb()
     {
         using var factory = new TestDbContextFactory();

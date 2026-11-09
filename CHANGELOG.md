@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **Import from .nfo** in the **Resolve .nfo Conflict** dialog: when the `.nfo` was changed outside Javbuddy on purpose, it adopts the on-disk file instead of overwriting it. The movie's title, dates, studio, label, series, director, plot, cast and tags are replaced by what the `.nfo` says, the metadata source becomes **Local** (so a rescan doesn't re-scrape over it), and the file is left untouched. A rating, cover URL or backdrop URL the `.nfo` doesn't carry is kept, and a missing runtime is filled from the video's duration. A cast or tag difference that Javbuddy's own normalization leaves (a name matched to an actor's main name, a tag rule, the ignore list) shows as a Javbuddy change, not as an outside edit. The button is disabled while you have unsaved manual edits.
+
 ### Changed
 
 - **Jellyfin now only provides the "Open in Jellyfin" links.** A movie is looked up in Jellyfin by its code across the whole server, and a match stores the link only: it no longer marks the movie **Got**, and a movie whose files are gone is no longer kept **Got** because it is linked. Whether a movie is Got now comes only from the local library, so a movie that was Got only through Jellyfin turns **Missing** the next time it is rescanned. The Jellyfin link sync task and the add/rescan lookups work this way, and the Connections card for Jellyfin now shows its base URL when configured. Actor links are unchanged.

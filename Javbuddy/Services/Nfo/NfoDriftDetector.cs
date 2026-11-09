@@ -205,7 +205,7 @@ public static class NfoDriftDetector
 
     /// <summary>A field's value as one comparable string — what the baseline stores per side.
     /// Genres compare as a set; actors as a set of name + other names.</summary>
-    private static string? ValueKey(NfoFieldValues values, NfoField field) => field switch
+    internal static string? ValueKey(NfoFieldValues values, NfoField field) => field switch
     {
         NfoField.Title => values.Title,
         NfoField.OriginalTitle => values.OriginalTitle,
