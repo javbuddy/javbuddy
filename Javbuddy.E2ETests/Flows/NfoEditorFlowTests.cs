@@ -570,6 +570,9 @@ public class NfoEditorFlowTests : IAsyncLifetime
     /// <summary>Edit .nfo lives in Movie Detail's Tools menu.</summary>
     private static async Task OpenNfoEditorAsync(IPage page)
     {
+        // After an enhanced navigation the page is server-rendered before its handlers are attached; the toolbar
+        // buttons are disabled until the circuit has made it interactive, and a Tools click before that is lost.
+        await Expect(page.GetByRole(AriaRole.Button, new() { Name = "Edit metadata" })).ToBeEnabledAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Tools", Exact = true }).ClickAsync();
         await page.GetByRole(AriaRole.Menuitem, new() { Name = "Edit .nfo" }).ClickAsync();
     }
