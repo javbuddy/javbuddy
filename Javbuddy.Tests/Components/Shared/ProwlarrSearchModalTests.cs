@@ -88,7 +88,7 @@ public class ProwlarrSearchModalTests : BunitContext
         var addedMovie = new Movie { Id = 42, Code = "ABC-123" };
         var movieAddService = Substitute.For<IMovieAddService>();
         movieAddService.AddAsync("ABC-123", Arg.Any<CancellationToken>())
-            .Returns(new MovieAddResult(addedMovie, false, true, null));
+            .Returns(new MovieAddResult(addedMovie, true, null));
         Services.AddSingleton(movieAddService);
 
         var torrentGrabService = Substitute.For<ITorrentGrabService>();
@@ -127,7 +127,7 @@ public class ProwlarrSearchModalTests : BunitContext
         var addedMovie = new Movie { Id = 42, Code = "ABC-123" };
         var movieAddService = Substitute.For<IMovieAddService>();
         movieAddService.AddAsync("ABC-123", Arg.Any<CancellationToken>())
-            .Returns(new MovieAddResult(addedMovie, false, true, null));
+            .Returns(new MovieAddResult(addedMovie, true, null));
         Services.AddSingleton(movieAddService);
 
         var torrentGrabService = Substitute.For<ITorrentGrabService>();

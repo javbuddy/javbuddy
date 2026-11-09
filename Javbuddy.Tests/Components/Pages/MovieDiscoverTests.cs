@@ -292,7 +292,7 @@ public class MovieDiscoverTests : BunitContext
             Assert.Null(actions.QuerySelectorAll("button").FirstOrDefault(b => b.TextContent.Trim() == "Dismiss"));
         });
 
-        await cut.InvokeAsync(() => tcs.SetResult(new MovieAddResult(new Movie { Code = "SIVR-501", Title = "Sample Title" }, false, true, null)));
+        await cut.InvokeAsync(() => tcs.SetResult(new MovieAddResult(new Movie { Code = "SIVR-501", Title = "Sample Title" }, true, null)));
 
         cut.WaitForAssertion(() =>
         {
@@ -387,7 +387,7 @@ public class MovieDiscoverTests : BunitContext
             Assert.All(secondButtons, b => Assert.True(b.HasAttribute("disabled")));
         });
 
-        await cut.InvokeAsync(() => tcs.SetResult(new MovieAddResult(new Movie { Code = "SIVR-501", Title = "Sample Title" }, false, true, null)));
+        await cut.InvokeAsync(() => tcs.SetResult(new MovieAddResult(new Movie { Code = "SIVR-501", Title = "Sample Title" }, true, null)));
     }
 
     private static DiscoveredMovieCandidateView[] Views(int count, int firstId = 1) =>

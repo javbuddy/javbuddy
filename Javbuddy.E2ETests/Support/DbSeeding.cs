@@ -174,8 +174,8 @@ public static class DbSeeding
 
     /// <summary>Gives a movie seeded with <see cref="SeedPlayableVideoAsync"/> a locally generated
     /// trickplay set: the probed MovieFile row its identity comes from, plus its
-    /// TrickplaySet row and one tile sheet under <see cref="ObjectStoreRoot"/>. Returns the set's identity.</summary>
-    public static async Task<string> SeedLocalTrickplayAsync(IDbContextFactory<AppDbContext> dbFactory, Movie movie)
+    /// TrickplaySet row and its tile sheets under <see cref="ObjectStoreRoot"/>. Returns the set's identity.</summary>
+    public static async Task<string> SeedLocalTrickplayAsync(IDbContextFactory<AppDbContext> dbFactory, Movie movie, int tileWidth = 10, int tileHeight = 10)
     {
         var fileName = movie.Code + ".webm";
         await using (var db = await dbFactory.CreateDbContextAsync())
@@ -188,7 +188,12 @@ public static class DbSeeding
         var identity = TrickplayIdentity.For(fileName, 3, 512, 256)!;
         var codeFolder = TrickplayStore.CodeFolder(movie.Code!);
         var folder = Directory.CreateDirectory(Path.Combine(ObjectStoreRoot, "trickplay", codeFolder, identity)).FullName;
-        await File.WriteAllBytesAsync(Path.Combine(folder, TrickplayStore.SheetName(0)), TinyWebp);
+        // The 3 thumbnails are spread over as many sheets as the tile grid needs.
+        var sheetCount = (int)Math.Ceiling(3d / (tileWidth * tileHeight));
+        for (var sheet = 0; sheet < sheetCount; sheet++)
+        {
+            await File.WriteAllBytesAsync(Path.Combine(folder, TrickplayStore.SheetName(sheet)), TinyWebp);
+        }
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
             db.TrickplaySets.Add(new TrickplaySet
@@ -197,8 +202,8 @@ public static class DbSeeding
                 Identity = identity,
                 Width = 320,
                 Height = 160,
-                TileWidth = 10,
-                TileHeight = 10,
+                TileWidth = tileWidth,
+                TileHeight = tileHeight,
                 ThumbnailCount = 3,
                 IntervalMs = 1000,
                 DurationSeconds = 3,

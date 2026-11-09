@@ -1,20 +1,22 @@
 # Jellyfin Integration
 
-What the app actually does with Jellyfin today. Jellyfin's role narrowed significantly at one point: local file-based metadata gathering (`docs/local-library-format.md`) replaced what used to be Jellyfin-sourced metadata. What's documented here is current behavior, verified against the real code (`Services/Jellyfin/JellyfinClient.cs`, `Services/Tasks/JellyfinLinkSyncTask.cs`, `Components/Pages/MovieDetail.razor`).
+Jellyfin is used, read-only, for one thing: the **"Open in Jellyfin" links** on a movie's page (and in the clip player) and on an actor's page. Everything else — ownership, metadata, playback, trickplay — comes from the local library (`docs/local-library-format.md`). Verified against `Services/Jellyfin/JellyfinClient.cs`, `Services/Tasks/JellyfinLinkSyncTask.cs` and `Components/Pages/MovieDetail.razor`.
 
-## What Jellyfin is used for
+## What it does
 
-- **Ownership sync**: matching a movie against the user's selected Jellyfin libraries and, on a match, marking it `Got` and linking `JellyfinItemId`/`JellyfinServerId`/`JellyfinLibraryName`. Matching uses a "first result is the match" rule (`JellyfinClient.LookupInSelectedLibrariesAsync`, applied consistently by `MovieAddService`, `MovieDetail.razor`'s manual refresh, and the background sync task below).
-- **Direct-open link**: once linked, `MovieDetail.razor` shows an "Open in Jellyfin" badge/link built from `JellyfinClient.GetWebUrlAsync`.
-- **Background sync**: `JellyfinLinkSyncTask` (default interval 6h) checks every movie not yet linked — regardless of how it was added (local scan, javinizer-go, manual) — against the selected libraries and links/marks-Got any match. This is the unattended equivalent of the per-movie "Jellyfin" refresh option on `MovieDetail.razor`.
-- **Library selection**: opt-in, on the Jellyfin Connections settings page (`JellyfinConnectionSection.razor`) — **no libraries are selected by default**, so ownership sync does nothing until the user explicitly picks which Jellyfin libraries to match against.
+- **Movie link**: a movie is looked up by its code across the whole Jellyfin server (`JellyfinClient.LookupMovieAsync`, a single `/Items?searchTerm=…` request for Movie items), and the first result is stored as `JellyfinItemId`/`JellyfinServerId`. `MovieDetail.razor` then shows an "Open in Jellyfin" badge built from `JellyfinClient.GetWebUrlAsync`. The lookup runs when a movie is added, on a rescan and in the background (below).
+- **A match never changes the movie's status.** Whether a movie is Got comes only from the local library, so a Jellyfin match neither marks a movie Got nor keeps one Got after its files are gone.
+- **Actor link**: `JellyfinLinkSyncTask` looks an actor up by name and stores `JellyfinPersonId`, which the actor page uses for its "Open in Jellyfin" badge.
+- **Background sync**: `JellyfinLinkSyncTask` (default every 6 h, `Jellyfin__LinkSyncIntervalHours`) looks up every movie and actor that isn't linked yet.
 
-## What Jellyfin is *not* used for anymore
+## What it is not used for
 
-- **Metadata gathering** — resolution, bitrate, codec, and other technical info now come from probing the local video file directly (`Services/MediaInfo/`), not from Jellyfin's API. This was an explicit removal, not an oversight — see `docs/local-library-format.md`.
-- **Library import/discovery** — movies are discovered by scanning local library root paths (`Services/LocalLibrary/`), not by querying Jellyfin for its contents. Library Import (`LibraryImport.razor`) was switched from Jellyfin-based discovery to local-file-based scanning.
-- **Triggering a rescan on Jellyfin's own side** — `JellyfinClient.RefreshItemAsync` (an item-refresh API call) exists in the client but has no caller anywhere in the app currently; nothing in the UI or background tasks invokes it. The "Jellyfin" option in `MovieDetail`'s refresh dropdown re-runs the *ownership lookup*, not a Jellyfin-side metadata refresh.
+- **Ownership / the Got status** — the local library scan decides it.
+- **Library selection** — there is none; lookups search the whole server.
+- **Metadata** — descriptive and technical info come from the local `.nfo`/video file or javinizer-go.
+- **Trickplay** — scrub-bar previews are generated locally (Settings → Metadata → Trickplay); Jellyfin's are no longer used as a fallback.
+- **Telling Jellyfin to rescan** — after a torrent is sorted or chapters are written into a file, Jellyfin picks up the change on its own schedule. Javbuddy never writes to Jellyfin.
 
 ## Settings
 
-Connection settings (base URL, API key) and library selection live on Settings > Connections' Jellyfin section, following the same env-var-or-DB pattern as the other integrations (`docs/architecture.md`'s Service layering section).
+Base URL, external URL, API key and the enable switch live on Settings > Connections > Jellyfin, with the usual env-var-or-DB pattern (`docs/configuration.md`).

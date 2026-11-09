@@ -5,7 +5,6 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Common;
-using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Scenes;
 using Javbuddy.Services.Tags;
@@ -38,7 +37,6 @@ public class MovieCleanupTests : BunitContext
 
     private TestDbContextFactory SetUpServices(
         IMovieCleanupService? cleanupService = null,
-        IJellyfinClient? jellyfinClient = null,
         Javbuddy.Services.VideoRepair.IVideoRepairService? repairService = null,
         MovieChangeNotifier? movieChangeNotifier = null,
         IMovieService? movieService = null,
@@ -65,7 +63,6 @@ public class MovieCleanupTests : BunitContext
         cleanupService.GetQueueMovieAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(call => Task.FromResult(queuedMovies.GetValueOrDefault(call.ArgAt<int>(0))));
         Services.AddSingleton(cleanupService);
-        Services.AddSingleton(jellyfinClient ?? Substitute.For<IJellyfinClient>());
         Services.AddSingleton(streamService ?? StreamServiceStubs.AllPlayable());
         Services.AddSingleton(Substitute.For<IMovieSubtitleService>());
         Services.AddSingleton(trickplayService ?? Substitute.For<ITrickplayService>());
@@ -82,7 +79,7 @@ public class MovieCleanupTests : BunitContext
     public void NoEligibleMovies_ShowsEmptyState()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
         using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
@@ -99,7 +96,7 @@ public class MovieCleanupTests : BunitContext
             new() { Id = 1, Code = "ABC-123", MetaTitle = "First Movie", Status = MovieStatus.Got },
             new() { Id = 2, Code = "DEF-456", MetaTitle = "Second Movie", Status = MovieStatus.Got },
         };
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Queued(movies));
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Queued(movies));
         using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
@@ -117,7 +114,7 @@ public class MovieCleanupTests : BunitContext
         {
             new() { Id = 1, Code = "ABC-123", MetaTitle = "First Movie", Status = MovieStatus.Got },
         };
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Queued(movies));
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Queued(movies));
         using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
@@ -132,9 +129,9 @@ public class MovieCleanupTests : BunitContext
     public void ChangingOrder_RebuildsTheQueue()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "RND-1", Status = MovieStatus.Got }]));
-        cleanupService.BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 2, Code = "LRG-1", Status = MovieStatus.Got }]));
         using var factory = SetUpServices(cleanupService);
 
@@ -144,87 +141,14 @@ public class MovieCleanupTests : BunitContext
         cut.Find("#cleanup-order").Change("LargestFirst");
 
         Assert.Contains("LRG-1", cut.Find(".cleanup-code").TextContent);
-        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public void EligibleLibraries_RendersLibraryDropdown()
-    {
-        var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.GetEligibleLibrariesAsync(Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<CancellationToken>()).Returns(["JAV", "VR"]);
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 1, Code = "ABC-123", Status = MovieStatus.Got, JellyfinLibraryName = "JAV" }]));
-        using var factory = SetUpServices(cleanupService);
-
-        var cut = Render<MovieCleanup>();
-
-        var select = cut.Find("#cleanup-library");
-        Assert.NotNull(select);
-        var options = select.Children.Select(o => o.TextContent.Trim()).ToList();
-        Assert.Equal(["All libraries", "JAV", "VR"], options);
-    }
-
-    [Fact]
-    public void NoEligibleLibraries_DoesNotRenderLibraryDropdown()
-    {
-        var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.GetEligibleLibrariesAsync(Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<CancellationToken>()).Returns([]);
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 1, Code = "ABC-123", Status = MovieStatus.Got }]));
-        using var factory = SetUpServices(cleanupService);
-
-        var cut = Render<MovieCleanup>();
-
-        Assert.Empty(cut.FindAll("#cleanup-library"));
-    }
-
-    [Fact]
-    public void ChangingLibrary_RebuildsTheQueueWithSelectedLibrary()
-    {
-        var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.GetEligibleLibrariesAsync(Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<CancellationToken>()).Returns(["JAV", "VR"]);
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, null, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 1, Code = "ALL-1", Status = MovieStatus.Got }]));
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, "VR", Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 2, Code = "VR-1", Status = MovieStatus.Got, JellyfinLibraryName = "VR" }]));
-        using var factory = SetUpServices(cleanupService);
-
-        var cut = Render<MovieCleanup>();
-        Assert.Contains("ALL-1", cut.Find(".cleanup-code").TextContent);
-        Assert.Contains("1 eligible", cut.Find(".cleanup-eligible-pill").TextContent);
-
-        cut.Find("#cleanup-library").Change("VR");
-
-        Assert.Contains("VR-1", cut.Find(".cleanup-code").TextContent);
-        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.Random, "VR", Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public void SelectingAllLibraries_RebuildsTheQueueWithoutLibraryFilter()
-    {
-        var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.GetEligibleLibrariesAsync(Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<CancellationToken>()).Returns(["JAV", "VR"]);
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, null, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 1, Code = "ALL-1", Status = MovieStatus.Got }]));
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, "VR", Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 2, Code = "VR-1", Status = MovieStatus.Got, JellyfinLibraryName = "VR" }]));
-        using var factory = SetUpServices(cleanupService);
-
-        var cut = Render<MovieCleanup>();
-        cut.Find("#cleanup-library").Change("VR");
-        Assert.Contains("VR-1", cut.Find(".cleanup-code").TextContent);
-
-        cut.Find("#cleanup-library").Change("");
-
-        Assert.Contains("ALL-1", cut.Find(".cleanup-code").TextContent);
-        _ = cleanupService.Received(2).BuildQueueAsync(CleanupOrder.Random, null, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public void ClickingSnooze_CallsServiceAndAdvancesToTheNextCard()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "SNZ-1", Status = MovieStatus.Got },
             new Movie { Id = 2, Code = "SNZ-2", Status = MovieStatus.Got },
@@ -244,7 +168,7 @@ public class MovieCleanupTests : BunitContext
     public void ClickingBlacklist_CallsServiceAndAdvancesToTheNextCard()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "BLK-1", Status = MovieStatus.Got },
             new Movie { Id = 2, Code = "BLK-2", Status = MovieStatus.Got },
@@ -263,7 +187,7 @@ public class MovieCleanupTests : BunitContext
     public void ClickingSkip_AdvancesWithoutCallingTheService()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "SKP-1", Status = MovieStatus.Got },
             new Movie { Id = 2, Code = "SKP-2", Status = MovieStatus.Got },
@@ -283,7 +207,7 @@ public class MovieCleanupTests : BunitContext
     public void ClickingDelete_ShowsConfirmModal_AndDoesNotCallServiceUntilConfirmed()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "DEL-1", Status = MovieStatus.Got },
         ]));
@@ -307,7 +231,7 @@ public class MovieCleanupTests : BunitContext
     public void ConfirmingDelete_WhenServiceFails_ShowsTheErrorAndDoesNotAdvance()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "DEL-1", Status = MovieStatus.Got },
             new Movie { Id = 2, Code = "DEL-2", Status = MovieStatus.Got },
@@ -329,17 +253,16 @@ public class MovieCleanupTests : BunitContext
     [Fact]
     public void ConfirmingDelete_ReleasesThePlayingVideoBeforeDeletingTheFolder()
     {
-        // While the card's <video> still streams the file from Jellyfin, a network share
+        // While the card's <video> still streams the file, a network share
         // keeps the deleted file around (NFS .nfsXXXX / SMB delete-pending) and the folder delete fails
         // with "Directory not empty" — so the page must drop the stream first.
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
-            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, JellyfinItemId = "item-2", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        using var factory = SetUpServices(cleanupService, jellyfinClient);
+        using var factory = SetUpServices(cleanupService);
         var module = JSInterop.SetupModule("./Components/Pages/MovieCleanup.razor.js");
         module.SetupVoid("releaseVideo", "video.cleanup-video").SetVoidResult();
         var releasedBeforeDelete = false;
@@ -365,7 +288,7 @@ public class MovieCleanupTests : BunitContext
     public void ClickingCancelOnDeleteModal_DismissesItWithoutCallingTheService()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "DEL-1", Status = MovieStatus.Got },
         ]));
@@ -384,7 +307,7 @@ public class MovieCleanupTests : BunitContext
     public void ClickingStop_EndsTheSessionAndShowsTheSummaryInsteadOfLeaving()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "STP-1", Status = MovieStatus.Got },
         ]));
@@ -407,7 +330,7 @@ public class MovieCleanupTests : BunitContext
     public void ReachingTheEndOfTheQueue_EndsTheSessionAndShowsTheSummary()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "END-1", Status = MovieStatus.Got },
             new Movie { Id = 2, Code = "END-2", Status = MovieStatus.Got },
@@ -435,7 +358,7 @@ public class MovieCleanupTests : BunitContext
         ]);
         // Movie 2 is still queued but was deleted (e.g. from another tab) since the queue was built.
         queue.Insert(1, 2);
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(queue);
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(queue);
         using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
@@ -454,7 +377,7 @@ public class MovieCleanupTests : BunitContext
         var cleanupService = Substitute.For<IMovieCleanupService>();
         var queue = Queued([new Movie { Id = 1, Code = "LAST-1", Status = MovieStatus.Got }]);
         queue.Add(2);
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(queue);
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(queue);
         using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
@@ -503,7 +426,7 @@ public class MovieCleanupTests : BunitContext
         Assert.Contains("BLK-3", cut.Find(".cleanup-summary-blacklisted .cleanup-summary-cover-placeholder").TextContent);
         Assert.Contains("FLG-4", cut.Find(".cleanup-summary-flagged").TextContent);
         Assert.Contains("KPT-5", cut.Find(".cleanup-summary-kept").TextContent);
-        _ = cleanupService.DidNotReceive().BuildQueueAsync(Arg.Any<CleanupOrder>(), Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = cleanupService.DidNotReceive().BuildQueueAsync(Arg.Any<CleanupOrder>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -560,7 +483,7 @@ public class MovieCleanupTests : BunitContext
     public void Summary_FinishButton_DiscardsSessionAndNavigatesToMovies()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "FIN-1", Status = MovieStatus.Got },
         ]));
@@ -579,7 +502,7 @@ public class MovieCleanupTests : BunitContext
     public void Summary_StartNewSessionButton_DiscardsSessionAndBuildsAFreshQueue()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(_ =>
         Queued([
             new Movie { Id = 1, Code = "NEW-1", Status = MovieStatus.Got },
         ]));
@@ -590,7 +513,7 @@ public class MovieCleanupTests : BunitContext
         cut.Find(".cleanup-new-session-btn").Click();
 
         cleanupService.Received(1).DiscardSession();
-        _ = cleanupService.Received(2).BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = cleanupService.Received(2).BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
         Assert.Empty(cut.FindAll(".cleanup-summary"));
         Assert.Contains("NEW-1", cut.Find(".cleanup-code").TextContent);
         Assert.Contains("Session: 0 reviewed", cut.Markup);
@@ -600,12 +523,11 @@ public class MovieCleanupTests : BunitContext
     public void MovieWithALocalFile_AutoplaysOnLoad()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        using var factory = SetUpServices(cleanupService, jellyfinClient);
+        using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
 
@@ -621,12 +543,11 @@ public class MovieCleanupTests : BunitContext
     public void VrToggle_ShowsTheViewerOverTheVideoAndTogglesBack()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        using var factory = SetUpServices(cleanupService, jellyfinClient);
+        using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
 
@@ -651,12 +572,11 @@ public class MovieCleanupTests : BunitContext
     public void AVrMovieTheViewerSupports_OpensInTheViewer_WithItsProjection()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000, VrType = VrFormat.FisheyeSbs },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000, VrType = VrFormat.FisheyeSbs },
         ]));
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        using var factory = SetUpServices(cleanupService, jellyfinClient);
+        using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
 
@@ -669,13 +589,12 @@ public class MovieCleanupTests : BunitContext
     public void VrMode_DoesNotCarryOverToTheNextCard()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
-            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, JellyfinItemId = "item-2", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        using var factory = SetUpServices(cleanupService, jellyfinClient);
+        using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
         cut.Find(".cleanup-vr-toggle").Click();
@@ -693,11 +612,11 @@ public class MovieCleanupTests : BunitContext
     public void MovieWithoutALocalFile_HasNoVrToggle()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "NL-1", Status = MovieStatus.Got },
         ]));
-        using var factory = SetUpServices(cleanupService, Substitute.For<IJellyfinClient>());
+        using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
 
@@ -712,9 +631,9 @@ public class MovieCleanupTests : BunitContext
     public void MovieWithTrickplay_ShowsScrubBarBelowTheVideo()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
         var trickplayService = Substitute.For<ITrickplayService>();
         trickplayService.GetAsync(1, Arg.Any<CancellationToken>()).Returns(SampleTrickplay);
@@ -732,9 +651,9 @@ public class MovieCleanupTests : BunitContext
     public void MovieWithoutTrickplayOrAKnownLength_KeepsTheNativeSeekBarUntilTheVideoReportsItsLength()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
         var trickplayService = Substitute.For<ITrickplayService>();
         trickplayService.GetAsync(1, Arg.Any<CancellationToken>()).Returns((TrickplayLayout?)null);
@@ -755,9 +674,9 @@ public class MovieCleanupTests : BunitContext
     {
         // The scrub bar without thumbnails, not the native seek bar with a timeline under it.
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "REV-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000, MediaDurationSeconds = 180 },
+            new Movie { Id = 1, Code = "REV-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000, MediaDurationSeconds = 180 },
         ]));
         cleanupService.StampReviewedAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(OperationResult.Ok());
         var trickplayService = Substitute.For<ITrickplayService>();
@@ -784,9 +703,9 @@ public class MovieCleanupTests : BunitContext
     public void SlowTrickplayLookup_DoesNotDelayTheVideo()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
         var pending = new TaskCompletionSource<TrickplayLayout?>();
         var trickplayService = Substitute.For<ITrickplayService>();
@@ -807,10 +726,10 @@ public class MovieCleanupTests : BunitContext
     public async Task TrickplayArrivingAfterAdvancingToTheNextCard_IsDiscarded()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
-            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, JellyfinItemId = "item-2", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
         var firstCardTrickplay = new TaskCompletionSource<TrickplayLayout?>();
         var trickplayService = Substitute.For<ITrickplayService>();
@@ -834,9 +753,9 @@ public class MovieCleanupTests : BunitContext
     public void MovieWithoutALocalFile_ShowsTheNoFileNote_NotAVideoOrPlayButton()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "NOJF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1" },
+            new Movie { Id = 1, Code = "NOSIZE-1", Status = MovieStatus.Got },
         ]));
         using var factory = SetUpServices(cleanupService);
 
@@ -851,9 +770,9 @@ public class MovieCleanupTests : BunitContext
     public void LocalFileGoneAtPlayTime_ShowsPlayButtonFallback()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
         // Recorded as having a file, but it's gone by the time it's played.
         var streams = Substitute.For<IMovieStreamService>();
@@ -871,13 +790,12 @@ public class MovieCleanupTests : BunitContext
     public void AdvancingToTheNextCard_AutoplaysTheNextMovie()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
-            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, JellyfinItemId = "item-2", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        using var factory = SetUpServices(cleanupService, jellyfinClient);
+        using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
         Assert.Equal("/api/movies/1/stream", cut.Find("video.cleanup-video").GetAttribute("src"));
@@ -892,10 +810,10 @@ public class MovieCleanupTests : BunitContext
     public void AdvancingPastACardWhileItsStreamUrlIsStillLoading_DiscardsTheStaleResult()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
-            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 },
-            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, JellyfinItemId = "item-2", LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 1, Code = "JF-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
+            new Movie { Id = 2, Code = "JF-2", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 },
         ]));
         var tcs1 = new TaskCompletionSource<string?>();
         var tcs2 = new TaskCompletionSource<string?>();
@@ -928,12 +846,11 @@ public class MovieCleanupTests : BunitContext
     public void ChangingOrder_AutoplaysFirstMovieOfNewOrder()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 1, Code = "RND-1", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 1_000_000 }]));
-        cleanupService.BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 2, Code = "LRG-1", Status = MovieStatus.Got, JellyfinItemId = "item-2", LocalFileSizeBytes = 1_000_000 }]));
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        using var factory = SetUpServices(cleanupService, jellyfinClient);
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Queued([new Movie { Id = 1, Code = "RND-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 }]));
+        cleanupService.BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(Queued([new Movie { Id = 2, Code = "LRG-1", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 }]));
+        using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
         Assert.Equal("/api/movies/1/stream", cut.Find("video.cleanup-video").GetAttribute("src"));
@@ -947,7 +864,7 @@ public class MovieCleanupTests : BunitContext
     public void MovieCover_RendersOverTitle()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "CVR-1", MetaTitle = "Cover Movie", Status = MovieStatus.Got }]));
         using var factory = SetUpServices(cleanupService);
 
@@ -962,7 +879,7 @@ public class MovieCleanupTests : BunitContext
     public void ClickingMovieCover_OpensImageLightboxWithFullJacketByDefault()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "CVR-1", MetaTitle = "Cover Movie", Status = MovieStatus.Got, MetaSourceName = "Local" }]));
         using var factory = SetUpServices(cleanupService);
 
@@ -999,7 +916,7 @@ public class MovieCleanupTests : BunitContext
     public void ClickingMovieCover_WhenNoMetadata_OpensLightboxWithPosterOnly()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "CVR-2", MetaTitle = "Raw Movie", Status = MovieStatus.Got }]));
         using var factory = SetUpServices(cleanupService);
 
@@ -1016,7 +933,7 @@ public class MovieCleanupTests : BunitContext
     public void AdvancingQueue_ClosesCoverLightbox()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([
                 new Movie { Id = 1, Code = "CVR-1", MetaTitle = "Movie 1", Status = MovieStatus.Got, MetaSourceName = "Local" },
                 new Movie { Id = 2, Code = "CVR-2", MetaTitle = "Movie 2", Status = MovieStatus.Got, MetaSourceName = "Local" },
@@ -1038,7 +955,7 @@ public class MovieCleanupTests : BunitContext
     public void MovieActors_RendersActorImagesAndInitials()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "ACT-1", MetaTitle = "Movie With Cast", Status = MovieStatus.Got, MetaActresses = "Mikami Yua, Unknown Actress" }]));
         cleanupService.GetMovieActorsAsync(1, "Mikami Yua, Unknown Actress", Arg.Any<CancellationToken>())
             .Returns([
@@ -1060,7 +977,7 @@ public class MovieCleanupTests : BunitContext
     private IMovieCleanupService CleanupServiceWithCast(string? metaActresses, params CleanupActorItem[] actors)
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([
                 new Movie { Id = 1, Code = "CAST-1", MetaTitle = "First", Status = MovieStatus.Got, MetaActresses = metaActresses },
                 new Movie { Id = 2, Code = "CAST-2", MetaTitle = "Second", Status = MovieStatus.Got }
@@ -1226,7 +1143,7 @@ public class MovieCleanupTests : BunitContext
     private IMovieCleanupService CleanupServiceWithTags(params CleanupTagItem[] tags)
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([
                 new Movie { Id = 1, Code = "TAG-1", MetaTitle = "First", Status = MovieStatus.Got },
                 new Movie { Id = 2, Code = "TAG-2", MetaTitle = "Second", Status = MovieStatus.Got }
@@ -1310,7 +1227,7 @@ public class MovieCleanupTests : BunitContext
     public void EditTags_RemovingATag_UnlinksItAndRefreshesTheCardFromTheDatabase()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "TAG-1", MetaTitle = "First", Status = MovieStatus.Got }]));
         cleanupService.GetMovieTagsAsync(1, Arg.Any<CancellationToken>()).Returns(
             [new CleanupTagItem(1, "Drama", null, false), new CleanupTagItem(2, "Solo", null, false)],
@@ -1334,7 +1251,7 @@ public class MovieCleanupTests : BunitContext
     public void EditTags_SearchingAndPickingATag_AddsItToTheMovie()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "TAG-1", MetaTitle = "First", Status = MovieStatus.Got }]));
         cleanupService.GetMovieTagsAsync(1, Arg.Any<CancellationToken>()).Returns(
             [new CleanupTagItem(1, "Drama", null, false)],
@@ -1405,7 +1322,7 @@ public class MovieCleanupTests : BunitContext
     public void ClickingBrokenBFrame_MarksMovieDoesNotStartRepairAndStaysOnCurrentMovie()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "BFR-1", Status = MovieStatus.Got },
             new Movie { Id = 2, Code = "BFR-2", Status = MovieStatus.Got },
@@ -1432,7 +1349,7 @@ public class MovieCleanupTests : BunitContext
     public void ClickingUnmarkBrokenBFrame_UnmarksMovieAndRemovesBadge()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "BFR-1", Status = MovieStatus.Got, HasBrokenBFrames = true },
             new Movie { Id = 2, Code = "BFR-2", Status = MovieStatus.Got },
@@ -1460,7 +1377,7 @@ public class MovieCleanupTests : BunitContext
     public void BrokenBFrameCountGreaterThanZero_ShowsBatchRepairButton()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "BFR-1", Status = MovieStatus.Got }
         ]));
@@ -1481,7 +1398,7 @@ public class MovieCleanupTests : BunitContext
     public void MovieHasBrokenBFrames_ShowsBadge()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "BFR-1", Status = MovieStatus.Got, HasBrokenBFrames = true }
         ]));
@@ -1495,7 +1412,7 @@ public class MovieCleanupTests : BunitContext
     public void BatchRepairFinishing_RefreshesBrokenBFrameCount()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "BFR-1", Status = MovieStatus.Got }
         ]));
@@ -1519,16 +1436,13 @@ public class MovieCleanupTests : BunitContext
         var activeSession = new MovieCleanupSession
         {
             Order = CleanupOrder.ByActress,
-            Library = "VR",
-            Queue = Queued([new Movie { Id = 2, Code = "RESUME-2", Status = MovieStatus.Got, JellyfinItemId = "item-res", LocalFileSizeBytes = 1_000_000 }]),
+            Queue = Queued([new Movie { Id = 2, Code = "RESUME-2", Status = MovieStatus.Got, LocalFileSizeBytes = 1_000_000 }]),
             ReviewedCount = 4,
             CurrentIndex = 4,
             StartedAt = DateTimeOffset.UtcNow.AddMinutes(-10)
         };
-        cleanupService.GetEligibleLibrariesAsync(Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<CancellationToken>()).Returns(["JAV", "VR"]);
         cleanupService.ResumeSessionAsync(Arg.Any<CancellationToken>()).Returns(activeSession);
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        using var factory = SetUpServices(cleanupService, jellyfinClient);
+        using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
 
@@ -1536,14 +1450,14 @@ public class MovieCleanupTests : BunitContext
         Assert.Contains("Session: 4 reviewed", cut.Find(".cleanup-session-count").TextContent);
         Assert.Contains("1 eligible", cut.Find(".cleanup-eligible-pill").TextContent);
         Assert.Equal("/api/movies/2/stream", cut.Find("video.cleanup-video").GetAttribute("src"));
-        _ = cleanupService.DidNotReceive().BuildQueueAsync(Arg.Any<CleanupOrder>(), Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = cleanupService.DidNotReceive().BuildQueueAsync(Arg.Any<CleanupOrder>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public void ClickingRestart_DiscardsActiveSessionAndRebuildsQueue()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(_ =>
         Queued([
             new Movie { Id = 1, Code = "RST-1", Status = MovieStatus.Got },
             new Movie { Id = 2, Code = "RST-2", Status = MovieStatus.Got },
@@ -1559,7 +1473,7 @@ public class MovieCleanupTests : BunitContext
         restartBtn.Click();
 
         cleanupService.Received(1).DiscardSession();
-        _ = cleanupService.Received(2).BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = cleanupService.Received(2).BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
         Assert.Contains("Session: 0 reviewed", cut.Markup);
         Assert.Contains("RST-1", cut.Find(".cleanup-code").TextContent);
     }
@@ -1568,9 +1482,9 @@ public class MovieCleanupTests : BunitContext
     public void ChangingOrder_DiscardsActiveSessionAndRebuildsQueue()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "ORD-1", Status = MovieStatus.Got }]));
-        cleanupService.BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 2, Code = "ORD-2", Status = MovieStatus.Got }]));
         using var factory = SetUpServices(cleanupService);
 
@@ -1578,32 +1492,14 @@ public class MovieCleanupTests : BunitContext
         cut.Find("#cleanup-order").Change("LargestFirst");
 
         cleanupService.Received(1).DiscardSession();
-        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public void ChangingLibrary_DiscardsActiveSessionAndRebuildsQueue()
-    {
-        var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.GetEligibleLibrariesAsync(Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<CancellationToken>()).Returns(["JAV", "VR"]);
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, null, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 1, Code = "LIB-1", Status = MovieStatus.Got }]));
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, "VR", Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
-            .Returns(Queued([new Movie { Id = 2, Code = "LIB-2", Status = MovieStatus.Got, JellyfinLibraryName = "VR" }]));
-        using var factory = SetUpServices(cleanupService);
-
-        var cut = Render<MovieCleanup>();
-        cut.Find("#cleanup-library").Change("VR");
-
-        cleanupService.Received(1).DiscardSession();
-        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.Random, "VR", Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.LargestFirst, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public void AdvancingQueue_CallsAdvanceSessionOnCleanupService()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "ADV-1", Status = MovieStatus.Got },
             new Movie { Id = 2, Code = "ADV-2", Status = MovieStatus.Got },
@@ -1620,7 +1516,7 @@ public class MovieCleanupTests : BunitContext
     public void SnoozeAndBlacklist_RecordTheirOutcome()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(
         Queued([
             new Movie { Id = 1, Code = "OUT-1", Status = MovieStatus.Got },
             new Movie { Id = 2, Code = "OUT-2", Status = MovieStatus.Got },
@@ -1644,13 +1540,13 @@ public class MovieCleanupTests : BunitContext
     public void NoActorId_ShowsNoScopeBanner()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
         using var factory = SetUpServices(cleanupService);
 
         var cut = Render<MovieCleanup>();
 
         Assert.Empty(cut.FindAll(".cleanup-scope"));
-        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), null, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.Random, null, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -1658,7 +1554,7 @@ public class MovieCleanupTests : BunitContext
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
         var movies = new List<Movie> { new() { Id = 1, Code = "ABC-123", MetaTitle = "First Movie", Status = MovieStatus.Got } };
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), 5, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Queued(movies));
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, 5, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Queued(movies));
         var actorService = Substitute.For<IActorService>();
         actorService.GetByIdAsync(5, Arg.Any<CancellationToken>()).Returns(ScopeActor());
         using var factory = SetUpServices(cleanupService, actorService: actorService);
@@ -1669,8 +1565,7 @@ public class MovieCleanupTests : BunitContext
         Assert.Contains(ScopeActor().DisplayName, cut.Find(".cleanup-scope").TextContent);
         Assert.Equal($"/actors/{Uri.EscapeDataString(ScopeActor().DisplayName)}", cut.Find(".cleanup-scope a").GetAttribute("href"));
         Assert.Contains("ABC-123", cut.Markup);
-        _ = cleanupService.Received().GetEligibleLibrariesAsync(5, Arg.Any<CleanupMode>(), Arg.Any<CancellationToken>());
-        cleanupService.Received(1).StartSession(Arg.Is<List<int>>(ids => ids.SequenceEqual(new[] { 1 })), CleanupOrder.Random, null, 5);
+        cleanupService.Received(1).StartSession(Arg.Is<List<int>>(ids => ids.SequenceEqual(new[] { 1 })), CleanupOrder.Random, 5);
     }
 
     [Fact]
@@ -1684,7 +1579,7 @@ public class MovieCleanupTests : BunitContext
             StartedAt = DateTimeOffset.UtcNow
         };
         cleanupService.ResumeSessionAsync(Arg.Any<CancellationToken>()).Returns(unscoped);
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), 5, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, 5, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "NEW-001", Status = MovieStatus.Got }]));
         var actorService = Substitute.For<IActorService>();
         actorService.GetByIdAsync(5, Arg.Any<CancellationToken>()).Returns(ScopeActor());
@@ -1719,7 +1614,7 @@ public class MovieCleanupTests : BunitContext
 
         Assert.Contains("RESUMED-2", cut.Markup);
         cleanupService.DidNotReceive().DiscardSession();
-        _ = cleanupService.DidNotReceive().BuildQueueAsync(Arg.Any<CleanupOrder>(), Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = cleanupService.DidNotReceive().BuildQueueAsync(Arg.Any<CleanupOrder>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -1749,9 +1644,9 @@ public class MovieCleanupTests : BunitContext
     public void ScopeBanner_AllMoviesButton_DiscardsSessionAndBuildsUnscopedQueue()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), 5, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, 5, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "SCOPED-1", Status = MovieStatus.Got }]));
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), null, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, null, Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 2, Code = "ALL-2", Status = MovieStatus.Got }]));
         var actorService = Substitute.For<IActorService>();
         actorService.GetByIdAsync(5, Arg.Any<CancellationToken>()).Returns(ScopeActor());
@@ -1773,7 +1668,7 @@ public class MovieCleanupTests : BunitContext
     private IMovieCleanupService ReviewQueueService(params Movie[] movies)
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), CleanupMode.Review, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Queued([.. movies]));
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), CleanupMode.Review, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Queued([.. movies]));
         cleanupService.StampReviewedAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(OperationResult.Ok());
         return cleanupService;
     }
@@ -1789,7 +1684,7 @@ public class MovieCleanupTests : BunitContext
 
         Assert.Contains("REV-1", cut.Find(".cleanup-code").TextContent);
         Assert.Equal("Review", cut.Find(".cleanup-page-title").TextContent);
-        cleanupService.Received(1).StartSession(Arg.Any<List<int>>(), CleanupOrder.Random, null, null, CleanupMode.Review, true);
+        cleanupService.Received(1).StartSession(Arg.Any<List<int>>(), CleanupOrder.Random, null, CleanupMode.Review, true);
     }
 
     [Fact]
@@ -1837,7 +1732,7 @@ public class MovieCleanupTests : BunitContext
     public void CleanupMode_HasNoSceneEditor()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), CleanupMode.Cleanup, Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), CleanupMode.Cleanup, Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "CLN-1", Status = MovieStatus.Got }]));
         using var factory = SetUpServices(cleanupService);
 
@@ -1850,7 +1745,7 @@ public class MovieCleanupTests : BunitContext
     public void CleanupRoute_KeepsDeleteAndSkip_AndHasNoNextButton()
     {
         var cleanupService = Substitute.For<IMovieCleanupService>();
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), CleanupMode.Cleanup, Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), CleanupMode.Cleanup, Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 1, Code = "CLN-1", Status = MovieStatus.Got }]));
         using var factory = SetUpServices(cleanupService);
 
@@ -1901,7 +1796,7 @@ public class MovieCleanupTests : BunitContext
         checkbox.Change(false);
 
         cleanupService.Received(1).DiscardSession();
-        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.Random, null, null, CleanupMode.Review, false, Arg.Any<CancellationToken>());
+        _ = cleanupService.Received(1).BuildQueueAsync(CleanupOrder.Random, null, CleanupMode.Review, false, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -1978,7 +1873,7 @@ public class MovieCleanupTests : BunitContext
     public void NavigatingFromReviewToCleanup_DiscardsTheSessionAndRebuildsInCleanupMode()
     {
         var cleanupService = ReviewQueueService(new Movie { Id = 1, Code = "REV-1", Status = MovieStatus.Got });
-        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<string?>(), Arg.Any<int?>(), CleanupMode.Cleanup, Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        cleanupService.BuildQueueAsync(CleanupOrder.Random, Arg.Any<int?>(), CleanupMode.Cleanup, Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .Returns(Queued([new Movie { Id = 9, Code = "CLN-9", Status = MovieStatus.Got }]));
         using var factory = SetUpServices(cleanupService);
         NavigateTo("/movies/review");
@@ -1988,7 +1883,7 @@ public class MovieCleanupTests : BunitContext
 
         cut.WaitForAssertion(() => Assert.Contains("CLN-9", cut.Find(".cleanup-code").TextContent));
         Assert.NotNull(cut.Find(".cleanup-delete-btn"));
-        cleanupService.Received(1).StartSession(Arg.Any<List<int>>(), CleanupOrder.Random, null, null, CleanupMode.Cleanup);
+        cleanupService.Received(1).StartSession(Arg.Any<List<int>>(), CleanupOrder.Random, null, CleanupMode.Cleanup);
     }
 
     [Fact]
@@ -2001,6 +1896,6 @@ public class MovieCleanupTests : BunitContext
         var cut = Render<MovieCleanup>();
         NavigateTo("/actors");
 
-        _ = cleanupService.Received(1).BuildQueueAsync(Arg.Any<CleanupOrder>(), Arg.Any<string?>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        _ = cleanupService.Received(1).BuildQueueAsync(Arg.Any<CleanupOrder>(), Arg.Any<int?>(), Arg.Any<CleanupMode>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 }

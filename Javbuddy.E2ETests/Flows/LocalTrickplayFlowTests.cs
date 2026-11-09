@@ -1,16 +1,13 @@
 using System.Net;
 using Javbuddy.E2ETests.Fixtures;
-using Javbuddy.E2ETests.Fixtures.FakeServices;
 using Javbuddy.E2ETests.Support;
 using Javbuddy.Models;
-using Javbuddy.Services.Jellyfin;
 using static Microsoft.Playwright.Assertions;
 
 namespace Javbuddy.E2ETests.Flows;
 
 /// <summary>A movie's locally generated trickplay in the real player: the scrub bar's
-/// hover preview loads its tile sheets from the app's own tile endpoint, ahead of the Jellyfin
-/// trickplay the same movie also has.</summary>
+/// hover preview loads its tile sheets from the app's own tile endpoint.</summary>
 [Collection(E2ECollection.Name)]
 public class LocalTrickplayFlowTests
 {
@@ -23,29 +20,9 @@ public class LocalTrickplayFlowTests
     }
 
     [Fact]
-    public async Task ScrubBarPreview_UsesTheLocalTiles_OverJellyfins()
+    public async Task ScrubBarPreview_UsesTheLocalTiles()
     {
-        const string itemId = "fake-jf-item-local-tp-1";
-        fixture.FakeJellyfin.Trickplay = new JellyfinTrickplayItemDto
-        {
-            Id = itemId,
-            RunTimeTicks = TimeSpan.FromSeconds(3).Ticks,
-            Trickplay = new()
-            {
-                [itemId] = new()
-                {
-                    ["320"] = new JellyfinTrickplayInfoDto { Width = 320, Height = 180, TileWidth = 10, TileHeight = 10, ThumbnailCount = 3, Interval = 1000 },
-                },
-            },
-        };
         var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-LOCAL-TP-1", MovieStatus.Got);
-        await using (var db = await fixture.DbFactory.CreateDbContextAsync())
-        {
-            var m = await db.Movies.FindAsync(movie.Id);
-            m!.JellyfinItemId = itemId;
-            m.JellyfinServerId = FakeJellyfinServer.ServerId;
-            await db.SaveChangesAsync();
-        }
         await DbSeeding.SeedPlayableVideoAsync(fixture.App.Services, fixture.DbFactory, movie);
         var identity = await DbSeeding.SeedLocalTrickplayAsync(fixture.DbFactory, movie);
         var tileUrl = $"/trickplay/{movie.Id}/{identity}/0.webp";

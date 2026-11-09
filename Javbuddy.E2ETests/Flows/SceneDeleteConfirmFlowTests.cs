@@ -1,10 +1,8 @@
 using Javbuddy.E2ETests.Fixtures;
-using Javbuddy.E2ETests.Fixtures.FakeServices;
 using Javbuddy.E2ETests.Support;
 using Javbuddy.Models;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Scenes;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using static Microsoft.Playwright.Assertions;
 
@@ -28,13 +26,6 @@ public class SceneDeleteConfirmFlowTests
     public async Task PlayerSidePanel_EscapeAndBackdropCancelWithoutClosingThePlayer_DeleteRemovesTheScene()
     {
         var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-SCNDEL-1", MovieStatus.Got);
-        await using (var db = await fixture.DbFactory.CreateDbContextAsync())
-        {
-            var m = await db.Movies.FindAsync(movie.Id);
-            m!.JellyfinItemId = "fake-jf-item-scndel-1";
-            m.JellyfinServerId = FakeJellyfinServer.ServerId;
-            await db.SaveChangesAsync();
-        }
         await DbSeeding.SeedPlayableVideoAsync(fixture.App.Services, fixture.DbFactory, movie);
         using (var scope = fixture.App.Services.CreateScope())
         {
@@ -82,8 +73,6 @@ public class SceneDeleteConfirmFlowTests
         var second = await DbSeeding.SeedMovieAsync(fixture.DbFactory, prefix + "-2", MovieStatus.Got);
         await using (var db = await fixture.DbFactory.CreateDbContextAsync())
         {
-            await db.Movies.Where(m => m.Id == first.Id || m.Id == second.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(m => m.JellyfinItemId, m => "scndel-item-" + m.Id));
             db.MovieActors.AddRange(
                 new MovieActor { MovieId = first.Id, ActorId = actor.Id },
                 new MovieActor { MovieId = second.Id, ActorId = actor.Id });

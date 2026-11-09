@@ -63,7 +63,6 @@ public sealed record CleanupEdit(int MovieId, CleanupEditTarget Target, string K
 public sealed class MovieCleanupSession
 {
     public required CleanupOrder Order { get; init; }
-    public string? Library { get; init; }
 
     /// <summary>Set when the session was launched from an Actor Detail page: the queue
     /// then only holds that actor's movies, and resuming prunes to the same scope.</summary>
@@ -104,9 +103,9 @@ public interface IMovieCleanupSessionTracker
     /// <summary>Whether an active session is currently tracked.</summary>
     bool HasActiveSession { get; }
 
-    /// <summary>Starts a new session with the specified queue, order, library filter, optional
+    /// <summary>Starts a new session with the specified queue, order, optional
     /// actor scope, and mode.</summary>
-    MovieCleanupSession StartSession(List<int> queue, CleanupOrder order, string? library, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false);
+    MovieCleanupSession StartSession(List<int> queue, CleanupOrder order, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false);
 
     /// <summary>Advances the active session by one item, updating index and reviewed count, and
     /// records the decision made for <paramref name="movie"/>.</summary>
@@ -154,14 +153,13 @@ public sealed class MovieCleanupSessionTracker(TimeProvider? timeProvider = null
         }
     }
 
-    public MovieCleanupSession StartSession(List<int> queue, CleanupOrder order, string? library, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false)
+    public MovieCleanupSession StartSession(List<int> queue, CleanupOrder order, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false)
     {
         lock (gate)
         {
             activeSession = new MovieCleanupSession
             {
                 Order = order,
-                Library = library,
                 ActorId = actorId,
                 Mode = mode,
                 UnreviewedOnly = unreviewedOnly,

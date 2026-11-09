@@ -16,9 +16,8 @@
 <div class="card">
     <div class="card-body">
         <p class="text-muted">
-            Ownership is checked in Jellyfin (marking it Got if already owned) once you've selected libraries on the
-            Connections page. Metadata is looked up separately — from your local library folders first, falling back
-            to javinizer-go. Only the code is needed here.
+            Metadata is looked up from your local library folders first, falling back to javinizer-go, and the movie is
+            linked to Jellyfin when it's there. Only the code is needed here.
         </p>
         <EditForm Model="newMovie" OnValidSubmit="AddMovie" FormName="add-movie">
             <DataAnnotationsValidator />
@@ -123,7 +122,7 @@
 
         var result = await MovieAddService.AddAsync(newMovie.Code!);
 
-        if (!result.MetadataFound && !result.OwnedViaJellyfin)
+        if (!result.MetadataFound)
         {
             addError = $"Movie added, but no metadata found locally or via javinizer-go: {result.MetadataError}. You can retry from the movie's page.";
             adding = false;

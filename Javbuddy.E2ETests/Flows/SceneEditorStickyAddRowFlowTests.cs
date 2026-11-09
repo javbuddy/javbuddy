@@ -1,6 +1,5 @@
 using System.Text.RegularExpressions;
 using Javbuddy.E2ETests.Fixtures;
-using Javbuddy.E2ETests.Fixtures.FakeServices;
 using Javbuddy.E2ETests.Support;
 using Javbuddy.Models;
 using Microsoft.Playwright;
@@ -135,8 +134,6 @@ public class SceneEditorStickyAddRowFlowTests
         await using (var db = await fixture.DbFactory.CreateDbContextAsync())
         {
             var m = (await db.Movies.FindAsync(movie.Id))!;
-            m.JellyfinItemId = $"fake-jf-item-{code.ToLowerInvariant()}";
-            m.JellyfinServerId = FakeJellyfinServer.ServerId;
             // The fixture video is a 3-second clip; enough scenes inside it to overflow the panel.
             m.MediaDurationSeconds = 3;
             for (var i = 0; i < 40; i++)

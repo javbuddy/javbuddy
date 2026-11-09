@@ -87,91 +87,6 @@ public class MovieCleanupServiceTests
     }
 
     [Fact]
-    public async Task BuildQueueAsync_WithJellyfinLibrary_FiltersQueueToMatchingLibrary()
-    {
-        using var factory = new TestDbContextFactory();
-        var (service, root) = CreateService(factory);
-        using var _ = root;
-
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            db.Movies.AddRange(
-                new Movie { Code = "JAV-1", Status = MovieStatus.Got, JellyfinLibraryName = "JAV" },
-                new Movie { Code = "VR-1", Status = MovieStatus.Got, JellyfinLibraryName = "VR" },
-                new Movie { Code = "NOLIB-1", Status = MovieStatus.Got, JellyfinLibraryName = null });
-            await db.SaveChangesAsync();
-        }
-
-        var javQueue = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, "JAV"));
-        var vrQueue = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, "VR"));
-
-        Assert.Single(javQueue);
-        Assert.Equal("JAV-1", javQueue[0].Code);
-
-        Assert.Single(vrQueue);
-        Assert.Equal("VR-1", vrQueue[0].Code);
-    }
-
-    [Fact]
-    public async Task BuildQueueAsync_WithoutJellyfinLibrary_IncludesAllLibraries()
-    {
-        using var factory = new TestDbContextFactory();
-        var (service, root) = CreateService(factory);
-        using var _ = root;
-
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            db.Movies.AddRange(
-                new Movie { Code = "JAV-1", Status = MovieStatus.Got, JellyfinLibraryName = "JAV" },
-                new Movie { Code = "VR-1", Status = MovieStatus.Got, JellyfinLibraryName = "VR" },
-                new Movie { Code = "NOLIB-1", Status = MovieStatus.Got, JellyfinLibraryName = null });
-            await db.SaveChangesAsync();
-        }
-
-        var queueNull = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, null));
-        var queueEmpty = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, ""));
-
-        Assert.Equal(3, queueNull.Count);
-        Assert.Equal(3, queueEmpty.Count);
-    }
-
-    [Fact]
-    public async Task GetEligibleLibrariesAsync_ReturnsDistinctSortedLibrariesOfEligibleMovies()
-    {
-        using var factory = new TestDbContextFactory();
-        var (service, root) = CreateService(factory);
-        using var _ = root;
-
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            var favActor = new Actor { FirstName = "Yua", LastName = "Mikami", IsFavorite = true };
-            db.Actors.Add(favActor);
-            await db.SaveChangesAsync();
-
-            var favMovie = new Movie { Code = "FAV-1", Status = MovieStatus.Got, JellyfinLibraryName = "FavOnlyLib" };
-            db.Movies.Add(favMovie);
-            await db.SaveChangesAsync();
-
-            db.MovieActors.Add(new MovieActor { MovieId = favMovie.Id, ActorId = favActor.Id });
-
-            db.Movies.AddRange(
-                new Movie { Code = "VR-1", Status = MovieStatus.Got, JellyfinLibraryName = "VR" },
-                new Movie { Code = "JAV-1", Status = MovieStatus.Got, JellyfinLibraryName = "JAV" },
-                new Movie { Code = "JAV-2", Status = MovieStatus.Got, JellyfinLibraryName = "JAV" },
-                new Movie { Code = "MISSING-1", Status = MovieStatus.Missing, JellyfinLibraryName = "Anime" },
-                new Movie { Code = "BL-1", Status = MovieStatus.Got, CleanupBlacklisted = true, JellyfinLibraryName = "Hidden" },
-                new Movie { Code = "SNOOZE-1", Status = MovieStatus.Got, CleanupSnoozedUntil = DateTime.UtcNow.AddDays(5), JellyfinLibraryName = "Snoozed" },
-                new Movie { Code = "NOLIB-1", Status = MovieStatus.Got, JellyfinLibraryName = null },
-                new Movie { Code = "EMPTY-1", Status = MovieStatus.Got, JellyfinLibraryName = "" });
-            await db.SaveChangesAsync();
-        }
-
-        var libraries = await service.GetEligibleLibrariesAsync();
-
-        Assert.Equal(["JAV", "VR"], libraries);
-    }
-
-    [Fact]
     public async Task BuildQueueAsync_ExcludesMoviesFromFavoriteActors()
     {
         using var factory = new TestDbContextFactory();
@@ -587,7 +502,7 @@ public class MovieCleanupServiceTests
         int movieId;
         await using (var db = await factory.CreateDbContextAsync())
         {
-            var movie = new Movie { Code = "CARD-1", MetaTitle = "Card Movie", Status = MovieStatus.Got, JellyfinItemId = "item-1", LocalFileSizeBytes = 42 };
+            var movie = new Movie { Code = "CARD-1", MetaTitle = "Card Movie", Status = MovieStatus.Got, LocalFileSizeBytes = 42 };
             db.Movies.Add(movie);
             await db.SaveChangesAsync();
             movieId = movie.Id;
@@ -598,7 +513,6 @@ public class MovieCleanupServiceTests
         Assert.NotNull(loaded);
         Assert.Equal("CARD-1", loaded.Code);
         Assert.Equal("Card Movie", loaded.DisplayName);
-        Assert.Equal("item-1", loaded.JellyfinItemId);
         Assert.Equal(42, loaded.LocalFileSizeBytes);
         Assert.Null(await service.GetQueueMovieAsync(movieId + 999));
     }
@@ -803,12 +717,11 @@ public class MovieCleanupServiceTests
             new() { Id = 2, Code = "SESS-2", Status = MovieStatus.Got }
         };
 
-        service.StartSession([.. movies.Select(m => m.Id)], CleanupOrder.ByActress, "JAV");
+        service.StartSession([.. movies.Select(m => m.Id)], CleanupOrder.ByActress);
 
         var session = service.ActiveSession;
         Assert.NotNull(session);
         Assert.Equal(CleanupOrder.ByActress, session.Order);
-        Assert.Equal("JAV", session.Library);
         Assert.Equal(2, session.Queue.Count);
         Assert.Equal(0, session.CurrentIndex);
         Assert.Equal(0, session.ReviewedCount);
@@ -823,7 +736,7 @@ public class MovieCleanupServiceTests
         using var _ = root;
 
         var movies = new List<Movie> { new() { Id = 1, Code = "ADV-1", Status = MovieStatus.Got } };
-        service.StartSession([.. movies.Select(m => m.Id)], CleanupOrder.Random, null);
+        service.StartSession([.. movies.Select(m => m.Id)], CleanupOrder.Random);
 
         service.AdvanceSession(movies[0], CleanupOutcome.Snoozed);
 
@@ -843,7 +756,7 @@ public class MovieCleanupServiceTests
         var (service, root) = CreateService(factory);
         using var _ = root;
 
-        service.StartSession([1], CleanupOrder.Random, null);
+        service.StartSession([1], CleanupOrder.Random);
 
         var ended = service.EndSession();
 
@@ -869,7 +782,7 @@ public class MovieCleanupServiceTests
         var (service, root) = CreateService(factory);
         using var _ = root;
 
-        service.StartSession([], CleanupOrder.Random, null);
+        service.StartSession([], CleanupOrder.Random);
         service.EndSession();
 
         var resumed = await service.ResumeSessionAsync();
@@ -886,7 +799,7 @@ public class MovieCleanupServiceTests
         var (service, root) = CreateService(factory);
         using var _ = root;
 
-        service.StartSession([1], CleanupOrder.Random, null);
+        service.StartSession([1], CleanupOrder.Random);
         Assert.NotNull(service.ActiveSession);
 
         service.DiscardSession();
@@ -931,7 +844,7 @@ public class MovieCleanupServiceTests
             new() { Id = m2Id, Code = "DELETED-WHILE-AWAY", Status = MovieStatus.Got },
             new() { Id = m3Id, Code = "SNOOZED-WHILE-AWAY", Status = MovieStatus.Got }
         };
-        service.StartSession([.. queue.Select(m => m.Id)], CleanupOrder.Random, null);
+        service.StartSession([.. queue.Select(m => m.Id)], CleanupOrder.Random);
 
         // While away, m2 is deleted and m3 is snoozed
         await using (var db = await factory.CreateDbContextAsync())
@@ -973,7 +886,7 @@ public class MovieCleanupServiceTests
             new() { Id = m1Id, Code = "FAV-NEW", Status = MovieStatus.Got, MetaActresses = "Yua Mikami" },
             new() { Id = m2Id, Code = "FAV-KEEP", Status = MovieStatus.Got, MetaActresses = "Someone Else" }
         };
-        service.StartSession([.. queue.Select(m => m.Id)], CleanupOrder.Random, null);
+        service.StartSession([.. queue.Select(m => m.Id)], CleanupOrder.Random);
 
         // While away, Mikami Yua is marked as favorite
         await using (var db = await factory.CreateDbContextAsync())
@@ -1005,7 +918,7 @@ public class MovieCleanupServiceTests
             m1Id = m1.Id;
         }
 
-        service.StartSession([m1Id], CleanupOrder.Random, null);
+        service.StartSession([m1Id], CleanupOrder.Random);
 
         // While away, the last remaining movie is blacklisted from cleanup
         await using (var db = await factory.CreateDbContextAsync())
@@ -1026,7 +939,7 @@ public class MovieCleanupServiceTests
         var (service, root) = CreateService(factory);
         using var _ = root;
 
-        service.StartSession([], CleanupOrder.Random, null);
+        service.StartSession([], CleanupOrder.Random);
 
         Assert.Null(await service.ResumeSessionAsync());
         Assert.Null(service.ActiveSession);
@@ -1047,7 +960,7 @@ public class MovieCleanupServiceTests
             await db.SaveChangesAsync();
             childId = child.Id;
         }
-        service.StartSession([1], CleanupOrder.Random, null);
+        service.StartSession([1], CleanupOrder.Random);
 
         await service.RecordTagEditAsync(1, childId, added: true);
 
@@ -1069,7 +982,7 @@ public class MovieCleanupServiceTests
             await db.SaveChangesAsync();
             actorId = actor.Id;
         }
-        service.StartSession([1], CleanupOrder.Random, null);
+        service.StartSession([1], CleanupOrder.Random);
 
         await service.RecordActorEditAsync(1, actorId, added: false);
 
@@ -1081,7 +994,7 @@ public class MovieCleanupServiceTests
     public void SessionTracker_RecordEdit_KeepsOnlyTheNetChange()
     {
         var tracker = new MovieCleanupSessionTracker();
-        tracker.StartSession([1, 2], CleanupOrder.Random, null);
+        tracker.StartSession([1, 2], CleanupOrder.Random);
 
         tracker.RecordEdit(CleanupEdit.Tag(1, 5, "Drama", added: true));
         tracker.RecordEdit(CleanupEdit.Tag(1, 5, "Drama", added: false));
@@ -1100,7 +1013,7 @@ public class MovieCleanupServiceTests
         var tracker = new MovieCleanupSessionTracker();
         tracker.RecordEdit(CleanupEdit.Tag(1, 5, "Drama", added: true));
 
-        tracker.StartSession([1], CleanupOrder.Random, null);
+        tracker.StartSession([1], CleanupOrder.Random);
         tracker.EndSession();
         tracker.RecordEdit(CleanupEdit.Tag(1, 5, "Drama", added: true));
 
@@ -1120,11 +1033,10 @@ public class MovieCleanupServiceTests
             new() { Id = 2, Code = "TRK-2" }
         };
 
-        var session = tracker.StartSession([.. movies.Select(m => m.Id)], CleanupOrder.OldestAdded, "TestLib");
+        var session = tracker.StartSession([.. movies.Select(m => m.Id)], CleanupOrder.OldestAdded);
         Assert.True(tracker.HasActiveSession);
         Assert.Same(session, tracker.ActiveSession);
         Assert.Equal(CleanupOrder.OldestAdded, session.Order);
-        Assert.Equal("TestLib", session.Library);
 
         tracker.AdvanceSession(movies[0], CleanupOutcome.Kept);
         Assert.Equal(1, tracker.ActiveSession!.CurrentIndex);
@@ -1149,7 +1061,7 @@ public class MovieCleanupServiceTests
             LocalFileSizeBytes = 5_000,
             HasBrokenBFrames = true
         };
-        tracker.StartSession([movie.Id], CleanupOrder.Random, null);
+        tracker.StartSession([movie.Id], CleanupOrder.Random);
         clock.Now = clock.Now.AddSeconds(30);
 
         tracker.AdvanceSession(movie, CleanupOutcome.Deleted);
@@ -1163,7 +1075,7 @@ public class MovieCleanupServiceTests
     {
         var clock = new StepClock(new DateTimeOffset(2026, 9, 20, 12, 0, 0, TimeSpan.Zero));
         var tracker = new MovieCleanupSessionTracker(clock);
-        tracker.StartSession([], CleanupOrder.Random, null);
+        tracker.StartSession([], CleanupOrder.Random);
 
         clock.Now = clock.Now.AddMinutes(2);
         tracker.EndSession();
@@ -1218,7 +1130,7 @@ public class MovieCleanupServiceTests
             await db.SaveChangesAsync();
         }
 
-        var queue = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, null, actorId));
+        var queue = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, actorId));
 
         Assert.Equal(["COLLAB-1", "SOLO-1"], queue.Select(m => m.Code).Order().ToList());
     }
@@ -1254,71 +1166,11 @@ public class MovieCleanupServiceTests
             await db.SaveChangesAsync();
         }
 
-        var favoriteQueue = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, null, favoriteId));
-        var normalQueue = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, null, normalId));
+        var favoriteQueue = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, favoriteId));
+        var normalQueue = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, normalId));
 
         Assert.Equal(["FAV-SOLO", "NORMAL-WITH-FAV"], favoriteQueue.Select(m => m.Code).Order().ToList());
         Assert.Equal(["NORMAL-META-FAV", "NORMAL-WITH-FAV"], normalQueue.Select(m => m.Code).Order().ToList());
-    }
-
-    [Fact]
-    public async Task BuildQueueAsync_WithActorIdAndLibrary_AppliesBothFilters()
-    {
-        using var factory = new TestDbContextFactory();
-        var (service, root) = CreateService(factory);
-        using var _ = root;
-
-        int actorId;
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            var actor = new Actor { FirstName = "Arina", LastName = "Hashimoto" };
-            db.Actors.Add(actor);
-            await db.SaveChangesAsync();
-            actorId = actor.Id;
-
-            var jav = new Movie { Code = "JAV-1", Status = MovieStatus.Got, JellyfinLibraryName = "JAV" };
-            var vr = new Movie { Code = "VR-1", Status = MovieStatus.Got, JellyfinLibraryName = "VR" };
-            var otherActorJav = new Movie { Code = "JAV-OTHER", Status = MovieStatus.Got, JellyfinLibraryName = "JAV" };
-            db.Movies.AddRange(jav, vr, otherActorJav);
-            await db.SaveChangesAsync();
-
-            db.MovieActors.AddRange(
-                new MovieActor { MovieId = jav.Id, ActorId = actor.Id },
-                new MovieActor { MovieId = vr.Id, ActorId = actor.Id });
-            await db.SaveChangesAsync();
-        }
-
-        var queue = await LoadQueueAsync(factory, await service.BuildQueueAsync(CleanupOrder.Random, "JAV", actorId));
-
-        Assert.Equal(["JAV-1"], queue.Select(m => m.Code).ToList());
-    }
-
-    [Fact]
-    public async Task GetEligibleLibrariesAsync_WithActorId_OnlyListsLibrariesOfThatActorsMovies()
-    {
-        using var factory = new TestDbContextFactory();
-        var (service, root) = CreateService(factory);
-        using var _ = root;
-
-        int actorId;
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            var actor = new Actor { FirstName = "Arina", LastName = "Hashimoto" };
-            db.Actors.Add(actor);
-            await db.SaveChangesAsync();
-            actorId = actor.Id;
-
-            var mine = new Movie { Code = "MINE-1", Status = MovieStatus.Got, JellyfinLibraryName = "JAV" };
-            var notMine = new Movie { Code = "NOT-MINE-1", Status = MovieStatus.Got, JellyfinLibraryName = "VR" };
-            db.Movies.AddRange(mine, notMine);
-            await db.SaveChangesAsync();
-
-            db.MovieActors.Add(new MovieActor { MovieId = mine.Id, ActorId = actor.Id });
-            await db.SaveChangesAsync();
-        }
-
-        Assert.Equal(["JAV"], await service.GetEligibleLibrariesAsync(actorId));
-        Assert.Equal(["JAV", "VR"], await service.GetEligibleLibrariesAsync());
     }
 
     [Fact]
@@ -1328,7 +1180,7 @@ public class MovieCleanupServiceTests
         var (service, root) = CreateService(factory);
         using var _ = root;
 
-        service.StartSession([], CleanupOrder.Random, null, 42);
+        service.StartSession([], CleanupOrder.Random, 42);
 
         Assert.Equal(42, service.ActiveSession!.ActorId);
     }
@@ -1364,7 +1216,7 @@ public class MovieCleanupServiceTests
 
         service.StartSession(
             [keptId, unlinkedId],
-            CleanupOrder.Random, null, actorId);
+            CleanupOrder.Random, actorId);
 
         var resumed = await service.ResumeSessionAsync();
 
@@ -1378,7 +1230,7 @@ public class MovieCleanupServiceTests
         await using var db = await factory.CreateDbContextAsync();
         var favorite = new Actor { FirstName = "Yua", LastName = "Mikami", IsFavorite = true };
         db.Actors.Add(favorite);
-        var favoriteMovie = new Movie { Code = "REV-FAV", Status = MovieStatus.Got, JellyfinLibraryName = "JAV" };
+        var favoriteMovie = new Movie { Code = "REV-FAV", Status = MovieStatus.Got };
         var plainMovie = new Movie { Code = "REV-PLAIN", Status = MovieStatus.Got };
         db.Movies.AddRange(favoriteMovie, plainMovie);
         await db.SaveChangesAsync();
@@ -1424,18 +1276,6 @@ public class MovieCleanupServiceTests
     }
 
     [Fact]
-    public async Task GetEligibleLibrariesAsync_ReviewMode_IncludesLibrariesOfFavoriteActorsMovies()
-    {
-        using var factory = new TestDbContextFactory();
-        var (service, root) = CreateService(factory);
-        using var _ = root;
-        await SeedFavoriteAndPlainMovieAsync(factory);
-
-        Assert.Empty(await service.GetEligibleLibrariesAsync());
-        Assert.Equal(["JAV"], await service.GetEligibleLibrariesAsync(mode: CleanupMode.Review));
-    }
-
-    [Fact]
     public async Task ResumeSessionAsync_ReviewSession_KeepsMoviesOfFavoriteActors()
     {
         using var factory = new TestDbContextFactory();
@@ -1459,8 +1299,8 @@ public class MovieCleanupServiceTests
     {
         var tracker = new MovieCleanupSessionTracker();
 
-        Assert.Equal(CleanupMode.Cleanup, tracker.StartSession([], CleanupOrder.Random, null).Mode);
-        Assert.Equal(CleanupMode.Review, tracker.StartSession([], CleanupOrder.Random, null, mode: CleanupMode.Review).Mode);
+        Assert.Equal(CleanupMode.Cleanup, tracker.StartSession([], CleanupOrder.Random).Mode);
+        Assert.Equal(CleanupMode.Review, tracker.StartSession([], CleanupOrder.Random, mode: CleanupMode.Review).Mode);
     }
 
     [Fact]
@@ -1532,8 +1372,8 @@ public class MovieCleanupServiceTests
     {
         var tracker = new MovieCleanupSessionTracker();
 
-        Assert.False(tracker.StartSession([], CleanupOrder.Random, null, unreviewedOnly: false).UnreviewedOnly);
-        Assert.True(tracker.StartSession([], CleanupOrder.Random, null, unreviewedOnly: true).UnreviewedOnly);
+        Assert.False(tracker.StartSession([], CleanupOrder.Random, unreviewedOnly: false).UnreviewedOnly);
+        Assert.True(tracker.StartSession([], CleanupOrder.Random, unreviewedOnly: true).UnreviewedOnly);
     }
 
     [Fact]

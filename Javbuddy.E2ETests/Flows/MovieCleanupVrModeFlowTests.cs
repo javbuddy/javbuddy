@@ -252,7 +252,7 @@ public class MovieCleanupVrModeFlowTests
         Assert.Contains("cleanup-player-column", fsClass);
     }
 
-    /// <summary>Seeds a Jellyfin-linked movie linked to its own actor and opens Cleanup scoped to
+    /// <summary>Seeds a movie linked to its own actor and opens Cleanup scoped to
     /// that actor, so the queue holds exactly this movie. Skipping through the unscoped queue
     /// instead meant one SignalR round trip per Got movie other tests left in the shared fixture
     /// DB (hundreds), which made each test here take up to a minute. A
@@ -264,7 +264,6 @@ public class MovieCleanupVrModeFlowTests
         var movie = await DbSeeding.SeedMovieAsync(dbFactory, code, MovieStatus.Got);
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
-            await db.Movies.Where(m => m.Id == movie.Id).ExecuteUpdateAsync(s => s.SetProperty(m => m.JellyfinItemId, "vr-item-" + code));
             db.MovieActors.Add(new MovieActor { MovieId = movie.Id, ActorId = actor.Id });
             await db.SaveChangesAsync();
         }

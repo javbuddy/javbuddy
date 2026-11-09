@@ -94,8 +94,7 @@ Add either one next to Javbuddy in Compose (Trawl is a self-hosted alternative t
 | `Jellyfin:BaseUrl` | `Jellyfin__BaseUrl` | *(none)* | Base URL of the Jellyfin instance (e.g. `http://jellyfin:8096`). |
 | `Jellyfin:ExternalUrl` | `Jellyfin__ExternalUrl` | *(none)* | Optional browser-facing URL if different from `BaseUrl`. |
 | `Jellyfin:ApiKey` | `Jellyfin__ApiKey` | *(none)* | API key created in Jellyfin Dashboard -> Advanced -> API Keys. |
-| `Jellyfin:SelectedLibraryNames` | `Jellyfin__SelectedLibraryNames__0` | `[]` | Array of Jellyfin library names tracked for movie ownership matching. |
-| `Jellyfin:LinkSyncIntervalHours` | `Jellyfin__LinkSyncIntervalHours` | `24` | Background interval in hours for resynchronizing movie ownership links. |
+| `Jellyfin:LinkSyncIntervalHours` | `Jellyfin__LinkSyncIntervalHours` | `6` | Background interval in hours for linking movies and actors not yet linked to Jellyfin. |
 
 #### qBittorrent (Download Client)
 

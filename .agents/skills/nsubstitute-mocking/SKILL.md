@@ -47,7 +47,7 @@ javinizerClient.ScrapeAsync("ABC-123", Arg.Any<CancellationToken>())
 Used pervasively for parameters the test doesn't care about pinning to an exact value — most commonly `CancellationToken`:
 
 ```csharp
-jellyfinClient.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>()).Returns(["lib-1"]);
+jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
 ```
 
 Pin the arguments that matter (a specific code, id, or path) as literal values in the same call, and use `Arg.Any<T>()` only for the ones that don't:

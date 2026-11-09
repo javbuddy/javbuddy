@@ -35,7 +35,7 @@ public static class MediaEndpoints
         });
 
         // Streams a movie's main local video file for the player, so playback doesn't need
-        // Jellyfin, or with ?fileId= one of its other versions. Range requests (206) let the
+        // Jellyfin. With ?fileId= it streams one of the movie's other versions. Range requests (206) let the
         // browser seek without downloading the whole file. The path is only ever the one
         // IMovieStreamService resolves inside a library root, never one from the request.
         app.MapGet("/api/movies/{movieId:int}/stream", async (int movieId, int? fileId, IMovieStreamService streamService, CancellationToken ct) =>

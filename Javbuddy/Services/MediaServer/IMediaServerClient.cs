@@ -1,5 +1,4 @@
 using System.Text.Json.Serialization;
-using Javbuddy.Services.Common;
 
 namespace Javbuddy.Services.MediaServer;
 
@@ -13,27 +12,19 @@ public class MediaServerItemDto
 
     [JsonPropertyName("Name")]
     public string? Name { get; set; }
-
-    [JsonIgnore]
-    public string? LibraryId { get; set; }
-
-    [JsonIgnore]
-    public string? LibraryName { get; set; }
 }
 
 public record MediaServerLookupResult(bool Success, IReadOnlyList<MediaServerItemDto>? Items, string? ErrorMessage);
 public record MediaServerTestResult(bool Success, string Message, string? Version = null, string? ServerId = null);
 
 /// <summary>Generic media server abstraction enabling media servers (Jellyfin, and
-/// in the future Plex, Emby) to be used interchangeably for library ownership checks,
-/// item links, and web playback.</summary>
+/// in the future Plex, Emby) to be used interchangeably for "Open in …" item links.</summary>
 public interface IMediaServerClient
 {
-    string DisplayName { get; }
     Task<bool> IsEnabledAsync(CancellationToken ct = default);
-    Task<MediaServerLookupResult> LookupInSelectedLibrariesAsync(string query, CancellationToken ct = default);
+    /// <summary>Searches the whole server for a movie by code. An empty result (not an error) when the integration is disabled.</summary>
+    Task<MediaServerLookupResult> LookupMovieAsync(string query, CancellationToken ct = default);
     Task<string?> GetWebUrlAsync(string itemId, string? serverId = null, CancellationToken ct = default);
-    Task<OperationResult> RefreshItemAsync(string itemId, CancellationToken ct = default);
     Task<MediaServerTestResult> TestConnectionAsync(CancellationToken ct = default);
     Task<string?> GetExternalUrlAsync(CancellationToken ct = default);
 }

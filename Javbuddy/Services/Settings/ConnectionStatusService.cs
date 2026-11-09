@@ -83,26 +83,7 @@ public class ConnectionStatusService(IDbContextFactory<AppDbContext> dbFactory, 
         var baseUrl = envConfigured ? JellyfinEnvConfig.GetBaseUrl(configuration) : db?.BaseUrl;
         var configured = envConfigured || !string.IsNullOrWhiteSpace(db?.BaseUrl) && !string.IsNullOrWhiteSpace(db?.ApiKey);
 
-        var envLibraryNames = JellyfinEnvConfig.GetSelectedLibraryNames(configuration);
-        var selectedLibraryCount = envLibraryNames.Count > 0
-            ? envLibraryNames.Count
-            : JellyfinClient.ParseLibraryNames(db?.SelectedLibraryNames).Count;
-
-        string summary;
-        if (!configured)
-        {
-            summary = "Not configured";
-        }
-        else if (selectedLibraryCount == 0)
-        {
-            summary = "No libraries selected";
-        }
-        else
-        {
-            summary = $"{selectedLibraryCount} librar{(selectedLibraryCount == 1 ? "y" : "ies")} selected";
-        }
-
-        return new ConnectionStatus("jellyfin", configured, envConfigured, summary);
+        return new ConnectionStatus("jellyfin", configured, envConfigured, configured ? baseUrl ?? "Configured" : "Not configured");
     }
 
     public async Task<ConnectionStatus> GetLocalLibraryStatusAsync(CancellationToken ct = default)

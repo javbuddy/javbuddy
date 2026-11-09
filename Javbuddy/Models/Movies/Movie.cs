@@ -73,13 +73,10 @@ public class Movie : IMediaTechnicalInfo
     public string? MetaSourceUrl { get; set; }
     public DateTime? MetaFetchedAt { get; set; }
 
-    // Jellyfin library link — ownership/"do I already have this" only. Descriptive and
-    // technical metadata used to also be gathered from Jellyfin (Stage 6) but that was
-    // replaced with the local file-based source below (Stage 7); this is just the link.
+    // Jellyfin link — only what "Open in Jellyfin" needs. It doesn't decide ownership (the local
+    // library does) and carries no metadata (that comes from the local file-based source below).
     public string? JellyfinItemId { get; set; }
     public string? JellyfinServerId { get; set; }
-    public string? JellyfinLibraryId { get; set; }
-    public string? JellyfinLibraryName { get; set; }
     public DateTime? JellyfinCheckedAt { get; set; }
 
     /// <summary>The configured local library root (LocalLibrary:RootPaths) this movie's folder lives under. Set by the

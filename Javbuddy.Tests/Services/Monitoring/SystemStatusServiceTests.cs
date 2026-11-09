@@ -27,7 +27,6 @@ public class SystemStatusServiceTests
         var pathMappings = Substitute.For<IPathMappingService>();
         pathMappings.GetAllAsync(Arg.Any<CancellationToken>()).Returns([]);
         var connectionStatus = new ConnectionStatusService(factory, new ConfigurationBuilder().Build(), pathMappings);
-        jellyfin.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>()).Returns([]);
         return new SystemStatusService(factory, connectionStatus, javinizer, prowlarr, qbittorrent, jellyfin, challengeSolver);
     }
 
@@ -66,7 +65,6 @@ public class SystemStatusServiceTests
         Assert.Contains(report.Messages, m => m.StartsWith("javinizer-go is not configured"));
         Assert.Contains(report.Messages, m => m.StartsWith("Prowlarr is not configured"));
         Assert.Contains(report.Messages, m => m.StartsWith("qBittorrent is not configured"));
-        Assert.DoesNotContain(report.Messages, m => m.StartsWith("No Jellyfin libraries"));
         Assert.NotEmpty(report.MigrationVersion);
     }
 
@@ -94,20 +92,6 @@ public class SystemStatusServiceTests
         await CreateService().GetHealthReportAsync();
 
         await prowlarr.DidNotReceive().GetDisabledIndexersAsync(Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task GetHealthReportAsync_ConfiguredJellyfinWithoutLibraries_Warns()
-    {
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            db.JellyfinSettings.Add(new JellyfinSettings { BaseUrl = "http://jf", ApiKey = "k", Enabled = true });
-            await db.SaveChangesAsync();
-        }
-
-        var report = await CreateService().GetHealthReportAsync();
-
-        Assert.Contains(report.Messages, m => m.StartsWith("No Jellyfin libraries are selected"));
     }
 
     [Fact]

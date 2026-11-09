@@ -13,7 +13,4 @@ public class TrickplaySettings
     /// <summary>Decode only keyframes: much faster, but a thumbnail can be off by up to the gap
     /// between keyframes.</summary>
     public bool KeyframeOnly { get; set; }
-
-    /// <summary>Use the movie's Jellyfin trickplay when no local trickplay exists yet.</summary>
-    public bool JellyfinFallback { get; set; } = true;
 }

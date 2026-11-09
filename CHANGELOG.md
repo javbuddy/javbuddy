@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **Jellyfin now only provides the "Open in Jellyfin" links.** A movie is looked up in Jellyfin by its code across the whole server, and a match stores the link only: it no longer marks the movie **Got**, and a movie whose files are gone is no longer kept **Got** because it is linked. Whether a movie is Got now comes only from the local library, so a movie that was Got only through Jellyfin turns **Missing** the next time it is rescanned. The Jellyfin link sync task and the add/rescan lookups work this way, and the Connections card for Jellyfin now shows its base URL when configured. Actor links are unchanged.
+
+### Removed
+
+- **Libraries to check**: Jellyfin lookups no longer depend on a library selection, so the library picker, the `Jellyfin__SelectedLibraryNames` environment variable and the "No Jellyfin libraries are selected" health warning are gone (lookups were skipped until a library was chosen; they now run as soon as Jellyfin is configured).
+- **Jellyfin trickplay fallback**: the scrub bar uses only Javbuddy's own trickplay. The "Use Jellyfin's trickplay" setting and the `Trickplay__JellyfinFallback` environment variable are gone.
+- **Jellyfin refresh after sorting a torrent or writing chapters**: sorting a finished download no longer asks Jellyfin to rescan its library, and writing scene chapters into a file no longer asks it to refresh that item (Jellyfin picks the changes up on its own schedule). Javbuddy no longer writes to Jellyfin at all.
+- **Library filter on the Cleanup and Review pages**: it filtered by Jellyfin library name, which is no longer stored.
+- A database migration drops the unused columns (the stored Jellyfin library id and name on movies, the library selection, and the trickplay fallback setting).
+
 ## [0.5.2] - 2026-11-08
 
 ### Added

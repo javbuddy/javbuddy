@@ -10,7 +10,7 @@ This guide takes you from nothing to a working Javbuddy with metadata, downloads
 | [javinizer-go](https://github.com/javinizer/javinizer-go) | Movie metadata, cover images, and organizing finished downloads | Yes |
 | [Prowlarr](https://prowlarr.com/) | Searching torrent indexers | Only for downloading |
 | [qBittorrent](https://www.qbittorrent.org/) | Downloading | Only for downloading |
-| [Jellyfin](https://jellyfin.org/) | Ownership sync and "Open in Jellyfin" | No |
+| [Jellyfin](https://jellyfin.org/) | "Open in Jellyfin" links | No |
 
 Javbuddy has no login of its own, so run it on a trusted network or behind an authenticating reverse proxy.
 

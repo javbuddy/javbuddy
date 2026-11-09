@@ -1,6 +1,6 @@
-// Stops the card's video and aborts its Jellyfin stream before the movie's folder is deleted
-//. Just removing the <video> from the DOM doesn't reliably end the download, and while
-// Jellyfin still has the file open a network share keeps it around after the delete (NFS .nfsXXXX,
+// Stops the card's video and aborts its stream before the movie's folder is deleted.
+// Just removing the <video> from the DOM doesn't reliably end the download, and while
+// the stream still has the file open a network share keeps it around after the delete (NFS .nfsXXXX,
 // SMB delete-pending), failing the folder delete with "Directory not empty". Emptying the element —
 // dropping src and calling load() — is the spec'd way to release a media resource.
 export function releaseVideo(selector) {

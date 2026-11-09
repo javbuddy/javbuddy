@@ -42,7 +42,6 @@ public sealed class JavbuddyAppFactory : WebApplicationFactory<Program>
         ["Jellyfin:BaseUrl"] = "",
         ["Jellyfin:ExternalUrl"] = "",
         ["Jellyfin:ApiKey"] = "",
-        ["Jellyfin:SelectedLibraryNames"] = "",
         ["QBittorrent:BaseUrl"] = "",
         ["QBittorrent:ExternalUrl"] = "",
         ["QBittorrent:Username"] = "",
@@ -61,12 +60,12 @@ public sealed class JavbuddyAppFactory : WebApplicationFactory<Program>
         // Blank every one of those keys first so the suite never inherits or acts on them; IntegrationSettings
         // below then overrides the ones this run points at a fake.
         //
-        // Array settings (Jellyfin:SelectedLibraryNames, LocalLibrary:RootPaths) bind as child keys
+        // Array settings (LocalLibrary:RootPaths) bind as child keys
         // ("...:0"), and UseSetting on the parent key can't remove children a lower-priority provider
         // defined, so those child keys are blanked too.
         builder.ConfigureAppConfiguration((context, config) =>
         {
-            var arrayShapedKeys = new[] { "Jellyfin:SelectedLibraryNames", "LocalLibrary:RootPaths" };
+            var arrayShapedKeys = new[] { "LocalLibrary:RootPaths" };
             var childOverrides = arrayShapedKeys
                 .SelectMany(key => context.Configuration.GetSection(key).GetChildren())
                 .ToDictionary(child => child.Path, _ => (string?)"");

@@ -1,5 +1,4 @@
 using Javbuddy.E2ETests.Fixtures;
-using Javbuddy.E2ETests.Fixtures.FakeServices;
 using Javbuddy.E2ETests.Support;
 using Javbuddy.Models;
 using static Microsoft.Playwright.Assertions;
@@ -30,8 +29,6 @@ public class ClipEditorFlowTests
         await using (var db = await fixture.DbFactory.CreateDbContextAsync())
         {
             var m = (await db.Movies.FindAsync(movie.Id))!;
-            m.JellyfinItemId = "fake-jf-item-clip-1";
-            m.JellyfinServerId = FakeJellyfinServer.ServerId;
             // The fixture video is a 3-second clip.
             m.MediaDurationSeconds = 3;
             db.MovieActors.Add(new MovieActor { MovieId = m.Id, ActorId = actor.Id });

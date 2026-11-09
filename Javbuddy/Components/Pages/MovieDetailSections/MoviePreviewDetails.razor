@@ -54,7 +54,7 @@
                 <span class="movie-hero-badge movie-hero-badge-missing">Not in library</span>
                 @if (!string.IsNullOrWhiteSpace(Preview.TrailerUrl))
                 {
-                    <a class="movie-hero-badge movie-hero-badge-jellyfin" href="@Preview.TrailerUrl" target="_blank" rel="noopener noreferrer">Watch trailer</a>
+                    <a class="movie-hero-badge movie-hero-badge-trailer" href="@Preview.TrailerUrl" target="_blank" rel="noopener noreferrer">Watch trailer</a>
                 }
             </div>
             @if (Preview.Actresses.Count > 0)

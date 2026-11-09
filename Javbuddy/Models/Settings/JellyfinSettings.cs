@@ -19,11 +19,7 @@ public class JellyfinSettings : IHasConnectionUrls
     [StringLength(200)]
     public string? ApiKey { get; set; }
 
-    /// <summary>Comma-separated Jellyfin library (VirtualFolder) Names to restrict the "Scan Jellyfin" bulk sync to. Empty means all libraries.</summary>
-    [StringLength(2000)]
-    public string? SelectedLibraryNames { get; set; }
-
-    // Stats from the most recent automatic link-sync run (JellyfinLinkSyncService).
+    // Stats from the most recent automatic link-sync run (JellyfinLinkSyncTask).
     public DateTime? LastLinkSyncAt { get; set; }
     public int? LastLinkSyncChecked { get; set; }
     public int? LastLinkSyncMatched { get; set; }

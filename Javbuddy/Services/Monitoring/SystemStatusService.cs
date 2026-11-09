@@ -76,15 +76,6 @@ public class SystemStatusService(
             messages.Add("qBittorrent is not configured — grabbing releases will fail until you configure it in Settings.");
         }
 
-        if (configured.Jellyfin)
-        {
-            var libraryNames = await jellyfinClient.GetSelectedLibraryNamesAsync(ct);
-            if (libraryNames.Count == 0)
-            {
-                messages.Add("No Jellyfin libraries are selected — Jellyfin lookups are skipped until you choose at least one library in Settings.");
-            }
-        }
-
         return new SystemHealthReport(migrationVersion, messages, configured);
     }
 

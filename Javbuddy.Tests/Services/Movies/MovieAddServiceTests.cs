@@ -22,7 +22,7 @@ public class MovieAddServiceTests
         if (jellyfinClient is null)
         {
             jellyfinClient = Substitute.For<IJellyfinClient>();
-            jellyfinClient.LookupInSelectedLibrariesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            jellyfinClient.LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(new MediaServerLookupResult(true, [], null));
         }
 
@@ -106,20 +106,18 @@ public class MovieAddServiceTests
     }
 
     [Fact]
-    public async Task AddAsync_JellyfinMatchFound_MarksMovieGotAndAppliesTheMatch()
+    public async Task AddAsync_JellyfinMatchFound_LinksTheMovieWithoutMarkingItGot()
     {
         using var factory = new TestDbContextFactory();
         var jellyfinClient = Substitute.For<IJellyfinClient>();
-        jellyfinClient.LookupInSelectedLibrariesAsync("ABC-123", Arg.Any<CancellationToken>())
+        jellyfinClient.LookupMovieAsync("ABC-123", Arg.Any<CancellationToken>())
             .Returns(new MediaServerLookupResult(true, [new JellyfinItemDto { Id = "item-1", ServerId = "server-1" }], null));
 
-        var result = await CreateService(factory, jellyfinClient: jellyfinClient).AddAsync("ABC-123");
-
-        Assert.True(result.OwnedViaJellyfin);
+        await CreateService(factory, jellyfinClient: jellyfinClient).AddAsync("ABC-123");
 
         await using var db = await factory.CreateDbContextAsync();
         var movie = await db.Movies.SingleAsync();
-        Assert.Equal(MovieStatus.Got, movie.Status);
+        Assert.Equal(MovieStatus.Missing, movie.Status);
         Assert.Equal("item-1", movie.JellyfinItemId);
     }
 
@@ -134,7 +132,6 @@ public class MovieAddServiceTests
         var result = await CreateService(factory, localLibraryClient: localLibraryClient).AddAsync("ABC-123");
 
         Assert.True(result.MetadataFound);
-        Assert.False(result.OwnedViaJellyfin);
 
         await using var db = await factory.CreateDbContextAsync();
         var movie = await db.Movies.SingleAsync();

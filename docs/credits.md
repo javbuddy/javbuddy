@@ -12,7 +12,7 @@ Javbuddy stands on other projects' work, borrowing their ideas, designs and data
 | [javinizer-go](https://github.com/javinizer/javinizer-go) | The API Javbuddy consumes for metadata, the r18.dev database workflow, the cropping modal and the tag UI design |
 | [Prowlarr](https://prowlarr.com/) | Torrent search |
 | [qBittorrent](https://www.qbittorrent.org/) | Downloading torrents |
-| [Jellyfin](https://jellyfin.org/) | Library integration and trickplay |
+| [Jellyfin](https://jellyfin.org/) | "Open in Jellyfin" links |
 | [DeoVRDeeplink](https://github.com/Toastyice/DeoVRDeeplink) | DeoVR support |
 | [FFmpeg](https://ffmpeg.org/) | All the media work: trickplay, previews, merging. The goat |
 | [MediaInfo](https://mediaarea.net/en/MediaInfo) | The technical details shown for each video file |

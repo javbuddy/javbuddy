@@ -49,9 +49,4 @@ public class MovieDetailTextTests
         Assert.Equal("/actor-image/5/thumb?v=9", MovieDetailText.ActorThumbUrl(5, 9));
     }
 
-    [Fact]
-    public void JellyfinLinkedTooltip_AddsLibraryName()
-    {
-        Assert.Equal("Linked to a library item in JAV", MovieDetailText.JellyfinLinkedTooltip(new Movie { JellyfinLibraryName = "JAV" }));
-    }
 }

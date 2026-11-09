@@ -2,7 +2,6 @@ using Javbuddy.Models;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Javinizer;
-using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.QBittorrent;
@@ -20,14 +19,12 @@ public class TorrentSortServiceTests
         IJavinizerClient javinizerClient,
         ILocalLibraryClient? localLibraryClient = null,
         TorrentChangeNotifier? changeNotifier = null,
-        IJellyfinClient? jellyfinClient = null,
         IPathMappingService? pathMappingService = null,
         IQBittorrentClient? qBittorrentClient = null,
         MovieChangeNotifier? movieChangeNotifier = null) =>
         new(
             javinizerClient,
             localLibraryClient ?? Substitute.For<ILocalLibraryClient>(),
-            jellyfinClient ?? Substitute.For<IJellyfinClient>(),
             pathMappingService ?? CreatePassthroughPathMappingService(),
             qBittorrentClient ?? Substitute.For<IQBittorrentClient>(),
             factory,
@@ -36,13 +33,10 @@ public class TorrentSortServiceTests
             movieChangeNotifier);
 
     /// <summary>A no-op IPathMappingService substitute that returns whatever path it was given
-    /// unchanged, so tests that don't care about path translation (e.g. the Jellyfin sync tests
-    /// below) can match Jellyfin library locations directly against the organize destination.</summary>
+    /// unchanged, so tests that don't care about path translation can use plain paths.</summary>
     private static IPathMappingService CreatePassthroughPathMappingService()
     {
         var pathMappingService = Substitute.For<IPathMappingService>();
-        pathMappingService.TranslateJavinizerPathToAppPathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(callInfo => callInfo.Arg<string>());
         pathMappingService.TranslateToAppPathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(callInfo => callInfo.Arg<string>());
         return pathMappingService;
@@ -153,109 +147,6 @@ public class TorrentSortServiceTests
         }
 
         return (movie.Id, torrent.Id);
-    }
-
-    private static JellyfinVirtualFolderDto Library(string itemId, params string[] locations) =>
-        new() { Name = itemId, ItemId = itemId, Locations = locations.ToList() };
-
-    [Fact]
-    public async Task OrganizeAsync_DestinationMatchesJellyfinLibrary_RefreshesThatLibrary()
-    {
-        using var factory = new TestDbContextFactory();
-        var (movieId, torrentId) = await SetUpOrganizedTorrentAsync(factory);
-        var (javinizerClient, localLibraryClient) = SetUpOrganizedJob("job-1", movieId, localMatchFound: false);
-
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        jellyfinClient.GetLibrariesAsync(Arg.Any<CancellationToken>())
-            .Returns(new JellyfinLibrariesResult(true, [Library("lib-1", "/media/dest")], null));
-        jellyfinClient.RefreshItemAsync("lib-1", Arg.Any<CancellationToken>())
-            .Returns(new OperationResult(true, null));
-
-        var service = CreateService(factory, javinizerClient, localLibraryClient, jellyfinClient: jellyfinClient);
-        var result = await service.OrganizeAsync(torrentId, "/media/dest/movie1");
-
-        Assert.True(result.Success);
-        await jellyfinClient.Received(1).RefreshItemAsync("lib-1", Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task OrganizeAsync_DestinationMatchesNoLibrary_DoesNotRefresh_ButStillSucceeds()
-    {
-        using var factory = new TestDbContextFactory();
-        var (movieId, torrentId) = await SetUpOrganizedTorrentAsync(factory);
-        var (javinizerClient, localLibraryClient) = SetUpOrganizedJob("job-1", movieId, localMatchFound: false);
-
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        jellyfinClient.GetLibrariesAsync(Arg.Any<CancellationToken>())
-            .Returns(new JellyfinLibrariesResult(true, [Library("lib-1", "/other/library")], null));
-
-        var service = CreateService(factory, javinizerClient, localLibraryClient, jellyfinClient: jellyfinClient);
-        var result = await service.OrganizeAsync(torrentId, "/media/dest");
-
-        Assert.True(result.Success);
-        await jellyfinClient.DidNotReceive().RefreshItemAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task OrganizeAsync_GetLibrariesFails_DoesNotRefresh_ButStillSucceeds()
-    {
-        using var factory = new TestDbContextFactory();
-        var (movieId, torrentId) = await SetUpOrganizedTorrentAsync(factory);
-        var (javinizerClient, localLibraryClient) = SetUpOrganizedJob("job-1", movieId, localMatchFound: false);
-
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        jellyfinClient.GetLibrariesAsync(Arg.Any<CancellationToken>())
-            .Returns(new JellyfinLibrariesResult(false, null, "Jellyfin is not configured."));
-
-        var service = CreateService(factory, javinizerClient, localLibraryClient, jellyfinClient: jellyfinClient);
-        var result = await service.OrganizeAsync(torrentId, "/media/dest");
-
-        Assert.True(result.Success);
-        await jellyfinClient.DidNotReceive().RefreshItemAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task OrganizeAsync_TwoLibrariesWithOverlappingLocations_LongestMatchWins()
-    {
-        using var factory = new TestDbContextFactory();
-        var (movieId, torrentId) = await SetUpOrganizedTorrentAsync(factory);
-        var (javinizerClient, localLibraryClient) = SetUpOrganizedJob("job-1", movieId, localMatchFound: false);
-
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        jellyfinClient.GetLibrariesAsync(Arg.Any<CancellationToken>())
-            .Returns(new JellyfinLibrariesResult(true, [Library("lib-broad", "/media"), Library("lib-specific", "/media/dest")], null));
-        jellyfinClient.RefreshItemAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new OperationResult(true, null));
-
-        var service = CreateService(factory, javinizerClient, localLibraryClient, jellyfinClient: jellyfinClient);
-        var result = await service.OrganizeAsync(torrentId, "/media/dest/movie1");
-
-        Assert.True(result.Success);
-        await jellyfinClient.Received(1).RefreshItemAsync("lib-specific", Arg.Any<CancellationToken>());
-        await jellyfinClient.DidNotReceive().RefreshItemAsync("lib-broad", Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task OrganizeAsync_JellyfinSyncPathTranslationThrows_IsSwallowed_OrganizeStillSucceeds()
-    {
-        // Regression test: TrySyncJellyfinLibraryAsync's doc comment promises it
-        // never throws, but had no try/catch. An exception from any of its dependencies (here,
-        // path translation) must not propagate out of OrganizeAsync and crash the circuit.
-        using var factory = new TestDbContextFactory();
-        var (movieId, torrentId) = await SetUpOrganizedTorrentAsync(factory);
-        var (javinizerClient, localLibraryClient) = SetUpOrganizedJob("job-1", movieId, localMatchFound: false);
-
-        var pathMappingService = Substitute.For<IPathMappingService>();
-        pathMappingService.TranslateJavinizerPathToAppPathAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns<Task<string>>(_ => throw new InvalidOperationException("boom"));
-
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-
-        var service = CreateService(factory, javinizerClient, localLibraryClient, jellyfinClient: jellyfinClient, pathMappingService: pathMappingService);
-        var result = await service.OrganizeAsync(torrentId, "/media/dest");
-
-        Assert.True(result.Success);
-        await jellyfinClient.DidNotReceive().GetLibrariesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]

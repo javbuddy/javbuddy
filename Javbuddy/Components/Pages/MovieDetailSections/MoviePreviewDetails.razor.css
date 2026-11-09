@@ -110,7 +110,7 @@
     border-color: transparent;
 }
 
-.movie-hero-badge-jellyfin {
+.movie-hero-badge-trailer {
     background-color: rgba(28, 159, 196, 0.85);
     border-color: transparent;
     color: #ffffff;
@@ -118,7 +118,7 @@
     cursor: pointer;
 }
 
-    .movie-hero-badge-jellyfin:hover {
+    .movie-hero-badge-trailer:hover {
         background-color: rgba(28, 159, 196, 1);
         color: #ffffff;
     }

@@ -1,15 +1,12 @@
 using System.Globalization;
 using Javbuddy.Data;
 using Javbuddy.Services.Infrastructure;
-using Javbuddy.Services.Jellyfin;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Trickplay;
 
-/// <summary>Finds the trickplay for a movie's player, whichever source has it: the
-/// locally generated set for its main video file first, then — when the Jellyfin fallback setting
-/// is on and the movie is matched in Jellyfin — Jellyfin's, else none (the player then shows the
-/// stand-in scene timeline).</summary>
+/// <summary>Finds the trickplay for a movie's player: the locally generated set for its main video
+/// file, else none (the player then shows the stand-in scene timeline).</summary>
 public interface ITrickplayService
 {
     Task<TrickplayLayout?> GetAsync(int movieId, CancellationToken ct = default);
@@ -21,9 +18,7 @@ public interface ITrickplayService
 
 public sealed class TrickplayService(
     IDbContextFactory<AppDbContext> dbFactory,
-    ITrickplayStore store,
-    ITrickplaySettingsService settingsService,
-    IJellyfinClient jellyfinClient) : ITrickplayService
+    ITrickplayStore store) : ITrickplayService
 {
     /// <summary>The browser's URL template for a local set's tile sheets.</summary>
     public static string TileUrlTemplate(int movieId, string identity) =>
@@ -37,7 +32,7 @@ public sealed class TrickplayService(
             main = await TrickplayMainFiles.LoadAsync(db, movieId, ct);
         }
         if (main is null) return null;
-        var (code, jellyfinItemId, identity) = (main.Code, main.JellyfinItemId, main.Identity);
+        var (code, identity) = (main.Code, main.Identity);
 
         if (identity is not null && await store.GetSetAsync(code, identity, ct) is { } set)
         {
@@ -46,9 +41,7 @@ public sealed class TrickplayService(
                 set.IntervalMs, set.DurationSeconds, TileUrlTemplate(movieId, identity));
         }
 
-        if (string.IsNullOrWhiteSpace(jellyfinItemId)) return null;
-        var settings = await settingsService.GetEffectiveAsync(ct);
-        return settings.JellyfinFallback ? await jellyfinClient.GetTrickplayAsync(jellyfinItemId, ct) : null;
+        return null;
     }
 
     public async Task<StoredObject?> OpenTileAsync(int movieId, string identity, int index, CancellationToken ct = default)

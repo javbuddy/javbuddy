@@ -28,7 +28,7 @@ Javbuddy is a self-hosted manager for JAV collections, modeled on Sonarr/Radarr:
 
 ### Playback, scenes & highlights
 - A built-in browser player streams straight from your library files, so you don't need a media server to watch.
-- Scrub-bar trickplay previews are generated locally, or taken from Jellyfin when available.
+- Scrub-bar trickplay previews are generated locally from each movie's video file.
 - Mark **scenes** (non-overlapping chapters of a movie), tag the performers in each and write them back to the file as chapters.
 - Mark **highlights** (favorite clips with their own performers and tags) and **apexes** (single favorite moments). Tags roll up from clips to scenes and the movie, and actors are inherited downwards. **Actor tags** (blonde, brunette, …) tag one performer within a movie or clip and can be filtered on together with the actor. The rules are in [Scenes, highlights and apexes](docs/scenes-and-apexes.md).
 - The **Scenes** wall (`/movies/scenes`) shows clips from the whole library, filterable by actor and tag, with Play all and Shuffle.
@@ -57,7 +57,7 @@ Javbuddy is a self-hosted manager for JAV collections, modeled on Sonarr/Radarr:
 | [javinizer-go](https://github.com/javinizer/javinizer-go) | Movie and actor metadata, cover images | Yes |
 | [Prowlarr](https://prowlarr.com/) | Torrent search | For downloads |
 | [qBittorrent](https://www.qbittorrent.org/) | Downloading | For downloads |
-| [Jellyfin](https://jellyfin.org/) | Ownership/link sync, "Open in Jellyfin", trickplay fallback | No |
+| [Jellyfin](https://jellyfin.org/) | "Open in Jellyfin" links for movies and actors | No |
 | [DeoVR](https://deovr.com/) | Browsing and playing movies in VR through its JSON API | No (off by default) |
 | [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr) or [Trawl](https://github.com/germondai/trawl) | Gets minnano-av.com past a Cloudflare challenge | No |
 | r18.dev dump | Release catalog, actor filmographies (imported locally) | No |
@@ -123,7 +123,7 @@ dotnet run --project Javbuddy
 - [Library guide](docs/library-guide.md) — folder layout, importing an existing collection, Torrent sort, path mappings
 - [Configuration reference](docs/configuration.md) — every setting, storage tiers, Compose and Kubernetes examples
 - [Local library format](docs/local-library-format.md) — folder layout, `.nfo` dialects, `.actors/`
-- [Jellyfin integration](docs/jellyfin-integration.md) — ownership sync, linking, library selection
+- [Jellyfin integration](docs/jellyfin-integration.md) — the "Open in Jellyfin" links
 - [Screenshots](docs/screenshots.md) — the main pages, shown with a fictional demo library
 - [Credits & inspirations](docs/credits.md) — the projects and data sources Javbuddy builds on
 

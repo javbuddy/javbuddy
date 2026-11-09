@@ -205,7 +205,7 @@ public class MovieReleasesBrowserTests : BunitContext
     {
         Returns(new R18DevReleaseBrowseResult(true, Ready, [Row("MIDE-001")]));
         movieAddService.AddAsync("MIDE-001", Arg.Any<CancellationToken>())
-            .Returns(new MovieAddResult(new Movie { Code = "MIDE-001", Status = MovieStatus.Missing }, false, true, null));
+            .Returns(new MovieAddResult(new Movie { Code = "MIDE-001", Status = MovieStatus.Missing }, true, null));
         var cut = RenderBrowser();
         cut.WaitForAssertion(() => cut.Find("button.missing-poster-add"));
 
@@ -276,7 +276,7 @@ public class MovieReleasesBrowserTests : BunitContext
     {
         Returns(new R18DevReleaseBrowseResult(true, Ready, [Row("MIDE-001", "deleted")]));
         movieAddService.AddAsync("MIDE-001", Arg.Any<CancellationToken>())
-            .Returns(new MovieAddResult(new Movie { Code = "MIDE-001" }, false, false, null));
+            .Returns(new MovieAddResult(new Movie { Code = "MIDE-001" }, false, null));
         var cut = RenderBrowser(new R18DevCatalogFilter { CodePrefix = "MIDE", HidePreviouslyDeleted = false });
         cut.WaitForAssertion(() => cut.Find(".status-deleted"));
 

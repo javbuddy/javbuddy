@@ -3,6 +3,7 @@ using Javbuddy.Components.Pages.SettingsConnectionSections;
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Jellyfin;
+using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Settings;
 using Javbuddy.Services.Trickplay;
 using Javbuddy.Tests.TestSupport;
@@ -35,7 +36,7 @@ public class JellyfinConnectionSectionConnectionTests : BunitContext
     {
         var jellyfinClient = SetUpServices();
         jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>())
-            .Returns(new JellyfinTestResult(true, "Connected successfully.", "10.9.7", "server-abc-123"));
+            .Returns(new MediaServerTestResult(true, "Connected successfully.", "10.9.7", "server-abc-123"));
 
         var cut = Render<JellyfinConnectionSection>();
         var testButton = cut.FindAll("button").First(b => b.TextContent.Trim() == "Test connection");
@@ -57,7 +58,7 @@ public class JellyfinConnectionSectionConnectionTests : BunitContext
     {
         var jellyfinClient = SetUpServices();
         jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>())
-            .Returns(new JellyfinTestResult(true, "Connected successfully."));
+            .Returns(new MediaServerTestResult(true, "Connected successfully."));
 
         var cut = Render<JellyfinConnectionSection>();
         var testButton = cut.FindAll("button").First(b => b.TextContent.Trim() == "Test connection");
@@ -77,7 +78,7 @@ public class JellyfinConnectionSectionConnectionTests : BunitContext
     {
         var jellyfinClient = SetUpServices();
         jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>())
-            .Returns(new JellyfinTestResult(false, "Reached the server, but the API key was rejected."));
+            .Returns(new MediaServerTestResult(false, "Reached the server, but the API key was rejected."));
 
         var cut = Render<JellyfinConnectionSection>();
         var testButton = cut.FindAll("button").First(b => b.TextContent.Trim() == "Test connection");

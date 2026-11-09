@@ -3,7 +3,6 @@ using Javbuddy.Models;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Javinizer;
-using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.QBittorrent;
@@ -89,7 +88,6 @@ public interface ITorrentSortService
 public class TorrentSortService(
     IJavinizerClient javinizerClient,
     ILocalLibraryClient localLibraryClient,
-    IJellyfinClient jellyfinClient,
     IPathMappingService pathMappingService,
     IQBittorrentClient qBittorrentClient,
     IDbContextFactory<AppDbContext> dbFactory,
@@ -102,7 +100,6 @@ public class TorrentSortService(
 
     private readonly IJavinizerClient javinizerClient = javinizerClient;
     private readonly ILocalLibraryClient localLibraryClient = localLibraryClient;
-    private readonly IJellyfinClient jellyfinClient = jellyfinClient;
     private readonly IPathMappingService pathMappingService = pathMappingService;
     private readonly IQBittorrentClient qBittorrentClient = qBittorrentClient;
     private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
@@ -247,7 +244,6 @@ public class TorrentSortService(
                 if (job.Data.Status == JavinizerJobStatus.Organized)
                 {
                     await MarkSortedAsync(torrentDownloadId, ct);
-                    await TrySyncJellyfinLibraryAsync(destination, ct);
                     return new OperationResult(true, null);
                 }
 
@@ -505,69 +501,6 @@ public class TorrentSortService(
         }
 
         changeNotifier.NotifyChanged();
-    }
-
-    /// <summary>Best-effort: matches the organize destination against the monitored folder paths
-    /// of each configured Jellyfin library and refreshes the matching one, so a multi-library
-    /// setup (e.g. separate "jav"/"jav-vr" libraries) gets the correct library rescanned instead
-    /// of relying on Jellyfin's own periodic scan. Never throws — any failure to translate, fetch
-    /// libraries, match, or refresh is logged and swallowed, since it must not fail the organize
-    /// operation that already succeeded against javinizer-go.</summary>
-    private async Task TrySyncJellyfinLibraryAsync(string destination, CancellationToken ct)
-    {
-        try
-        {
-            var appPath = await pathMappingService.TranslateJavinizerPathToAppPathAsync(destination, ct) ?? destination;
-
-            var librariesResult = await jellyfinClient.GetLibrariesAsync(ct);
-            if (librariesResult is null || !librariesResult.Success || librariesResult.Libraries is null)
-            {
-                logger.LogDebug("Skipping Jellyfin library sync for {Destination}: {Error}", destination, librariesResult?.ErrorMessage);
-                return;
-            }
-
-            var library = FindLibraryForPath(librariesResult.Libraries, appPath);
-            if (library?.ItemId is null)
-            {
-                logger.LogDebug("No Jellyfin library matched destination {Destination} (app path {AppPath})", destination, appPath);
-                return;
-            }
-
-            var refreshResult = await jellyfinClient.RefreshItemAsync(library.ItemId, ct);
-            if (refreshResult is not { Success: true })
-            {
-                logger.LogWarning("Failed to refresh Jellyfin library {LibraryName}: {Error}", library.Name, refreshResult?.ErrorMessage);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Jellyfin library sync failed for destination {Destination}", destination);
-        }
-    }
-
-    /// <summary>Finds the library whose monitored path is the longest prefix match of
-    /// <paramref name="path"/>, on a path-segment boundary (same rule PathMappingService uses),
-    /// so a location like "/media/jav" doesn't also match "/media/javfoo/...".</summary>
-    private static JellyfinVirtualFolderDto? FindLibraryForPath(List<JellyfinVirtualFolderDto> libraries, string path)
-    {
-        JellyfinVirtualFolderDto? best = null;
-        var bestLength = -1;
-
-        foreach (var library in libraries)
-        {
-            foreach (var location in library.Locations ?? [])
-            {
-                if (string.IsNullOrEmpty(location) || location.Length > path.Length || location.Length <= bestLength) continue;
-
-                var isSegmentMatch = path.Length == location.Length || path[location.Length] is '/' or '\\';
-                if (!isSegmentMatch || !path.StartsWith(location, StringComparison.OrdinalIgnoreCase)) continue;
-
-                best = library;
-                bestLength = location.Length;
-            }
-        }
-
-        return best;
     }
 
     private async Task<string?> GetJobIdAsync(int torrentDownloadId, CancellationToken ct)

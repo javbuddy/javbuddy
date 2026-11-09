@@ -44,12 +44,6 @@ public interface IPathMappingService
     /// Javbuddy's own process view), for callers that need to open the file directly (see the VR
     /// part-merge step). Returns path unchanged if no configured mapping has an AppPrefix.</summary>
     Task<string> TranslateToAppPathAsync(string path, CancellationToken ct = default);
-
-    /// <summary>Rewrites path using the longest matching configured prefix (javinizer-go-side →
-    /// Javbuddy's own process view), for callers matching an organize destination against a
-    /// filesystem path from another service (see the post-organize Jellyfin library sync).
-    /// Returns path unchanged if no configured mapping has an AppPrefix.</summary>
-    Task<string> TranslateJavinizerPathToAppPathAsync(string path, CancellationToken ct = default);
 }
 
 /// <summary>Manages user-configured path-prefix rewrite rules bridging qBittorrent's filesystem
@@ -121,9 +115,6 @@ public class PathMappingService(IDbContextFactory<AppDbContext> dbFactory, IConf
 
     public async Task<string> TranslateToAppPathAsync(string path, CancellationToken ct = default) =>
         await TranslateAsync(path, m => m.QBittorrentPrefix, m => m.AppPrefix, ct);
-
-    public async Task<string> TranslateJavinizerPathToAppPathAsync(string path, CancellationToken ct = default) =>
-        await TranslateAsync(path, m => m.JavinizerPrefix, m => m.AppPrefix, ct);
 
     private async Task<string> TranslateAsync(
         string path,

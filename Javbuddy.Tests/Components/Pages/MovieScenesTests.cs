@@ -68,7 +68,7 @@ public class MovieScenesTests : BunitContext
         module.Mode = JSRuntimeMode.Loose;
         clipCardModule = JSInterop.SetupModule("./Components/Shared/ClipCard.razor.js");
         clipCardModule.Mode = JSRuntimeMode.Loose;
-        // The clip player's own modules (clip controls, seek keys) once a card with a Jellyfin item plays.
+        // The clip player's own modules (clip controls, seek keys) once a card plays.
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 
