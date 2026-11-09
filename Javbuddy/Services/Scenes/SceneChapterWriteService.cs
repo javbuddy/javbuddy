@@ -2,7 +2,6 @@ using Javbuddy.Data;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.LocalLibrary;
-using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.VideoRepair;
 using Microsoft.EntityFrameworkCore;
@@ -45,7 +44,6 @@ public class SceneChapterWriteService(
     ILocalLibraryClient localLibraryClient,
     IFfmpegClient ffmpegClient,
     IVideoRepairJobTracker jobTracker,
-    IMediaServerClient? mediaServerClient = null,
     MovieChangeNotifier? movieChangeNotifier = null,
     ILogger<SceneChapterWriteService>? logger = null) : ISceneChapterWriteService
 {
@@ -121,20 +119,6 @@ public class SceneChapterWriteService(
             if (refresh is { Success: false })
             {
                 logger?.LogWarning("Media info refresh after writing chapters for movie #{MovieId} failed: {Error}", movieId, refresh.ErrorMessage);
-            }
-
-            string? itemId;
-            await using (var db = await dbFactory.CreateDbContextAsync())
-            {
-                itemId = await db.Movies.Where(m => m.Id == movieId).Select(m => m.JellyfinItemId).FirstOrDefaultAsync();
-            }
-            if (mediaServerClient is not null && !string.IsNullOrWhiteSpace(itemId))
-            {
-                var refreshed = await mediaServerClient.RefreshItemAsync(itemId, CancellationToken.None);
-                if (!refreshed.Success)
-                {
-                    logger?.LogWarning("Media server refresh after writing chapters for movie #{MovieId} failed: {Error}", movieId, refreshed.ErrorMessage);
-                }
             }
         }
         catch (Exception ex)

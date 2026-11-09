@@ -1,6 +1,5 @@
 using Javbuddy.Models;
 using Javbuddy.Services.Javinizer;
-using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.MediaInfo;
 using Javbuddy.Services.Movies;
@@ -400,32 +399,6 @@ public class MovieServiceTests
     }
 
     [Fact]
-    public async Task LinkJellyfinItemAsync_AppliesMatchAndMarksGot()
-    {
-        using var factory = new TestDbContextFactory();
-        int movieId;
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            var movie = new Movie { Code = "ABC-123", Status = MovieStatus.Missing };
-            db.Movies.Add(movie);
-            await db.SaveChangesAsync();
-            movieId = movie.Id;
-        }
-
-        var service = new MovieService(factory);
-        var item = new JellyfinItemDto { Id = "item-1", ServerId = "server-1", LibraryId = "lib-1", LibraryName = "Movies" };
-        await service.LinkJellyfinItemAsync(movieId, item);
-
-        await using var readDb = await factory.CreateDbContextAsync();
-        var reloaded = await readDb.Movies.SingleAsync(m => m.Id == movieId);
-        Assert.Equal(MovieStatus.Got, reloaded.Status);
-        Assert.Equal("item-1", reloaded.JellyfinItemId);
-        Assert.Equal("server-1", reloaded.JellyfinServerId);
-        Assert.Equal("lib-1", reloaded.JellyfinLibraryId);
-        Assert.Equal("Movies", reloaded.JellyfinLibraryName);
-    }
-
-    [Fact]
     public async Task ToggleStatusAsync_NotifiesMovieChangeNotifier()
     {
         using var factory = new TestDbContextFactory();
@@ -467,30 +440,6 @@ public class MovieServiceTests
 
         var service = new MovieService(factory, notifier);
         await service.DeleteAsync(movieId);
-
-        Assert.True(notified);
-    }
-
-    [Fact]
-    public async Task LinkJellyfinItemAsync_NotifiesMovieChangeNotifier()
-    {
-        using var factory = new TestDbContextFactory();
-        int movieId;
-        await using (var db = await factory.CreateDbContextAsync())
-        {
-            var movie = new Movie { Code = "ABC-123", Status = MovieStatus.Missing };
-            db.Movies.Add(movie);
-            await db.SaveChangesAsync();
-            movieId = movie.Id;
-        }
-
-        var notifier = new MovieChangeNotifier();
-        var notified = false;
-        notifier.Changed += () => notified = true;
-
-        var service = new MovieService(factory, notifier);
-        var item = new JellyfinItemDto { Id = "item-1", ServerId = "server-1", LibraryId = "lib-1", LibraryName = "Movies" };
-        await service.LinkJellyfinItemAsync(movieId, item);
 
         Assert.True(notified);
     }

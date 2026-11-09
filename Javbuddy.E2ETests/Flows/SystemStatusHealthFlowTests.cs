@@ -20,8 +20,8 @@ public class SystemStatusHealthFlowTests
 
     /// <summary>Locates a Sub-services row by its bolded service name (a &lt;strong&gt; tag,
     /// only used in that table) rather than page-wide text, since the "Health" messages table
-    /// above it can also mention a service name in plain text (e.g. "No Jellyfin libraries are
-    /// selected...") and would otherwise collide.</summary>
+    /// above it can also mention a service name in plain text (e.g. "Prowlarr is not
+    /// configured...") and would otherwise collide.</summary>
     private static ILocator SubServiceRow(IPage page, string serviceName) =>
         page.Locator(".health-row", new() { Has = page.Locator("strong", new() { HasText = serviceName }) });
 

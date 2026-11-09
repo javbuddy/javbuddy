@@ -59,20 +59,6 @@ public class TrickplaySectionTests : BunitContext
     }
 
     [Fact]
-    public async Task SavingTheForm_KeepsTheJellyfinFallback()
-    {
-        // The fallback toggle lives in Settings > Connections > Jellyfin.
-        var service = UseSettings();
-        await service.SaveAsync(new TrickplaySettings { JellyfinFallback = false });
-        var cut = Render<TrickplaySection>();
-        Assert.Empty(cut.FindAll("#trickplay-jellyfin-fallback"));
-
-        cut.Find("form").Submit();
-
-        Assert.False((await service.GetEffectiveAsync()).JellyfinFallback);
-    }
-
-    [Fact]
     public void WhenEveryFieldIsSetByTheEnvironment_ThereIsNothingToSave()
     {
         UseSettings(new()

@@ -5,9 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Trickplay;
 
-/// <summary>Reads the trickplay environment overrides: <c>Trickplay__GenerateForNewFiles</c>,
-/// <c>Trickplay__KeyframeOnly</c> and <c>Trickplay__JellyfinFallback</c> (true/false, each
-/// overriding just its own Settings field).</summary>
+/// <summary>Reads the trickplay environment overrides: <c>Trickplay__GenerateForNewFiles</c>
+/// and <c>Trickplay__KeyframeOnly</c> (true/false, each overriding just its own Settings field).</summary>
 public static class TrickplayEnvConfig
 {
     public static bool? GetBool(IConfiguration configuration, string field) =>
@@ -37,7 +36,6 @@ public sealed class TrickplaySettingsService(IDbContextFactory<AppDbContext> dbF
         {
             existing.GenerateForNewFiles = form.GenerateForNewFiles;
             existing.KeyframeOnly = form.KeyframeOnly;
-            existing.JellyfinFallback = form.JellyfinFallback;
         });
 
     public async Task<TrickplaySettings> GetEffectiveAsync(CancellationToken ct = default)
@@ -48,7 +46,6 @@ public sealed class TrickplaySettingsService(IDbContextFactory<AppDbContext> dbF
             Id = stored.Id,
             GenerateForNewFiles = TrickplayEnvConfig.GetBool(configuration, nameof(TrickplaySettings.GenerateForNewFiles)) ?? stored.GenerateForNewFiles,
             KeyframeOnly = TrickplayEnvConfig.GetBool(configuration, nameof(TrickplaySettings.KeyframeOnly)) ?? stored.KeyframeOnly,
-            JellyfinFallback = TrickplayEnvConfig.GetBool(configuration, nameof(TrickplaySettings.JellyfinFallback)) ?? stored.JellyfinFallback,
         };
     }
 

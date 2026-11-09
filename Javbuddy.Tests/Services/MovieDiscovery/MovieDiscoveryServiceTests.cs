@@ -258,7 +258,7 @@ public class MovieDiscoveryServiceTests
 
         var movieAddService = Substitute.For<IMovieAddService>();
         movieAddService.AddAsync("SIVR-501", Arg.Any<CancellationToken>())
-            .Returns(new MovieAddResult(new Movie { Code = "SIVR-501" }, false, true, null));
+            .Returns(new MovieAddResult(new Movie { Code = "SIVR-501" }, true, null));
 
         var service = new MovieDiscoveryService([], factory, movieAddService, TimeProvider.System);
 
@@ -304,7 +304,7 @@ public class MovieDiscoveryServiceTests
 
         var movieAddService = Substitute.For<IMovieAddService>();
         movieAddService.AddAsync("SIVR-501", Arg.Any<CancellationToken>())
-            .Returns(new MovieAddResult(new Movie { Id = movieId, Code = "SIVR-501" }, false, false, "no metadata found"));
+            .Returns(new MovieAddResult(new Movie { Id = movieId, Code = "SIVR-501" }, false, "no metadata found"));
 
         var service = new MovieDiscoveryService([], factory, movieAddService, TimeProvider.System);
 
@@ -361,7 +361,7 @@ public class MovieDiscoveryServiceTests
 
         var movieAddService = Substitute.For<IMovieAddService>();
         movieAddService.AddAsync("SIVR-501", Arg.Any<CancellationToken>())
-            .Returns(new MovieAddResult(new Movie { Id = movieId, Code = "SIVR-501" }, false, false, "no metadata found"));
+            .Returns(new MovieAddResult(new Movie { Id = movieId, Code = "SIVR-501" }, false, "no metadata found"));
 
         var service = new MovieDiscoveryService([], factory, movieAddService, TimeProvider.System);
 
@@ -407,7 +407,7 @@ public class MovieDiscoveryServiceTests
 
         var movieAddService = Substitute.For<IMovieAddService>();
         movieAddService.AddAsync("SIVR-501", Arg.Any<CancellationToken>())
-            .Returns(new MovieAddResult(new Movie { Id = movieId, Code = "SIVR-501" }, false, true, null));
+            .Returns(new MovieAddResult(new Movie { Id = movieId, Code = "SIVR-501" }, true, null));
 
         var service = new MovieDiscoveryService([], factory, movieAddService, TimeProvider.System);
 

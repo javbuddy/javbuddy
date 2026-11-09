@@ -38,8 +38,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
-        jellyfinClient.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>()).Returns(new List<string> { "Movies" });
-        jellyfinClient.LookupInSelectedLibrariesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        jellyfinClient.LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new MediaServerLookupResult(true, new List<MediaServerItemDto>(), null));
 
         var task = new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration());
@@ -51,23 +50,6 @@ public class JellyfinLinkSyncTaskTests
         Assert.Equal(new[] { 1, 2, 3 }, progress.Reports.Select(r => r.Current));
         Assert.All(progress.Reports, r => Assert.Equal(3, r.Total));
         Assert.All(progress.Reports, r => Assert.Equal("Checking Jellyfin", r.Stage));
-    }
-
-    [Fact]
-    public async Task RunAsync_NoLibrariesSelected_ReportsNoProgress()
-    {
-        using var factory = new TestDbContextFactory();
-        var jellyfinClient = Substitute.For<IJellyfinClient>();
-        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
-        jellyfinClient.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>()).Returns(new List<string>());
-
-        var task = new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration());
-        var progress = new RecordingProgress();
-
-        var summary = await task.RunAsync(CancellationToken.None, progress);
-
-        Assert.Empty(progress.Reports);
-        Assert.Equal("skipped — no libraries selected", summary);
     }
 
     [Fact]
@@ -104,7 +86,6 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
-        jellyfinClient.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>()).Returns(new List<string> { "Movies" });
         jellyfinClient.LookupPersonAsync("Mikami Yua", Arg.Any<CancellationToken>())
             .Returns(new JellyfinPersonDto { Id = "jf-person-123", Name = "Mikami Yua" });
 
@@ -152,7 +133,6 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
-        jellyfinClient.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>()).Returns(new List<string> { "Movies" });
         jellyfinClient.LookupPersonAsync("Primary Name", Arg.Any<CancellationToken>()).Returns((JellyfinPersonDto?)null);
         jellyfinClient.LookupPersonAsync("Known Alias", Arg.Any<CancellationToken>())
             .Returns(new JellyfinPersonDto { Id = "jf-alias-456", Name = "Known Alias" });
@@ -182,8 +162,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
-        jellyfinClient.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>()).Returns(new List<string> { "Movies" });
-        jellyfinClient.LookupInSelectedLibrariesAsync("AAA-001", Arg.Any<CancellationToken>())
+        jellyfinClient.LookupMovieAsync("AAA-001", Arg.Any<CancellationToken>())
             .Returns(new MediaServerLookupResult(true, new List<MediaServerItemDto>
             {
                 new() { Id = "jf-1", Name = "AAA-001 Match", ServerId = "srv-1" }
@@ -202,7 +181,7 @@ public class JellyfinLinkSyncTaskTests
         await using (var verifyDb = await factory.CreateDbContextAsync())
         {
             var movie = await verifyDb.Movies.SingleAsync();
-            Assert.Equal(MovieStatus.Got, movie.Status);
+            Assert.Equal(MovieStatus.Missing, movie.Status); // a link never decides ownership
             Assert.Equal("jf-1", movie.JellyfinItemId);
         }
     }

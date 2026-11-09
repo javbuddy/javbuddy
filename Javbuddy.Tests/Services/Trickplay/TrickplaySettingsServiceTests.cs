@@ -19,33 +19,33 @@ public class TrickplaySettingsServiceTests : IDisposable
     {
         var settings = await Service().GetEffectiveAsync();
 
-        Assert.Equal((true, false, true), (settings.GenerateForNewFiles, settings.KeyframeOnly, settings.JellyfinFallback));
+        Assert.Equal((true, false), (settings.GenerateForNewFiles, settings.KeyframeOnly));
     }
 
     [Fact]
     public async Task SaveAsync_UpsertsTheSingleRow()
     {
         var service = Service();
-        await service.SaveAsync(new TrickplaySettings { JellyfinFallback = false });
-        await service.SaveAsync(new TrickplaySettings { JellyfinFallback = false, KeyframeOnly = true });
+        await service.SaveAsync(new TrickplaySettings { GenerateForNewFiles = false });
+        await service.SaveAsync(new TrickplaySettings { KeyframeOnly = true });
 
         await using var db = await dbFactory.CreateDbContextAsync();
         var row = Assert.Single(db.TrickplaySettings);
-        Assert.Equal((true, true, false), (row.GenerateForNewFiles, row.KeyframeOnly, row.JellyfinFallback));
+        Assert.Equal((true, true), (row.GenerateForNewFiles, row.KeyframeOnly));
     }
 
     [Fact]
     public async Task EachEnvironmentVariable_OverridesJustItsOwnField()
     {
-        await Service().SaveAsync(new TrickplaySettings { GenerateForNewFiles = false, KeyframeOnly = false, JellyfinFallback = true });
-        var service = Service(new() { ["Trickplay:JellyfinFallback"] = "false", ["Trickplay:KeyframeOnly"] = "not a bool" });
+        await Service().SaveAsync(new TrickplaySettings { GenerateForNewFiles = false, KeyframeOnly = false });
+        var service = Service(new() { ["Trickplay:GenerateForNewFiles"] = "true", ["Trickplay:KeyframeOnly"] = "not a bool" });
 
         var effective = await service.GetEffectiveAsync();
         var stored = await service.GetStoredAsync();
 
-        Assert.Equal((false, false, false), (effective.GenerateForNewFiles, effective.KeyframeOnly, effective.JellyfinFallback));
-        Assert.True(stored.JellyfinFallback);
-        Assert.True(service.IsSetByEnvironment(nameof(TrickplaySettings.JellyfinFallback)));
+        Assert.Equal((true, false), (effective.GenerateForNewFiles, effective.KeyframeOnly));
+        Assert.False(stored.GenerateForNewFiles);
+        Assert.True(service.IsSetByEnvironment(nameof(TrickplaySettings.GenerateForNewFiles)));
         Assert.False(service.IsSetByEnvironment(nameof(TrickplaySettings.KeyframeOnly)));
     }
 }

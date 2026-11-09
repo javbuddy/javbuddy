@@ -1,8 +1,6 @@
 using Javbuddy.E2ETests.Fixtures;
-using Javbuddy.E2ETests.Fixtures.FakeServices;
 using Javbuddy.E2ETests.Support;
 using Javbuddy.Models;
-using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.Scenes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
@@ -25,13 +23,11 @@ public class HighlightFlowTests
         fixture.ResetFakes();
     }
 
-    private async Task<Movie> SeedPlayableMovieAsync(string code, string itemId)
+    private async Task<Movie> SeedPlayableMovieAsync(string code)
     {
         var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, code, MovieStatus.Got);
         await using var db = await fixture.DbFactory.CreateDbContextAsync();
         var m = (await db.Movies.FindAsync(movie.Id))!;
-        m.JellyfinItemId = itemId;
-        m.JellyfinServerId = FakeJellyfinServer.ServerId;
         // The fixture video is a 3-second clip.
         m.MediaDurationSeconds = 3;
         await db.SaveChangesAsync();
@@ -56,7 +52,7 @@ public class HighlightFlowTests
     [Fact]
     public async Task AddHighlight_ShowsOnTheTimeline_AndPlayingItPausesAtItsEnd()
     {
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-1", "fake-jf-item-hilite-1");
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-1");
         var page = await OpenPlayerAsync(movie);
         var panel = page.Locator(".video-player-side-panel");
 
@@ -104,7 +100,7 @@ public class HighlightFlowTests
     [Fact]
     public async Task HighlightWall_CardPlaysJustTheClip_AndClosesAtItsEnd()
     {
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-4", "fake-jf-item-hilite-4");
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-4");
         var page = await OpenWallClipAsync(movie, 0.5, 2.5, "Wall clip", loop: false);
 
         // The wall's own clip player: no navigation, no editor, and only the clip's
@@ -125,7 +121,7 @@ public class HighlightFlowTests
     [Fact]
     public async Task HighlightWall_RememberedLoop_RestartsTheClip_UntilTurnedOff()
     {
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-6", "fake-jf-item-hilite-6");
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-6");
         var page = await OpenWallClipAsync(movie, 0.5, 1.5, "Loop clip", loop: true);
         var loop = page.Locator(".clip-controls-loop");
         await Expect(loop).ToHaveAttributeAsync("aria-pressed", "true");
@@ -148,7 +144,7 @@ public class HighlightFlowTests
     {
         // A background tab pauses requestAnimationFrame while the video plays on; the clip's end
         // must still be caught (by timeupdate), not only once the tab is visible again.
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-8", "fake-jf-item-hilite-8");
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-8");
         var page = await OpenWallClipAsync(movie, 0.5, 1.5, "Hidden clip", loop: true,
             initScript: "window.requestAnimationFrame = () => 0; window.cancelAnimationFrame = () => {};");
         await page.EvaluateAsync($"() => {{ window.__max = 0; const v = document.querySelector('{Video}'); v.addEventListener('timeupdate', () => window.__max = Math.max(window.__max, v.currentTime)); }}");
@@ -167,7 +163,7 @@ public class HighlightFlowTests
     [Fact]
     public async Task HighlightWall_SpaceAfterClickingLoop_PausesInsteadOfTogglingLoop()
     {
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-9", "fake-jf-item-hilite-9");
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-9");
         var page = await OpenWallClipAsync(movie, 0.3, 2.8, "Space clip", loop: false);
         var loop = page.Locator(".clip-controls-loop");
 
@@ -183,7 +179,7 @@ public class HighlightFlowTests
     [Fact]
     public async Task HighlightWall_PlayingFromTheClipsEnd_RestartsItInsteadOfClosing()
     {
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-10", "fake-jf-item-hilite-10");
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-10");
         var page = await OpenWallClipAsync(movie, 0.3, 2.8, "End clip", loop: false);
 
         // Paused at the clip's end, e.g. after → clamped a skip there.
@@ -201,7 +197,7 @@ public class HighlightFlowTests
     {
         foreach (var (n, end) in new[] { (1, firstEnd), (2, secondEnd) })
         {
-            var movie = await SeedPlayableMovieAsync($"{codePrefix}-{n}", $"fake-jf-item-{codePrefix.ToLowerInvariant()}-{n}");
+            var movie = await SeedPlayableMovieAsync($"{codePrefix}-{n}");
             using var scope = fixture.App.Services.CreateScope();
             await scope.ServiceProvider.GetRequiredService<IMovieHighlightService>().AddHighlightAsync(movie.Id, 0.3, end, $"{token} {n}");
         }
@@ -266,7 +262,7 @@ public class HighlightFlowTests
     [Fact]
     public async Task HighlightWall_EditInMovie_OpensMovieDetailsEditorAtTheHighlight()
     {
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-7", "fake-jf-item-hilite-7");
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-7");
         // Looping, so the player is still open to click in.
         var page = await OpenWallClipAsync(movie, 0.5, 1.5, "Edit clip", loop: true);
 
@@ -279,7 +275,7 @@ public class HighlightFlowTests
     [Fact]
     public async Task HighlightWall_BackAndTheNavLink_ShowTheViewTheUrlNames()
     {
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-5", "fake-jf-item-hilite-5");
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-5");
         using (var scope = fixture.App.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<IMovieSceneService>().AddSceneAsync(movie.Id, 0, 2, "Zqxback scene");
@@ -316,7 +312,7 @@ public class HighlightFlowTests
     [Fact]
     public async Task DeleteHighlight_AsksFirst_EscapeCancelsWithoutClosingThePlayer()
     {
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-3", "fake-jf-item-hilite-3");
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-3");
         using (var scope = fixture.App.Services.CreateScope())
         {
             await scope.ServiceProvider.GetRequiredService<IMovieHighlightService>().AddHighlightAsync(movie.Id, 1, 2, "Climax");
@@ -344,20 +340,8 @@ public class HighlightFlowTests
     [Fact]
     public async Task ScrubBar_HoveringAHighlightPreviewsItsStart_AndClickingSeeksThere()
     {
-        const string itemId = "fake-jf-item-hilite-2";
-        fixture.FakeJellyfin.Trickplay = new JellyfinTrickplayItemDto
-        {
-            Id = itemId,
-            RunTimeTicks = TimeSpan.FromSeconds(3).Ticks,
-            Trickplay = new()
-            {
-                [itemId] = new()
-                {
-                    ["320"] = new JellyfinTrickplayInfoDto { Width = 320, Height = 180, TileWidth = 10, TileHeight = 10, ThumbnailCount = 3, Interval = 1000 },
-                },
-            },
-        };
-        var movie = await SeedPlayableMovieAsync("E2E-HILITE-2", itemId);
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-2");
+        await DbSeeding.SeedLocalTrickplayAsync(fixture.DbFactory, movie);
         using (var scope = fixture.App.Services.CreateScope())
         {
             var highlights = scope.ServiceProvider.GetRequiredService<IMovieHighlightService>();

@@ -3,7 +3,6 @@ using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
-using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Tags;
@@ -74,10 +73,6 @@ public interface IMovieService
     /// <summary>Lists the files <see cref="DeleteAsync"/> with <c>deleteFiles</c> would remove, with
     /// their total size, for the Delete dialog to show before the user confirms.</summary>
     Task<MovieFolderDeletePreview> GetFolderDeletePreviewAsync(int movieId, CancellationToken ct = default);
-
-    /// <summary>Applies a Jellyfin lookup match's ownership/descriptive fields onto a movie and
-    /// marks it Got after Movie Detail's Jellyfin scan finds a match.</summary>
-    Task LinkJellyfinItemAsync(int movieId, MediaServer.MediaServerItemDto item, CancellationToken ct = default);
 
     /// <summary>Links a tracked actor to a movie: appends their canonical name to
     /// <c>Movie.MetaActresses</c> (or corrects an existing unmatched entry to it), re-derives
@@ -274,19 +269,6 @@ public class MovieService(
     }
 
     private const string LocalLibraryUnavailable = "The local library isn't available.";
-
-    public async Task LinkJellyfinItemAsync(int movieId, MediaServer.MediaServerItemDto item, CancellationToken ct = default)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var tracked = await db.Movies.FindAsync([movieId], ct);
-        if (tracked is not null)
-        {
-            JellyfinMetadataMapper.ApplyMatch(tracked, item);
-            tracked.Status = MovieStatus.Got;
-            await db.SaveChangesAsync(ct);
-            movieChangeNotifier?.NotifyChanged();
-        }
-    }
 
     public async Task<OperationResult> AddActorToMovieAsync(int movieId, int actorId, CancellationToken ct = default)
     {

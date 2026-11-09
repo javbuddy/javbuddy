@@ -162,7 +162,6 @@ public static class ServiceRegistration
         services.AddHostedService(sp => sp.GetRequiredService<TrickplayQueue>());
         services.AddSingleton<IMovieCleanupSessionTracker, MovieCleanupSessionTracker>();
         services.AddScoped<IMovieCleanupService, MovieCleanupService>();
-        services.AddScoped<IJellyfinMovieScanService, JellyfinMovieScanService>();
         services.AddScoped<IConnectionSettingsSaveService, ConnectionSettingsSaveService>();
         services.AddScoped<IConnectionStatusService, ConnectionStatusService>();
         services.AddScoped<ISystemStatusService, SystemStatusService>();

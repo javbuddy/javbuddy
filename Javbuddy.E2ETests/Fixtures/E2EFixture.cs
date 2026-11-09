@@ -46,11 +46,6 @@ public sealed class E2EFixture : IAsyncLifetime
                 ["Javinizer:ApiToken"] = FakeJavinizerServer.ApiToken,
                 ["Jellyfin:BaseUrl"] = FakeJellyfin.Address,
                 ["Jellyfin:ApiKey"] = FakeJellyfinServer.ApiKey,
-                // Matches FakeJellyfinServer's default Libraries entry — without a selected
-                // library, every Jellyfin lookup (ownership check, MovieDetail's "Jellyfin"
-                // refresh) short-circuits to an empty result without contacting the server at
-                // all (see JellyfinClient.LookupInSelectedLibrariesAsync).
-                ["Jellyfin:SelectedLibraryNames"] = "Movies",
                 ["QBittorrent:BaseUrl"] = FakeQBittorrent.Address,
                 ["QBittorrent:Username"] = FakeQBittorrentServer.Username,
                 ["QBittorrent:Password"] = FakeQBittorrentServer.Password,

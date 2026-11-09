@@ -5,7 +5,7 @@ namespace Javbuddy.Services.Trickplay;
 
 /// <summary>A movie's main video file as trickplay sees it: the MovieFile row MovieVideoFiles would
 /// stream (the primary version, else the first by case-insensitive name) and its probe data.</summary>
-public sealed record TrickplayMainFile(int MovieId, string Code, string? JellyfinItemId, string? FileName, double? DurationSeconds, int? Width, int? Height)
+public sealed record TrickplayMainFile(int MovieId, string Code, string? FileName, double? DurationSeconds, int? Width, int? Height)
 {
     /// <summary>Null until the file has been probed (see TrickplayIdentity.For).</summary>
     public string? Identity => FileName is null ? null : TrickplayIdentity.For(FileName, DurationSeconds, Width, Height);
@@ -28,7 +28,6 @@ public static class TrickplayMainFiles
             {
                 m.Id,
                 m.Code,
-                m.JellyfinItemId,
                 Files = m.MovieFiles.Select(f => new { f.FileName, f.IsPrimary, f.DurationSeconds, f.Width, f.Height }).ToList(),
             })
             .ToListAsync(ct);
@@ -40,7 +39,7 @@ public static class TrickplayMainFiles
                 .OrderByDescending(f => f.IsPrimary)
                 .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
-            return new TrickplayMainFile(m.Id, m.Code!, m.JellyfinItemId, main?.FileName, main?.DurationSeconds, main?.Width, main?.Height);
+            return new TrickplayMainFile(m.Id, m.Code!, main?.FileName, main?.DurationSeconds, main?.Width, main?.Height);
         }).ToList();
     }
 }

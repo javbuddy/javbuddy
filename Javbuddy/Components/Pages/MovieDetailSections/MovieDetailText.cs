@@ -58,11 +58,7 @@ public static class MovieDetailText
 
     public static string JellyfinLinkedTooltip(Movie movie)
     {
-        var text = "Linked to a library item";
-        if (!string.IsNullOrWhiteSpace(movie.JellyfinLibraryName))
-        {
-            text += $" in {movie.JellyfinLibraryName}";
-        }
+        var text = "Linked to a Jellyfin item";
         if (movie.JellyfinCheckedAt is not null)
         {
             text += $" (checked {movie.JellyfinCheckedAt.Value.ToLocalTime():yyyy-MM-dd HH:mm})";

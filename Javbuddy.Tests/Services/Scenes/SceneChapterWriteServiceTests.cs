@@ -2,7 +2,6 @@ using Javbuddy.Models;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.LocalLibrary;
-using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Scenes;
 using Javbuddy.Services.VideoRepair;
@@ -19,7 +18,6 @@ public sealed class SceneChapterWriteServiceTests : IDisposable
     private readonly string folder = Path.Combine(Path.GetTempPath(), "javbuddy-tests-" + Guid.NewGuid().ToString("N"));
     private readonly ILocalLibraryClient localLibrary = Substitute.For<ILocalLibraryClient>();
     private readonly IFfmpegClient ffmpeg = Substitute.For<IFfmpegClient>();
-    private readonly IMediaServerClient mediaServer = Substitute.For<IMediaServerClient>();
     private readonly VideoRepairJobTracker tracker = new();
     private readonly string videoPath;
     private string? writtenMetadata;
@@ -32,7 +30,6 @@ public sealed class SceneChapterWriteServiceTests : IDisposable
         File.WriteAllText(videoPath, "original");
         localLibrary.ResolveMovieFolderPathAsync("ABC-123", Arg.Any<CancellationToken>()).Returns(folder);
         localLibrary.RefreshMediaInfoOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(new OperationResult(true, null));
-        mediaServer.RefreshItemAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new OperationResult(true, null));
 
         // The original has the VR merge's part chapters; the staging copy reports whatever the
         // remux "wrote" (by default: exactly the chapters in the metadata).
@@ -72,14 +69,14 @@ public sealed class SceneChapterWriteServiceTests : IDisposable
     private static int CountChapters(string? metadata) =>
         metadata is null ? 0 : metadata.Split("[CHAPTER]").Length - 1;
 
-    private SceneChapterWriteService CreateService() => new(factory, localLibrary, ffmpeg, tracker, mediaServer);
+    private SceneChapterWriteService CreateService() => new(factory, localLibrary, ffmpeg, tracker);
 
     private Task<int> SeedAsync(params (double Start, double? End, string? Title)[] scenes) => SeedAsync("ABC-123", scenes);
 
     private async Task<int> SeedAsync(string code, params (double Start, double? End, string? Title)[] scenes)
     {
         await using var db = await factory.CreateDbContextAsync();
-        var movie = new Movie { Code = code, MediaDurationSeconds = 100, JellyfinItemId = "jf-1" };
+        var movie = new Movie { Code = code, MediaDurationSeconds = 100 };
         foreach (var (start, end, title) in scenes)
         {
             movie.Scenes.Add(new Scene { StartSeconds = start, EndSeconds = end, Title = title });
@@ -121,7 +118,7 @@ public sealed class SceneChapterWriteServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Write_ReplacesTheFile_ThenRefreshesMediaInfoAndJellyfin()
+    public async Task Write_ReplacesTheFile_ThenRefreshesMediaInfo()
     {
         var movieId = await SeedAsync((10, 60, "Interview"), (60, null, "Bath"));
 
@@ -135,7 +132,6 @@ public sealed class SceneChapterWriteServiceTests : IDisposable
         Assert.Contains("title= \n", writtenMetadata); // MP4: the gap gets a blank title
         Assert.Contains("title=Interview\n", writtenMetadata);
         await localLibrary.Received(1).RefreshMediaInfoOnlyAsync(movieId, Arg.Any<CancellationToken>());
-        await mediaServer.Received(1).RefreshItemAsync("jf-1", Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -150,7 +146,6 @@ public sealed class SceneChapterWriteServiceTests : IDisposable
         Assert.Contains("the original was kept", result.ErrorMessage);
         Assert.Equal("original", await File.ReadAllTextAsync(videoPath));
         Assert.Equal(["ABC-123.mp4"], Directory.GetFiles(folder).Select(Path.GetFileName));
-        await mediaServer.DidNotReceive().RefreshItemAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

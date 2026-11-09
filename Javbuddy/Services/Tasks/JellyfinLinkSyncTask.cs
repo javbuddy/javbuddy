@@ -7,9 +7,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Javbuddy.Services.Tasks;
 
 /// <summary>Checks every movie that isn't yet linked to a Jellyfin library item (regardless of
-/// how it was added — local library scan, javinizer-go, manual) and links it (marking it Got)
-/// if a match turns up in the selected libraries. The unattended version of the "Scan Jellyfin"
-/// button on the Movies page and "Lookup in Jellyfin" on a movie's own page.</summary>
+/// how it was added — local library scan, javinizer-go, manual) and links it if a match turns up.
+/// Only the link is stored; a match never changes the movie's status.</summary>
 public class JellyfinLinkSyncTask(
     IJellyfinClient jellyfinClient,
     IDbContextFactory<AppDbContext> dbFactory,
@@ -27,8 +26,7 @@ public class JellyfinLinkSyncTask(
     public string Name => "Jellyfin Link Sync";
 
     public string Description =>
-        "Links movies and actors not yet matched to Jellyfin library items — the unattended " +
-        "version of the \"Scan Jellyfin\" button.";
+        "Links movies and actors not yet matched to Jellyfin items so \"Open in Jellyfin\" works.";
 
     public TimeSpan GetInterval()
     {
@@ -46,12 +44,6 @@ public class JellyfinLinkSyncTask(
         if (!await jellyfinClient.IsEnabledAsync(ct))
         {
             return "skipped — Jellyfin integration is disabled";
-        }
-
-        var libraryNames = await jellyfinClient.GetSelectedLibraryNamesAsync(ct);
-        if (libraryNames.Count == 0)
-        {
-            return "skipped — no libraries selected";
         }
 
         // Only Id + Code are needed to look each movie up; matches are reloaded and saved in
@@ -74,7 +66,7 @@ public class JellyfinLinkSyncTask(
             checkedCount++;
             progress.Report(new TaskProgress(checkedCount, targets.Count, "Checking Jellyfin"));
 
-            var result = await jellyfinClient.LookupInSelectedLibrariesAsync(movie.Code, ct);
+            var result = await jellyfinClient.LookupMovieAsync(movie.Code, ct);
             var match = result.Success ? result.Items?.FirstOrDefault() : null;
             if (match is null) continue;
 
@@ -83,7 +75,6 @@ public class JellyfinLinkSyncTask(
             if (tracked is null) continue;
 
             JellyfinMetadataMapper.ApplyMatch(tracked, match);
-            tracked.Status = MovieStatus.Got;
             await db.SaveChangesAsync(ct);
             matched++;
         }

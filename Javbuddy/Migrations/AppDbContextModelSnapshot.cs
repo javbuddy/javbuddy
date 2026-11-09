@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261108214253_AddMovieLocalRootPath";
+    public override string LastMigrationId => "20261108221810_RemoveJellyfinLibraryFilter";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -879,10 +879,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<int?>("LastLinkSyncMatched")
                     .HasColumnType("INTEGER");
 
-                b.Property<string>("SelectedLibraryNames")
-                    .HasMaxLength(2000)
-                    .HasColumnType("TEXT");
-
                 b.HasKey("Id");
 
                 b.ToTable("JellyfinSettings");
@@ -1004,12 +1000,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("TEXT");
 
                 b.Property<string>("JellyfinItemId")
-                    .HasColumnType("TEXT");
-
-                b.Property<string>("JellyfinLibraryId")
-                    .HasColumnType("TEXT");
-
-                b.Property<string>("JellyfinLibraryName")
                     .HasColumnType("TEXT");
 
                 b.Property<string>("JellyfinServerId")
@@ -1313,8 +1303,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.HasIndex("IsFavorite")
                     .HasFilter("\"IsFavorite\"");
-
-                b.HasIndex("JellyfinLibraryName");
 
                 b.HasIndex("LocalRootPath");
 
@@ -2270,9 +2258,6 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("INTEGER");
 
                 b.Property<bool>("GenerateForNewFiles")
-                    .HasColumnType("INTEGER");
-
-                b.Property<bool>("JellyfinFallback")
                     .HasColumnType("INTEGER");
 
                 b.Property<bool>("KeyframeOnly")

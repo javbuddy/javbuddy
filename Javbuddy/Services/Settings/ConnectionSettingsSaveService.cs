@@ -14,10 +14,6 @@ public interface IConnectionSettingsSaveService
     Task<QBittorrentSettings> GetQBittorrentAsync(CancellationToken ct = default);
     Task<FlareSolverrSettings> GetFlareSolverrAsync(CancellationToken ct = default);
 
-    /// <summary>Saves only Jellyfin's library selection (comma-joined names), creating the row when
-    /// connection settings come from env vars and none exists yet.</summary>
-    Task SaveJellyfinLibrarySelectionAsync(IEnumerable<string> libraryNames, CancellationToken ct = default);
-
     Task SaveJavinizerAsync(JavinizerSettings settings, CancellationToken ct = default);
     Task SaveProwlarrAsync(ProwlarrSettings settings, CancellationToken ct = default);
     Task SaveJellyfinConnectionAsync(JellyfinSettings settings, CancellationToken ct = default);
@@ -86,10 +82,4 @@ public class ConnectionSettingsSaveService(IDbContextFactory<AppDbContext> dbFac
     public Task<LocalLibrarySettings> GetLocalLibraryAsync(CancellationToken ct = default) => localLibrary.GetAsync(() => new LocalLibrarySettings(), ct);
     public Task<QBittorrentSettings> GetQBittorrentAsync(CancellationToken ct = default) => qbittorrent.GetAsync(() => new QBittorrentSettings(), ct);
     public Task<FlareSolverrSettings> GetFlareSolverrAsync(CancellationToken ct = default) => flareSolverr.GetAsync(() => new FlareSolverrSettings(), ct);
-
-    public Task SaveJellyfinLibrarySelectionAsync(IEnumerable<string> libraryNames, CancellationToken ct = default)
-    {
-        var joined = string.Join(",", libraryNames);
-        return jellyfin.UpdateAsync(() => new JellyfinSettings(), row => row.SelectedLibraryNames = joined, ct);
-    }
 }

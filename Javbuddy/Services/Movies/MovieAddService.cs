@@ -9,19 +9,19 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Movies;
 
-public sealed record MovieAddResult(Movie Movie, bool OwnedViaJellyfin, bool MetadataFound, string? MetadataError);
+public sealed record MovieAddResult(Movie Movie, bool MetadataFound, string? MetadataError);
 
 public interface IMovieAddService
 {
     /// <summary>Adds a new Missing movie by code and runs the same lookup chain as the manual
-    /// "Add a movie" page: media server ownership check (marks it Got on a match), then metadata from
+    /// "Add a movie" page: media server link lookup (never marks it Got), then metadata from
     /// the local library first, falling back to javinizer-go.</summary>
     Task<MovieAddResult> AddAsync(string code, CancellationToken ct = default);
 }
 
 /// <summary>Shared by MovieAdd.razor (manual add) and MovieDetail.razor's r18.dev preview branch
 /// ("Add to Library" on a movie not yet in the library) — both need the identical
-/// ownership-check-then-metadata-fallback pipeline, not two copies that can drift apart.</summary>
+/// local-library-then-javinizer-go metadata pipeline, not two copies that can drift apart.</summary>
 public class MovieAddService(
     IDbContextFactory<AppDbContext> dbFactory,
     IMediaServerClient mediaServerClient,
@@ -51,10 +51,9 @@ public class MovieAddService(
         }
         movieChangeNotifier.NotifyChanged();
 
-        // Ownership only (only within the libraries configured on the Connections page — none
-        // selected means media server isn't checked at all). Metadata no longer comes from media server —
-        // see the local/javinizer-go lookup below.
-        var serverResult = await mediaServerClient.LookupInSelectedLibrariesAsync(code, ct);
+        // Link only: a Jellyfin match stores the "Open in Jellyfin" link and never marks the movie Got.
+        // Metadata comes from the local/javinizer-go lookup below.
+        var serverResult = await mediaServerClient.LookupMovieAsync(code, ct);
         var match = serverResult.Success ? serverResult.Items?.FirstOrDefault() : null;
 
         if (match is not null)
@@ -64,7 +63,6 @@ public class MovieAddService(
             if (tracked is not null)
             {
                 JellyfinMetadataMapper.ApplyMatch(tracked, match);
-                tracked.Status = MovieStatus.Got;
                 await db.SaveChangesAsync(ct);
             }
         }
@@ -86,7 +84,7 @@ public class MovieAddService(
                 }
                 await db.SaveChangesAsync(ct);
             }
-            return new MovieAddResult(movie, match is not null, true, null);
+            return new MovieAddResult(movie, true, null);
         }
 
         var scrapeResult = await javinizerClient.ScrapeAsync(code, ct);
@@ -101,9 +99,9 @@ public class MovieAddService(
                 await TagNormalization.ApplyToMovieAsync(db, tracked, scrapeResult.Movie.Genres?.Select(g => g.Name) ?? [], ct);
                 await db.SaveChangesAsync(ct);
             }
-            return new MovieAddResult(movie, match is not null, true, null);
+            return new MovieAddResult(movie, true, null);
         }
 
-        return new MovieAddResult(movie, match is not null, false, scrapeResult.ErrorMessage);
+        return new MovieAddResult(movie, false, scrapeResult.ErrorMessage);
     }
 }

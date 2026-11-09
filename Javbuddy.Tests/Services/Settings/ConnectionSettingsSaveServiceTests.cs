@@ -38,12 +38,12 @@ public class ConnectionSettingsServiceTests
     }
 
     [Fact]
-    public async Task SaveJellyfinConnectionAsync_PersistsBaseUrlExternalUrlAndApiKey_LeavesLibrarySelectionAlone()
+    public async Task SaveJellyfinConnectionAsync_PersistsBaseUrlExternalUrlAndApiKey()
     {
         using var factory = new TestDbContextFactory();
         await using (var seedDb = await factory.CreateDbContextAsync())
         {
-            seedDb.JellyfinSettings.Add(new JellyfinSettings { BaseUrl = "http://old.test", SelectedLibraryNames = "lib-1,lib-2" });
+            seedDb.JellyfinSettings.Add(new JellyfinSettings { BaseUrl = "http://old.test" });
             await seedDb.SaveChangesAsync();
         }
 
@@ -55,7 +55,6 @@ public class ConnectionSettingsServiceTests
         Assert.Equal("http://jf.test", row.BaseUrl);
         Assert.Equal("http://jf-ext.test", row.ExternalUrl);
         Assert.Equal("key", row.ApiKey);
-        Assert.Equal("lib-1,lib-2", row.SelectedLibraryNames);
     }
 
     [Fact]
@@ -123,31 +122,4 @@ public class ConnectionSettingsServiceTests
         Assert.Equal("javbuddy", row.Category);
     }
 
-    [Fact]
-    public async Task SaveJellyfinLibrarySelectionAsync_CreatesTheRowWhenNoneExists()
-    {
-        using var factory = new TestDbContextFactory();
-        var service = new ConnectionSettingsSaveService(factory);
-
-        await service.SaveJellyfinLibrarySelectionAsync(["JAV", "VR"]);
-
-        await using var db = await factory.CreateDbContextAsync();
-        Assert.Equal("JAV,VR", (await db.JellyfinSettings.SingleAsync()).SelectedLibraryNames);
-    }
-
-    [Fact]
-    public async Task SaveJellyfinLibrarySelectionAsync_LeavesConnectionFieldsUntouched()
-    {
-        using var factory = new TestDbContextFactory();
-        var service = new ConnectionSettingsSaveService(factory);
-        await service.SaveJellyfinConnectionAsync(new JellyfinSettings { Enabled = true, BaseUrl = "http://jf.test", ApiKey = "key" });
-
-        await service.SaveJellyfinLibrarySelectionAsync(["Movies"]);
-
-        await using var db = await factory.CreateDbContextAsync();
-        var row = await db.JellyfinSettings.SingleAsync();
-        Assert.Equal("Movies", row.SelectedLibraryNames);
-        Assert.Equal("http://jf.test", row.BaseUrl);
-        Assert.Equal("key", row.ApiKey);
-    }
 }

@@ -9,7 +9,6 @@ using Javbuddy.Services.Images;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
-using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Monitoring;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Nfo;
@@ -59,13 +58,11 @@ public class MovieDetailTests : BunitContext
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Trickplay.IHighlightTrickplayService>());
         Services.AddSingleton(Substitute.For<IJavinizerClient>());
         var jellyfinClient = Substitute.For<IJellyfinClient>();
-        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
         Services.AddSingleton(jellyfinClient);
         Services.AddSingleton(StreamServiceStubs.AllPlayable());
         Services.AddSingleton(Substitute.For<IMovieSubtitleService>());
         Services.AddSingleton(Substitute.For<ITrickplayService>());
         Services.AddSingleton(new TrickplayGenerationTracker());
-        Services.AddSingleton<IMediaServerClient>(jellyfinClient);
         var dumpStore = r18DevDumpStore ?? Substitute.For<IR18DevDumpStore>();
         Services.AddSingleton(dumpStore);
         Services.AddSingleton<IR18DevReleaseBrowseService>(new R18DevReleaseBrowseService(factory, dumpStore, new R18DevLibrarySnapshotCache(factory, TimeProvider.System), TimeProvider.System));
@@ -84,7 +81,6 @@ public class MovieDetailTests : BunitContext
         Services.AddSingleton<ScheduledTaskChangeNotifier>();
         Services.AddSingleton(TimeProvider.System);
         Services.AddSingleton<TaskActivityTracker>();
-        Services.AddSingleton<IJellyfinMovieScanService, JellyfinMovieScanService>();
         Services.AddSingleton(new MovieFilterNavigationState());
         Services.AddLogging();
 

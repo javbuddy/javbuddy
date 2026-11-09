@@ -6,6 +6,7 @@ using Javbuddy.Services.Images;
 using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
+using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Monitoring;
 using Javbuddy.Services.Prowlarr;
 using Javbuddy.Services.QBittorrent;
@@ -36,7 +37,6 @@ public class SystemStatusTests : BunitContext
         var prowlarr = Substitute.For<IProwlarrClient>();
         var qbittorrent = Substitute.For<IQBittorrentClient>();
         var jellyfin = Substitute.For<IJellyfinClient>();
-        jellyfin.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>()).Returns([]);
 
         var imageCacheMaintenance = Substitute.For<IImageCacheMaintenanceService>();
         imageCacheMaintenance.GetStatsAsync(Arg.Any<CancellationToken>())
@@ -139,7 +139,7 @@ public class SystemStatusTests : BunitContext
         qbittorrent.TestConnectionAsync(Arg.Any<CancellationToken>())
             .Returns(new QBittorrentTestResult(true, "Connected successfully.", "v4.6.0"));
         jellyfin.TestConnectionAsync(Arg.Any<CancellationToken>())
-            .Returns(new JellyfinTestResult(true, "Connected successfully.", "10.10.6", "jf_srv_id"));
+            .Returns(new MediaServerTestResult(true, "Connected successfully.", "10.10.6", "jf_srv_id"));
 
         var cut = Render<SystemStatus>();
 

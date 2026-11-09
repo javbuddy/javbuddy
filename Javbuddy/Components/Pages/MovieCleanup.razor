@@ -55,19 +55,6 @@
                         @(batchRepairing ? "Repairing…" : $"Repair Broken B-Frames ({brokenBFrameCount})")
                     </button>
                 }
-                @if (availableLibraries is { Count: > 0 })
-                {
-                    <label class="cleanup-order-label" for="cleanup-library">
-                        Library
-                        <select id="cleanup-library" @bind="selectedLibrary" @bind:after="OnLibraryChangedAsync">
-                            <option value="">All libraries</option>
-                            @foreach (var library in availableLibraries)
-                            {
-                                <option value="@library">@library</option>
-                            }
-                        </select>
-                    </label>
-                }
                 <label class="cleanup-order-label" for="cleanup-order">
                     Queue order
                     <select id="cleanup-order" @bind="selectedOrder" @bind:after="OnOrderChangedAsync">
@@ -309,8 +296,6 @@
     private CleanupOrder selectedOrder = CleanupOrder.Random;
     private CleanupMode mode;
     private bool unreviewedOnly = true;
-    private List<string> availableLibraries = [];
-    private string? selectedLibrary;
     private int sessionReviewedCount;
     private bool showDeleteConfirm;
     private bool showCoverLightbox;
@@ -413,7 +398,6 @@
         if (resumed is not null)
         {
             selectedOrder = resumed.Order;
-            selectedLibrary = resumed.Library;
             unreviewedOnly = resumed.UnreviewedOnly;
             queue = resumed.Queue;
             sessionReviewedCount = resumed.ReviewedCount;
@@ -450,7 +434,6 @@
         {
             CleanupService.DiscardSession();
             scopeActorId = requestedActorId;
-            selectedLibrary = null;
             await LoadScopeAsync();
             await ReloadQueueAsync();
         }
@@ -468,7 +451,6 @@
         CleanupService.DiscardSession();
         mode = newMode;
         unreviewedOnly = (mode == CleanupMode.Review);
-        selectedLibrary = null;
         await LoadScopeAsync();
         await ReloadQueueAsync();
         StateHasChanged();
@@ -476,7 +458,6 @@
 
     private async Task LoadScopeAsync()
     {
-        availableLibraries = (await CleanupService.GetEligibleLibrariesAsync(scopeActorId, mode)) ?? [];
         scopeActor = scopeActorId is { } id ? await ActorService.GetByIdAsync(id) : null;
     }
 
@@ -484,7 +465,6 @@
     {
         CleanupService.DiscardSession();
         scopeActorId = null;
-        selectedLibrary = null;
         await LoadScopeAsync();
         await ReloadQueueAsync();
         Nav.NavigateTo(ModeUrl(mode), replace: true);
@@ -534,10 +514,9 @@
 
     private async Task ReloadQueueAsync()
     {
-        var library = string.IsNullOrWhiteSpace(selectedLibrary) ? null : selectedLibrary;
         var unreviewed = reviewMode && unreviewedOnly;
-        queue = await CleanupService.BuildQueueAsync(selectedOrder, library, scopeActorId, mode, unreviewed);
-        CleanupService.StartSession(queue, selectedOrder, library, scopeActorId, mode, unreviewed);
+        queue = await CleanupService.BuildQueueAsync(selectedOrder, scopeActorId, mode, unreviewed);
+        CleanupService.StartSession(queue, selectedOrder, scopeActorId, mode, unreviewed);
         await LoadCurrentMovieAsync();
         brokenBFrameCount = await CleanupService.GetBrokenBFrameCountAsync();
         sessionReviewedCount = 0;
@@ -562,12 +541,6 @@
     }
 
     private async Task OnOrderChangedAsync()
-    {
-        CleanupService.DiscardSession();
-        await ReloadQueueAsync();
-    }
-
-    private async Task OnLibraryChangedAsync()
     {
         CleanupService.DiscardSession();
         await ReloadQueueAsync();
@@ -606,7 +579,7 @@
         }
     }
 
-    /// <summary>Stops the card's video and ends its Jellyfin stream so Jellyfin closes the file before
+    /// <summary>Stops the card's video and ends its stream so the file is closed before
     /// the folder is deleted — see MovieCleanup.razor.js. The player stays stopped if the
     /// delete then fails; Play brings it back.</summary>
     private async Task ReleasePlayerAsync()
@@ -912,8 +885,7 @@
             // A video the VR 2D viewer can unwarp opens in it, as in the video player.
             vrProjection = showPlayer ? VrFormat.ViewerProjection(movie.VrType) : null;
             vrMode = vrProjection is not null;
-            // The scrub bar is a nicety: load it in the background so a slow Jellyfin fallback
-            // round-trip never delays the video itself.
+            // The scrub bar is a nicety: load it in the background so it never delays the video itself.
             if (showPlayer)
             {
                 _ = LoadTrickplayAsync(requestedMovieId);

@@ -54,9 +54,7 @@ public class MovieRescanServiceTests
             jellyfinClient = Substitute.For<IJellyfinClient>();
             jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>())
                 .Returns(false);
-            jellyfinClient.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>())
-                .Returns(new List<string>());
-            jellyfinClient.LookupInSelectedLibrariesAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            jellyfinClient.LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                 .Returns(new MediaServerLookupResult(true, new List<MediaServerItemDto>(), null));
         }
 
@@ -413,6 +411,49 @@ public class MovieRescanServiceTests
     }
 
     [Fact]
+    public async Task RescanAsync_MissingLocalFolder_WhenRootReachable_RevertsALinkedGotMovieToMissingAndKeepsTheLink()
+    {
+        using var factory = new TestDbContextFactory();
+        int movieId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = new Movie
+            {
+                Code = "ABC-123",
+                Status = MovieStatus.Got,
+                LocalFileSizeBytes = 9999,
+                MediaVideoFileName = "old.mp4",
+                JellyfinItemId = "jf-1"
+            };
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+            movieId = movie.Id;
+        }
+
+        var localLibraryClient = Substitute.For<ILocalLibraryClient>();
+        localLibraryClient.TryGetMetadataAsync("ABC-123", Arg.Any<CancellationToken>(), false)
+            .Returns(new LocalLookupResult(false, null, null, null));
+        localLibraryClient.AnyRootReachableAsync(Arg.Any<CancellationToken>())
+            .Returns(true);
+
+        var service = CreateService(factory, localLibraryClient: localLibraryClient);
+        var result = await service.RescanAsync(movieId);
+
+        Assert.True(result.Success);
+        Assert.False(result.LocalFound);
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        var updated = await verifyDb.Movies.SingleAsync(m => m.Id == movieId);
+        Assert.Equal(MovieStatus.Missing, updated.Status);
+        Assert.Null(updated.LocalFileSizeBytes);
+        Assert.Null(updated.MediaVideoFileName);
+        await using var checkDb = await factory.CreateDbContextAsync();
+        var after = await checkDb.Movies.SingleAsync(m => m.Id == movieId);
+        Assert.Equal(MovieStatus.Missing, after.Status);
+        Assert.Equal("jf-1", after.JellyfinItemId);
+    }
+
+    [Fact]
     public async Task RescanAsync_LocalMetadataPresent_DoesNotQueryJavinizerGo()
     {
         using var factory = new TestDbContextFactory();
@@ -564,7 +605,7 @@ public class MovieRescanServiceTests
     }
 
     [Fact]
-    public async Task RescanAsync_JellyfinEnabledAndMatched_LinksMovieAndMarksGot()
+    public async Task RescanAsync_JellyfinEnabledAndMatched_LinksMovieWithoutMarkingItGot()
     {
         using var factory = new TestDbContextFactory();
         int movieId;
@@ -583,12 +624,10 @@ public class MovieRescanServiceTests
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>())
             .Returns(true);
-        jellyfinClient.GetSelectedLibraryNamesAsync(Arg.Any<CancellationToken>())
-            .Returns(new List<string> { "JAV" });
-        jellyfinClient.LookupInSelectedLibrariesAsync("ABC-123", Arg.Any<CancellationToken>())
+        jellyfinClient.LookupMovieAsync("ABC-123", Arg.Any<CancellationToken>())
             .Returns(new MediaServerLookupResult(true, new List<MediaServerItemDto>
             {
-                new JellyfinItemDto { Id = "jf-123", ServerId = "srv-456", LibraryName = "JAV" }
+                new JellyfinItemDto { Id = "jf-123", ServerId = "srv-456" }
             }, null));
 
         var service = CreateService(factory, jellyfinClient: jellyfinClient);
@@ -599,10 +638,9 @@ public class MovieRescanServiceTests
 
         await using var verifyDb = await factory.CreateDbContextAsync();
         var updated = await verifyDb.Movies.SingleAsync(m => m.Id == movieId);
-        Assert.Equal(MovieStatus.Got, updated.Status);
+        Assert.Equal(MovieStatus.Missing, updated.Status);
         Assert.Equal("jf-123", updated.JellyfinItemId);
         Assert.Equal("srv-456", updated.JellyfinServerId);
-        Assert.Equal("JAV", updated.JellyfinLibraryName);
         Assert.NotNull(updated.JellyfinCheckedAt);
     }
 

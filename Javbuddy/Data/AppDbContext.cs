@@ -93,7 +93,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             // (Status, DateAdded) also serves the status counts and Status filters; DateAdded alone the unfiltered sort.
             entity.HasIndex(nameof(Movie.Status), Movie.DateAddedColumn);
             entity.HasIndex(Movie.DateAddedColumn);
-            entity.HasIndex(m => m.JellyfinLibraryName);
             entity.HasIndex(m => m.LocalRootPath);
             // A full index, not a partial one on <> 'None': the drift filter's IN (...) can't use the partial one.
             entity.HasIndex(m => m.NfoDriftKind);

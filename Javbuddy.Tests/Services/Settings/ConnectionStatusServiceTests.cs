@@ -138,7 +138,7 @@ public class ConnectionStatusServiceTests
     }
 
     [Fact]
-    public async Task JellyfinConfiguredWithNoLibrariesSelected_ShowsNoLibrariesSummary()
+    public async Task JellyfinConfigured_ShowsBaseUrlSummary()
     {
         var (db, config, pathMappings) = SetUp();
         using (db)
@@ -154,27 +154,7 @@ public class ConnectionStatusServiceTests
 
             var jellyfin = statuses.Single(s => s.Key == "jellyfin");
             Assert.True(jellyfin.Configured);
-            Assert.Equal("No libraries selected", jellyfin.Summary);
-        }
-    }
-
-    [Fact]
-    public async Task JellyfinConfiguredWithSelectedLibraries_ShowsCount()
-    {
-        var (db, config, pathMappings) = SetUp();
-        using (db)
-        {
-            await using (var ctx = await db.CreateDbContextAsync())
-            {
-                ctx.JellyfinSettings.Add(new JellyfinSettings { BaseUrl = "http://localhost:8096", ApiKey = "key", SelectedLibraryNames = "JAV,West" });
-                await ctx.SaveChangesAsync();
-            }
-
-            var service = new ConnectionStatusService(db, config, pathMappings);
-            var statuses = await service.GetStatusesAsync();
-
-            var jellyfin = statuses.Single(s => s.Key == "jellyfin");
-            Assert.Equal("2 libraries selected", jellyfin.Summary);
+            Assert.Equal("http://localhost:8096", jellyfin.Summary);
         }
     }
 
@@ -249,8 +229,7 @@ public class ConnectionStatusServiceTests
                 {
                     Enabled = false,
                     BaseUrl = "http://localhost:8096",
-                    ApiKey = "key",
-                    SelectedLibraryNames = "JAV"
+                    ApiKey = "key"
                 });
                 await ctx.SaveChangesAsync();
             }
@@ -279,8 +258,7 @@ public class ConnectionStatusServiceTests
                 {
                     Enabled = true,
                     BaseUrl = "http://localhost:8096",
-                    ApiKey = "key",
-                    SelectedLibraryNames = "JAV"
+                    ApiKey = "key"
                 });
                 await ctx.SaveChangesAsync();
             }

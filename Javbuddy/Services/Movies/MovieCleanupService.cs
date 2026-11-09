@@ -38,24 +38,19 @@ public sealed record CleanupTagItem(int Id, string Name, string? ParentName, boo
 public interface IMovieCleanupService
 {
     /// <summary>Loads the IDs of every eligible movie (Status == Got, not blacklisted, not currently
-    /// snoozed) for the Cleanup review flow, in the requested order, optionally filtered by
-    /// Jellyfin library name. Materializes the whole queue up front — the page works through
-    /// it in memory, not via further paged queries — but as IDs only; the page loads
+    /// snoozed) for the Cleanup review flow, in the requested order. Materializes the whole queue up front —
+    /// the page works through it in memory, not via further paged queries — but as IDs only; the page loads
     /// each card's movie with <see cref="GetQueueMovieAsync"/>. With <paramref name="actorId"/> the queue is
     /// scoped to movies linked to that actor and the favorite-actor exclusion is
     /// skipped — the user picked that actor on purpose, so a favorited actor (or a collab with
     /// one) must still be reviewable. <see cref="CleanupMode.Review"/> skips it too.
     /// With <paramref name="unreviewedOnly"/> true (the default for Review mode —)
     /// the queue contains only movies whose <c>LastReviewedAt</c> is null.</summary>
-    Task<List<int>> BuildQueueAsync(CleanupOrder order, string? jellyfinLibrary = null, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false, CancellationToken ct = default);
+    Task<List<int>> BuildQueueAsync(CleanupOrder order, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false, CancellationToken ct = default);
 
     /// <summary>Loads one queued movie for its review card, or null if it no longer exists
     ///.</summary>
     Task<Movie?> GetQueueMovieAsync(int movieId, CancellationToken ct = default);
-
-    /// <summary>Gets all distinct Jellyfin library names across movies currently eligible for cleanup,
-    /// optionally only those of the given actor's movies (same scope rules as <see cref="BuildQueueAsync"/>).</summary>
-    Task<List<string>> GetEligibleLibrariesAsync(int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, CancellationToken ct = default);
 
     /// <summary>Resolves the actresses/actors for a movie (from linked MovieActors and MetaActresses),
     /// including their Actor ID and whether a thumbnail image is available.</summary>
@@ -113,9 +108,9 @@ public interface IMovieCleanupService
     /// longer eligible (e.g. deleted, blacklisted, or snoozed from another tab while away).</summary>
     Task<MovieCleanupSession?> ResumeSessionAsync(CancellationToken ct = default);
 
-    /// <summary>Starts and tracks a new cleanup session with the given queue, order, library,
+    /// <summary>Starts and tracks a new cleanup session with the given queue, order,
     /// optional actor scope, mode, and whether the queue was built with the unreviewed-only filter.</summary>
-    void StartSession(List<int> queue, CleanupOrder order, string? library, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false);
+    void StartSession(List<int> queue, CleanupOrder order, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false);
 
     /// <summary>Advances the active session by one item, recording the decision made for the movie.</summary>
     void AdvanceSession(Movie movie, CleanupOutcome outcome);
@@ -149,8 +144,8 @@ public class MovieCleanupService(
 
     public MovieCleanupSession? ActiveSession => sessionTracker.ActiveSession;
 
-    public void StartSession(List<int> queue, CleanupOrder order, string? library, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false) =>
-        sessionTracker.StartSession(queue, order, library, actorId, mode, unreviewedOnly);
+    public void StartSession(List<int> queue, CleanupOrder order, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false) =>
+        sessionTracker.StartSession(queue, order, actorId, mode, unreviewedOnly);
 
     public void AdvanceSession(Movie movie, CleanupOutcome outcome) => sessionTracker.AdvanceSession(movie, outcome);
 
@@ -203,7 +198,7 @@ public class MovieCleanupService(
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var movieIds = session.Queue.ToList();
 
-            var eligible = ToCandidates(EligibleMovies(db, session.Library, session.ActorId, session.Mode, session.UnreviewedOnly).Where(m => movieIds.Contains(m.Id)));
+            var eligible = ToCandidates(EligibleMovies(db, session.ActorId, session.Mode, session.UnreviewedOnly).Where(m => movieIds.Contains(m.Id)));
             var eligibleMovies = await ApplyFavoriteExclusionAsync(db, await eligible.ToListAsync(ct), session.ActorId, session.Mode, ct);
             var eligibleIds = eligibleMovies.Select(m => m.Id).ToHashSet();
             session.Queue.RemoveAll(id => !eligibleIds.Contains(id));
@@ -222,10 +217,10 @@ public class MovieCleanupService(
         return session;
     }
 
-    public async Task<List<int>> BuildQueueAsync(CleanupOrder order, string? jellyfinLibrary = null, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false, CancellationToken ct = default)
+    public async Task<List<int>> BuildQueueAsync(CleanupOrder order, int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, bool unreviewedOnly = false, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var eligible = EligibleMovies(db, jellyfinLibrary, actorId, mode, unreviewedOnly);
+        var eligible = EligibleMovies(db, actorId, mode, unreviewedOnly);
 
         var candidates = order switch
         {
@@ -259,17 +254,6 @@ public class MovieCleanupService(
         return await db.Movies
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id == movieId, ct);
-    }
-
-    public async Task<List<string>> GetEligibleLibrariesAsync(int? actorId = null, CleanupMode mode = CleanupMode.Cleanup, CancellationToken ct = default)
-    {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        return await EligibleMovies(db, null, actorId, mode)
-            .Where(m => m.JellyfinLibraryName != null && m.JellyfinLibraryName != "")
-            .Select(m => m.JellyfinLibraryName!)
-            .Distinct()
-            .OrderBy(n => n)
-            .ToListAsync(ct);
     }
 
     public async Task<string?> GetMetaActressesAsync(int movieId, CancellationToken ct = default)
@@ -472,7 +456,7 @@ public class MovieCleanupService(
     /// with a favorited linked actor here (its MetaActresses counterpart is
     /// <see cref="ApplyFavoriteExclusionAsync"/>). With <paramref name="unreviewedOnly"/> true
     /// the query adds <c>LastReviewedAt IS NULL</c>.</summary>
-    private static IQueryable<Movie> EligibleMovies(AppDbContext db, string? jellyfinLibrary, int? actorId, CleanupMode mode, bool unreviewedOnly = false)
+    private static IQueryable<Movie> EligibleMovies(AppDbContext db, int? actorId, CleanupMode mode, bool unreviewedOnly = false)
     {
         var now = DateTime.UtcNow;
         var eligible = db.Movies.AsNoTracking().Where(m =>
@@ -492,11 +476,6 @@ public class MovieCleanupService(
         else if (ExcludesFavorites(actorId, mode))
         {
             eligible = eligible.Where(m => !m.MovieActors.Any(ma => ma.Actor.IsFavorite));
-        }
-
-        if (!string.IsNullOrWhiteSpace(jellyfinLibrary))
-        {
-            eligible = eligible.Where(m => m.JellyfinLibraryName == jellyfinLibrary);
         }
 
         return eligible;

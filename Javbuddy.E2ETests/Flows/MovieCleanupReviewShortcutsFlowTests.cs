@@ -14,7 +14,7 @@ namespace Javbuddy.E2ETests.Flows;
 /// <summary>Review mode's keyboard shortcuts: Space toggles the video, N clicks Next
 /// (it was Right arrow before the arrows became seek keys), and ←/→ seek. Key handling, focus and default actions (page scroll, a focused button's activation,
 /// the video's native controls) only exist in a real browser, so bUnit can't cover them. Each test
-/// scopes the queue to its own actor's two Jellyfin-linked movies, so it doesn't depend on (or
+/// scopes the queue to its own actor's two movies, so it doesn't depend on (or
 /// stamp as reviewed) the other Got movies in the shared fixture DB.</summary>
 [Collection(E2ECollection.Name)]
 public class MovieCleanupReviewShortcutsFlowTests
@@ -141,7 +141,7 @@ public class MovieCleanupReviewShortcutsFlowTests
         Assert.Equal(!paused, await page.EvaluateAsync<bool>(VideoPausedScript));
     }
 
-    /// <summary>Seeds a favorited actor linked to two playable, Jellyfin-linked Got movies and opens the page
+    /// <summary>Seeds a favorited actor linked to two playable Got movies and opens the page
     /// scoped to that actor, waiting until the card's video has loaded.</summary>
     private async Task<IPage> OpenReviewAsync(string actorName, string path = "/movies/review")
     {
@@ -152,8 +152,6 @@ public class MovieCleanupReviewShortcutsFlowTests
         var second = await DbSeeding.SeedMovieAsync(dbFactory, prefix + "-2", MovieStatus.Got);
         await using (var db = await dbFactory.CreateDbContextAsync())
         {
-            await db.Movies.Where(m => m.Id == first.Id || m.Id == second.Id)
-                .ExecuteUpdateAsync(s => s.SetProperty(m => m.JellyfinItemId, m => "keys-item-" + m.Id));
             db.MovieActors.AddRange(
                 new MovieActor { MovieId = first.Id, ActorId = actor.Id },
                 new MovieActor { MovieId = second.Id, ActorId = actor.Id });

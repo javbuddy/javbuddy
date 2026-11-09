@@ -33,7 +33,7 @@ public interface IMovieRescanService
 ///    and queue trickplay generation when the main video file has none yet.
 /// 2. Query external metadata providers (javinizer-go) if configured and applicable under unified precedence rules.
 /// 3. Re-synchronize actor relationships and alias mappings.
-/// 4. Perform media server (Jellyfin) link and stream info check.</summary>
+/// 4. Look the movie up in Jellyfin and store its "Open in Jellyfin" link.</summary>
 public class MovieRescanService(
     IDbContextFactory<AppDbContext> dbFactory,
     ILocalLibraryClient localLibraryClient,
@@ -148,7 +148,7 @@ public class MovieRescanService(
                     var movie = await db.Movies.FindAsync([movieId], ct);
                     if (movie is not null)
                     {
-                        if (movie.Status == MovieStatus.Got && movie.JellyfinItemId == null)
+                        if (movie.Status == MovieStatus.Got)
                         {
                             movie.Status = MovieStatus.Missing;
                         }
@@ -212,31 +212,26 @@ public class MovieRescanService(
                 await nfoSyncService.CheckMovieNfoConflictAsync(movieId, ct);
             }
 
-            // 4. Perform media server (Jellyfin) link and stream info check
+            // 4. Look the movie up in Jellyfin and store its link
             if (await jellyfinClient.IsEnabledAsync(ct))
             {
-                var libraryNames = await jellyfinClient.GetSelectedLibraryNamesAsync(ct);
-                if (libraryNames.Count > 0)
-                {
-                    var lookupResult = await jellyfinClient.LookupInSelectedLibrariesAsync(code, ct);
-                    var match = lookupResult.Success ? lookupResult.Items?.FirstOrDefault() : null;
+                var lookupResult = await jellyfinClient.LookupMovieAsync(code, ct);
+                var match = lookupResult.Success ? lookupResult.Items?.FirstOrDefault() : null;
 
-                    await using var db = await dbFactory.CreateDbContextAsync(ct);
-                    var movie = await db.Movies.FindAsync([movieId], ct);
-                    if (movie is not null)
+                await using var db = await dbFactory.CreateDbContextAsync(ct);
+                var movie = await db.Movies.FindAsync([movieId], ct);
+                if (movie is not null)
+                {
+                    if (match is not null && !string.IsNullOrWhiteSpace(match.Id))
                     {
-                        if (match is not null && !string.IsNullOrWhiteSpace(match.Id))
-                        {
-                            JellyfinMetadataMapper.ApplyMatch(movie, match);
-                            movie.Status = MovieStatus.Got;
-                            jellyfinLinked = true;
-                        }
-                        else
-                        {
-                            movie.JellyfinCheckedAt = DateTime.UtcNow;
-                        }
-                        await db.SaveChangesAsync(ct);
+                        JellyfinMetadataMapper.ApplyMatch(movie, match);
+                        jellyfinLinked = true;
                     }
+                    else
+                    {
+                        movie.JellyfinCheckedAt = DateTime.UtcNow;
+                    }
+                    await db.SaveChangesAsync(ct);
                 }
             }
 

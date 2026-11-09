@@ -288,23 +288,10 @@ export function trickplayThumbnails(thumb, config) {
         return sheet;
     };
 
-    // Jellyfin's tiles (the fallback) come from its own origin; should a proxy strip its CORS
-    // headers, an <img> still loads them.
-    const decodeFull = async (sheetIndex, sheet) => {
-        try {
-            return await createImageBitmap(await sheet.blob);
-        } catch {
-            const image = new Image();
-            image.src = sheetUrl(sheetIndex);
-            await image.decode();
-            return createImageBitmap(image);
-        }
-    };
-
     const decode = async (sheetIndex) => {
         const sheet = download(sheetIndex, 'high');
         try {
-            const full = await decodeFull(sheetIndex, sheet);
+            const full = await createImageBitmap(await sheet.blob);
             const bitmap = scale < 1
                 ? await createImageBitmap(full, { resizeWidth: Math.round(full.width * scale), resizeHeight: Math.round(full.height * scale), resizeQuality: 'medium' })
                 : full;

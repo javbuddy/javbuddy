@@ -701,7 +701,7 @@ else
 
         // A remembered selection the library no longer offers (a cup nobody has, a limit outside the new
         // bounds) is corrected here, and the caller re-counts with the corrected filter.
-        // A remembered library the library no longer lists (e.g. an old Jellyfin library name) is dropped, not left as an invisible filter.
+        // A remembered library the library no longer lists (e.g. an old persisted library name) is dropped, not left as an invisible filter.
         var libraryStale = !string.IsNullOrEmpty(filters.Library) && !libraryNames.Contains(filters.Library);
         if (libraryStale) filters.Library = null;
 

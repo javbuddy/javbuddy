@@ -3,7 +3,6 @@ using Javbuddy.E2ETests.Fixtures.FakeServices;
 using Javbuddy.E2ETests.Support;
 using Javbuddy.Models;
 using Javbuddy.Services.Javinizer;
-using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.Tags;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Playwright;
@@ -174,7 +173,7 @@ public class MovieDetailActionsFlowTests
     }
 
     [Fact]
-    public async Task PlayMovie_WhenMatchedToJellyfin_OpensAndClosesVideoPlayerModal()
+    public async Task PlayMovie_WhenLinkedToJellyfin_OpensAndClosesVideoPlayerModal()
     {
         var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-PLAY-1", MovieStatus.Got);
         await using (var db = await fixture.DbFactory.CreateDbContextAsync())
@@ -237,30 +236,16 @@ public class MovieDetailActionsFlowTests
     public async Task PlayMovie_AfterLeavingFullscreen_EscapeStillClosesThePlayer()
     {
         // Entering fullscreen moved focus off the backdrop that handles Esc.
-        // Fullscreen is bound by the ScrubBar, which the item's trickplay makes sure is drawn.
-        const string itemId = "fake-jf-item-fs-esc-1";
-        fixture.FakeJellyfin.Trickplay = new JellyfinTrickplayItemDto
-        {
-            Id = itemId,
-            RunTimeTicks = TimeSpan.FromSeconds(3).Ticks,
-            Trickplay = new()
-            {
-                [itemId] = new()
-                {
-                    ["320"] = new JellyfinTrickplayInfoDto { Width = 320, Height = 180, TileWidth = 10, TileHeight = 10, ThumbnailCount = 3, Interval = 1000 },
-                },
-            },
-        };
+        // Fullscreen is bound by the ScrubBar, which the movie's trickplay makes sure is drawn.
         var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-PLAY-FS-ESC-1", MovieStatus.Got);
         await using (var db = await fixture.DbFactory.CreateDbContextAsync())
         {
             var m = await db.Movies.FindAsync(movie.Id);
             m!.MetaSourceName = "javinizer";
-            m.JellyfinItemId = itemId;
-            m.JellyfinServerId = FakeJellyfinServer.ServerId;
             await db.SaveChangesAsync();
         }
         await DbSeeding.SeedPlayableVideoAsync(fixture.App.Services, fixture.DbFactory, movie);
+        await DbSeeding.SeedLocalTrickplayAsync(fixture.DbFactory, movie);
 
         var page = await fixture.NewPageAsync();
         try
@@ -299,8 +284,6 @@ public class MovieDetailActionsFlowTests
         {
             var m = await db.Movies.FindAsync(movie.Id);
             m!.MetaSourceName = "javinizer";
-            m.JellyfinItemId = "fake-jf-item-fs-1";
-            m.JellyfinServerId = FakeJellyfinServer.ServerId;
             await db.SaveChangesAsync();
         }
         await DbSeeding.SeedPlayableVideoAsync(fixture.App.Services, fixture.DbFactory, movie);
