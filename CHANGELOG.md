@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-09
+
 ### Added
 
 - **Import from .nfo** in the **Resolve .nfo Conflict** dialog: when the `.nfo` was changed outside Javbuddy on purpose, it adopts the on-disk file instead of overwriting it. The movie's title, dates, studio, label, series, director, plot, cast and tags are replaced by what the `.nfo` says, the metadata source becomes **Local** (so a rescan doesn't re-scrape over it), and the file is left untouched. A rating, cover URL or backdrop URL the `.nfo` doesn't carry is kept, and a missing runtime is filled from the video's duration. A cast or tag difference that Javbuddy's own normalization leaves (a name matched to an actor's main name, a tag rule, the ignore list) shows as a Javbuddy change, not as an outside edit. The button is disabled while you have unsaved manual edits.
