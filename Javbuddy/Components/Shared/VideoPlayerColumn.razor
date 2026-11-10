@@ -32,7 +32,9 @@
             }
             @if (VrMode)
             {
-                <VrViewer @key="VrProjection" VideoSelector="@VideoSelector" Projection="@VrProjection" />
+                @* Keyed by stream too: it binds to the <video> it finds when it starts, so another movie's
+                   fresh <video> needs a fresh viewer, not the last one still drawing the old video. *@
+                <VrViewer @key="(videoStream, VrProjection)" VideoSelector="@VideoSelector" Projection="@VrProjection" />
             }
             @if (SeekKeys)
             {
@@ -216,6 +218,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender) await WatchVideoReleaseAsync();
         if (!subtitlePrefsLoaded && Subtitles.Count > 0)
         {
             subtitlePrefsLoaded = true;
@@ -339,8 +342,10 @@
             videoModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipEditor.razor.js");
             videoDurationSeconds = await videoModule.InvokeAsync<double?>("duration", VideoSelector);
         }
-        catch (JSDisconnectedException)
+        // ObjectDisposedException: the player closed (disposing the module) while the event was in flight.
+        catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException)
         {
+            return;
         }
         await ReportScrubBarShownAsync();
     }
@@ -352,12 +357,31 @@
         await ScrubBarShownChanged.InvokeAsync(ScrubBarShown);
     }
 
-    public async ValueTask DisposeAsync()
+    // VideoPlayerColumn.razor.js lets go of each player <video> once it leaves the page (another movie's or
+    // version's stream gets a fresh one, or the player closes): a removed <video> otherwise keeps its
+    // stream's connection open, and after a few movies of a playlist the browser's connections to the
+    // server were all taken by streams no one was watching. One page-wide watcher, started by the first
+    // column.
+    private IJSObjectReference? releaseModule;
+
+    private async Task WatchVideoReleaseAsync()
     {
-        if (videoModule is null) return;
         try
         {
-            await videoModule.DisposeAsync();
+            releaseModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/VideoPlayerColumn.razor.js");
+            await releaseModule.InvokeVoidAsync("watch");
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or ObjectDisposedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (releaseModule is not null) await releaseModule.DisposeAsync();
+            if (videoModule is not null) await videoModule.DisposeAsync();
         }
         catch (JSDisconnectedException)
         {
