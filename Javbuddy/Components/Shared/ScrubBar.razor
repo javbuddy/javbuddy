@@ -62,6 +62,7 @@
     {
         <span class="scrub-bar-clock"></span>
         @ExtraControls
+        <div class="scrub-bar-volume-group">
         <button type="button" class="scrub-bar-btn scrub-bar-mute" aria-label="Mute or unmute" title="Mute/unmute">
             <svg class="scrub-bar-icon-sound" viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
                 <path d="M11.536 14.01A8.473 8.473 0 0 0 14.026 8a8.473 8.473 0 0 0-2.49-6.01l-.708.707A7.476 7.476 0 0 1 13.025 8c0 2.071-.84 3.946-2.197 5.303l.708.707z" />
@@ -72,7 +73,10 @@
                 <path d="M6.717 3.55A.5.5 0 0 1 7 4v8a.5.5 0 0 1-.812.39L3.825 10.5H1.5A.5.5 0 0 1 1 10V6a.5.5 0 0 1 .5-.5h2.325l2.363-1.89a.5.5 0 0 1 .529-.06zm7.137 2.096a.5.5 0 0 1 0 .708L12.207 8l1.647 1.646a.5.5 0 0 1-.708.708L11.5 8.707l-1.646 1.647a.5.5 0 0 1-.708-.708L10.793 8 9.146 6.354a.5.5 0 1 1 .708-.708L11.5 7.293l1.646-1.647a.5.5 0 0 1 .708 0z" />
             </svg>
         </button>
-        <input type="range" class="scrub-bar-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume" title="Volume" />
+        <div class="scrub-bar-volume-popup">
+            <input type="range" class="scrub-bar-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume" title="Volume" />
+        </div>
+        </div>
     }
     <button type="button" class="scrub-bar-fullscreen" aria-label="Toggle fullscreen" title="Toggle fullscreen (f, double-click video)">
         <svg class="scrub-bar-fs-icon-enter" viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">

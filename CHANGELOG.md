@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **The player's volume slider appears on hover.** The slider no longer sits beside the mute button permanently: it pops up above the speaker icon while you hover (or focus) it, so the timeline gets the space back.
+
 ### Fixed
 
 - **Keyboard shortcuts work in fullscreen.** In the player (Play all / Shuffle on the Movies and Scenes pages, and the movie player), **N** and **P** (and Esc, to close after leaving fullscreen) did nothing once the video was fullscreen, because entering fullscreen moved keyboard focus out of the player. Focus now moves to the fullscreen player. In Review mode, **N** also keeps fullscreen on when it moves to the next movie, instead of dropping out of it.

@@ -55,6 +55,8 @@ public class NoTrickplayScrubBarFlowTests
             await page.WaitForFunctionAsync("() => !document.querySelector('video.video-player-video').paused");
             await page.Locator(".scrub-bar-play").ClickAsync();
             await page.WaitForFunctionAsync("() => document.querySelector('video.video-player-video').paused");
+            // The slider only appears while the mute button's group is hovered.
+            await page.Locator(".scrub-bar-mute").HoverAsync();
             await page.Locator(".scrub-bar-volume").FillAsync("0.5");
             await page.WaitForFunctionAsync("() => document.querySelector('video.video-player-video').volume === 0.5");
             await page.Locator(".scrub-bar-mute").ClickAsync();

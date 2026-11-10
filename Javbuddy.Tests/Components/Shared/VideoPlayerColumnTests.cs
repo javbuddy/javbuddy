@@ -58,7 +58,7 @@ public class VideoPlayerColumnTests : BunitContext
 
         Assert.Single(cut.FindAll(".scrub-bar .video-player-subtitles-in-bar .video-player-subtitles-button"));
         Assert.Empty(cut.FindAll(".video-player-subtitles-overlay"));
-        Assert.Contains("video-player-subtitles-in-bar", cut.Find(".scrub-bar-mute").PreviousElementSibling!.ClassList);
+        Assert.Contains("video-player-subtitles-in-bar", cut.Find(".scrub-bar-volume-group").PreviousElementSibling!.ClassList);
     }
 
     [Fact]

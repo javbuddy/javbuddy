@@ -77,15 +77,47 @@
     color: #cbd5e1;
 }
 
-.scrub-bar-volume {
+.scrub-bar-volume-group {
+    position: relative;
     flex: none;
-    width: 80px;
+    display: flex;
+    align-items: center;
+}
+
+/* The slider floats above the mute button on hover or keyboard focus, so it takes no width from the timeline.
+   Padding (not margin) bridges the gap to the button so the pointer never leaves the group. */
+.scrub-bar-volume-popup {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    padding: 0.35rem 0.4rem 0.5rem;
+    z-index: 5;
+}
+
+.scrub-bar-volume-group:hover .scrub-bar-volume-popup,
+.scrub-bar-volume-group:focus-within .scrub-bar-volume-popup {
+    display: block;
+}
+
+.scrub-bar-volume {
+    display: block;
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 20px;
+    height: 80px;
+    margin: 0;
+    padding: 0.4rem 0.3rem;
+    box-sizing: content-box;
+    background: rgba(15, 23, 42, 0.95);
+    border-radius: 4px;
     accent-color: #2f8fd6;
     cursor: pointer;
 }
 
 @media (max-width: 576px) {
-    .scrub-bar-volume {
+    .scrub-bar-volume-group {
         display: none;
     }
 }

@@ -48,8 +48,8 @@ public class ScrubBarTests : BunitContext
         Assert.Empty(without.FindAll(".scrub-bar-play, .scrub-bar-mute, .scrub-bar-volume, .scrub-bar-clock"));
         Assert.Single(with.FindAll(".scrub-bar > .scrub-bar-play"));
         Assert.Single(with.FindAll(".scrub-bar > .scrub-bar-clock"));
-        Assert.Single(with.FindAll(".scrub-bar > .scrub-bar-mute"));
-        Assert.Single(with.FindAll(".scrub-bar > input.scrub-bar-volume[type=range]"));
+        Assert.Single(with.FindAll(".scrub-bar > .scrub-bar-volume-group > .scrub-bar-mute"));
+        Assert.Single(with.FindAll(".scrub-bar-volume-group > .scrub-bar-volume-popup > input.scrub-bar-volume[type=range]"));
     }
 
     [Fact]
