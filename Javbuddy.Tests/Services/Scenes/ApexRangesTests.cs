@@ -37,6 +37,16 @@ public class ApexRangesTests
     public void ClipFor_RunsFromTheLeadInToTheTailPastIt_InsideTheMovie(double apex, double leadIn, double tail, double? duration, double start, double end) =>
         Assert.Equal((start, end), ApexRanges.ClipFor(apex, new ApexWindow(leadIn, tail), duration));
 
+    [Fact]
+    public void TotalClipSeconds_SumsEachApexsClip_CutAtTheStartAndEndOfTheMovie()
+    {
+        var window = new ApexWindow(5, 5);
+        ApexItem[] apexes = [new(1, 1, 100, []) { Window = window }, new(2, 2, 2, []) { Window = window }, new(3, 3, 118, []) { Window = window }];
+
+        Assert.Equal(10 + 7 + 7, ApexRanges.TotalClipSeconds(apexes, 120));
+        Assert.Equal(0, ApexRanges.TotalClipSeconds([], 120));
+    }
+
     [Theory]
     [InlineData(100, 89, false, 11d)]
     [InlineData(100, 111.25, true, 11.25)]

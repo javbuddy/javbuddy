@@ -113,7 +113,7 @@
                                 data-start="@highlight.StartSeconds.ToString(CultureInfo.InvariantCulture)" data-end="@highlight.EndSeconds.ToString(CultureInfo.InvariantCulture)" data-highlight-id="@highlight.Id" data-highlight-name="@highlight.DisplayTitle"
                                 aria-label="Play @label" disabled="@(!CanPlay)"
                                 @onclick="() => PlayHighlight(highlight)">
-                            @SparkleIcon(10)
+                            <SparkleIcon Size="10" />
                             <span class="movie-scenes-timeline-pin-name">@highlight.DisplayTitle</span>
                             <span class="movie-scenes-timeline-pin-time">@SceneTimeFormat.Format(highlight.StartSeconds)</span>
                         </button>
@@ -196,7 +196,7 @@
                             @if (highlightCount > 0)
                             {
                                 var label = highlightCount == 1 ? "1 highlight" : $"{highlightCount} highlights";
-                                <span class="movie-scenes-highlight-count" title="@label" aria-label="@label">@SparkleIcon(10) @highlightCount</span>
+                                <span class="movie-scenes-highlight-count" title="@label" aria-label="@label"><SparkleIcon Size="10" /> @highlightCount</span>
                             }
                             @if (apexCount > 0)
                             {
@@ -537,6 +537,23 @@
         PlayAt(Apexes.ToList().FindIndex(a => a.Id == apex.Id));
     }
 
+    /// <summary>Plays every highlight of the movie one after another in the clip player, in timeline order or
+    /// shuffled. Called from the page's Play menu.</summary>
+    public void PlayHighlights(bool shuffle) => PlayAll(Highlights.Select(HighlightClip).ToArray(), shuffle);
+
+    /// <summary>Plays every apex of the movie one after another in the clip player, in timeline order or
+    /// shuffled. Called from the page's Play menu.</summary>
+    public void PlayApexes(bool shuffle) => PlayAll(Apexes.Select(ApexClip).ToArray(), shuffle);
+
+    private void PlayAll(PlayerClip[] clips, bool shuffle)
+    {
+        if (!CanPlay || clips.Length == 0) return;
+        if (shuffle) Random.Shared.Shuffle(clips);
+        playlist = clips;
+        PlayAt(0);
+        StateHasChanged();
+    }
+
     private void PlayAt(int index)
     {
         playlistIndex = Math.Max(index, 0);
@@ -681,6 +698,4 @@
 
     private static string ApexLabel(int count) => count == 1 ? "1 apex" : $"{count} apexes";
 
-    private static RenderFragment SparkleIcon(int size) =>
-        @<svg viewBox="0 0 16 16" width="@size" height="@size" fill="currentColor" aria-hidden="true"><path d="M8 0 9.8 6.2 16 8 9.8 9.8 8 16 6.2 9.8 0 8 6.2 6.2z" /></svg>;
 }

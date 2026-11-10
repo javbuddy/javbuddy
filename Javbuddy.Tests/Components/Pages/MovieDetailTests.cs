@@ -1561,6 +1561,100 @@ public class MovieDetailTests : BunitContext
         Assert.True(cut.FindComponent<VideoPlayerModal>().Instance.ShowEditor);
     }
 
+    private async Task<int> AddPlayableMovieWithClipsAsync(TestDbContextFactory factory, int highlightCount, int apexCount)
+    {
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "ABC-123", Status = MovieStatus.Got, JellyfinItemId = "jf-item-42", LocalFileSizeBytes = 1_000_000, MediaDurationSeconds = 3600 };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+        for (var i = 0; i < highlightCount; i++) await new MovieHighlightService(factory).AddHighlightAsync(movieId, 100 + i * 500, 140 + i * 500, null);
+        for (var i = 0; i < apexCount; i++) await new MovieApexService(factory).AddApexAsync(movieId, 300 + i * 400, []);
+        return movieId;
+    }
+
+    [Fact]
+    public async Task PlayMenu_HasNoCaret_WhenTheMovieHasNoHighlightsOrApexes()
+    {
+        using var factory = SetUpServices();
+        await AddPlayableMovieWithClipsAsync(factory, 0, 0);
+
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+
+        Assert.Single(cut.FindAll("button.movie-detail-badge-play"));
+        Assert.Empty(cut.FindAll(".movie-detail-play-caret"));
+    }
+
+    [Fact]
+    public async Task PlayMenu_ListsOnlyTheKindsTheMovieHas_WithCountAndRunningTime()
+    {
+        using var factory = SetUpServices();
+        await AddPlayableMovieWithClipsAsync(factory, highlightCount: 2, apexCount: 0);
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+
+        cut.Find(".movie-detail-play-caret").Click();
+
+        var rows = cut.FindAll(".movie-detail-play-menu-row");
+        var row = Assert.Single(rows);
+        Assert.Contains("All highlights", row.TextContent);
+        Assert.Contains("2 clips · 1:20", row.TextContent);
+        Assert.Contains("1:00:00", cut.Find(".movie-detail-play-menu").TextContent);
+    }
+
+    [Fact]
+    public async Task PlayMenu_SummarisesApexesByTheirClips_AndPlaysThemInThePlayer()
+    {
+        using var factory = SetUpServices();
+        await AddPlayableMovieWithClipsAsync(factory, highlightCount: 1, apexCount: 2);
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+        cut.Find(".movie-detail-play-caret").Click();
+
+        var apexRow = cut.FindAll(".movie-detail-play-menu-row")[1];
+        Assert.Contains("All apexes", apexRow.TextContent);
+        Assert.Contains("2 clips · 0:20", apexRow.TextContent);
+        apexRow.QuerySelector("button.movie-detail-version-choice")!.Click();
+
+        var clipPlayer = cut.FindComponent<ClipPlayerModal>().Instance;
+        Assert.Equal((PlayerClipKind.Apex, 1, 2), (clipPlayer.Clip!.Kind, clipPlayer.Position, clipPlayer.Count));
+        Assert.Empty(cut.FindAll(".movie-detail-play-menu"));
+    }
+
+    [Fact]
+    public async Task PlayMenu_ShufflePill_PlaysTheHighlights_AndEscapeClosesTheMenu()
+    {
+        using var factory = SetUpServices();
+        await AddPlayableMovieWithClipsAsync(factory, highlightCount: 3, apexCount: 0);
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+
+        cut.Find(".movie-detail-play-caret").Click();
+        cut.Find(".movie-detail-play-split").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
+        Assert.Empty(cut.FindAll(".movie-detail-play-menu"));
+
+        cut.Find(".movie-detail-play-caret").Click();
+        var shuffle = cut.Find(".movie-detail-play-menu-shuffle");
+        Assert.Equal("Shuffle highlights", shuffle.GetAttribute("aria-label"));
+        shuffle.Click();
+
+        var clipPlayer = cut.FindComponent<ClipPlayerModal>().Instance;
+        Assert.Equal((PlayerClipKind.Highlight, 3), (clipPlayer.Clip!.Kind, clipPlayer.Count));
+    }
+
+    [Fact]
+    public async Task PlayMenu_PlayMovie_OpensTheFullPlayer()
+    {
+        using var factory = SetUpServices();
+        await AddPlayableMovieWithClipsAsync(factory, highlightCount: 1, apexCount: 0);
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+
+        cut.Find(".movie-detail-play-caret").Click();
+        cut.Find(".movie-detail-play-menu > button.movie-detail-version-choice").Click();
+
+        Assert.True(cut.FindComponent<VideoPlayerModal>().Instance.Show);
+    }
+
     [Fact]
     public async Task HighlightDeepLink_OpensThePlayerForJustTheClip()
     {

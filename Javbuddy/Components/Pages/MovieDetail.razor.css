@@ -366,6 +366,81 @@ button.movie-detail-badge {
     }
 }
 
+.movie-detail-play-split {
+    display: inline-flex;
+}
+
+/* The caret joins the Play badge into one split button. */
+.movie-detail-badge.movie-detail-play-caret {
+    border-left: 0;
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    padding-inline: 0.4rem;
+    font-size: 0.7rem;
+}
+
+.movie-detail-split-play-first {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+/* Sized to its rows, not the Versions menu's 280px minimum. */
+.movie-detail-play-menu {
+    min-width: 0;
+}
+
+.movie-detail-play-menu-label {
+    flex: 1;
+    min-width: 0;
+}
+
+.movie-detail-play-menu-meta {
+    font-size: 0.75rem;
+    color: #9ea5b3;
+    font-variant-numeric: tabular-nums;
+}
+
+/* A clip kind's row: the play-in-order choice, then a Shuffle pill. */
+.movie-detail-play-menu-row {
+    display: flex;
+    align-items: center;
+    padding-right: 0.6rem;
+}
+
+.movie-detail-play-menu-highlight {
+    color: #7ff0cd;
+}
+
+/* The apex diamond's orange, as on the timeline markers. */
+.movie-detail-play-menu-apex {
+    color: #f76707;
+}
+
+.movie-detail-play-menu-shuffle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex: none;
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    color: #cfd3dc;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.05rem 0.6rem;
+}
+
+    .movie-detail-play-menu-shuffle:hover {
+        background-color: rgba(255, 255, 255, 0.12);
+        color: #fff;
+    }
+
+.movie-detail-play-menu-rule {
+    margin: 0.25rem 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
 .movie-detail-version-heading {
     padding: 0.2rem 0.75rem 0.35rem;
     font-size: 0.72rem;

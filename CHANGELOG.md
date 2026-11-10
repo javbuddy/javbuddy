@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **Play highlights and apexes from Movie Detail's Play menu.** When a movie has highlights or apexes, the **Play** badge has a caret beside it. Its menu offers **Play movie** with the movie's length, and a row each for the highlights and the apexes showing their clip count and total running time. Clicking a row plays every clip of that kind one after another in the clip player, and its **Shuffle** pill plays them in random order.
+
 ### Changed
 
 - **The player's volume slider appears on hover.** The slider no longer sits beside the mute button permanently: it pops up above the speaker icon while you hover (or focus) it, so the timeline gets the space back.

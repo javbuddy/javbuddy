@@ -3,6 +3,7 @@
 @using Javbuddy.Data
 @using Javbuddy.Models
 @using Javbuddy.Services
+@using Javbuddy.Services.Scenes
 @using Javbuddy.Services.Jellyfin
 @using Javbuddy.Services.R18Dev
 @using Javbuddy.Components.Pages.MovieDetailSections
@@ -283,12 +284,58 @@ else
                 }
                 @if (CanPlay)
                 {
-                    <button type="button" class="movie-detail-badge movie-detail-badge-play" @onclick="OpenVideoPlayerModal" title="Play movie">
-                        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
-                            <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
-                        </svg>
-                        Play
-                    </button>
+                    @* Play, with a caret menu for the movie's highlights and apexes when it has any. *@
+                    <span class="movie-detail-version-anchor movie-detail-play-split" @onkeydown="OnPlayMenuKeyDown">
+                        <button type="button" class="movie-detail-badge movie-detail-badge-play @(HasClipMenu ? "movie-detail-split-play-first" : null)" @onclick="OpenVideoPlayerModal" title="Play movie">
+                            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
+                                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                            </svg>
+                            Play
+                        </button>
+                        @if (HasClipMenu)
+                        {
+                            <button type="button" class="movie-detail-badge movie-detail-badge-play movie-detail-play-caret"
+                                    aria-haspopup="menu" aria-expanded="@(showPlayMenu ? "true" : "false")"
+                                    title="More ways to play" aria-label="More ways to play" @onclick="() => showPlayMenu = !showPlayMenu">
+                                <span aria-hidden="true">▾</span>
+                            </button>
+                            @if (showPlayMenu)
+                            {
+                                <div class="movie-detail-version-backdrop" @onclick="() => showPlayMenu = false"></div>
+                                <div class="movie-detail-version-menu movie-detail-play-menu" role="menu" aria-label="Play">
+                                    <button type="button" class="movie-detail-version-choice" role="menuitem" @onclick="() => PlayFromMenu(null, false)">
+                                        <span class="movie-detail-play-menu-label">Play movie</span>
+                                        @if (movie.MediaDurationSeconds is > 0 and var movieSeconds)
+                                        {
+                                            <span class="movie-detail-play-menu-meta">@SceneTimeFormat.Format(movieSeconds)</span>
+                                        }
+                                    </button>
+                                    @if (highlights.Count > 0)
+                                    {
+                                        <div class="movie-detail-play-menu-rule" role="separator"></div>
+                                        <div class="movie-detail-play-menu-row">
+                                            <button type="button" class="movie-detail-version-choice" role="menuitem" @onclick="() => PlayFromMenu(PlayerClipKind.Highlight, false)">
+                                                <span class="movie-detail-play-menu-highlight"><SparkleIcon Size="12" /></span>
+                                                <span class="movie-detail-play-menu-label">All highlights<br /><span class="movie-detail-play-menu-meta">@ClipSummary(highlights.Count, highlights.Sum(h => h.DurationSeconds))</span></span>
+                                            </button>
+                                            <button type="button" class="movie-detail-play-menu-shuffle" role="menuitem" title="Shuffle highlights" aria-label="Shuffle highlights" @onclick="() => PlayFromMenu(PlayerClipKind.Highlight, true)"><ShuffleIcon Size="10" /> Shuffle</button>
+                                        </div>
+                                    }
+                                    @if (apexes.Count > 0)
+                                    {
+                                        <div class="movie-detail-play-menu-rule" role="separator"></div>
+                                        <div class="movie-detail-play-menu-row">
+                                            <button type="button" class="movie-detail-version-choice" role="menuitem" @onclick="() => PlayFromMenu(PlayerClipKind.Apex, false)">
+                                                <span class="movie-detail-play-menu-apex"><ApexIcon Size="12" /></span>
+                                                <span class="movie-detail-play-menu-label">All apexes<br /><span class="movie-detail-play-menu-meta">@ClipSummary(apexes.Count, ApexRanges.TotalClipSeconds(apexes, movie.MediaDurationSeconds))</span></span>
+                                            </button>
+                                            <button type="button" class="movie-detail-play-menu-shuffle" role="menuitem" title="Shuffle apexes" aria-label="Shuffle apexes" @onclick="() => PlayFromMenu(PlayerClipKind.Apex, true)"><ShuffleIcon Size="10" /> Shuffle</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    </span>
                 }
                 @if (!string.IsNullOrWhiteSpace(movie.JellyfinItemId))
                 {
@@ -329,7 +376,7 @@ else
         <div class="movie-detail-wide">
             @if (CanPlay || scenes.Count > 0 || highlights.Count > 0 || apexes.Count > 0)
             {
-                <MovieScenesSection Movie="movie"
+                <MovieScenesSection @ref="scenesSection" Movie="movie"
                                     Scenes="scenes"
                                     Highlights="highlights"
                                     Apexes="apexes"
@@ -437,6 +484,8 @@ else
     private bool showVideoPlayerModal;
     // Whether the Versions badge's primary-version picker is open.
     private bool showPrimaryVersionMenu;
+    private bool showPlayMenu;
+    private MovieScenesSection? scenesSection;
     private bool settingPrimary;
     private string? versionMenuError;
     private double? playerStartAt;
@@ -510,6 +559,7 @@ else
         showPosterLightbox = false;
         showVideoPlayerModal = false;
         showPrimaryVersionMenu = false;
+        showPlayMenu = false;
         showCoverCropModal = false;
         showStillsModal = false;
         showMetadataRefreshModal = false;
@@ -744,6 +794,29 @@ else
     }
 
     private void CloseVersionMenu() => showPrimaryVersionMenu = false;
+
+    private static string ClipSummary(int count, double seconds) =>
+        $"{count} {(count == 1 ? "clip" : "clips")} · {SceneTimeFormat.Format(seconds)}";
+
+    // Escape closes the open Play menu, from wherever focus is inside it.
+    private void OnPlayMenuKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") showPlayMenu = false;
+    }
+
+    private bool HasClipMenu => highlights.Count > 0 || apexes.Count > 0;
+
+    // The Play menu: the whole movie (null kind), or the movie's highlights or apexes in order or shuffled.
+    private void PlayFromMenu(PlayerClipKind? kind, bool shuffle)
+    {
+        showPlayMenu = false;
+        switch (kind)
+        {
+            case PlayerClipKind.Highlight: scenesSection?.PlayHighlights(shuffle); break;
+            case PlayerClipKind.Apex: scenesSection?.PlayApexes(shuffle); break;
+            default: OpenVideoPlayerModal(); break;
+        }
+    }
 
     private async Task SetPrimaryVersionAsync(int fileId)
     {

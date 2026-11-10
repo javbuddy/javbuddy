@@ -1,0 +1,8 @@
+@* The highlight sparkle: the timeline's highlight pins and count badges, and the Movie Detail Play menu. *@
+<svg viewBox="0 0 16 16" width="@Size" height="@Size" fill="currentColor" aria-hidden="true" class="@Class"><path d="M8 0 9.8 6.2 16 8 9.8 9.8 8 16 6.2 9.8 0 8 6.2 6.2z" /></svg>
+
+@code {
+    [Parameter] public int Size { get; set; } = 10;
+
+    [Parameter] public string? Class { get; set; }
+}

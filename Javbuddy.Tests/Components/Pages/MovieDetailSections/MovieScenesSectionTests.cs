@@ -200,6 +200,67 @@ public class MovieScenesSectionTests : BunitContext
         Assert.Equal(1, player.Instance.Clip!.Id);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PlayApexes_PlaysEveryApexInThePlayer_InOrderOrShuffled(bool shuffle)
+    {
+        IReadOnlyList<ApexItem> apexes = [new(1, 1, 900, []), new(2, 2, 1200, []), new(3, 3, 1500, [])];
+        var cut = Render<MovieScenesSection>(p => p
+            .Add(x => x.Movie, PlayableMovie)
+            .Add(x => x.Apexes, apexes)
+            .Add(x => x.CanPlay, true));
+
+        await cut.InvokeAsync(() => cut.Instance.PlayApexes(shuffle));
+
+        var player = cut.FindComponent<ClipPlayerModal>().Instance;
+        Assert.Equal(PlayerClipKind.Apex, player.Clip!.Kind);
+        Assert.Equal((1, 3), (player.Position, player.Count));
+        if (!shuffle) Assert.Equal(1, player.Clip.Id);
+
+        // Stepping through visits every apex exactly once, whatever the order.
+        var seen = new List<int> { player.Clip.Id };
+        for (var i = 1; i < 3; i++)
+        {
+            await cut.InvokeAsync(player.OnNext.InvokeAsync);
+            seen.Add(player.Clip!.Id);
+        }
+        Assert.Equal([1, 2, 3], seen.Order());
+        if (!shuffle) Assert.Equal([1, 2, 3], seen);
+    }
+
+    [Fact]
+    public async Task PlayHighlights_PlaysEveryHighlightInTheirOwnRangeAmongTheHighlights()
+    {
+        var cut = RenderSection();
+
+        await cut.InvokeAsync(() => cut.Instance.PlayHighlights(shuffle: false));
+
+        var player = cut.FindComponent<ClipPlayerModal>().Instance;
+        Assert.Equal((PlayerClipKind.Highlight, 21, 600d, (double?)640d), (player.Clip!.Kind, player.Clip.Id, player.Clip.StartSeconds, player.Clip.EndSeconds));
+        Assert.Equal((1, 3), (player.Position, player.Count));
+    }
+
+    [Fact]
+    public async Task PlayApexesAndPlayHighlights_PlayNothing_WhenTheMovieCantPlayOrHasNone()
+    {
+        var cantPlay = Render<MovieScenesSection>(p => p
+            .Add(x => x.Movie, PlayableMovie)
+            .Add(x => x.Highlights, ThreeHighlights)
+            .Add(x => x.Apexes, TwoApexes)
+            .Add(x => x.CanPlay, false));
+        var none = Render<MovieScenesSection>(p => p
+            .Add(x => x.Movie, PlayableMovie)
+            .Add(x => x.Scenes, TwoScenes)
+            .Add(x => x.CanPlay, true));
+
+        await cantPlay.InvokeAsync(() => { cantPlay.Instance.PlayApexes(false); cantPlay.Instance.PlayHighlights(true); });
+        await none.InvokeAsync(() => { none.Instance.PlayApexes(false); none.Instance.PlayHighlights(true); });
+
+        Assert.Null(cantPlay.FindComponent<ClipPlayerModal>().Instance.Clip);
+        Assert.Null(none.FindComponent<ClipPlayerModal>().Instance.Clip);
+    }
+
     [Fact]
     public void AnApexMarker_PlaysNothing_WhenTheMovieCantPlay()
     {

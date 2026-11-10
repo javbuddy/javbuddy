@@ -51,6 +51,15 @@ public static class ApexRanges
     /// <summary>Where playback starts for an apex, by its effective window.</summary>
     public static double StartFor(ApexItem apex) => StartFor(apex.Seconds, apex.Window.LeadInSeconds);
 
+    /// <summary>The running time of playing every apex's clip one after another (<see cref="ClipFor"/> by
+    /// each one's effective window), where overlapping clips are counted each time.</summary>
+    public static double TotalClipSeconds(IEnumerable<ApexItem> apexes, double? durationSeconds) =>
+        apexes.Sum(a =>
+        {
+            var (start, end) = ClipFor(a.Seconds, a.Window, durationSeconds);
+            return end - start;
+        });
+
     /// <summary>The clip the Scenes wall plays for an apex: from <see cref="StartFor(double, double)"/>
     /// to the window's tail after it, cut at the movie's end when that's known.</summary>
     public static (double Start, double End) ClipFor(double apexSeconds, ApexWindow window, double? durationSeconds)
