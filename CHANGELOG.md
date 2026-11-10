@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Play all / Shuffle shows the full timeline.** The Movies page's player drew a bare scrub bar; it now marks the playing movie's scenes, highlights and apexes, and the H / A jump keys work, as on Movie Detail.
 - **Keyboard shortcuts work in fullscreen.** In the player (Play all / Shuffle on the Movies and Scenes pages, and the movie player), **N** and **P** (and Esc, to close after leaving fullscreen) did nothing once the video was fullscreen, because entering fullscreen moved keyboard focus out of the player. Focus now moves to the fullscreen player. In Review mode, **N** also keeps fullscreen on when it moves to the next movie, instead of dropping out of it.
 
 ## [0.6.1] - 2026-11-10

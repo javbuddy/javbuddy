@@ -9,6 +9,9 @@
 @using Javbuddy.Services.R18Dev
 @implements IAsyncDisposable
 @inject IMovieGridQueryService GridQueries
+@inject IMovieSceneService SceneService
+@inject IMovieHighlightService HighlightService
+@inject IMovieApexService ApexService
 @inject MovieChangeNotifier MovieChangeNotifier
 @inject IMovieService MovieService
 @inject TorrentChangeNotifier TorrentChangeNotifier
@@ -149,6 +152,9 @@ else
                           Code="@playingMovie.Code"
                           MovieId="@playingMovie.Id"
                           DurationSeconds="@playingMovie.MediaDurationSeconds"
+                          Scenes="playerScenes"
+                          Highlights="playerHighlights"
+                          Apexes="playerApexes"
                           CanPrevious="@(playlistIndex > 0)"
                           OnNext="NextMovie"
                           OnPrevious="PreviousMovie"
@@ -299,6 +305,7 @@ else
             if (shuffle) Random.Shared.Shuffle(movies);
             playlist = movies;
             playlistIndex = 0;
+            _ = LoadPlayerMarkersAsync();
         }
         finally
         {
@@ -306,16 +313,53 @@ else
         }
     }
 
+    // The playing movie's scenes, highlights and apexes for the scrub bar, loaded as each movie comes up;
+    // cleared meanwhile so the previous movie's markers never sit on the next one's timeline.
+    private IReadOnlyList<Javbuddy.Services.Scenes.SceneItem> playerScenes = [];
+    private IReadOnlyList<Javbuddy.Services.Scenes.HighlightItem> playerHighlights = [];
+    private IReadOnlyList<Javbuddy.Services.Scenes.ApexItem> playerApexes = [];
+
+    private async Task LoadPlayerMarkersAsync()
+    {
+        playerScenes = [];
+        playerHighlights = [];
+        playerApexes = [];
+        var movie = playingMovie;
+        if (movie is null) return;
+        try
+        {
+            var scenes = await SceneService.GetScenesAsync(movie.Id);
+            var highlights = await HighlightService.GetHighlightsAsync(movie.Id);
+            var apexes = await ApexService.GetApexesAsync(movie.Id);
+            if (playingMovie?.Id != movie.Id) return;
+            playerScenes = scenes;
+            playerHighlights = highlights;
+            playerApexes = apexes;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Loading scene markers for movie {MovieId} failed", movie.Id);
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
     // Next, or closing after the last movie.
     private void NextMovie()
     {
-        if (playlist is not null && playlistIndex + 1 < playlist.Length) playlistIndex++;
+        if (playlist is not null && playlistIndex + 1 < playlist.Length) {
+            playlistIndex++;
+            _ = LoadPlayerMarkersAsync();
+        }
         else ClosePlayer();
     }
 
     private void PreviousMovie()
     {
-        if (playlistIndex > 0) playlistIndex--;
+        if (playlistIndex > 0)
+        {
+            playlistIndex--;
+            _ = LoadPlayerMarkersAsync();
+        }
     }
 
     private void ClosePlayer() => playlist = null;
