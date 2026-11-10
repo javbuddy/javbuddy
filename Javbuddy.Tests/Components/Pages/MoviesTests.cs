@@ -8,6 +8,7 @@ using Javbuddy.Services.Movies;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Prowlarr;
 using Javbuddy.Services.R18Dev;
+using Javbuddy.Services.Scenes;
 using Javbuddy.Services.Torrents;
 using Javbuddy.Services.Trickplay;
 using Javbuddy.Tests.TestSupport;
@@ -57,6 +58,10 @@ public class MoviesTests : BunitContext
         // Replaced by SetUpReleaseBrowsing for the tests that open "All releases (r18.dev)".
         Services.AddSingleton(Substitute.For<IR18DevReleaseBrowseService>());
         Services.AddSingleton(new MovieChangeNotifier());
+        // The Play all / Shuffle player loads the playing movie's scenes, highlights and apexes for its scrub bar.
+        Services.AddSingleton(Substitute.For<IMovieSceneService>());
+        Services.AddSingleton(Substitute.For<IMovieHighlightService>());
+        Services.AddSingleton(Substitute.For<IMovieApexService>());
         Services.AddSingleton<IMovieService>(sp => new MovieService(
             sp.GetRequiredService<IDbContextFactory<AppDbContext>>(),
             sp.GetRequiredService<MovieChangeNotifier>()));
