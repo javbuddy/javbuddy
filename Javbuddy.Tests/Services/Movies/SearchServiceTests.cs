@@ -54,6 +54,34 @@ public class SearchServiceTests
         Assert.NotEqual(before, Assert.Single((await service.SearchAsync("SIVR")).Movies).PosterVersion);
     }
 
+    // The placeholder hash is the poster thumbnail row's, on both the search result and the Movies grid;
+    // a movie with no cached poster, or only a full-size row, has none.
+    [Fact]
+    public async Task SearchAsync_AndGrid_PosterBlurHashIsTheThumbnailRowsOnly()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.AddRange(new Movie { Code = "COL-001" }, new Movie { Code = "COL-002" }, new Movie { Code = "COL-003" });
+            db.CachedImages.AddRange(
+                new CachedImage { Code = "COL-001", Role = "poster", Variant = "thumb", BlurHash = "LEHV6nWB2yk8pyo0adR*.7kCMdnj" },
+                new CachedImage { Code = "COL-001", Role = "poster", Variant = "full", BlurHash = "LFFFFFFFFFFFFFFFFFFFFFFFFFFF" },
+                new CachedImage { Code = "COL-002", Role = "poster", Variant = "full", BlurHash = "L000000000000000000000000000" });
+            await db.SaveChangesAsync();
+        }
+
+        var search = (await new SearchService(factory).SearchAsync("COL-")).Movies.ToDictionary(m => m.Code!, m => m.PosterBlurHash);
+        var grid = (await new MovieGridQueryService(factory).GetRangeAsync(new MovieGridFilter(), new MovieGridSort("title", false, 1), 0, 10))
+            .ToDictionary(m => m.Code!, m => m.PosterBlurHash);
+
+        foreach (var colors in new[] { search, grid })
+        {
+            Assert.Equal("LEHV6nWB2yk8pyo0adR*.7kCMdnj", colors["COL-001"]);
+            Assert.Null(colors["COL-002"]);
+            Assert.Null(colors["COL-003"]);
+        }
+    }
+
     [Fact]
     public async Task SearchAsync_RanksPrefixMatchesBeforeSubstringMatches()
     {

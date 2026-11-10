@@ -61,8 +61,9 @@ One row per product area.
 | `ApexMarkers.razor` | Diamond apex markers drawn above `ScrubBar`'s and `ClipControls`' highlight track | `ApexMarkersTests.cs` |
 | `HighlightSegments.razor` | Lane-stacked highlight track drawn above `ScrubBar`'s scene bar | `HighlightSegmentsTests.cs` |
 | `MultiSelectFilterGroup.razor` (+ `MultiSelectOption.cs`) | Checkbox filter group | — |
-| `PosterCard.razor` | One poster tile (image, status badge, click-through) | `PosterCardTests.cs` |
+| `PosterCard.razor` | One poster tile (image, status badge, click-through). Shows a blurred stand-in of the poster (its BlurHash, `PlaceholderBlurHash`, painted by App.razor's script; the average colour is the plain background) behind the image until it loads, then fades the image in (App.razor's `poster-pending` flag) | `PosterCardTests.cs` |
 | `PosterGrid.razor` | Layout grid wrapping `PosterCard` tiles | `PosterGridTests.cs` |
+| `VirtualizedGrid.razor` (+ `.razor.js`) | Windowed card grid shared by Movies, Actors, Missing, Scenes and Discover: only a slice of the list is in the DOM between two spacers sized to the rows outside it. The spacers tile card-shaped placeholders (measured from a real card) so scrolling past the loaded window shows the grid's shape instead of a blank page | `VirtualizedGridTests.cs`; real-browser coverage in `MoviesGridScrollTests.cs` |
 | `R18DevReleaseCard.razor` | An r18.dev release as a `PosterCard` with hover Prowlarr-search/add actions for releases not in the library (actor Missing page, Movies "All releases") | `R18DevReleaseCardTests.cs` |
 | `ProwlarrSearchModal.razor` | Modal for searching/grabbing Prowlarr torrent results, with a warning per disabled/blocked indexer | `ProwlarrSearchModalTests.cs` |
 | `StatusFilterButtonGroup.razor` (+ `FilterButtonOption.cs`) | Toggle-button group for status filters (All/Missing/Got) | `StatusFilterButtonGroupTests.cs` |
@@ -82,7 +83,7 @@ Domain services are grouped into `Services/<Group>/` folders whose namespace mat
 | `Torrents/` | grab, the Activity Queue and History services, change notifier, path mapping, and the TorrentSort wizard (`TorrentSortService`, the thin `TorrentSortWizardState` coordinator, its per-step parts in `SortWizard/`, its helpers) |
 | `Settings/` | connection settings save/read and connection status tiles (per-source discovery toggles live in `MovieDiscovery/DiscoverySettingsService`) |
 | `Monitoring/` | system status, disk space, task activity and change notifiers |
-| `Images/` | image serving, upload limits, remote image download, and the local WebP image caches (poster/fanart and actor images), converter and crop geometry |
+| `Images/` | image serving, upload limits, remote image download, and the local WebP image caches (poster/fanart and actor images), converter and crop geometry, and a poster thumbnail's BlurHash placeholder (`BlurHashes`, stored as `CachedImage.BlurHash`) |
 | `Backups/` | database backups: the archive format and manifest (`BackupArchive`, `BackupManifest`), the SQLite snapshot/check helpers (`BackupDatabase`), `BackupService` (create, list, prune, delete, import, stage a restore), `BackupRestoreApplier` (swaps a staged restore in at startup, before migrations, in `Program.cs`), `BackupSettingsService`, `BackupLocation`; tests under `Javbuddy.Tests/Services/Backups/` |
 | `Common/` | small cross-cutting helpers (`ByteSizeFormatter`, `StringExtensions`, `JustifiedGridLayout`) |
 

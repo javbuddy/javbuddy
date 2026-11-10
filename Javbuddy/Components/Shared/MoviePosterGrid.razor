@@ -16,6 +16,7 @@
                         StatusCssClass="@MoviePosterText.StatusCssClass(movie, IsDownloading(movie))"
                         ImageUrl="@(hasImage ? MoviePosterText.ThumbUrl(movie.Code!, movie.PosterVersion) : null)"
                         Loading="loading"
+                        PlaceholderBlurHash="@(hasImage ? movie.PosterBlurHash : null)"
                         AltText="@movie.DisplayName"
                         PlaceholderText="@(movie.Code ?? "?")"
                         TitleText="@(movie.Code ?? movie.DisplayName)"

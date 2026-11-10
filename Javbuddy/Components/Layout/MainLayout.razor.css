@@ -51,10 +51,17 @@ main {
         flex-direction: row;
     }
 
+    /* Sticky and only as tall as the viewport, not stretched to the page's height. A scrolling list can make
+       the page hundreds of thousands of pixels tall, and a sidebar background that big is a layer the browser
+       can't paint in time when the scroll jumps (the menu went blank during a fast scroll). */
     .sidebar {
         width: 230px;
         flex-shrink: 0;
         transition: width 0.15s ease;
+        position: sticky;
+        top: 3.25rem;
+        align-self: flex-start;
+        height: calc(100vh - 3.25rem);
     }
 
     :root[data-sidebar-collapsed="true"] .sidebar {

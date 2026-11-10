@@ -1,5 +1,6 @@
 using Bunit;
 using Javbuddy.Components.Shared;
+using Javbuddy.Services.Images;
 
 namespace Javbuddy.Tests.Components.Shared;
 
@@ -184,5 +185,45 @@ public class PosterCardTests : BunitContext
 
         Assert.Equal("2 versions", withBadge.Find(".poster-image .poster-corner-badge-end").TextContent);
         Assert.Empty(plain.FindAll(".poster-corner-badge-end"));
+    }
+
+    private const string SampleHash = "LEHV6nWB2yk8pyo0adR*.7kCMdnj";
+
+    private IRenderedComponent<PosterCard> RenderWithHash(string? hash) => Render<PosterCard>(p => p
+        .Add(x => x.Href, "/x")
+        .Add(x => x.StatusCssClass, "status-wanted")
+        .Add(x => x.ImageUrl, "/image-cache/X-1/poster/thumb")
+        .Add(x => x.PlaceholderBlurHash, hash)
+        .Add(x => x.PlaceholderText, "X")
+        .Add(x => x.TitleText, "X"));
+
+    [Fact]
+    public void PlaceholderBlurHash_PaintsTheImageBox_WithItsAverageColorAndTheHashForTheScript()
+    {
+        var box = RenderWithHash(SampleHash).Find(".poster-image");
+
+        Assert.Equal(SampleHash, box.GetAttribute("data-blurhash"));
+        Assert.Equal($"background-color:{BlurHashes.AverageColor(SampleHash)}", box.GetAttribute("style"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("red")]
+    [InlineData("LEHV6nWB2yk8pyo0adR*.7kCMd")] // too short for its size byte
+    [InlineData("LEHV6nWB2yk8pyo0adR*.7kCMd\" j")] // not in the BlurHash alphabet
+    [InlineData("LEHV6nWB2yk8pyo0adR*.7kCMdn<")]
+    public void PlaceholderBlurHash_NotAValidHash_KeepsTheDefaultBackground(string? hash)
+    {
+        var box = RenderWithHash(hash).Find(".poster-image");
+
+        Assert.Null(box.GetAttribute("style"));
+        Assert.Null(box.GetAttribute("data-blurhash"));
+    }
+
+    [Fact]
+    public void Images_DecodeAsync()
+    {
+        Assert.Equal("async", RenderWithHash(SampleHash).Find("img").GetAttribute("decoding"));
     }
 }
