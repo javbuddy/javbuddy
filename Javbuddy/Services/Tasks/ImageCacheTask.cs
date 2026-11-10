@@ -64,6 +64,9 @@ public class ImageCacheTask(
 
     public async Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress)
     {
+        // First, and cheap: it only reads thumbnails already on disk, so an upgraded library gets its poster
+        // placeholders straight away instead of after the (slow) conversion passes below.
+        var hashesBackfilled = await BackfillPosterBlurHashesAsync(progress, ct);
         var (movieCodes, moviesProcessed, moviesFailed, sourcelessRoles, allRootsOffline) = await CacheMoviesAsync(progress, ct);
         var (actorIds, actorsProcessed, actorsFailed) = await CacheActorsAsync(progress, ct);
         var (photoIds, photosProcessed, photosFailed) = await CacheActorPhotosAsync(progress, ct);
@@ -74,8 +77,62 @@ public class ImageCacheTask(
 
         var summary = $"scanned {movieCodes.Count} movies / {actorIds.Count} actors / {photoIds.Count} photos, {imagesProcessed} images cached/up to date";
         if (imagesFailed > 0) summary += $", {imagesFailed} failed";
+        if (hashesBackfilled > 0) summary += $", {hashesBackfilled} poster placeholders computed";
         if (rowsPruned > 0 || filesPruned > 0) summary += $", pruned {rowsPruned} orphaned rows / {filesPruned} orphaned files";
         return summary;
+    }
+
+    /// <summary>Fills in the BlurHash placeholder of poster thumbnails cached before CachedImage.BlurHash
+    /// existed. Thumbnails converted since carry theirs from the start, so after the first run this finds nothing.
+    /// A row whose file is gone or undecodable is left for the next run. Each hash is written only where the
+    /// column is still empty, so a conversion that rewrote the thumbnail meanwhile keeps its own, and a row purged
+    /// meanwhile is simply not updated. It's an optional extra: a failure is logged and never stops the cache passes.</summary>
+    private async Task<int> BackfillPosterBlurHashesAsync(IProgress<TaskProgress> progress, CancellationToken ct)
+    {
+        const string stage = "Computing poster placeholders";
+        const int batchSize = 200;
+        progress.Report(new TaskProgress(0, null, stage));
+
+        var done = 0;
+        try
+        {
+            var lastId = 0;
+            while (true)
+            {
+                ct.ThrowIfCancellationRequested();
+                await using var db = await dbFactory.CreateDbContextAsync(ct);
+                var rows = await db.CachedImages
+                    .AsNoTracking()
+                    .Where(c => c.Id > lastId && c.Role == LocalImageCacheService.RolePoster && c.Variant == LocalImageCacheService.VariantThumb
+                        && c.BlurHash == null)
+                    .OrderBy(c => c.Id)
+                    .Take(batchSize)
+                    .Select(c => new { c.Id, c.StorageId })
+                    .ToListAsync(ct);
+                if (rows.Count == 0) break;
+
+                foreach (var row in rows)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    lastId = row.Id;
+                    var hash = BlurHashes.FromFile(imageCache.GetStoragePath(row.StorageId));
+                    if (hash is null) continue;
+
+                    var id = row.Id;
+                    done += await db.CachedImages
+                        .Where(c => c.Id == id && c.BlurHash == null)
+                        .ExecuteUpdateAsync(set => set.SetProperty(c => c.BlurHash, hash), ct);
+                }
+
+                progress.Report(new TaskProgress(done, null, stage));
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Computing poster placeholders failed; continuing with the image cache");
+        }
+
+        return done;
     }
 
     /// <summary>Discovers *which* movies to process from the Movies table, not by enumerating the

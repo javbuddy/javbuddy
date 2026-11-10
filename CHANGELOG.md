@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **Poster grids scroll more smoothly.** A poster card now shows a blurred stand-in of the poster (a BlurHash, as Jellyfin does) while its image loads, then fades the image in, so fast scrolling fills the grid with the covers' colours and shapes instead of empty boxes. Posters also decode off the main thread, and cards no longer make the browser re-check the rest of the grid when one mounts. The grid also keeps up with a fast scroll over a slow connection (a VPN or tunnel): it measures how fast you are scrolling and how long a load takes, and loads that much further ahead in the direction you are going. Scrolling faster than the grid can load now shows card-shaped placeholders in the empty stretch instead of a blank page, and the left menu no longer goes blank during a fast scroll through a long list (it is now as tall as the window rather than as tall as the whole page). The BlurHash is stored with the cached poster (a database migration adds the column); posters cached before this update get theirs the next time the **Image Cache** task runs, and show the plain dark placeholder until then.
+
 ## [0.6.0] - 2026-11-09
 
 ### Added

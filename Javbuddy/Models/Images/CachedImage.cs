@@ -63,5 +63,11 @@ public class CachedImage
     [StringLength(64)]
     public string? SourceIdentity { get; set; }
 
+    /// <summary>A BlurHash (blurha.sh) of the thumbnail (see BlurHashes) — a ~28-character blurred stand-in
+    /// that a poster card paints behind its image while it loads, whose first component is also the average colour. Null until computed: set when a poster is converted, backfilled by ImageCacheTask
+    /// for a thumbnail cached before this column existed.</summary>
+    [StringLength(40)]
+    public string? BlurHash { get; set; }
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

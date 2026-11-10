@@ -6,6 +6,7 @@ using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Tasks;
 using Javbuddy.Tests.TestSupport;
 using NSubstitute;
+using SkiaSharp;
 
 namespace Javbuddy.Tests.Services.Tasks;
 
@@ -125,6 +126,75 @@ public class ImageCacheTaskTests
         await movieService.Received(1).GetOrCreateBothAsync("ABC-123", LocalImageCacheService.RoleFanart, 0, Arg.Any<CancellationToken>());
         await actorService.Received(1).GetOrCreateBothAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         Assert.Contains("1 movies / 1 actors", summary);
+    }
+
+    [Fact]
+    public async Task RunAsync_ComputesThePlaceholderBlurHashOfThumbnailsCachedWithoutOne()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        var readable = Guid.NewGuid();
+        var missing = Guid.NewGuid();
+        var corrupt = Guid.NewGuid();
+        var alreadyColored = Guid.NewGuid();
+        File.WriteAllBytes(cache.GetStoragePath(readable), ImageConverter.ConvertBytesToBothWebP(SolidPng(SKColors.Red)).ThumbBytes);
+        File.WriteAllBytes(cache.GetStoragePath(corrupt), [1, 2, 3]);
+        File.WriteAllBytes(cache.GetStoragePath(alreadyColored), ImageConverter.ConvertBytesToBothWebP(SolidPng(SKColors.Blue)).ThumbBytes);
+        using (var db = factory.CreateDbContext())
+        {
+            string[] codes = ["ABC-123", "ABC-124", "ABC-125", "ABC-126"];
+            db.Movies.AddRange(codes.Select(c => new Movie { Code = c }));
+            db.CachedImages.AddRange(
+                Thumb("ABC-123", readable),
+                Thumb("ABC-124", missing),
+                Thumb("ABC-125", corrupt),
+                Thumb("ABC-126", alreadyColored, "LEHV6nWB2yk8pyo0adR*.7kCMdnj"));
+            db.SaveChanges();
+        }
+
+        var service = Substitute.For<ILocalImageCacheService>();
+        service.GetOrCreateBothAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(((string?)"thumb", (string?)"full"));
+        var task = CreateTask(factory, cache, service);
+
+        var summary = await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        // Only the readable row is filled; a missing or corrupt file is skipped without failing the run,
+        // and a row that already has a hash is never overwritten.
+        Assert.Contains("1 poster placeholders computed", summary);
+        using (var db = factory.CreateDbContext())
+        {
+            var colors = db.CachedImages.ToDictionary(c => c.Code, c => c.BlurHash);
+            // WebP is lossy, so pure red comes back within a channel or two of #ff0000.
+            var red = BlurHashes.AverageColor(colors["ABC-123"])!;
+            Assert.True(BlurHashes.IsValid(colors["ABC-123"]));
+            Assert.InRange(Convert.ToInt32(red[1..3], 16), 250, 255);
+            Assert.InRange(Convert.ToInt32(red[3..5], 16), 0, 6);
+            Assert.InRange(Convert.ToInt32(red[5..7], 16), 0, 6);
+            Assert.Null(colors["ABC-124"]);
+            Assert.Null(colors["ABC-125"]);
+            Assert.Equal("LEHV6nWB2yk8pyo0adR*.7kCMdnj", colors["ABC-126"]);
+        }
+
+        // Nothing left to do on the next run.
+        Assert.DoesNotContain("poster placeholders computed", await task.RunAsync(CancellationToken.None, NoopProgress));
+    }
+
+    private static CachedImage Thumb(string code, Guid storageId, string? color = null) => new()
+    {
+        Code = code,
+        Role = LocalImageCacheService.RolePoster,
+        Variant = LocalImageCacheService.VariantThumb,
+        StorageId = storageId,
+        BlurHash = color,
+    };
+
+    private static byte[] SolidPng(SKColor color)
+    {
+        using var bitmap = new SKBitmap(40, 60);
+        using (var canvas = new SKCanvas(bitmap)) canvas.Clear(color);
+        using var image = SKImage.FromBitmap(bitmap);
+        return image.Encode(SKEncodedImageFormat.Png, 100).ToArray();
     }
 
     [Fact]

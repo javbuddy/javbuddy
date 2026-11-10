@@ -99,6 +99,7 @@ public class RemotePosterCropService(IHttpClientFactory httpClientFactory, ILoca
             sourceLastWriteUtc: DateTime.MinValue,
             sourceUrl: coverUrl,
             updatedAt: updatedAt,
+            blurHash: BlurHashes.FromEncoded(thumbBytes),
             ct: ct);
 
         await cacheMaintenance.EnforceSizeLimitAsync((long)thumbBytes.Length + fullBytes.Length, ct);

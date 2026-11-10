@@ -291,6 +291,12 @@ public class Movie : IMediaTechnicalInfo
     [NotMapped]
     public string? PosterVersion { get; set; }
 
+    /// <summary>Not stored: the poster thumbnail's BlurHash, filled alongside
+    /// <see cref="PosterVersion"/> for the card to show behind the image while it loads. Null until the
+    /// thumbnail's hash is known.</summary>
+    [NotMapped]
+    public string? PosterBlurHash { get; set; }
+
     [NotMapped]
     public bool HasLocalVideo => LocalFileSizeBytes is not null;
 

@@ -388,6 +388,7 @@ public class MovieCoverCropService(
                 sourceLength: posterInfo.Length,
                 sourceLastWriteUtc: posterInfo.LastWriteTimeUtc,
                 updatedAt: DateTime.UtcNow,
+                blurHash: BlurHashes.FromEncoded(thumbBytes),
                 ct: ct);
 
             if (movie != null)
@@ -407,6 +408,7 @@ public class MovieCoverCropService(
                 sourceLastWriteUtc: DateTime.MinValue,
                 sourceUrl: "custom",
                 updatedAt: DateTime.UtcNow,
+                blurHash: BlurHashes.FromEncoded(thumbBytes),
                 ct: ct);
         }
 

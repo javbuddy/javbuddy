@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Javbuddy.E2ETests.Fixtures;
 using Javbuddy.E2ETests.Support;
+using Javbuddy.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Playwright;
 using static Microsoft.Playwright.Assertions;
@@ -160,6 +161,102 @@ public class MoviesGridScrollTests(E2EFixture fixture)
             $"Expected the grid's height to hold steady as the window slid, but saw: {string.Join(", ", gridHeights)}px.");
     }
 
+    /// <summary>The spacers stand in for the rows outside the loaded window, so scrolling past it shows
+    /// the grid's shape (card-shaped tiles) rather than a blank page until the next window arrives.
+    /// The tiles have to be as big as a real card plus its gaps, or the real cards would jump when they
+    /// replace them. Needs a real browser: the tile size is measured from laid-out cards.</summary>
+    [Fact]
+    public async Task SpacersTileCardShapedPlaceholders_MatchingTheRealCardGeometry()
+    {
+        await DbSeeding.SeedManyMoviesAsync(fixture.DbFactory, 300, "E2E-SKELETON");
+        var page = await fixture.NewPageAsync();
+        await page.SetViewportSizeAsync(1280, 720);
+
+        await page.GotoInteractiveAsync("/");
+        await Expect(page.Locator(".poster-card").First).ToBeVisibleAsync();
+        await page.WaitForFunctionAsync(
+            "document.querySelector('.movies-grid .virtualized-grid-spacer:last-child').style.backgroundImage !== ''");
+
+        var json = await page.EvaluateAsync<string>(
+            """
+            () => {
+                const grid = document.querySelector('.movies-grid .poster-grid');
+                const cards = grid.querySelectorAll('.poster-card');
+                const first = cards[0].getBoundingClientRect();
+                const second = cards[1].getBoundingClientRect();
+                const nextRow = [...cards].find(c => c.getBoundingClientRect().top > first.top + 1).getBoundingClientRect();
+                const spacers = [...document.querySelectorAll('.movies-grid .virtualized-grid-spacer')];
+                return JSON.stringify({
+                    columnPitch: second.left - first.left,
+                    rowPitch: nextRow.top - first.top,
+                    tiles: spacers.map(s => s.style.backgroundSize),
+                    images: spacers.map(s => s.style.backgroundImage.startsWith('url("data:image/svg+xml')),
+                });
+            }
+            """);
+        var result = System.Text.Json.JsonDocument.Parse(json).RootElement;
+        var columnPitch = result.GetProperty("columnPitch").GetDouble();
+        var rowPitch = result.GetProperty("rowPitch").GetDouble();
+
+        foreach (var tile in result.GetProperty("tiles").EnumerateArray().Select(t => t.GetString()!))
+        {
+            var sizes = tile.Replace("px", "").Split(' ').Select(double.Parse).ToArray();
+            Assert.True(Math.Abs(sizes[0] - columnPitch) <= 1, $"Tile width {sizes[0]} should be one column ({columnPitch}px).");
+            Assert.True(Math.Abs(sizes[1] - rowPitch) <= 1, $"Tile height {sizes[1]} should be one row ({rowPitch}px).");
+        }
+
+        Assert.All(result.GetProperty("images").EnumerateArray(), image => Assert.True(image.GetBoolean()));
+    }
+
+    /// <summary>A poster fades in over its placeholder colour, and one that has loaded or failed must never be
+    /// left invisible — including after an enhanced navigation away and back, which strips every class the
+    /// server didn't render. Needs a real browser: load/error events and the DOM patching are involved.
+    /// (The seeded movies have no cached posters, so their image requests fail: the error path.)</summary>
+    [Fact]
+    public async Task PosterImages_AreNeverLeftHidden_AfterLoadFailureOrEnhancedNavigation()
+    {
+        await DbSeeding.SeedManyMoviesAsync(fixture.DbFactory, 120, "E2E-FADE");
+        // A metadata source is what makes a card render a poster <img> at all.
+        await using (var db = await fixture.DbFactory.CreateDbContextAsync())
+        {
+            await db.Movies.Where(m => m.Code!.StartsWith("E2E-FADE")).ExecuteUpdateAsync(set => set.SetProperty(m => m.MetaSourceName, "test"));
+            // Cached poster thumbnails with a BlurHash, so every card has a placeholder to paint.
+            db.CachedImages.AddRange(Enumerable.Range(0, 120).Select(i => new CachedImage
+            {
+                Code = $"E2E-FADE-{i:D4}",
+                Role = "poster",
+                Variant = "thumb",
+                StorageId = Guid.NewGuid(),
+                BlurHash = "LEHV6nWB2yk8pyo0adR*.7kCMdnj",
+            }));
+            await db.SaveChangesAsync();
+        }
+        var page = await fixture.NewPageAsync();
+        await page.SetViewportSizeAsync(1280, 720);
+
+        const string hiddenInView =
+            """
+            () => [...document.querySelectorAll('.poster-image img')]
+                .filter(i => i.getBoundingClientRect().top < window.innerHeight && getComputedStyle(i).opacity === '0').length
+            """;
+
+        await page.GotoInteractiveAsync("/");
+        await Expect(page.Locator(".poster-image img").First).ToBeVisibleAsync();
+        await page.WaitForFunctionAsync($"({hiddenInView})() === 0");
+
+        // The cards that carry a BlurHash get it painted behind the image by App.razor's script.
+        await page.WaitForFunctionAsync(
+            "() => { const e = [...document.querySelectorAll('.poster-image[data-blurhash]')]; return e.length > 0 && e.every(x => x.style.backgroundImage.startsWith('url(')); }");
+
+        await page.Locator("nav a", new() { HasTextString = "Actors" }).First.ClickAsync();
+        await Expect(page).ToHaveURLAsync(new Regex("/actors"));
+        await page.Locator("nav a", new() { HasTextString = "Movies" }).First.ClickAsync();
+        await Expect(page.Locator(".poster-image img").First).ToBeAttachedAsync();
+
+        await page.WaitForFunctionAsync($"({hiddenInView})() === 0");
+        Assert.Equal(0, await page.EvaluateAsync<int>(hiddenInView));
+    }
+
     /// <summary>Regression test: a first fix attempt saved window.scrollY to
     /// sessionStorage unconditionally on every 'scroll'/'resize' event, but enhanced navigation
     /// patches the DOM to the destination page (and scrolls a forward navigation to top) well
@@ -303,7 +400,9 @@ public class MoviesGridScrollTests(E2EFixture fixture)
         await page.GotoInteractiveAsync("/");
         await Expect(page.Locator(".poster-card").First).ToBeVisibleAsync();
 
-        await page.EvaluateAsync("window.scrollTo({ top: 3000, behavior: 'instant' })");
+        // Far enough down that the window has to slide off the first page (the window reaches several screens
+        // behind the viewport, so a shallow scroll would leave it starting at row 0).
+        await page.EvaluateAsync("window.scrollTo({ top: 6000, behavior: 'instant' })");
         await page.WaitForFunctionAsync(
             "document.querySelector('.movies-grid .virtualized-grid-spacer').dataset.windowStart !== '0'");
 

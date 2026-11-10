@@ -59,6 +59,7 @@ public static class AppDbContextImageCacheExtensions
             nameof(CachedImage.SourceLength),
             nameof(CachedImage.SourceLastWriteUtc),
             nameof(CachedImage.SourceUrl),
+            nameof(CachedImage.BlurHash),
             nameof(CachedImage.UpdatedAt),
         ],
         // The scene/highlight/DeoVR freshness columns are maintained by their own services, not by this upsert.
@@ -197,6 +198,7 @@ public static class AppDbContextImageCacheExtensions
         DateTime? sourceLastWriteUtc = null,
         string? sourceUrl = null,
         DateTime? updatedAt = null,
+        string? blurHash = null,
         CancellationToken ct = default)
     {
         var updated = updatedAt ?? DateTime.UtcNow;
@@ -213,6 +215,7 @@ public static class AppDbContextImageCacheExtensions
                 [nameof(CachedImage.SourceLength)] = sourceLength,
                 [nameof(CachedImage.SourceLastWriteUtc)] = lastWrite,
                 [nameof(CachedImage.SourceUrl)] = sourceUrl,
+                [nameof(CachedImage.BlurHash)] = blurHash,
                 [nameof(CachedImage.UpdatedAt)] = updated,
             },
             thumbStorageId,

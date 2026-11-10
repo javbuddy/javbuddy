@@ -272,4 +272,46 @@ public class LocalImageCacheServiceTests : IDisposable
         Assert.All(results, path => Assert.True(File.Exists(path)));
         Assert.Equal(2, results.Distinct().Count());
     }
+
+    // The placeholder BlurHash is stored with a converted poster (both rows), computed from its thumbnail;
+    // other roles don't carry one.
+    [Theory]
+    [InlineData(LocalImageCacheService.RolePoster, true)]
+    [InlineData(LocalImageCacheService.RoleFanart, false)]
+    public async Task GetOrCreateAsync_StoresThePlaceholderBlurHash_ForPostersOnly(string role, bool expectColor)
+    {
+        using var factory = new TestDbContextFactory();
+        var sourcePath = Path.Combine(cache.RootPath, role + ".jpg");
+        Directory.CreateDirectory(cache.RootPath);
+        using (var bitmap = new SKBitmap(600, 900))
+        {
+            using (var canvas = new SKCanvas(bitmap)) canvas.Clear(new SKColor(0, 0, 255));
+            using var data = bitmap.Encode(SKEncodedImageFormat.Jpeg, 90);
+            await File.WriteAllBytesAsync(sourcePath, data.ToArray());
+        }
+
+        var libraryClient = Substitute.For<ILocalLibraryClient>();
+        libraryClient.ResolveFirstExistingLocalFilePathAsync("ABC-123", Arg.Any<string[]>(), Arg.Any<CancellationToken>())
+            .Returns(sourcePath);
+
+        await CreateService(factory, cache, libraryClient).GetOrCreateAsync("ABC-123", role, 0, LocalImageCacheService.VariantThumb);
+
+        await using var db = await factory.CreateDbContextAsync();
+        var rows = await db.CachedImages.Where(c => c.Code == "ABC-123" && c.Role == role).ToListAsync();
+        Assert.Equal(2, rows.Count);
+        if (expectColor)
+        {
+            Assert.All(rows, row =>
+            {
+                var color = BlurHashes.AverageColor(row.BlurHash);
+                Assert.NotNull(color);
+                Assert.InRange(Convert.ToInt32(color![5..7], 16), 235, 255); // blue channel
+                Assert.InRange(Convert.ToInt32(color[1..3], 16), 0, 20); // red channel
+            });
+        }
+        else
+        {
+            Assert.All(rows, row => Assert.Null(row.BlurHash));
+        }
+    }
 }

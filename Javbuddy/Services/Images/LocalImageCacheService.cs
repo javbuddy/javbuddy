@@ -176,6 +176,7 @@ public class LocalImageCacheService(ILocalLibraryClient localLibraryClient, ILoc
             sourceLength: srcInfo.Length,
             sourceLastWriteUtc: srcInfo.LastWriteTimeUtc,
             updatedAt: updatedAt,
+            blurHash: role == RolePoster ? BlurHashes.FromEncoded(thumbBytes) : null,
             ct: ct);
 
 

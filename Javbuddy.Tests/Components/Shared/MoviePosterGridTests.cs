@@ -27,6 +27,23 @@ public class MoviePosterGridTests : BunitContext
     }
 
     [Fact]
+    public void BlurHash_IsPaintedOnlyForAMovieThatShowsAnImage()
+    {
+        const string hash = "LEHV6nWB2yk8pyo0adR*.7kCMdnj";
+        var withImage = NewMovie(1, "AAA-001");
+        withImage.PosterBlurHash = hash;
+        var withoutImage = NewMovie(2, "BBB-002");
+        withoutImage.MetaSourceName = null;
+        withoutImage.PosterBlurHash = hash;
+
+        var cut = Render<MoviePosterGrid>(p => p.Add(x => x.Movies, [withImage, withoutImage]));
+
+        var boxes = cut.FindAll(".poster-image");
+        Assert.Equal(hash, boxes[0].GetAttribute("data-blurhash"));
+        Assert.Null(boxes[1].GetAttribute("data-blurhash"));
+    }
+
+    [Fact]
     public void MissingMovieWithATorrentShowsAsDownloading()
     {
         var cut = Render<MoviePosterGrid>(p => p

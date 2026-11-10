@@ -155,6 +155,15 @@ public class MovieCoverCropServiceTests
                 {
                     var cached = await db.CachedImages.Where(c => c.Code == "IPX-535" && c.Role == "poster").ToListAsync();
                     Assert.Equal(2, cached.Count); // thumb and full
+                    // The crop is solid purple, so the stored placeholder colour is purple.
+                    Assert.All(cached, row =>
+                    {
+                        var color = BlurHashes.AverageColor(row.BlurHash);
+                        Assert.NotNull(color);
+                        Assert.InRange(Convert.ToInt32(color![1..3], 16), 112, 144);
+                        Assert.InRange(Convert.ToInt32(color[3..5], 16), 0, 16);
+                        Assert.InRange(Convert.ToInt32(color[5..7], 16), 112, 144);
+                    });
                 }
 
                 await client.Received(1).SyncImagesSignatureAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());

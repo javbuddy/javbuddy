@@ -1,24 +1,24 @@
 <div class="poster-card-wrapper">
     <a class="poster-card" href="@Href">
-        <div class="poster-image @StatusCssClass">
+        <div class="poster-image @StatusCssClass" style="@PlaceholderStyle" data-blurhash="@ValidBlurHash">
             @if (!string.IsNullOrWhiteSpace(ImageUrl))
             {
-                @* decoding="sync" asks the browser to present each poster atomically with the rest of
-                   its card, instead of painting the card first and the image a frame or two later.
-                   That gap is tiny, but on a scrolling grid it happens to every card that comes in,
-                   which is what reads as a flash. Affordable here precisely because these are small
-                   pre-scaled WebP thumbnails — it would be the wrong call for full-size artwork. *@
+                @* decoding="async" keeps a poster's decode off the main thread, which matters when a
+                   fast scroll mounts dozens of cards at once. The flash that gap could cause is covered
+                   instead: the card already shows a blurred stand-in of the poster (PlaceholderBlurHash, painted by
+                   App.razor's script, with its average colour as the plain background), and the image fades in
+                   over it once loaded (App.razor's `poster-pending` flag). *@
                 @if (Loading == PosterImageLoading.Eager)
                 {
-                    <img src="@ImageUrl" alt="@AltText" decoding="sync" />
+                    <img src="@ImageUrl" alt="@AltText" decoding="async" />
                 }
                 else if (Loading == PosterImageLoading.JsLazy)
                 {
-                    <img data-src="@ImageUrl" alt="@AltText" class="js-lazy-poster-img" decoding="sync" />
+                    <img data-src="@ImageUrl" alt="@AltText" class="js-lazy-poster-img" decoding="async" />
                 }
                 else
                 {
-                    <img src="@ImageUrl" alt="@AltText" loading="lazy" decoding="sync" />
+                    <img src="@ImageUrl" alt="@AltText" loading="lazy" decoding="async" />
                 }
             }
             else
@@ -92,6 +92,9 @@
 
     [Parameter] public string? ImageUrl { get; set; }
     [Parameter] public PosterImageLoading Loading { get; set; } = PosterImageLoading.Eager;
+    /// <summary>The poster's BlurHash, painted behind the image until it loads (its average colour is the card's
+    /// plain background). Null or anything that isn't a valid hash keeps the neutral dark placeholder.</summary>
+    [Parameter] public string? PlaceholderBlurHash { get; set; }
     [Parameter] public string AltText { get; set; } = "";
     [Parameter, EditorRequired] public string PlaceholderText { get; set; } = "";
     [Parameter, EditorRequired] public string TitleText { get; set; } = "";
@@ -124,4 +127,9 @@
     [Parameter] public bool? IsFavorite { get; set; }
 
     [Parameter] public EventCallback OnToggleFavorite { get; set; }
+
+    // Only a validated hash ever reaches the markup, and the colour is derived from it, never passed in.
+    private string? ValidBlurHash => BlurHashes.IsValid(PlaceholderBlurHash) ? PlaceholderBlurHash : null;
+
+    private string? PlaceholderStyle => BlurHashes.AverageColor(ValidBlurHash) is { } color ? $"background-color:{color}" : null;
 }

@@ -316,11 +316,19 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
                 PosterCachedAt = db.CachedImages
                     .Where(c => c.Code == m.Code && c.Role == LocalImageCacheService.RolePoster && c.Index == 0)
                     .Max(c => (DateTime?)c.UpdatedAt),
+                PosterBlurHash = db.CachedImages
+                    .Where(c => c.Code == m.Code && c.Role == LocalImageCacheService.RolePoster && c.Index == 0 && c.Variant == LocalImageCacheService.VariantThumb)
+                    .Select(c => c.BlurHash)
+                    .FirstOrDefault(),
                 m.MetaCoverUrl,
             })
             .ToListAsync(ct);
 
-        foreach (var row in rows) row.Movie.PosterVersion = PosterVersion.Compute(row.PosterCachedAt, row.MetaCoverUrl);
+        foreach (var row in rows)
+        {
+            row.Movie.PosterVersion = PosterVersion.Compute(row.PosterCachedAt, row.MetaCoverUrl);
+            row.Movie.PosterBlurHash = row.PosterBlurHash;
+        }
         return rows.Select(row => row.Movie).ToList();
     }
 

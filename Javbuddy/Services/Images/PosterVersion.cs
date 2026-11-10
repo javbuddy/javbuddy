@@ -25,20 +25,26 @@ public static class PosterVersion
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(stamp)).AsSpan(0, 4));
     }
 
-    /// <summary>Fills <see cref="Movie.PosterVersion"/> on already-loaded movies with one query for
-    /// all their cached posters.</summary>
+    /// <summary>Fills <see cref="Movie.PosterVersion"/> and <see cref="Movie.PosterBlurHash"/> on already-loaded
+    /// movies with one query for all their cached posters.</summary>
     public static async Task ApplyAsync(AppDbContext db, IReadOnlyCollection<Movie> movies, CancellationToken ct = default)
     {
         var codes = movies.Select(m => m.Code).OfType<string>().ToList();
-        var postersCachedAt = await db.CachedImages
+        var posters = await db.CachedImages
             .Where(c => c.Role == LocalImageCacheService.RolePoster && c.Index == 0 && codes.Contains(c.Code))
             .GroupBy(c => c.Code)
-            .Select(g => new { Code = g.Key, UpdatedAt = g.Max(c => c.UpdatedAt) })
-            .ToDictionaryAsync(x => x.Code, x => x.UpdatedAt, StringComparer.OrdinalIgnoreCase, ct);
+            .Select(g => new
+            {
+                Code = g.Key,
+                UpdatedAt = g.Max(c => c.UpdatedAt),
+                BlurHash = g.Where(c => c.Variant == LocalImageCacheService.VariantThumb).Select(c => c.BlurHash).FirstOrDefault(),
+            })
+            .ToDictionaryAsync(x => x.Code, StringComparer.OrdinalIgnoreCase, ct);
         foreach (var movie in movies)
         {
-            DateTime? cachedAt = movie.Code is not null && postersCachedAt.TryGetValue(movie.Code, out var at) ? at : null;
-            movie.PosterVersion = Compute(cachedAt, movie.MetaCoverUrl);
+            var poster = movie.Code is not null && posters.TryGetValue(movie.Code, out var found) ? found : null;
+            movie.PosterVersion = Compute(poster?.UpdatedAt, movie.MetaCoverUrl);
+            movie.PosterBlurHash = poster?.BlurHash;
         }
     }
 }

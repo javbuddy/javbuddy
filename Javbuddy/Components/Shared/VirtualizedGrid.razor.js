@@ -55,6 +55,12 @@ export function init(id, dotNetRef, gridWrapper, leadingSpacer, trailingSpacer, 
         pending: false,
         frame: 0,
         lastRequestKey: null,
+        // Scroll speed in px/ms (positive = down), smoothed, and how long a window round trip takes in ms (smoothed).
+        // Together they say how far ahead of the viewport the window has to reach to be there when it arrives.
+        lastY: null,
+        lastTime: 0,
+        velocity: 0,
+        roundTrip: 120,
         onViewportChanged: null,
         resizeObserver: null,
         windowObserver: null,
@@ -177,9 +183,13 @@ function measure(state) {
     const gridStyle = getComputedStyle(grid);
     const columns = Math.max(1, gridStyle.gridTemplateColumns.split(' ').filter(s => s.length > 0).length);
     const rowGap = parseFloat(gridStyle.rowGap) || 0;
-    const rowHeight = card.getBoundingClientRect().height + rowGap;
+    const columnGap = parseFloat(gridStyle.columnGap) || 0;
+    const cardRect = card.getBoundingClientRect();
+    const rowHeight = cardRect.height + rowGap;
 
-    return rowHeight > 0 ? { columns, rowHeight } : null;
+    return rowHeight > 0
+        ? { columns, rowHeight, cardWidth: cardRect.width, cardHeight: cardRect.height, columnGap, cardLeft: cardRect.left }
+        : null;
 }
 
 // Spacers first — they're what makes the scrollbar reflect the whole filtered list, and the
@@ -197,6 +207,9 @@ function resizeSpacers(state) {
     const trailingItems = Math.max(0, state.totalCount - state.windowStart - state.windowCount);
     setHeight(state.leadingSpacer, leadingRows * rowHeight);
     setHeight(state.trailingSpacer, Math.ceil(trailingItems / columns) * rowHeight);
+    paintSkeleton(state.leadingSpacer, geometry, false, 0);
+    // The list's last row is usually partial, and it's the trailing spacer's last row.
+    paintSkeleton(state.trailingSpacer, geometry, true, trailingItems % columns);
 
     return geometry;
 }
@@ -252,28 +265,98 @@ function evaluate(state) {
     const contentTop = state.leadingSpacer.getBoundingClientRect().top + window.scrollY;
     const firstVisibleRow = Math.floor((window.scrollY - contentTop) / rowHeight);
     const viewportRows = Math.max(1, Math.ceil(window.innerHeight / rowHeight));
+    trackScrollSpeed(state);
 
-    // Two viewports of overscan either side. One was measurably not enough: the round-trip to
-    // fetch a window is itself time the user keeps scrolling through, so a card was landing in the
-    // DOM a median of ~400px from the viewport edge — about 120ms of lead at a normal scroll speed,
-    // against a ~40ms poster fetch. That left a few percent of cards becoming visible a frame or
-    // two before their poster had painted, which is the flash you can just catch. Doubling the
-    // overscan buys ~4x the lead time; the card count stays bounded and proportional to the
-    // viewport, which is the property that matters for keeping the DOM small.
-    const overscanRows = 2 * viewportRows;
-    const startRow = Math.max(0, firstVisibleRow - overscanRows);
-    const endRow = firstVisibleRow + viewportRows + overscanRows;
+    // Two viewports of overscan either side, at rest or scrolling slowly. One was measurably not enough: the
+    // round-trip to fetch a window is itself time the user keeps scrolling through, so a card was landing in the
+    // DOM a median of ~400px from the viewport edge — about 120ms of lead at a normal scroll speed, against a
+    // ~40ms poster fetch. Doubling the overscan bought ~4x the lead time while the card count stays bounded and
+    // proportional to the viewport.
+    //
+    // A fling outruns any fixed overscan once the round trip is longer than a LAN's (the app is often reached
+    // over a VPN or a tunnel): at 6000px/s and a 150ms round trip the viewport is already 900px further on by
+    // the time the window it asked for lands, and a harder fling never catches up. So in the direction of travel
+    // the window reaches as far as the viewport is expected to move in a round trip (plus margin), capped so the
+    // DOM stays bounded.
+    const baseRows = 2 * viewportRows;
+    const pxPerRow = rowHeight;
+    const expectedTravelPx = Math.abs(state.velocity) * (state.roundTrip + 80);
+    const aheadRows = Math.min(8 * viewportRows, Math.max(baseRows, Math.ceil(expectedTravelPx / pxPerRow) + viewportRows));
+    const movingDown = state.velocity > 0.05;
+    const movingUp = state.velocity < -0.05;
+
+    // What each side asks for: a little more than is needed (so the next request isn't due right away), within
+    // what one request may hold. In a dense grid (many columns, so few rows per request) that budget can be
+    // smaller than the wish; the viewport itself always comes first, and the shortfall is taken from the side
+    // the user is moving away from, never from the side they are heading towards.
+    const { behind, forward } = allocateRows(
+        Math.ceil((movingUp ? aheadRows : baseRows) * 1.25),
+        Math.ceil((movingDown ? aheadRows : baseRows) * 1.25),
+        Math.floor(MAX_REQUEST_ITEMS / columns) - viewportRows,
+        movingDown, movingUp);
+
+    // Whether the loaded window already reaches far enough each way. A side that runs into the list's end needs
+    // nothing more. Asking before the margin is gone (at 60% of the wish, so 48% of what a request holds) keeps
+    // the next window on its way while the viewport is still inside the current one. Measured against what
+    // allocateRows can actually deliver, so a side the budget has squeezed doesn't ask on every row.
+    const totalRows = Math.ceil(state.totalCount / columns);
+    const windowFirstRow = Math.floor(state.windowStart / columns);
+    const windowEndRow = Math.ceil((state.windowStart + state.windowCount) / columns);
+    const behindMargin = windowFirstRow <= 0 ? Infinity : firstVisibleRow - windowFirstRow;
+    const forwardMargin = windowEndRow >= totalRows ? Infinity : windowEndRow - (firstVisibleRow + viewportRows);
+    if (behindMargin >= Math.floor(behind * 0.48) && forwardMargin >= Math.floor(forward * 0.48) && state.windowCount > 0) return;
+
+    const startRow = Math.max(0, firstVisibleRow - behind);
+    const endRow = firstVisibleRow + viewportRows + forward;
 
     const start = startRow * columns;
-    const count = (endRow - startRow + 1) * columns;
-    const desiredEnd = Math.min(start + count, state.totalCount);
-
-    if (start >= state.windowStart && desiredEnd <= state.windowStart + state.windowCount) return;
+    const count = Math.min(MAX_REQUEST_ITEMS, (endRow - startRow + 1) * columns);
 
     // Keyed on both the request and the window it was made against, so a request the server can't
     // satisfy exactly (a range clamped to its own maximum window size, say) is asked for once
     // rather than re-sent forever — while any real change to the loaded window frees it to ask again.
     requestWindow(state, start, count, columns, `${start}:${count}:${state.windowStart}:${state.windowCount}:${state.totalCount}`);
+}
+
+// Splits the spare rows of one request (the budget minus the viewport) between behind and forward. Each side gets
+// what it wished for if both fit; otherwise the side being moved away from gives way first, but keeps at least a
+// quarter of the spare rows, and at rest the two share it evenly.
+function allocateRows(wishBehind, wishForward, spare, movingDown, movingUp) {
+    spare = Math.max(0, spare);
+    if (wishBehind + wishForward <= spare) return { behind: wishBehind, forward: wishForward };
+
+    const floor = Math.floor(spare / 4);
+    if (movingDown) {
+        const forward = Math.min(wishForward, spare - Math.min(wishBehind, floor));
+        return { behind: Math.min(wishBehind, spare - forward), forward };
+    }
+    if (movingUp) {
+        const behind = Math.min(wishBehind, spare - Math.min(wishForward, floor));
+        return { behind, forward: Math.min(wishForward, spare - behind) };
+    }
+    const half = Math.floor(spare / 2);
+    const behind = Math.min(wishBehind, Math.max(half, spare - wishForward));
+    return { behind, forward: Math.min(wishForward, spare - behind) };
+}
+
+// A card-count ceiling for one request, below every grid page's own cap (500 on Actors and Discover, 1000 elsewhere) so one that
+// stays under it is never clamped — a clamped one would be re-sent forever (see the request key below).
+const MAX_REQUEST_ITEMS = 480;
+
+// Scroll speed from the change since the last evaluation, smoothed so one odd frame doesn't swing it. A jump of
+// several viewports in one step (a scroll restore, "back to top") is a teleport, not a speed, and is ignored.
+function trackScrollSpeed(state) {
+    const now = performance.now();
+    const y = window.scrollY;
+    if (state.lastY !== null && now > state.lastTime) {
+        const dy = y - state.lastY;
+        const speed = Math.abs(dy) > 3 * window.innerHeight ? 0 : dy / (now - state.lastTime);
+        // After a pause the old speed is stale; weight the new sample by how long it has been.
+        const weight = now - state.lastTime > 150 ? 1 : 0.5;
+        state.velocity = state.velocity * (1 - weight) + speed * weight;
+    }
+    state.lastY = y;
+    state.lastTime = now;
 }
 
 // Only one range request is ever in flight. A scrollbar drag produces a continuous stream of
@@ -294,7 +377,12 @@ function requestWindow(state, start, count, columns, requestKey) {
     state.lastRequestKey = requestKey;
 
     state.inFlight = true;
+    const sentAt = performance.now();
     state.dotNetRef.invokeMethodAsync('SetVisibleRange', start, count, columns)
+        .then(() => {
+            // Smoothed, and bounded so one stalled request can't make every window enormous.
+            state.roundTrip = 0.6 * state.roundTrip + 0.4 * Math.min(1500, performance.now() - sentAt);
+        })
         .catch(() => { })
         .finally(() => {
             if (!isLive(state)) return;
@@ -304,6 +392,54 @@ function requestWindow(state, start, count, columns, requestKey) {
                 schedule(state);
             }
         });
+}
+
+// Scrolling past the loaded window lands on a spacer until the server returns the next one, which
+// used to be a blank page. The spacers instead tile a neutral card-shaped placeholder, one per
+// card slot, sized and positioned from a real card, so a fast scroll shows the grid's shape right
+// away and the real cards replace it in place. Drawn as a repeating background, so it costs no DOM
+// nodes however tall the spacer is.
+//
+// A grid whose cards touch (one column, no row gap: the Missing list, the Actors table) is not a grid of
+// card shapes, so tiling it would only paint one grey band; it gets no skeleton.
+//
+// partialColumns: when the spacer's last row holds fewer cards than the grid has columns (the end of the
+// list), only that many columns of it are painted, so the placeholders don't promise cards that won't exist.
+function paintSkeleton(spacer, { columns, cardWidth, cardHeight, columnGap, rowHeight, cardLeft }, isTrailing, partialColumns) {
+    const rowGap = rowHeight - cardHeight;
+    const flat = columns === 1 && rowGap < 0.5;
+    const tileWidth = cardWidth + columnGap;
+    const key = flat ? 'flat' : `${tileWidth}|${rowHeight}|${cardWidth}|${cardHeight}|${cardLeft}|${isTrailing}|${partialColumns}`;
+    if (spacer.dataset.skeleton === key) return;
+    spacer.dataset.skeleton = key;
+    if (flat) {
+        spacer.style.backgroundImage = '';
+        setMask(spacer, '');
+        return;
+    }
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tileWidth}" height="${rowHeight}">`
+        + `<rect width="${cardWidth}" height="${cardHeight}" rx="4" fill="rgba(128,128,128,0.14)"/></svg>`;
+    spacer.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    spacer.style.backgroundSize = `${tileWidth}px ${rowHeight}px`;
+    spacer.style.backgroundRepeat = 'repeat';
+    // The grid's left edge relative to the spacer, so the tiles line up with the cards that replace them.
+    // The leading spacer ends with the gap after its last row, so its tiles start flush at the top. The trailing
+    // one starts at the last real row's bottom edge, which has no gap below it yet, so its first row of tiles
+    // is pushed down by one gap to land where the real row will.
+    const left = cardLeft - spacer.getBoundingClientRect().left;
+    spacer.style.backgroundPosition = `${left}px ${isTrailing ? rowGap : 0}px`;
+
+    // Everything but the last row stays; the last row is kept only as far as its real cards reach.
+    setMask(spacer, partialColumns > 0
+        ? `linear-gradient(#000,#000) 0 0 / 100% calc(100% - ${rowHeight}px) no-repeat, `
+            + `linear-gradient(#000,#000) 0 100% / ${left + partialColumns * tileWidth}px ${rowHeight}px no-repeat`
+        : '');
+}
+
+function setMask(element, value) {
+    element.style.mask = value;
+    element.style.webkitMask = value;
 }
 
 // Not rounded to whole pixels: a row measured at a fractional height (the Missing page's 49.78px
