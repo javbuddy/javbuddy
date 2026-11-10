@@ -386,6 +386,12 @@ export function placePreview(preview, track, clientX) {
     preview.style.left = `${x}px`;
 }
 
+const RESUME_FULLSCREEN_MS = 3000;
+let resumeFullscreenUntil = 0;
+// The class of the fullscreen column that went away, so only the same kind of column (Review's
+// replacement) resumes it, not some other player opened soon after.
+let resumeFullscreenClass = null;
+
 // Fullscreen for a player column: the button, the `f` key, double-clicking the video (above its
 // bottom `controlsStripPx`, where native controls sit) and the video's own fullscreen request all
 // toggle `container`, so the controls under the video stay visible. `root` gets `fullscreenClass`
@@ -394,6 +400,12 @@ export function placePreview(preview, track, clientX) {
 //. Returns the teardown. Also used by ClipControls.razor.js.
 export function bindFullscreen(root, container, video, button, fullscreenClass, controlsStripPx) {
     const isFullscreen = () => document.fullscreenElement === container;
+    let wasFullscreen = false;
+    let addedTabindex = false;
+    const armResume = () => {
+        resumeFullscreenUntil = Date.now() + RESUME_FULLSCREEN_MS;
+        resumeFullscreenClass = container?.className ?? null;
+    };
 
     let focusBeforeFullscreen = null;
     const requestFullscreen = (options, fallback) => {
@@ -437,6 +449,22 @@ export function bindFullscreen(root, container, video, button, fullscreenClass, 
 
     const onFullscreenChange = () => {
         const fs = isFullscreen();
+        if (wasFullscreen && !fs && !container?.isConnected) armResume();
+        wasFullscreen = fs;
+        // Entering fullscreen leaves focus on <body>, where a player modal's own keys (N, P, Esc,
+        // handled by an onkeydown on its backdrop, an ancestor of the column) would never arrive.
+        if (fs && container) {
+            if (!container.hasAttribute('tabindex')) {
+                container.setAttribute('tabindex', '-1');
+                addedTabindex = true;
+            }
+            container.style.outline = 'none';
+            container.focus({ preventScroll: true });
+        } else if (!fs && container) {
+            if (addedTabindex) container.removeAttribute('tabindex');
+            addedTabindex = false;
+            container.style.outline = '';
+        }
         root.classList.toggle(fullscreenClass, fs);
         if (button) {
             button.setAttribute('title', fs ? 'Exit fullscreen (Esc, double-click)' : 'Toggle fullscreen (f, double-click video)');
@@ -449,6 +477,15 @@ export function bindFullscreen(root, container, video, button, fullscreenClass, 
     };
     document.addEventListener('fullscreenchange', onFullscreenChange);
 
+    // The column this replaces was fullscreen when it went (Review's Next swaps the movie, and its
+    // column with it, which drops fullscreen): carry on in this one. Only just after that, while the
+    // key press that triggered it still counts as a user gesture.
+    if (Date.now() < resumeFullscreenUntil && resumeFullscreenClass === container?.className) {
+        requestFullscreen().catch(() => {});
+    }
+    resumeFullscreenUntil = 0;
+    resumeFullscreenClass = null;
+
     let originalRequestFullscreen = null;
     if (video) {
         originalRequestFullscreen = video.requestFullscreen;
@@ -457,6 +494,7 @@ export function bindFullscreen(root, container, video, button, fullscreenClass, 
     }
 
     return () => {
+        if (wasFullscreen) armResume();
         button?.removeEventListener('click', onFullscreenClick);
         video?.removeEventListener('dblclick', onDblClick);
         window.removeEventListener('keydown', onKeyDown);

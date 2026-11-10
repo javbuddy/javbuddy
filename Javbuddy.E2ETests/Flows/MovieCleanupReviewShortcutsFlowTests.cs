@@ -68,6 +68,23 @@ public class MovieCleanupReviewShortcutsFlowTests
     }
 
     [Fact]
+    public async Task N_ClicksNext_WhileFullscreen_AndStaysFullscreen()
+    {
+        var page = await OpenReviewAsync("Shortcut Fullscreen");
+        var firstCode = await page.Locator(".cleanup-code").TextContentAsync();
+        await page.Locator(".scrub-bar-fullscreen").ClickAsync(new() { Force = true });
+        await page.WaitForFunctionAsync("() => document.fullscreenElement !== null");
+
+        await page.Keyboard.PressAsync("n");
+
+        await Expect(page.Locator(".cleanup-session-count")).ToHaveTextAsync("Session: 1 reviewed");
+        await Expect(page.Locator(".cleanup-code")).Not.ToHaveTextAsync(firstCode!);
+        await page.WaitForFunctionAsync("() => { const v = document.querySelector('video.cleanup-video'); return v && v.readyState >= 2; }");
+        // The new movie's column, not the removed one, is what's fullscreen.
+        await page.WaitForFunctionAsync("() => { const fs = document.fullscreenElement; return fs && fs.isConnected && fs.classList.contains('cleanup-player-column') && fs.contains(document.querySelector('video.cleanup-video')); }");
+    }
+
+    [Fact]
     public async Task Arrows_SeekTheVideo_ClampedToItsLength_WithoutAdvancing()
     {
         var page = await OpenReviewAsync("Shortcut Seek");

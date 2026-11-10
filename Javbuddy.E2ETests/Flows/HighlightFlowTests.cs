@@ -260,6 +260,26 @@ public class HighlightFlowTests
     }
 
     [Fact]
+    public async Task HighlightWall_PlayAll_NAndP_WorkWhileFullscreen()
+    {
+        var page = await PlayAllAsync("Zqxfskeys", "E2E-PLAYFS", 2.8, 2.2);
+        await page.Locator(".clip-controls-fullscreen").ClickAsync(new() { Force = true });
+        await page.WaitForFunctionAsync("() => document.fullscreenElement !== null");
+        var quick = new LocatorAssertionsToHaveTextOptions { Timeout = 3000 };
+        var pause = $"() => document.querySelector('{Video}').pause()";
+
+        // Paused, so a clip's end can't move on before the key does.
+        await page.EvaluateAsync(pause);
+        await page.Keyboard.PressAsync("n");
+        await Expect(page.Locator(".clip-player-position")).ToHaveTextAsync("2 / 2", quick);
+        await page.WaitForFunctionAsync("() => document.fullscreenElement !== null");
+        await page.EvaluateAsync(pause);
+        await page.Keyboard.PressAsync("p");
+        await Expect(page.Locator(".clip-player-position")).ToHaveTextAsync("1 / 2", quick);
+        await Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+    }
+
+    [Fact]
     public async Task HighlightWall_EditInMovie_OpensMovieDetailsEditorAtTheHighlight()
     {
         var movie = await SeedPlayableMovieAsync("E2E-HILITE-7");
