@@ -7,8 +7,8 @@ using Javbuddy.Services.Scenes;
 using Javbuddy.Services.Tags;
 using Javbuddy.Services.Trickplay;
 using Javbuddy.Tests.TestSupport;
-using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Shared;
@@ -265,8 +265,10 @@ public class VideoPlayerModalTests : BunitContext
     }
 
     [Fact]
-    public void WhenEscapeKeyPressed_FiresOnClose()
+    public async Task WhenEscapeKeyPressed_FiresOnClose()
     {
+        var module = JSInterop.SetupModule("./Components/Shared/VideoPlayerShell.razor.js");
+        module.Mode = JSRuntimeMode.Loose;
 
         var closed = false;
         var cut = Render<VideoPlayerModal>(p => p
@@ -276,8 +278,9 @@ public class VideoPlayerModalTests : BunitContext
             .Add(x => x.MovieId, 1)
             .Add(x => x.OnClose, () => closed = true));
 
-        var backdrop = cut.Find(".video-player-modal-backdrop");
-        backdrop.KeyDown(new KeyboardEventArgs { Key = "Escape" });
+        // The key itself is picked out in the browser (VideoPlayerShell.razor.js), which calls back in.
+        var reference = (DotNetObjectReference<VideoPlayerShell>)Assert.Single(module.Invocations, i => i.Identifier == "init").Arguments[1]!;
+        await cut.InvokeAsync(() => reference.Value.CloseFromKeyAsync());
 
         Assert.True(closed);
     }

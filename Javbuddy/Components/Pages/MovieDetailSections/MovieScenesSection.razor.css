@@ -584,10 +584,21 @@
     cursor: default;
 }
 
+/* Marker and popover share a box-less host, so both position against the row. Every apex's popover is
+   drawn, hidden; hovering the marker shows it, and ClipCard.razor.js starts its video. */
+.movie-scenes-timeline-apex-host {
+    display: contents;
+}
+
+.movie-scenes-timeline-apex:hover + .movie-scenes-timeline-apex-popover {
+    display: block;
+}
+
 /* The hovered apex's popover: as wide as the timeline and a container, so the
    240px card can sit over the marker (--x, its fraction of the runtime) yet stay inside the
    timeline, with its arrow still on the marker. Never takes the pointer from the marker. */
 .movie-scenes-timeline-apex-popover {
+    display: none;
     position: absolute;
     left: 0;
     right: 0;

@@ -22,7 +22,7 @@
    panel; talks to the host's <video> through ClipEditor.razor.js (current time, seek, play-clip, and — when
    EnableShortcuts — the m / Shift+M, h / Shift+H and a keys) and reports every (re)load through the three
    On…Changed callbacks so the host can draw its timeline. *@
-<div class="scene-editor clip-editor">
+<div class="scene-editor clip-editor" @ref="editorRef">
     @* Header, add buttons and the open add forms; the player's side panel pins this while the clip list
        scrolls, as long as it fits. *@
     <div class="clip-editor-top" @ref="topBlock">
@@ -115,7 +115,7 @@
             @foreach (var node in tree.Scenes)
             {
                 var scene = node.Scene;
-                <li class="scene-editor-item @(scene.IsHiddenFromOverview ? "scene-editor-item-hidden" : null)" @key="scene.Id" @onmouseenter="() => hoveredSceneId = scene.Id" @onmouseleave="() => hoveredSceneId = null">
+                <li class="scene-editor-item @(scene.IsHiddenFromOverview ? "scene-editor-item-hidden" : null)" @key="scene.Id">
                     @if (sceneForm?.SceneId == scene.Id)
                     {
                         @SceneFormFragment()
@@ -229,7 +229,9 @@
     private bool chaptersProbed;
     private bool loaded;
     private int? loadedMovieId;
-    private int? hoveredSceneId;
+    private ElementReference editorRef;
+    private IJSObjectReference? hoverModule;
+    private IJSObjectReference? hoverPreviews;
     private readonly HashSet<int> collapsedSceneIds = [];
     private bool subscribed;
     private SceneForm? sceneForm;
@@ -282,6 +284,9 @@
             try
             {
                 await module.InvokeVoidAsync("watchTopFit", topBlock);
+                // A hovered scene row plays its preview in the browser, so hovering costs no round trip.
+                hoverModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
+                hoverPreviews = await hoverModule.InvokeAsync<IJSObjectReference>("bindHoverPreviews", editorRef, ".scene-editor-item");
             }
             catch (JSDisconnectedException)
             {
@@ -564,9 +569,9 @@
     private RenderFragment Thumb(SceneItem scene) => @<span class="scene-editor-thumb @(ThumbGenerating(scene) ? "scene-editor-thumb-generating" : null)" aria-hidden="true">
         @if (scene.ThumbVersion is { } thumbVersion)
         {
-            // The preview is a WebM video, played over the screenshot.
+            // The preview is a WebM video, played over the screenshot while the row is hovered (ClipCard.razor.js).
             <ScenePreviewMedia ThumbUrl="@($"/scene-image/{scene.Id}/thumb?v={thumbVersion}")"
-                               PreviewUrl="@(hoveredSceneId == scene.Id && scene.PreviewVersion is { } previewVersion ? $"/scene-image/{scene.Id}/preview?v={previewVersion}" : null)" />
+                               HoverPreviewUrl="@(scene.PreviewVersion is { } previewVersion ? $"/scene-image/{scene.Id}/preview?v={previewVersion}" : null)" />
         }
         else if (Trickplay is { } trickplay)
         {
@@ -1194,6 +1199,12 @@
         }
         try
         {
+            if (hoverPreviews is not null)
+            {
+                await hoverPreviews.InvokeVoidAsync("unbind");
+                await hoverPreviews.DisposeAsync();
+            }
+            if (hoverModule is not null) await hoverModule.DisposeAsync();
             if (jsModule is not null)
             {
                 await jsModule.InvokeVoidAsync("unwatchTopFit", topBlock);

@@ -15,7 +15,7 @@
    HeaderActions and replaces the native controls and scrub bar with its own clip Controls. *@
 @if (Show)
 {
-    <div class="video-player-modal-backdrop" tabindex="0" @ref="backdropRef" @onkeydown="HandleKeyDown" @onclick="CloseAsync">
+    <div class="video-player-modal-backdrop" tabindex="0" @ref="backdropRef" @onclick="CloseAsync">
         <InertBackground Root="backdropRef" />
         <div class="video-player-modal-panel" @ref="panelRef" @onclick:stopPropagation="true">
             <div class="video-player-modal-header">
@@ -34,7 +34,7 @@
                     @HeaderActions
                     @if (!string.IsNullOrWhiteSpace(streamUrl) && versions.Count > 1)
                     {
-                        <select class="video-player-version-select" aria-label="Version" @onkeydown="OnVersionKeyDown" @onkeydown:stopPropagation="true" title="Switch to another version of this movie"
+                        <select class="video-player-version-select" aria-label="Version" title="Switch to another version of this movie"
                                 value="@playingFileId" @onchange="SwitchVersionAsync">
                             @foreach (var version in versions)
                             {
@@ -278,6 +278,17 @@
     private int? playingFileId;
     private double? resumeAtSeconds;
     private IJSObjectReference? videoModule;
+    // The backdrop's key handling lives in the browser (VideoPlayerShell.razor.js); this is what it
+    // was last given, and whether it listens on the current backdrop.
+    private IJSObjectReference? keysModule;
+    private DotNetObjectReference<VideoPlayerShell>? selfRef;
+    private bool keysBound;
+    private KeyOptions? sentKeys;
+
+    /// <summary>What VideoPlayerShell.razor.js needs to filter keys, serialized camelCase.</summary>
+    public sealed record KeyOptions(bool Playlist);
+
+    private bool PlaylistKeys => OnNext.HasDelegate && SidePanel is null;
 
     private double? StartSeconds => resumeAtSeconds ?? openedAtSeconds;
 
@@ -426,6 +437,7 @@
             {
             }
         }
+        await SyncKeysAsync();
     }
 
     protected override void OnInitialized() => TrickplayGeneration.Changed += OnTrickplayGenerationChanged;
@@ -452,14 +464,23 @@
     {
         disposed = true;
         TrickplayGeneration.Changed -= OnTrickplayGenerationChanged;
-        if (videoModule is null) return;
         try
         {
-            await videoModule.DisposeAsync();
+            if (keysModule is not null)
+            {
+                if (keysBound) await keysModule.InvokeVoidAsync("dispose", backdropRef);
+                await keysModule.DisposeAsync();
+            }
+            if (videoModule is not null) await videoModule.DisposeAsync();
         }
         catch (JSDisconnectedException)
         {
         }
+        catch (JSException)
+        {
+            // The backdrop is already gone with the page; its listener went with it.
+        }
+        selfRef?.Dispose();
     }
 
     // Swaps the stream to another version, carrying on from where the current one is.
@@ -566,22 +587,49 @@
         await CloseAsync();
     }
 
-    // The version list keeps its own keys (type-ahead, arrows) from reaching the player's N / P, but
-    // Escape still closes the player.
-    private Task OnVersionKeyDown(KeyboardEventArgs e) => e.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
-
-    private async Task HandleKeyDown(KeyboardEventArgs e)
+    // Esc, and N / P in a movie playlist, are picked out in the browser, so no other key (a held
+    // arrow, typing in the scene editor) round-trips. The backdrop is new each time the player opens,
+    // so the listener is set up again then. The version list keeps its own keys from the player's
+    // N / P, but Esc still closes the player.
+    private async Task SyncKeysAsync()
     {
-        if (e.Key == "Escape")
+        if (!Show)
         {
-            await CloseAsync();
+            keysBound = false;
+            return;
         }
-        else if (OnNext.HasDelegate && SidePanel is null && !e.CtrlKey && !e.MetaKey && !e.AltKey && !e.ShiftKey)
+
+        var options = new KeyOptions(PlaylistKeys);
+        if (keysBound && options == sentKeys) return;
+
+        try
         {
-            if (e.Key is "n" or "N") await OnNext.InvokeAsync();
-            else if ((e.Key is "p" or "P") && CanPrevious) await OnPrevious.InvokeAsync();
+            keysModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/VideoPlayerShell.razor.js");
+            if (keysBound)
+            {
+                await keysModule.InvokeVoidAsync("update", backdropRef, options);
+            }
+            else
+            {
+                selfRef ??= DotNetObjectReference.Create(this);
+                await keysModule.InvokeVoidAsync("init", backdropRef, selfRef, options);
+                keysBound = true;
+            }
+            sentKeys = options;
+        }
+        catch (JSDisconnectedException)
+        {
         }
     }
+
+    [JSInvokable]
+    public Task CloseFromKeyAsync() => Show ? CloseAsync() : Task.CompletedTask;
+
+    [JSInvokable]
+    public Task NextFromKeyAsync() => PlaylistKeys ? OnNext.InvokeAsync() : Task.CompletedTask;
+
+    [JSInvokable]
+    public Task PreviousFromKeyAsync() => PlaylistKeys && CanPrevious ? OnPrevious.InvokeAsync() : Task.CompletedTask;
 
     private async Task CloseAsync()
     {

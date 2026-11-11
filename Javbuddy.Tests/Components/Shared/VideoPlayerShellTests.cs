@@ -6,6 +6,7 @@ using Javbuddy.Services.Trickplay;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Shared;
@@ -26,6 +27,108 @@ public class VideoPlayerShellTests : BunitContext
         // Unconfigured, NSubstitute would answer "" rather than null: only movie 1 has a file.
         streamService.GetMainFilePathAsync(Arg.Any<int>()).Returns((string?)null);
         streamService.GetMainFilePathAsync(1).Returns("/library/ABC-123/ABC-123.mp4");
+    }
+
+    private const string KeysModulePath = "./Components/Shared/VideoPlayerShell.razor.js";
+
+    // What the browser's key handling calls back into: the reference the shell handed to the module.
+    private static VideoPlayerShell KeyTarget(BunitJSModuleInterop module) =>
+        ((DotNetObjectReference<VideoPlayerShell>)Assert.Single(module.Invocations, i => i.Identifier == "init").Arguments[1]!).Value;
+
+    private BunitJSModuleInterop SetupKeysModule()
+    {
+        var module = JSInterop.SetupModule(KeysModulePath);
+        module.Mode = JSRuntimeMode.Loose;
+        return module;
+    }
+
+    [Fact]
+    public void KeysAreHandledInTheBrowser_NotByAServerSideKeydownHandler()
+    {
+        var module = SetupKeysModule();
+        var cut = Render<VideoPlayerShell>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.MovieId, 1)
+            .Add(x => x.OnNext, () => { }));
+
+        // A bound @onkeydown would send every key (a held arrow, typing in the editor) to the server.
+        Assert.DoesNotContain("blazor:onkeydown", cut.Markup);
+        var init = Assert.Single(module.Invocations, i => i.Identifier == "init");
+        Assert.IsType<ElementReference>(init.Arguments[0]);
+    }
+
+    [Fact]
+    public async Task Escape_ClosesThePlayer()
+    {
+        var module = SetupKeysModule();
+        var closed = 0;
+        Render<VideoPlayerShell>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.MovieId, 1)
+            .Add(x => x.OnClose, () => closed++));
+
+        await KeyTarget(module).CloseFromKeyAsync();
+
+        Assert.Equal(1, closed);
+    }
+
+    [Theory]
+    [InlineData(true, true, true, true)]
+    [InlineData(true, false, true, false)]
+    [InlineData(false, true, false, false)]
+    public async Task NextAndPrevious_FollowThePlaylist_AndPreviousNeedsAnEarlierMovie(bool playlist, bool canPrevious, bool nextExpected, bool previousExpected)
+    {
+        var module = SetupKeysModule();
+        var next = 0;
+        var previous = 0;
+        Render<VideoPlayerShell>(p =>
+        {
+            p.Add(x => x.Show, true).Add(x => x.MovieId, 1).Add(x => x.CanPrevious, canPrevious);
+            if (playlist) p.Add(x => x.OnNext, () => next++).Add(x => x.OnPrevious, () => previous++);
+        });
+        var target = KeyTarget(module);
+
+        await target.NextFromKeyAsync();
+        await target.PreviousFromKeyAsync();
+
+        Assert.Equal(nextExpected ? 1 : 0, next);
+        Assert.Equal(previousExpected ? 1 : 0, previous);
+    }
+
+    [Fact]
+    public async Task WithASidePanel_NextAndPreviousStayOff_AsTheEditorsFieldsTakeTheirLetters()
+    {
+        var module = SetupKeysModule();
+        var next = 0;
+        Render<VideoPlayerShell>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.MovieId, 1)
+            .Add(x => x.CanPrevious, true)
+            .Add(x => x.OnNext, () => next++)
+            .Add(x => x.SidePanel, _ => builder => builder.AddContent(0, "panel")));
+
+        await KeyTarget(module).NextFromKeyAsync();
+
+        Assert.Equal(0, next);
+        Assert.False(((VideoPlayerShell.KeyOptions)module.Invocations.Single(i => i.Identifier == "init").Arguments[2]!).Playlist);
+    }
+
+    [Fact]
+    public void ThePlaylistState_IsPassedToTheBrowser_AndUpdatedWhenItChanges()
+    {
+        var module = SetupKeysModule();
+        var cut = Render<VideoPlayerShell>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.MovieId, 1)
+            .Add(x => x.OnNext, () => { }));
+        Assert.Equal(new VideoPlayerShell.KeyOptions(true), module.Invocations.Single(i => i.Identifier == "init").Arguments[2]);
+
+        // A side panel (the scene editor) turns the playlist keys off.
+        cut.Render(p => p.Add(x => x.SidePanel, (RenderFragment<TrickplayLayout?>)(_ => b => b.AddContent(0, "editor"))));
+
+        var update = Assert.Single(module.Invocations, i => i.Identifier == "update");
+        Assert.Equal(new VideoPlayerShell.KeyOptions(false), update.Arguments[1]);
+        Assert.Single(module.Invocations, i => i.Identifier == "init");
     }
 
     [Fact]

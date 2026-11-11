@@ -408,7 +408,7 @@ export function isShortcutBlocked(event) {
 // bottom `controlsStripPx`, where native controls sit) and the video's own fullscreen request all
 // toggle `container`, so the controls under the video stay visible. `root` gets `fullscreenClass`
 // while it's fullscreen. Entering fullscreen moves focus to <body>, so leaving it hands focus back
-// to whatever had it — the player's Esc-to-close handler listens on the focused backdrop
+// to whatever had it — the player's Esc-to-close handler (VideoPlayerShell.razor.js) listens on the backdrop
 //. Returns the teardown. Also used by ClipControls.razor.js.
 export function bindFullscreen(root, container, video, button, fullscreenClass, controlsStripPx) {
     const isFullscreen = () => document.fullscreenElement === container;
@@ -464,7 +464,7 @@ export function bindFullscreen(root, container, video, button, fullscreenClass, 
         if (wasFullscreen && !fs && !container?.isConnected) armResume();
         wasFullscreen = fs;
         // Entering fullscreen leaves focus on <body>, where a player modal's own keys (N, P, Esc,
-        // handled by an onkeydown on its backdrop, an ancestor of the column) would never arrive.
+        // handled by a keydown listener on its backdrop, an ancestor of the column) would never arrive.
         if (fs && container) {
             if (!container.hasAttribute('tabindex')) {
                 container.setAttribute('tabindex', '-1');

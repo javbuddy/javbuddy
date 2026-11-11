@@ -1,9 +1,9 @@
 @using Javbuddy.Services.Scenes
 <div class="apex-preview" role="tooltip">
     <div class="apex-preview-media">
-        @if (PreviewUrl is not null)
+        @if (HoverPreviewUrl is not null)
         {
-            <ScenePreviewMedia PreviewUrl="@PreviewUrl" />
+            <ScenePreviewMedia HoverPreviewUrl="@HoverPreviewUrl" />
         }
         else
         {
@@ -32,8 +32,10 @@
 @code {
     /// <summary>What hovering an apex marker shows: the looping clip around the apex,
     /// its actors, tags and time. Until the clip exists, the cards' placeholder: a shimmer while it's being
-    /// generated, or "No preview" when none can be made. The caller positions it.</summary>
-    [Parameter] public string? PreviewUrl { get; set; }
+    /// generated, or "No preview" when none can be made. The caller positions it and shows it only while
+    /// the marker is hovered; the clip is only a data attribute here, which ClipCard.razor.js's
+    /// bindHoverPreviews plays then.</summary>
+    [Parameter] public string? HoverPreviewUrl { get; set; }
 
     [Parameter] public bool Generating { get; set; }
 

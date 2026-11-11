@@ -41,6 +41,9 @@ public class SceneEditorPreviewFlowTests
             await page.Locator("button.movie-scenes-edit-btn").ClickAsync();
             var row = page.Locator(".video-player-side-panel .scene-editor-item");
             await Expect(row.Locator(".scene-editor-thumb img")).ToBeVisibleAsync();
+            // The editor binds its hover handling in the browser a moment after it renders; a pointer that
+            // arrives first is never re-sent as a hover.
+            await page.WaitForSelectorAsync(".clip-editor[data-hover-bound]", new() { State = Microsoft.Playwright.WaitForSelectorState.Attached });
 
             await row.HoverAsync();
 
