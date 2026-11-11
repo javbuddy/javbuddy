@@ -141,8 +141,10 @@ public class ActorPhotoUploadFlowTests
         await actorCard.Locator(".actor-card-link").ClickAsync();
         await Expect(page.Locator("h1.actor-hero-title")).ToContainTextAsync(displayName);
 
-        // 3. Upload initial photo
+        // 3. Upload initial photo. In-app navigation shows the prerendered page before its circuit is
+        // interactive, and a click in that window is dropped, so wait for the button's handler first.
         var changePhotoBtn = page.Locator(".actor-toolbar").GetByRole(AriaRole.Button, new() { Name = "Change Photo" });
+        await changePhotoBtn.WaitForInteractiveAsync();
         await changePhotoBtn.ClickAsync();
         var modal = page.Locator(".modal-shell-panel");
         await Expect(modal).ToBeVisibleAsync();
@@ -185,6 +187,7 @@ public class ActorPhotoUploadFlowTests
             await updatedCard.Locator(".actor-card-link").ClickAsync();
             await Expect(page.Locator("h1.actor-hero-title")).ToContainTextAsync(displayName);
 
+            await changePhotoBtn.WaitForInteractiveAsync();
             await changePhotoBtn.ClickAsync();
             await Expect(modal).ToBeVisibleAsync();
 
