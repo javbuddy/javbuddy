@@ -82,4 +82,39 @@ public class ProwlarrConnectionSectionConnectionTests : BunitContext
             Assert.DoesNotContain("Server version:", cut.Markup);
         });
     }
+
+    [Fact]
+    public async Task WhenEnvConfigured_TestConnection_DoesNotPersistTheEnvValuesToTheDatabase()
+    {
+        var dbFactory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(dbFactory);
+        Services.AddSingleton<IConnectionSettingsSaveService>(new ConnectionSettingsSaveService(dbFactory));
+        Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Prowlarr:BaseUrl"] = "http://env:9696",
+            ["Prowlarr:ApiKey"] = "env-secret",
+        }).Build());
+        var prowlarrClient = Substitute.For<IProwlarrClient>();
+        prowlarrClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new ProwlarrTestResult(true, "Connected successfully.", "1.0"));
+        Services.AddSingleton(prowlarrClient);
+
+        var cut = Render<ProwlarrConnectionSection>();
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Test connection").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("Connected successfully.", cut.Markup));
+        await using var db = await dbFactory.CreateDbContextAsync();
+        Assert.False(await db.ProwlarrSettings.AnyAsync());
+    }
+
+    [Fact]
+    public void WhenTheClientThrows_TestingIsCleared()
+    {
+        var prowlarrClient = SetUpServices();
+        prowlarrClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns<ProwlarrTestResult>(_ => throw new InvalidOperationException("boom"));
+
+        var cut = Render<ProwlarrConnectionSection>();
+        try { cut.FindAll("button").First(b => b.TextContent.Trim() == "Test connection").Click(); } catch (InvalidOperationException) { }
+
+        Assert.DoesNotContain("Testing…", cut.Markup);
+    }
 }
