@@ -1,6 +1,5 @@
 @using Javbuddy.Services
 @using Javbuddy.Services.Scenes
-@inject ITagService TagService
 
 @* An apex's add/edit form in ClipEditor, moved from ApexEditor. Actors follow
    ClipActorChips' inherit-until-chosen rule, computed at the form's time; a new apex is offered the
@@ -9,26 +8,18 @@
 <form class="apex-editor-form" @onsubmit="OnSave" @onsubmit:preventDefault>
     <label class="apex-editor-field">
         <span class="apex-editor-label">Time</span>
-        <span class="apex-editor-time-row">
-            <input class="apex-editor-input apex-editor-time-input" type="text" inputmode="decimal" placeholder="m:ss" @bind="Model.Time" @bind:event="oninput" />
-            <button type="button" class="apex-editor-btn apex-editor-now-btn" @onclick="OnNow" title="Use the player's current time">Now</button>
-        </span>
+        <ClipTimeField @bind-Value="Model.Time" ClassPrefix="apex-editor" InputClass="apex-editor-time-input" NowClass="apex-editor-now-btn"
+                       OnNow="OnNow" NowTitle="Use the player's current time" />
     </label>
     <div class="apex-editor-field">
         <span class="apex-editor-label">Plays <span class="apex-editor-hint">(seconds before and after; blank uses the default)</span></span>
         <span class="apex-editor-window-row">
-            <span class="apex-editor-time-row">
-                <input class="apex-editor-input apex-editor-lead-in-input" type="text" inputmode="decimal" aria-label="Lead-in seconds"
-                       placeholder="@ApexWindowText.Format(DefaultWindow.LeadInSeconds)" @bind="Model.LeadIn" @bind:event="oninput" />
-                <button type="button" class="apex-editor-btn apex-editor-now-btn apex-editor-lead-in-now-btn" @onclick="() => OnWindowNow.InvokeAsync(false)"
-                        title="Start playback at the player's current time (before the apex)">Now</button>
-            </span>
-            <span class="apex-editor-time-row">
-                <input class="apex-editor-input apex-editor-tail-input" type="text" inputmode="decimal" aria-label="Tail seconds"
-                       placeholder="@ApexWindowText.Format(DefaultWindow.TailSeconds)" @bind="Model.Tail" @bind:event="oninput" />
-                <button type="button" class="apex-editor-btn apex-editor-now-btn apex-editor-tail-now-btn" @onclick="() => OnWindowNow.InvokeAsync(true)"
-                        title="End the clip at the player's current time (after the apex)">Now</button>
-            </span>
+            <ClipTimeField @bind-Value="Model.LeadIn" ClassPrefix="apex-editor" Fill="true" AriaLabel="Lead-in seconds" Placeholder="@ApexWindowText.Format(DefaultWindow.LeadInSeconds)"
+                           InputClass="apex-editor-lead-in-input" NowClass="apex-editor-now-btn apex-editor-lead-in-now-btn"
+                           OnNow="() => OnWindowNow.InvokeAsync(false)" NowTitle="Start playback at the player's current time (before the apex)" />
+            <ClipTimeField @bind-Value="Model.Tail" ClassPrefix="apex-editor" Fill="true" AriaLabel="Tail seconds" Placeholder="@ApexWindowText.Format(DefaultWindow.TailSeconds)"
+                           InputClass="apex-editor-tail-input" NowClass="apex-editor-now-btn apex-editor-tail-now-btn"
+                           OnNow="() => OnWindowNow.InvokeAsync(true)" NowTitle="End the clip at the player's current time (after the apex)" />
         </span>
     </div>
     <div class="apex-editor-field">
@@ -37,29 +28,18 @@
     </div>
     <div class="apex-editor-field">
         <span class="apex-editor-label">Tags</span>
-        @if (Model.Tags.Count > 0)
-        {
-            <div class="apex-editor-chips">
-                @foreach (var tag in Model.Tags)
-                {
-                    <span class="apex-editor-chip">
-                        @ImplicitChip.TagLabel(tag)
-                        <button type="button" class="apex-editor-chip-remove" disabled="@Busy" aria-label="Remove @tag.Name" @onclick="() => Model.Tags.Remove(tag)">×</button>
-                    </span>
-                }
-            </div>
-        }
-        @if (Model.ApexId is null && PreviousTagSuggestions() is { Count: > 0 } suggestions)
-        {
-            <div class="apex-editor-suggestions" aria-label="Tags from the previous apex">
-                @foreach (var tag in suggestions)
-                {
-                    <button type="button" class="apex-editor-suggestion" disabled="@Busy" title="Add tag from the previous apex" @onclick="() => Model.Tags.Add(tag)">@ImplicitChip.TagLabel(tag)</button>
-                }
-                <button type="button" class="apex-editor-btn apex-editor-copy-tags-btn" disabled="@Busy" @onclick="() => Model.Tags.AddRange(suggestions)">Copy previous tags</button>
-            </div>
-        }
-        <TagSearchAdd ExcludedTagIds="@Model.Tags.Select(t => t.TagId).ToHashSet()" OnAdd="AddTagAsync" />
+        <ClipTagChips FormTags="Model.Tags" ClassPrefix="apex-editor" Busy="Busy" OnChanged="Rerender">
+            @if (Model.ApexId is null && PreviousTagSuggestions() is { Count: > 0 } suggestions)
+            {
+                <div class="apex-editor-suggestions" aria-label="Tags from the previous apex">
+                    @foreach (var tag in suggestions)
+                    {
+                        <button type="button" class="apex-editor-suggestion" disabled="@Busy" title="Add tag from the previous apex" @onclick="() => Model.Tags.Add(tag)">@ImplicitChip.TagLabel(tag)</button>
+                    }
+                    <button type="button" class="apex-editor-btn apex-editor-copy-tags-btn" disabled="@Busy" @onclick="() => Model.Tags.AddRange(suggestions)">Copy previous tags</button>
+                </div>
+            }
+        </ClipTagChips>
     </div>
     <div class="apex-editor-form-actions">
         <button type="submit" class="apex-editor-btn apex-editor-save-btn" disabled="@Busy">@(Model.ApexId is null ? "Add" : "Save")</button>
@@ -100,11 +80,9 @@
             ? ClipActors.ForNewApex(Cast, Scenes, Highlights, seconds)
             : ClipActors.ForNewApex(Cast, [], [], 0);
 
-    private async Task AddTagAsync(int tagId)
+    // A tag change moves the previous-tag suggestions; the callback re-renders this form.
+    private static void Rerender()
     {
-        if (Model.Tags.Any(t => t.TagId == tagId)) return;
-        if (await TagService.GetByIdAsync(tagId) is not { } tag) return;
-        Model.Tags.Add(new SceneTagItem(tag.Id, tag.Name, tag.ParentTag?.Name));
     }
 
     /// <summary>The previous apex's tags not yet on the new apex being added — re-evaluated

@@ -1,0 +1,29 @@
+/* The tag chips of the clip forms; reads the --scene-editor-* custom properties like ClipEditor. */
+.clip-tag-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+
+.clip-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background-color: rgba(47, 143, 214, 0.18);
+    border: 1px solid var(--jb-accent);
+    border-radius: 999px;
+}
+
+.clip-tag-chip-remove {
+    appearance: none;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+}

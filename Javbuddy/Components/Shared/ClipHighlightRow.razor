@@ -26,17 +26,8 @@
         <ImplicitChips Items="@ImplicitChip.ForTags(Node.ImplicitTags)" />
     </span>
 </button>
-<button type="button" class="highlight-editor-icon-btn highlight-editor-play-btn" @onclick="OnPlay" aria-label="Play @Highlight.DisplayTitle" title="Play just this highlight">
-    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" /></svg>
-</button>
-<button type="button" class="highlight-editor-icon-btn highlight-editor-fav-btn @(Highlight.IsFavorite ? "highlight-editor-fav-on" : null)" @onclick="OnToggleFavorite" disabled="@Busy"
-        aria-pressed="@(Highlight.IsFavorite ? "true" : "false")" aria-label="@(Highlight.IsFavorite ? "Unfavorite" : "Favorite") @Highlight.DisplayTitle" title="@(Highlight.IsFavorite ? "Remove from favorite highlights" : "Add to favorite highlights")">
-    <FavoriteHeartIcon Filled="Highlight.IsFavorite" Size="12" />
-</button>
-<button type="button" class="highlight-editor-icon-btn highlight-editor-edit-btn" @onclick="OnEdit" disabled="@Busy" aria-label="Edit @Highlight.DisplayTitle" title="Edit">
-    <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5z" /></svg>
-</button>
-<button type="button" class="highlight-editor-icon-btn highlight-editor-delete-btn" @onclick="OnDelete" disabled="@Busy" aria-label="Delete @Highlight.DisplayTitle" title="Delete">×</button>
+<ClipRowActions ClassPrefix="highlight-editor" Label="@Highlight.DisplayTitle" FavoriteNoun="highlights" IsFavorite="Highlight.IsFavorite" Busy="Busy"
+                OnPlay="OnPlay" PlayTitle="Play just this highlight" OnToggleFavorite="OnToggleFavorite" OnEdit="OnEdit" OnDelete="OnDelete" />
 
 @code {
     [Parameter, EditorRequired] public HighlightNode Node { get; set; } = null!;

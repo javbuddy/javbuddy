@@ -442,14 +442,8 @@
                 <ImplicitChips Items="@ImplicitChip.ForTags(node.ImplicitTags)" />
             </span>
         </button>
-        <button type="button" class="scene-editor-icon-btn scene-editor-fav-btn @(scene.IsFavorite ? "scene-editor-fav-on" : null)" @onclick="() => ToggleSceneFavoriteAsync(scene)" disabled="@busy"
-                aria-pressed="@(scene.IsFavorite ? "true" : "false")" aria-label="@(scene.IsFavorite ? "Unfavorite" : "Favorite") @scene.DisplayTitle" title="@(scene.IsFavorite ? "Remove from favorite scenes" : "Add to favorite scenes")">
-            <FavoriteHeartIcon Filled="scene.IsFavorite" Size="12" />
-        </button>
-        <button type="button" class="scene-editor-icon-btn scene-editor-edit-btn" @onclick="() => StartEditSceneAsync(scene)" disabled="@busy" aria-label="Edit @scene.DisplayTitle" title="Edit">
-            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5z" /></svg>
-        </button>
-        <button type="button" class="scene-editor-icon-btn scene-editor-delete-btn" @onclick="() => pendingDelete = scene" disabled="@busy" aria-label="Delete @scene.DisplayTitle" title="Delete">×</button>
+        <ClipRowActions ClassPrefix="scene-editor" Label="@scene.DisplayTitle" FavoriteNoun="scenes" IsFavorite="scene.IsFavorite" Busy="busy"
+                        OnToggleFavorite="() => ToggleSceneFavoriteAsync(scene)" OnEdit="() => StartEditSceneAsync(scene)" OnDelete="() => pendingDelete = scene" />
     };
 
     private RenderFragment Children(IReadOnlyList<HighlightNode> highlightNodes, IReadOnlyList<ApexNode> apexNodes) => __builder =>
@@ -1110,21 +1104,18 @@
         <div class="scene-editor-times">
             <label class="scene-editor-field">
                 <span class="scene-editor-label">Start</span>
-                <span class="scene-editor-time-row">
-                    <input class="scene-editor-input scene-editor-start-input" type="text" inputmode="decimal" placeholder="m:ss" @bind="sceneForm!.Start" @bind:event="oninput" />
-                    <button type="button" class="scene-editor-btn scene-editor-now-btn scene-editor-start-now-btn" @onclick="() => SetSceneTimeFromPlayerAsync(end: false)" title="Set from the player's current time">Now</button>
-                </span>
+                <ClipTimeField @bind-Value="sceneForm!.Start" ClassPrefix="scene-editor" InputClass="scene-editor-start-input" NowClass="scene-editor-now-btn scene-editor-start-now-btn"
+                               OnNow="() => SetSceneTimeFromPlayerAsync(end: false)" NowTitle="Set from the player's current time" />
             </label>
             <label class="scene-editor-field">
                 <span class="scene-editor-label">End <span class="scene-editor-hint">(optional)</span></span>
-                <span class="scene-editor-time-row">
-                    <input class="scene-editor-input scene-editor-end-input" type="text" inputmode="decimal" placeholder="next scene" @bind="sceneForm!.End" @bind:event="oninput" />
-                    <button type="button" class="scene-editor-btn scene-editor-now-btn scene-editor-end-now-btn" @onclick="() => SetSceneTimeFromPlayerAsync(end: true)" title="Set from the player's current time">Now</button>
+                <ClipTimeField @bind-Value="sceneForm!.End" ClassPrefix="scene-editor" Placeholder="next scene" InputClass="scene-editor-end-input" NowClass="scene-editor-now-btn scene-editor-end-now-btn"
+                               OnNow="() => SetSceneTimeFromPlayerAsync(end: true)" NowTitle="Set from the player's current time">
                     @if (!string.IsNullOrEmpty(sceneForm!.End))
                     {
                         <button type="button" class="scene-editor-icon-btn scene-editor-clear-end-btn" @onclick="() => sceneForm!.End = string.Empty" aria-label="Clear end" title="Clear end (run to the next scene)">×</button>
                     }
-                </span>
+                </ClipTimeField>
             </label>
         </div>
         <div class="scene-editor-form-actions">
@@ -1157,24 +1148,9 @@
                     var rolledUp = ImplicitChip.ForTags(editingNode?.ImplicitTags ?? []);
                     var redundant = editingNode?.RedundantTags ?? [];
                 }
-                @if (editing.Tags.Count > 0 || rolledUp.Count > 0)
-                {
-                    <div class="scene-editor-chips">
-                        @foreach (var tag in editing.Tags)
-                        {
-                            <span class="scene-editor-chip scene-editor-chip-on scene-editor-tag-chip">
-                                @ImplicitChip.TagLabel(tag)
-                                @if (redundant.FirstOrDefault(r => r.Tag.TagId == tag.TagId) is { } carried)
-                                {
-                                    <RedundantMark Tooltip="@ImplicitChip.RedundantTagTooltip(carried.Sources)" />
-                                }
-                                <button type="button" class="scene-editor-chip-remove" disabled="@busy" aria-label="Remove @tag.Name" @onclick="() => RemoveSceneTagAsync(editing.Id, tag.TagId)">×</button>
-                            </span>
-                        }
-                        <ImplicitChips Items="rolledUp" />
-                    </div>
-                }
-                <TagSearchAdd ExcludedTagIds="@editing.Tags.Select(t => t.TagId).ToHashSet()" OnAdd="tagId => AddSceneTagAsync(editing.Id, tagId)" />
+                <ClipTagChips Tags="editing.Tags" ClassPrefix="scene-editor" ChipClass="scene-editor-chip-on scene-editor-tag-chip" Busy="busy"
+                              RedundantTags="redundant" RolledUp="rolledUp"
+                              OnRemove="tag => RemoveSceneTagAsync(editing.Id, tag.TagId)" OnAdd="tagId => AddSceneTagAsync(editing.Id, tagId)" />
             </div>
             @ActorTagsFragment(ActorTagLevel.Scene, editing.Id, editing.EffectiveActors, actorTags.Scenes.GetValueOrDefault(editing.Id) ?? [])
         </div>
