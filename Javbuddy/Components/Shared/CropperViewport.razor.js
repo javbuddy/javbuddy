@@ -166,8 +166,34 @@ export class ImageCropper {
         this.rotation = (Number(degrees) || 0) * Math.PI / 180;
         if (this.img.complete && this.img.naturalWidth) {
             const zoom = this.zoom;
+            // Keep the user's crop box: remember its centre relative to the frame, lay out again (which
+            // resets it), then put it back, clamped to the newly straightened image. The frame's shape
+            // changes with the angle, so the box is resized by one factor (the image's own display scale)
+            // rather than per axis — that keeps a locked aspect ratio exact.
+            const old = this.imgPos.width > 0 && this.imgPos.height > 0 ? {
+                cx: (this.cropBox.x + this.cropBox.width / 2 - this.imgPos.x) / this.imgPos.width,
+                cy: (this.cropBox.y + this.cropBox.height / 2 - this.imgPos.y) / this.imgPos.height,
+                width: this.cropBox.width,
+                height: this.cropBox.height,
+                imageScale: this.imgPos.width / this.frameNaturalWidth
+            } : null;
             this.setupGeometry();
             this.applyZoom(zoom);
+            if (old) {
+                const factor = (this.imgPos.width / this.frameNaturalWidth) / old.imageScale;
+                const width = old.width * factor;
+                const height = old.height * factor;
+                const rel = { cx: old.cx, cy: old.cy };
+                this.cropBox = {
+                    x: this.imgPos.x + rel.cx * this.imgPos.width - width / 2,
+                    y: this.imgPos.y + rel.cy * this.imgPos.height - height / 2,
+                    width,
+                    height
+                };
+                this.clampCropBoxToImage();
+                this.updateCropDom();
+                this.updatePreviews();
+            }
         }
     }
 

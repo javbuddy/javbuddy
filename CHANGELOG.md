@@ -20,6 +20,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - **Test connection no longer saves environment settings.** On a connection configured by environment variables (Prowlarr, Javinizer, Jellyfin, qBittorrent, challenge solver), **Test connection** copied the environment values, API keys and passwords included, into the database. It now leaves the database alone, and the button no longer stays on "Testing…" if the test fails unexpectedly.
 - **Activity > Queue shows a new grab right away.** A release grabbed elsewhere appeared only after a manual refresh when the queue was empty.
 - **Ctrl+F no longer toggles fullscreen in the player.** The **F** shortcut also fired with Ctrl, Cmd or Alt held, so the browser's Find couldn't open. It now also stays out of the way in editable fields and while a dialog is open.
+- **The Straighten slider keeps your crop box.** Dragging it in the cover and portrait croppers reset the crop box on every tick; it now stays where you put it.
 
 ## [0.6.1] - 2026-11-10
 
