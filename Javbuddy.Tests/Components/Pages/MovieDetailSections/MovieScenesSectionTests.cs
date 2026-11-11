@@ -458,20 +458,47 @@ public class MovieScenesSectionTests : BunitContext
         Assert.Empty(cut.FindAll(".movie-scenes-apex-count"));
     }
 
+    // The preview is played by the browser (ClipCard.razor.js's bindHoverPreviews) from the URL in
+    // data-preview-src, not by a server-side hover handler: that took a round trip and a re-render of the
+    // section for every card the pointer crossed.
     [Fact]
-    public void HoveringASceneCard_PlaysItsPreviewOverTheScreenshot()
+    public void ACard_LeavesItsPreviewForTheBrowserToPlayOnHover()
     {
         var cut = RenderSection();
 
         var card = cut.FindAll(".movie-scenes-grid .movie-scenes-card")[1];
-        Assert.Null(card.QuerySelector("video"));
-        card.MouseEnter();
-
-        card = cut.FindAll(".movie-scenes-grid .movie-scenes-card")[1];
         Assert.Equal("/scene-image/2/thumb?v=99", card.QuerySelector("img")!.GetAttribute("src"));
-        Assert.Equal("/scene-image/2/preview?v=100", card.QuerySelector("video")!.GetAttribute("src"));
-        cut.FindAll(".movie-scenes-grid .movie-scenes-card")[1].MouseLeave();
-        Assert.Null(cut.FindAll(".movie-scenes-grid .movie-scenes-card")[1].QuerySelector("video"));
+        Assert.Equal("/scene-image/2/preview?v=100", card.QuerySelector(".scene-preview-live")!.GetAttribute("data-preview-src"));
+        Assert.Null(card.QuerySelector("video"));
+        Assert.DoesNotContain("blazor:onmouseenter", cut.Markup);
+        Assert.DoesNotContain("blazor:onmouseleave", cut.Markup);
+    }
+
+    [Fact]
+    public void TheCardsAndApexMarkers_AreBoundForHoverPreviews()
+    {
+        var clipCardModule = JSInterop.SetupModule("./Components/Shared/ClipCard.razor.js");
+        clipCardModule.Mode = JSRuntimeMode.Loose;
+
+        RenderSection();
+
+        var binding = Assert.Single(clipCardModule.Invocations, i => i.Identifier == "bindHoverPreviews");
+        Assert.Equal(".movie-scenes-card, .movie-scenes-timeline-apex-host", binding.Arguments[1]);
+    }
+
+    [Fact]
+    public async Task LeavingThePage_UnbindsTheHoverPreviews()
+    {
+        var clipCardModule = JSInterop.SetupModule("./Components/Shared/ClipCard.razor.js");
+        clipCardModule.Mode = JSRuntimeMode.Loose;
+        var binding = clipCardModule.SetupModule("bindHoverPreviews", _ => true);
+        binding.Mode = JSRuntimeMode.Loose;
+        var cut = RenderSection();
+
+        await cut.Instance.DisposeAsync();
+
+        // Its scroll listener is on window, so it would outlive the section without this.
+        Assert.Single(binding.Invocations, i => i.Identifier == "unbind");
     }
 
     [Fact]
@@ -664,25 +691,25 @@ public class MovieScenesSectionTests : BunitContext
             .Add(x => x.CanPlay, true)
             .Add(x => x.OnApexesChanged, onApexesChanged ?? (_ => { })));
 
+    // Every apex's popover is drawn, hidden, and shown by CSS while its marker is hovered; the clip
+    // itself is only a data attribute until the browser plays it for the hovered apex.
     [Fact]
-    public void HoveringAnApex_ShowsItsPreviewAboveIt_UntilThePointerLeaves()
+    public void EveryApex_HasItsPopoverReadyBesideItsMarker()
     {
         var cut = RenderWithApexes(LocalMovie);
-        Assert.Empty(cut.FindAll(".apex-preview"));
-        var marker = cut.FindAll(".movie-scenes-timeline-apex")[0];
-        // The popover replaces the browser tooltip.
-        Assert.False(marker.HasAttribute("title"));
 
-        marker.TriggerEvent("onmouseenter", new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
-
-        Assert.Equal("/apex-image/1/preview?v=77", cut.Find(".apex-preview video").GetAttribute("src"));
-        Assert.Equal(["Squirt"], cut.FindAll(".apex-preview-tag").Select(t => t.TextContent));
-        Assert.Equal("15:00", cut.Find(".apex-preview-time").TextContent);
-        Assert.Contains("--x:0.25", cut.Find(".movie-scenes-timeline-apex-popover").GetAttribute("style"));
-
-        cut.FindAll(".movie-scenes-timeline-apex")[0].TriggerEvent("onmouseleave", new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
-
-        Assert.Empty(cut.FindAll(".apex-preview"));
+        var hosts = cut.FindAll(".movie-scenes-timeline-apex-host");
+        Assert.Equal(2, hosts.Count);
+        var first = hosts[0];
+        // The popover replaces the browser tooltip, and follows the marker for the sibling :hover rule.
+        Assert.False(first.QuerySelector(".movie-scenes-timeline-apex")!.HasAttribute("title"));
+        Assert.Equal("movie-scenes-timeline-apex-popover", first.QuerySelector(".movie-scenes-timeline-apex")!.NextElementSibling!.ClassName);
+        Assert.Equal("/apex-image/1/preview?v=77", first.QuerySelector(".apex-preview .scene-preview-live")!.GetAttribute("data-preview-src"));
+        Assert.Empty(cut.FindAll(".apex-preview video"));
+        Assert.Equal(["Squirt"], first.QuerySelectorAll(".apex-preview-tag").Select(t => t.TextContent));
+        Assert.Equal("15:00", first.QuerySelector(".apex-preview-time")!.TextContent);
+        Assert.Contains("--x:0.25", first.QuerySelector(".movie-scenes-timeline-apex-popover")!.GetAttribute("style"));
+        Assert.DoesNotContain("blazor:onmouseenter", cut.Markup);
     }
 
     [Theory]
@@ -693,11 +720,11 @@ public class MovieScenesSectionTests : BunitContext
         apexMedia.ServesPreview.Returns(servesPreview);
         var cut = RenderWithApexes(LocalMovie);
 
-        cut.FindAll(".movie-scenes-timeline-apex")[1].TriggerEvent("onmouseenter", new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        var popover = cut.FindAll(".movie-scenes-timeline-apex-host")[1];
 
-        Assert.Empty(cut.FindAll(".apex-preview video"));
-        Assert.Equal(shimmer, cut.FindAll(".apex-preview .scene-preview-shimmer").Count == 1);
-        Assert.Equal(["Apex"], cut.FindAll(".apex-preview-tag").Select(t => t.TextContent));
+        Assert.Empty(popover.QuerySelectorAll(".scene-preview-live"));
+        Assert.Equal(shimmer, popover.QuerySelectorAll(".apex-preview .scene-preview-shimmer").Length == 1);
+        Assert.Equal(["Apex"], popover.QuerySelectorAll(".apex-preview-tag").Select(t => t.TextContent));
     }
 
     [Fact]
@@ -705,9 +732,9 @@ public class MovieScenesSectionTests : BunitContext
     {
         var cut = RenderWithApexes(PlayableMovie);
 
-        cut.FindAll(".movie-scenes-timeline-apex")[1].TriggerEvent("onmouseenter", new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        var popover = cut.FindAll(".movie-scenes-timeline-apex-host")[1];
 
-        Assert.Equal("No preview", cut.Find(".apex-preview .scene-preview-none").TextContent);
+        Assert.Equal("No preview", popover.QuerySelector(".apex-preview .scene-preview-none")!.TextContent);
     }
 
     [Fact]

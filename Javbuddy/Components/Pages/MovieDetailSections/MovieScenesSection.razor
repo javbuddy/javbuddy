@@ -24,8 +24,10 @@
    Favorite and rating are set right on the cards. Hovering the timeline previews the movie's
    trickplay at that moment, following the pointer only; a highlight pin
    previews from the highlight's own denser set when it has one.
-   Hovering an apex marker instead pops up its own clip, tags and time. *@
-<div class="movie-detail-section movie-scenes">
+   Hovering an apex marker instead pops up its own clip, tags and time. The popovers are all drawn,
+   hidden, and shown by CSS; ClipCard.razor.js's bindHoverPreviews starts the hovered apex's (and a
+   hovered card's) preview video in the browser, so hovering costs no server round trip. *@
+<div class="movie-detail-section movie-scenes" @ref="sectionRef">
     <div class="movie-scenes-header">
         <h2>Scenes@(Scenes.Count > 0 ? $" ({Scenes.Count})" : null)</h2>
         @if (CanPlay)
@@ -54,23 +56,23 @@
                     @foreach (var apex in Apexes)
                     {
                         var label = $"{apex.DisplayLabel} ({SceneTimeFormat.Format(apex.Seconds)})";
-                        <button type="button" class="movie-scenes-timeline-apex @(apex.IsFavorite ? "movie-scenes-timeline-apex-fav" : null)"
-                                style="@FormattableString.Invariant($"left:{Percent(apex.Seconds, duration):0.###}%")"
-                                data-start="@apex.Seconds.ToString(CultureInfo.InvariantCulture)" data-highlight-name="@apex.DisplayLabel"
-                                aria-label="Play @label" disabled="@(!CanPlay)"
-                                @onmouseenter="() => hoveredApexId = apex.Id" @onmouseleave="() => hoveredApexId = null"
-                                @onclick="() => PlayApex(apex)"></button>
-                    }
-                    @if (Apexes.FirstOrDefault(a => a.Id == hoveredApexId) is { } hovered)
-                    {
-                        var preview = hovered.PreviewVersion is { } previewVersion ? $"/apex-image/{hovered.Id}/preview?v={previewVersion}" : null;
-                        <div class="movie-scenes-timeline-apex-popover" aria-hidden="true"
-                             style="@FormattableString.Invariant($"--x:{Percent(hovered.Seconds, duration) / 100:0.#####}")">
-                            <div class="movie-scenes-timeline-apex-popover-at">
-                                <ApexPreviewPopover PreviewUrl="@preview" Generating="Movie.HasLocalVideo && ApexMedia.ServesPreview"
-                                                    Actors="hovered.Actors" Tags="hovered.Tags" Seconds="hovered.Seconds" />
+                        var preview = apex.PreviewVersion is { } previewVersion ? $"/apex-image/{apex.Id}/preview?v={previewVersion}" : null;
+                        @* display: contents, so the marker and its popover are positioned against the row; the
+                           hover binding treats the pair as one card. *@
+                        <span class="movie-scenes-timeline-apex-host" @key="apex.Id">
+                            <button type="button" class="movie-scenes-timeline-apex @(apex.IsFavorite ? "movie-scenes-timeline-apex-fav" : null)"
+                                    style="@FormattableString.Invariant($"left:{Percent(apex.Seconds, duration):0.###}%")"
+                                    data-start="@apex.Seconds.ToString(CultureInfo.InvariantCulture)" data-highlight-name="@apex.DisplayLabel"
+                                    aria-label="Play @label" disabled="@(!CanPlay)"
+                                    @onclick="() => PlayApex(apex)"></button>
+                            <div class="movie-scenes-timeline-apex-popover" aria-hidden="true"
+                                 style="@FormattableString.Invariant($"--x:{Percent(apex.Seconds, duration) / 100:0.#####}")">
+                                <div class="movie-scenes-timeline-apex-popover-at">
+                                    <ApexPreviewPopover HoverPreviewUrl="@preview" Generating="Movie.HasLocalVideo && ApexMedia.ServesPreview"
+                                                        Actors="apex.Actors" Tags="apex.Tags" Seconds="apex.Seconds" />
+                                </div>
                             </div>
-                        </div>
+                        </span>
                     }
                 </div>
             }
@@ -145,11 +147,10 @@
             <div class="movie-scenes-shelf" @ref="shelfRef">
                 @foreach (var highlight in Highlights)
                 {
-                    <div class="movie-scenes-card movie-scenes-card-highlight" @key="highlight.Id"
-                         @onmouseenter="() => hoveredHighlightId = highlight.Id" @onmouseleave="() => hoveredHighlightId = null">
+                    <div class="movie-scenes-card movie-scenes-card-highlight" @key="highlight.Id">
                         @{
                             var thumb = highlight.ThumbVersion is { } thumbVersion ? $"/highlight-image/{highlight.Id}/thumb?v={thumbVersion}" : null;
-                            var preview = hoveredHighlightId == highlight.Id && highlight.PreviewVersion is { } previewVersion
+                            var preview = highlight.PreviewVersion is { } previewVersion
                                 ? $"/highlight-image/{highlight.Id}/preview?v={previewVersion}"
                                 : null;
                         }
@@ -182,11 +183,10 @@
             <div class="movie-scenes-grid">
                 @foreach (var scene in Scenes)
                 {
-                    <div class="movie-scenes-card" @key="scene.Id"
-                         @onmouseenter="() => hoveredSceneId = scene.Id" @onmouseleave="() => hoveredSceneId = null">
+                    <div class="movie-scenes-card" @key="scene.Id">
                         @{
                             var thumb = scene.ThumbVersion is { } thumbVersion ? $"/scene-image/{scene.Id}/thumb?v={thumbVersion}" : null;
-                            var preview = hoveredSceneId == scene.Id && scene.PreviewVersion is { } previewVersion
+                            var preview = scene.PreviewVersion is { } previewVersion
                                 ? $"/scene-image/{scene.Id}/preview?v={previewVersion}"
                                 : null;
                             var highlightCount = HighlightCounts.GetValueOrDefault(scene.Id);
@@ -320,9 +320,9 @@
     // What the actor tags were last loaded for. Any change to the clips, the cast or an actor tag reaches here as new
     // lists from the page (the editor reloads them after each save); a render with the same ones needn't query again.
     private (int MovieId, object Cast, object Scenes, object Highlights, object Apexes)? actorTagsLoadedFor;
-    private int? hoveredSceneId;
-    private int? hoveredHighlightId;
-    private int? hoveredApexId;
+    private ElementReference sectionRef;
+    private IJSObjectReference? clipCardModule;
+    private IJSObjectReference? hoverPreviews;
     private PlayerClip? playingClip;
     private PlayerClip[]? playlist;
     private int playlistIndex;
@@ -426,7 +426,28 @@
         if (highlightTrickplayLoadedFor == ids) highlightTrickplay = loaded;
     }
 
-    protected override Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await BindHoverPreviewsAsync();
+        await SyncTimelineAsync();
+    }
+
+    // A hovered card or apex marker plays its preview in the browser (ClipCard.razor.js), not through a
+    // server-side hover state.
+    private async Task BindHoverPreviewsAsync()
+    {
+        try
+        {
+            clipCardModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
+            hoverPreviews = await clipCardModule.InvokeAsync<IJSObjectReference>("bindHoverPreviews", sectionRef,
+                ".movie-scenes-card, .movie-scenes-timeline-apex-host");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    private Task SyncTimelineAsync()
     {
         // The timeline comes and goes with the runtime and the scenes, and trickplay loads after it's
         // up: (re)initialise its hover preview whenever either changed. Chained, like ScrubBar, so an
@@ -620,6 +641,18 @@
         TrickplayGeneration.Changed -= OnTrickplayGenerationChanged;
         // An init still in flight would otherwise bind its listeners after this dispose.
         await timelineInitialising;
+        try
+        {
+            if (hoverPreviews is not null)
+            {
+                await hoverPreviews.InvokeVoidAsync("unbind");
+                await hoverPreviews.DisposeAsync();
+            }
+            if (clipCardModule is not null) await clipCardModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
         if (module is null) return;
         try
         {
@@ -634,10 +667,10 @@
 
     // The 16:9 picture shared by both card kinds; clicking it plays the clip when the movie can play.
     // Without a screenshot yet it shimmers while one is generated.
-    private RenderFragment Media(string? thumbUrl, string? previewUrl, bool servesThumb, Action play, string playLabel, RenderFragment overlay) => @<div class="movie-scenes-media">
+    private RenderFragment Media(string? thumbUrl, string? hoverPreviewUrl, bool servesThumb, Action play, string playLabel, RenderFragment overlay) => @<div class="movie-scenes-media">
         @if (thumbUrl is not null)
         {
-            <ScenePreviewMedia ThumbUrl="@thumbUrl" PreviewUrl="@previewUrl" />
+            <ScenePreviewMedia ThumbUrl="@thumbUrl" HoverPreviewUrl="@hoverPreviewUrl" />
         }
         else
         {

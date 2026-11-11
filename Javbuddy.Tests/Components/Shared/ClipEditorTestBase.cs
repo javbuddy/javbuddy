@@ -26,6 +26,7 @@ public abstract class ClipEditorTestBase : BunitContext
     protected readonly MovieHighlightService highlightService;
     protected readonly MovieApexService apexService;
     protected readonly BunitJSModuleInterop module;
+    protected readonly BunitJSModuleInterop hoverModule;
     protected readonly ISceneChapterImportService chapterImport = Substitute.For<ISceneChapterImportService>();
     protected readonly ISceneMediaService sceneMedia = Substitute.For<ISceneMediaService>();
     protected readonly IHighlightMediaService highlightMedia = Substitute.For<IHighlightMediaService>();
@@ -57,6 +58,8 @@ public abstract class ClipEditorTestBase : BunitContext
         Services.AddSingleton(mediaQueue);
         module = JSInterop.SetupModule(ModulePath);
         module.Mode = JSRuntimeMode.Loose;
+        hoverModule = JSInterop.SetupModule("./Components/Shared/ClipCard.razor.js");
+        hoverModule.Mode = JSRuntimeMode.Loose;
 
         using var db = factory.CreateDbContext();
         var movie = new Movie { Code = "ABC-123", MediaDurationSeconds = 3600 };

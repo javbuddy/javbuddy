@@ -445,7 +445,7 @@ public class ClipEditorSceneTests : ClipEditorTestBase
     }
 
     [Fact]
-    public async Task SceneWithMedia_ShowsScreenshot_AndThePreviewWhileHovered()
+    public async Task SceneWithMedia_ShowsScreenshot_AndLeavesThePreviewForTheBrowserToPlayWhileHovered()
     {
         var sceneId = await SeedSceneWithMediaAsync();
         var version = new DateTime(2026, 9, 25, 0, 0, 0, DateTimeKind.Utc).Ticks;
@@ -454,14 +454,12 @@ public class ClipEditorSceneTests : ClipEditorTestBase
         Assert.Equal($"/scene-image/{sceneId}/thumb?v={version}", cut.Find(".scene-editor-thumb img").GetAttribute("src"));
         Assert.Empty(cut.FindAll(".scene-editor-thumb video"));
 
-        // The preview is a WebM video, so it plays in a <video> over the screenshot
-        // rather than as the <img>'s src.
-        cut.Find(".scene-editor-item").MouseEnter();
-        Assert.Equal($"/scene-image/{sceneId}/preview?v={version}", cut.Find(".scene-editor-thumb video").GetAttribute("src"));
-        Assert.Equal($"/scene-image/{sceneId}/thumb?v={version}", cut.Find(".scene-editor-thumb img").GetAttribute("src"));
-
-        cut.Find(".scene-editor-item").MouseLeave();
-        Assert.Empty(cut.FindAll(".scene-editor-thumb video"));
+        // The preview is a WebM video, played by the browser in a <video> over the screenshot while the row
+        // is hovered (ClipCard.razor.js's bindHoverPreviews), not by a server-side hover handler.
+        Assert.Equal($"/scene-image/{sceneId}/preview?v={version}", cut.Find(".scene-editor-thumb .scene-preview-live").GetAttribute("data-preview-src"));
+        Assert.DoesNotContain("blazor:onmouseenter", cut.Find(".scene-editor-item").OuterHtml);
+        var binding = Assert.Single(hoverModule.Invocations, i => i.Identifier == "bindHoverPreviews");
+        Assert.Equal(".scene-editor-item", binding.Arguments[1]);
         await sceneMedia.DidNotReceive().EnsureQueuedAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 

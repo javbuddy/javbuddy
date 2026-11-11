@@ -11,6 +11,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ### Changed
 
 - **The movie player stays responsive while you type in the scene editor or hold an arrow key.** Every key pressed in the player, each character typed in the editor's fields and every auto-repeat of a held arrow, was sent to the server and redrew the player. Now only Esc and a playlist's N / P are. In a movie playlist, N and P now also stay out of the way while a dialog is open over the player, as in the clip player.
+- **Hovering a scene card, a scene row in the editor or an apex marker on Movie Detail no longer redraws the page.** The preview is started by the browser, as on the Scenes wall; each hover used to be a server round trip. The preview now starts after the pointer has rested for a moment.
 - **The player's volume slider appears on hover.** The slider no longer sits beside the mute button permanently: it pops up above the speaker icon while you hover (or focus) it, so the timeline gets the space back.
 
 ### Fixed

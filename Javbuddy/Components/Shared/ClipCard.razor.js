@@ -16,13 +16,15 @@ export function preventPlainCardClicks(container) {
 // leaves. Doing it here rather than through Blazor's mouseenter/mouseleave means hovering costs no
 // round trip to the server and no re-render, which added up when a scroll carried a window of cards
 // under a still pointer. The delay, and restarting it while the page scrolls, keep a card that only
-// passes under the pointer from starting a download. Bound like preventPlainCardClicks, and the returned
+// passes under the pointer from starting a download. `cardSelector` names what counts as a card: the
+// wall's cards by default, Movie Detail's scene cards and apex markers and the scene editor's rows for
+// those hosts. Bound like preventPlainCardClicks, and the returned
 // reference's unbind() unbinds it, since the window's scroll listener would otherwise outlive the host.
 // The container gets data-hover-bound once it listens; data-hover-preview-delay overrides the delay
 // (both are attributes Blazor never renders, so they survive its re-renders), for tests.
 const HOVER_PREVIEW_DELAY_MS = 75;
 
-export function bindHoverPreviews(container) {
+export function bindHoverPreviews(container, cardSelector = '.scene-wall-card') {
     let card = null;
     let timer = 0;
     let video = null;
@@ -67,7 +69,7 @@ export function bindHoverPreviews(container) {
     };
 
     const onOver = e => {
-        const over = e.target.closest?.('.scene-wall-card');
+        const over = e.target.closest?.(cardSelector);
         if (over === card) return;
         stop();
         card = over && container.contains(over) ? over : null;
