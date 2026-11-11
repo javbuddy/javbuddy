@@ -1,0 +1,88 @@
+@using Javbuddy.Services
+@inject ITagService TagService
+
+@* A scene, highlight or apex form's tags: removable chips (own tags that rolled-up tags repeat marked
+   redundant, rolled-up ones grayed beside them), an optional slot for extras (the apex form's suggestions)
+   and the add box. Either edits FormTags in place, for the highlight and apex forms (OnChanged then lets the
+   form re-render what depends on them), or hands the change to OnAdd / OnRemove, for the scene form, which
+   saves each at once. ClassPrefix keeps each form's class names on the chips. *@
+@{
+    var items = FormTags ?? Tags;
+}
+@if (items.Count > 0 || RolledUp.Count > 0)
+{
+    <div class="clip-tag-chips @ClassPrefix-chips">
+        @foreach (var tag in items)
+        {
+            <span class="clip-tag-chip @ClassPrefix-chip @ChipClass">
+                @ImplicitChip.TagLabel(tag)
+                @if (RedundantTags.FirstOrDefault(r => r.Tag.TagId == tag.TagId) is { } carried)
+                {
+                    <RedundantMark Tooltip="@ImplicitChip.RedundantTagTooltip(carried.Sources)" />
+                }
+                <button type="button" class="clip-tag-chip-remove @ClassPrefix-chip-remove" disabled="@Busy" aria-label="Remove @tag.Name" @onclick="() => RemoveAsync(tag)">×</button>
+            </span>
+        }
+        <ImplicitChips Items="RolledUp" />
+    </div>
+}
+@ChildContent
+<TagSearchAdd ExcludedTagIds="@items.Select(t => t.TagId).ToHashSet()" OnAdd="AddAsync" />
+
+@code {
+    /// <summary>The tags shown, when saved through <see cref="OnAdd"/> / <see cref="OnRemove"/>.</summary>
+    [Parameter] public IReadOnlyList<SceneTagItem> Tags { get; set; } = [];
+
+    /// <summary>A form's tag list, which the component adds to and removes from itself (resolving an added
+    /// tag through <see cref="ITagService"/>). Takes the place of <see cref="Tags"/>.</summary>
+    [Parameter] public List<SceneTagItem>? FormTags { get; set; }
+
+    /// <summary>An added tag's ID, when <see cref="FormTags"/> is not set.</summary>
+    [Parameter] public EventCallback<int> OnAdd { get; set; }
+
+    /// <summary>A removed tag, when <see cref="FormTags"/> is not set.</summary>
+    [Parameter] public EventCallback<SceneTagItem> OnRemove { get; set; }
+
+    /// <summary>Raised after the component changed <see cref="FormTags"/>; the receiver re-renders.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    /// <summary>Own tags that <see cref="RolledUp"/>'s sources carry anyway, marked redundant.</summary>
+    [Parameter] public IReadOnlyList<ImplicitTag> RedundantTags { get; set; } = [];
+
+    /// <summary>What the clips below roll up to this one, grayed beside its own tags.</summary>
+    [Parameter] public IReadOnlyList<ImplicitChip> RolledUp { get; set; } = [];
+
+    [Parameter, EditorRequired] public string ClassPrefix { get; set; } = string.Empty;
+
+    /// <summary>Extra classes on each own-tag chip.</summary>
+    [Parameter] public string? ChipClass { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Rendered between the chips and the add box.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private async Task AddAsync(int tagId)
+    {
+        if (FormTags is null)
+        {
+            await OnAdd.InvokeAsync(tagId);
+            return;
+        }
+        if (FormTags.Any(t => t.TagId == tagId)) return;
+        if (await TagService.GetByIdAsync(tagId) is not { } tag) return;
+        FormTags.Add(new SceneTagItem(tag.Id, tag.Name, tag.ParentTag?.Name));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(SceneTagItem tag)
+    {
+        if (FormTags is null)
+        {
+            await OnRemove.InvokeAsync(tag);
+            return;
+        }
+        FormTags.Remove(tag);
+        await OnChanged.InvokeAsync();
+    }
+}

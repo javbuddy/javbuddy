@@ -1,0 +1,43 @@
+/* The time row of the clip forms; reads the --scene-editor-* custom properties like ClipEditor. */
+.clip-time-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.clip-time-row-fill {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.clip-time-input {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background-color: var(--scene-editor-input-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.clip-time-now-btn {
+    appearance: none;
+    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    color: var(--scene-editor-accent, #6ea8fe);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    white-space: nowrap;
+}
+
+.clip-time-now-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
