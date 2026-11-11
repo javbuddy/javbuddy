@@ -23,7 +23,6 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - run: dotnet format Javbuddy.slnx --verify-no-changes
 
   test:
@@ -33,7 +32,6 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg fontconfig
       - run: dotnet test Javbuddy.Tests/Javbuddy.Tests.csproj --logger "trx;LogFileName=unit.trx" --results-directory TestResults/unit
       - if: always()
@@ -50,7 +48,6 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 11.0.x
-          dotnet-quality: preview
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg fontconfig
       - run: dotnet build Javbuddy.E2ETests/Javbuddy.E2ETests.csproj
       - uses: actions/cache@v6
