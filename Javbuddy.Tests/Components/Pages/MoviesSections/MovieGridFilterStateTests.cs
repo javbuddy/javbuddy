@@ -220,4 +220,21 @@ public class MovieGridFilterStateTests
         Assert.Equal(state.CatalogFilter!.Key, restored.CatalogFilter!.Key);
         Assert.DoesNotContain("\"Key\"", json);
     }
+
+    [Fact]
+    public void SelectAll_IncludesTheValuesAndTakesThemOutOfTheExcludedSet_AndSelectNoneClearsBoth()
+    {
+        HashSet<string> included = new(StringComparer.OrdinalIgnoreCase) { "A" };
+        HashSet<string> excluded = new(StringComparer.OrdinalIgnoreCase) { "B", "C" };
+
+        MovieGridFilterState.SelectAll(included, excluded, new[] { "b", "D" });
+
+        Assert.Equal(new[] { "A", "b", "D" }, included.Order());
+        Assert.Equal(new[] { "C" }, excluded);
+
+        MovieGridFilterState.SelectNone(included, excluded);
+
+        Assert.Empty(included);
+        Assert.Empty(excluded);
+    }
 }

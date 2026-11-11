@@ -272,49 +272,50 @@ else
                             <MovieFilterToolbar TotalCount="@StatusCounts.Total"
                                                 MissingCount="@StatusCounts.Missing"
                                                 GotCount="@StatusCounts.Got"
-                                                StatusFilter="@filter"
-                                                OnStatusFilterChanged="SetFilter"
+                                                StatusFilter="@filters.Status"
+                                                OnStatusFilterChanged="status => Change(() => filters.Status = status)"
                                                 LibraryNames="@libraryNames"
-                                                LibraryFilter="@libraryFilter"
-                                                OnLibraryFilterChanged="OnLibraryFilterChanged"
-                                                TextFilter="@textFilter"
-                                                OnTextFilterChanged="OnTextFilterChanged"
-                                                ResolutionFilter="@resolutionFilter"
-                                                OnToggleResolution="ToggleResolutionFilter"
-                                                ScanTypeFilter="@scanTypeFilter"
-                                                OnToggleScanType="ToggleScanTypeFilter"
-                                                ContentTypeFilter="@contentTypeFilter"
-                                                OnToggleContentType="type => contentTypeFilter.Toggle(type)"
-                                                NfoDriftFilter="@nfoDriftFilter"
-                                                OnToggleNfoDrift="ToggleNfoDriftFilter"
+                                                LibraryFilter="@filters.Library"
+                                                OnLibraryFilterChanged="library => Change(() => filters.Library = library)"
+                                                TextFilter="@filters.Text"
+                                                OnTextFilterChanged="text => Change(() => filters.Text = text)"
+                                                ResolutionFilter="@filters.Resolutions"
+                                                OnToggleResolution="bucket => Change(() => filters.Resolutions.Toggle(bucket))"
+                                                ScanTypeFilter="@filters.ScanTypes"
+                                                OnToggleScanType="scanType => Change(() => filters.ScanTypes.Toggle(scanType))"
+                                                ContentTypeFilter="@filters.ContentTypes"
+                                                ExcludedContentTypeFilter="@filters.ExcludedContentTypes"
+                                                OnToggleContentType="type => Change(() => filters.ContentTypes.CycleInclusion(filters.ExcludedContentTypes, type))"
+                                                NfoDriftFilter="@filters.NfoDriftKinds"
+                                                OnToggleNfoDrift="kind => Change(() => filters.NfoDriftKinds.Toggle(kind))"
                                                 AvailableCodecs="@availableCodecs"
-                                                CodecFilter="@codecFilter"
-                                                OnToggleCodec="ToggleCodecFilter"
+                                                CodecFilter="@filters.Codecs"
+                                                OnToggleCodec="codec => Change(() => filters.Codecs.Toggle(codec))"
                                                 AvailableStudios="@availableStudios"
-                                                StudioFilter="@studioFilter"
-                                                OnToggleStudio="ToggleStudioFilter"
-                                                OnSelectAllStudios="SelectAllStudios"
-                                                OnSelectNoneStudios="SelectNoneStudios"
+                                                StudioFilter="@filters.Studios"
+                                                OnToggleStudio="studio => Change(() => filters.Studios.CycleInclusion(filters.ExcludedStudios, studio))"
+                                                OnSelectAllStudios="studios => Change(() => MovieGridFilterState.SelectAll(filters.Studios, filters.ExcludedStudios, studios))"
+                                                OnSelectNoneStudios="() => Change(() => MovieGridFilterState.SelectNone(filters.Studios, filters.ExcludedStudios))"
                                                 Excludable="true"
-                                                ExcludedStudioFilter="@excludedStudioFilter"
-                                                ExcludedGenreFilter="@excludedGenreFilter"
+                                                ExcludedStudioFilter="@filters.ExcludedStudios"
+                                                ExcludedGenreFilter="@filters.ExcludedGenres"
                                                 AvailableGenres="@availableGenres"
-                                                GenreFilter="@genreFilter"
-                                                OnToggleGenre="ToggleGenreFilter"
-                                                OnSelectAllGenres="SelectAllGenres"
-                                                OnSelectNoneGenres="SelectNoneGenres"
-                                                FeatureFilter="@featureFilter"
-                                                OnToggleFeature="ToggleFeatureFilter"
+                                                GenreFilter="@filters.Genres"
+                                                OnToggleGenre="genre => Change(() => filters.Genres.CycleInclusion(filters.ExcludedGenres, genre))"
+                                                OnSelectAllGenres="genres => Change(() => MovieGridFilterState.SelectAll(filters.Genres, filters.ExcludedGenres, genres))"
+                                                OnSelectNoneGenres="() => Change(() => MovieGridFilterState.SelectNone(filters.Genres, filters.ExcludedGenres))"
+                                                FeatureFilter="@filters.Features"
+                                                OnToggleFeature="feature => Change(() => filters.Features.Toggle(feature))"
                                                 CountOptions="@countOptions"
-                                                CountSelection="@countFilter"
-                                                OnCountsChanged="edited => countFilter = MovieFilterOptions.MergeCounts(countFilter, edited, countOptions)"
+                                                CountSelection="@filters.Counts"
+                                                OnCountsChanged="edited => Change(() => filters.Counts = MovieFilterOptions.MergeCounts(filters.Counts, edited, countOptions))"
                                                 RangeOptions="@rangeOptions"
-                                                RangeSelection="@rangeFilter"
-                                                OnRangesChanged="edited => rangeFilter = MovieFilterOptions.MergeRanges(rangeFilter, edited, rangeOptions)"
-                                                SortField="@sortField"
-                                                SortDescending="@sortDescending"
+                                                RangeSelection="@filters.Ranges"
+                                                OnRangesChanged="edited => Change(() => filters.Ranges = MovieFilterOptions.MergeRanges(filters.Ranges, edited, rangeOptions))"
+                                                SortField="@filters.SortField"
+                                                SortDescending="@filters.SortDescending"
                                                 OnSortChanged="SetSort"
-                                                HasActiveFilters="@HasActiveFilters"
+                                                HasActiveFilters="@filters.HasActiveFilters"
                                                 OnResetFilters="ResetFilters" />
 
                             @if (!DisplayedMovies.Any())
@@ -405,26 +406,10 @@ else
     private bool loaded;
     private bool hasImage;
     private List<Movie> allMovies = new();
-    private MovieStatus? filter;
-    private string? libraryFilter;
-    private HashSet<MovieResolutionFilterOption> resolutionFilter = new();
-    private HashSet<MovieScanTypeFilterOption> scanTypeFilter = new();
-    private HashSet<MovieContentType> contentTypeFilter = new();
-    private HashSet<NfoDriftKind> nfoDriftFilter = new();
-    private HashSet<string> codecFilter = new(StringComparer.OrdinalIgnoreCase);
-    private HashSet<string> studioFilter = new(StringComparer.OrdinalIgnoreCase);
-    private HashSet<string> genreFilter = new(StringComparer.OrdinalIgnoreCase);
-    private HashSet<string> excludedStudioFilter = new(StringComparer.OrdinalIgnoreCase);
-    private HashSet<string> excludedGenreFilter = new(StringComparer.OrdinalIgnoreCase);
-    private HashSet<MovieFeatureFilterOption> featureFilter = new();
-    private MovieCountSelection countFilter = MovieCountSelection.Empty;
+    // Releases first on an actor page; the Movies page defaults to date added. Not persisted in a cookie like Movies'.
+    private readonly MovieGridFilterState filters = new() { SortField = "release" };
     private MovieCountOptions countOptions = MovieCountOptions.None;
-    private MovieRangeSelection rangeFilter = MovieRangeSelection.Empty;
     private MovieRangeOptions rangeOptions = MovieRangeOptions.None;
-    private string textFilter = "";
-    private string sortField = "release";
-    private bool sortDescending = true;
-    private int randomSortSeed = Random.Shared.Next(1, int.MaxValue);
     private List<string> libraryNames = new();
     private List<string> availableCodecs = new();
     private List<string> availableStudios = new();
@@ -446,6 +431,9 @@ else
     private ActorPortraitInfo portraitInfo = new(false, false, false);
     private string? jellyfinWebUrl;
     private ElementReference moviesGridRef;
+    // What the IntersectionObserver last scanned the grid for: the posters rendered by this view version,
+    // with these poster options, inside this grid element (a re-created element gets a new Id).
+    private (int ViewVersion, MoviePosterOptions Options, string? GridId)? observedGrid;
     private MoviePosterOptions posterOptions = MoviePosterOptions.Default;
     private IReadOnlySet<string> downloadingCodes = new HashSet<string>();
     private IJSObjectReference? jsModule;
@@ -491,6 +479,7 @@ else
         // Reset per-actor state so a stale previous actor's movies/flags can never leak through
         // while this instance is reused across a route-parameter change.
         allMovies = new();
+        viewStale = true;
         imageCount = 0;
         hasImage = false;
         portraitInfo = new(false, false, false);
@@ -509,6 +498,7 @@ else
             imageVersion = portraitInfo.ImageVersion;
 
             allMovies = await ActorDetailQuery.GetMoviesAsync(actor.Id);
+            viewStale = true;
             downloadingCodes = await ActorDetailQuery.GetDownloadingCodesAsync();
 
             PopulateAvailableOptions();
@@ -550,9 +540,9 @@ else
             allMovies.Select(m => m.Scenes.Count).DefaultIfEmpty().Max(),
             allMovies.Select(m => m.Highlights.Count).DefaultIfEmpty().Max(),
             allMovies.Select(m => m.Apexes.Count).DefaultIfEmpty().Max());
-        countFilter = MovieFilterOptions.NormalizeCounts(countFilter, countOptions);
+        filters.Counts = MovieFilterOptions.NormalizeCounts(filters.Counts, countOptions);
         rangeOptions = MovieRangeOptions.FromMovies(allMovies);
-        rangeFilter = MovieFilterOptions.NormalizeRanges(rangeFilter, rangeOptions);
+        filters.Ranges = MovieFilterOptions.NormalizeRanges(filters.Ranges, rangeOptions);
 
         libraryNames = allMovies
             .Where(m => !string.IsNullOrWhiteSpace(m.LocalRootPath))
@@ -564,65 +554,60 @@ else
 
     // The filtered, counted and sorted movies are worked out once per change to the filters, sort or loaded
     // movies, not once per use: the markup reads the counts and the list several times a render, and every
-    // read used to filter and sort the whole filmography again. The key compares the loaded list by
-    // reference (it is only ever replaced) and everything else by value.
-    private sealed record ViewKey(
-        List<Movie> AllMovies, MovieStatus? Status, string? Library, string Text,
-        string SortField, bool SortDescending, int RandomSortSeed, string Filters);
-
-    private ViewKey? viewKey;
+    // read used to filter and sort the whole filmography again. Everything that changes the view goes through
+    // Change() (or marks the view stale itself), so no per-read comparison of the filter state is needed.
+    private bool viewStale = true;
+    private int viewVersion;
     private List<Movie> displayedMovies = new();
     private (int Total, int Missing, int Got) statusCounts;
 
+    private void Change(Action change)
+    {
+        change();
+        viewStale = true;
+    }
+
     private void EnsureView()
     {
-        var key = new ViewKey(allMovies, filter, libraryFilter, textFilter, sortField, sortDescending, randomSortSeed, FilterFingerprint());
-        if (key == viewKey) return;
+        if (!viewStale) return;
 
         var withoutStatus = FilteredMoviesWithoutStatus().ToList();
         statusCounts = (withoutStatus.Count, withoutStatus.Count(m => m.Status == MovieStatus.Missing), withoutStatus.Count(m => m.Status == MovieStatus.Got));
-        displayedMovies = SortMovies(filter is null ? withoutStatus : withoutStatus.Where(m => m.Status == filter)).ToList();
-        viewKey = key;
+        displayedMovies = SortMovies(filters.Status is null ? withoutStatus : withoutStatus.Where(m => m.Status == filters.Status)).ToList();
+        viewStale = false;
+        viewVersion++;
     }
-
-    private string FilterFingerprint() => string.Join('|',
-        Fingerprint(resolutionFilter), Fingerprint(scanTypeFilter), Fingerprint(contentTypeFilter), Fingerprint(nfoDriftFilter), Fingerprint(codecFilter),
-        Fingerprint(studioFilter), Fingerprint(genreFilter), Fingerprint(excludedStudioFilter), Fingerprint(excludedGenreFilter),
-        Fingerprint(featureFilter), $"{countFilter.Scenes}{countFilter.Highlights}{countFilter.Apexes}",
-        $"{rangeFilter.ReleaseYear}{rangeFilter.RuntimeMinutes}{rangeFilter.BitrateMbps}{rangeFilter.FileSizeGb}{rangeFilter.CastSize}");
-
-    private static string Fingerprint<T>(HashSet<T> set) =>
-        string.Join(',', set.Select(item => item?.ToString() ?? "").Order(StringComparer.Ordinal));
 
     private IEnumerable<Movie> FilteredMoviesWithoutStatus()
     {
         var query = (IEnumerable<Movie>)allMovies;
 
-        if (!string.IsNullOrEmpty(libraryFilter))
+        if (!string.IsNullOrEmpty(filters.Library))
         {
-            query = query.Where(m => m.LocalRootPath == libraryFilter);
+            query = query.Where(m => m.LocalRootPath == filters.Library);
         }
 
-        query = MovieFilterPredicates.WhereResolutions(query.AsQueryable(), resolutionFilter);
-        query = MovieFilterPredicates.WhereScanTypes(query.AsQueryable(), scanTypeFilter);
-        query = MovieFilterPredicates.WhereContentTypes(query.AsQueryable(), contentTypeFilter);
-        query = MovieFilterPredicates.WhereCodecs(query.AsQueryable(), codecFilter);
-        query = MovieFilterPredicates.WhereStudios(query.AsQueryable(), studioFilter);
-        query = MovieFilterPredicates.WhereNotStudios(query.AsQueryable(), excludedStudioFilter);
+        query = MovieFilterPredicates.WhereResolutions(query.AsQueryable(), filters.Resolutions);
+        query = MovieFilterPredicates.WhereScanTypes(query.AsQueryable(), filters.ScanTypes);
+        query = MovieFilterPredicates.WhereContentTypes(query.AsQueryable(), filters.ContentTypes);
+        query = MovieFilterPredicates.WhereNotContentTypes(query.AsQueryable(), filters.ExcludedContentTypes);
+        query = MovieFilterPredicates.WhereCodecs(query.AsQueryable(), filters.Codecs);
+        query = MovieFilterPredicates.WhereStudios(query.AsQueryable(), filters.Studios);
+        query = MovieFilterPredicates.WhereNotStudios(query.AsQueryable(), filters.ExcludedStudios);
 
         // Same predicates as the Movies page, evaluated in memory over the
         // loaded movies (MovieTags → Tag → ParentTag, Scenes, Highlights, Apexes and MovieActors → Actor are included above).
-        query = MovieFilterPredicates.WhereGenres(query.AsQueryable(), genreFilter);
-        query = MovieFilterPredicates.WhereNotGenres(query.AsQueryable(), excludedGenreFilter);
-        query = MovieFilterPredicates.WhereFeatures(query.AsQueryable(), featureFilter);
-        query = MovieFilterPredicates.WhereCounts(query.AsQueryable(), countFilter);
-        query = MovieFilterPredicates.WhereRanges(query.AsQueryable(), rangeFilter);
+        query = MovieFilterPredicates.WhereGenres(query.AsQueryable(), filters.Genres);
+        query = MovieFilterPredicates.WhereNotGenres(query.AsQueryable(), filters.ExcludedGenres);
+        query = MovieFilterPredicates.WhereFeatures(query.AsQueryable(), filters.Features);
+        query = MovieFilterPredicates.WhereCounts(query.AsQueryable(), filters.Counts);
+        query = MovieFilterPredicates.WhereRanges(query.AsQueryable(), filters.Ranges);
 
-        query = MovieFilterPredicates.WhereNfoDriftKinds(query.AsQueryable(), nfoDriftFilter);
+        query = MovieFilterPredicates.WhereNfoDriftKinds(query.AsQueryable(), filters.NfoDriftKinds);
 
-        if (!string.IsNullOrWhiteSpace(textFilter))
+        if (!string.IsNullOrWhiteSpace(filters.Text))
         {
-            var term = textFilter.Trim();
+            var term = filters.Text.Trim();
             query = query.Where(m =>
                 (m.Code != null && m.Code.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
                 (m.MetaTitle != null && m.MetaTitle.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
@@ -652,108 +637,16 @@ else
 
     // In memory, so the DateAdded column's own expression, not EF.Property (which only works inside an EF query).
     private IEnumerable<Movie> SortMovies(IEnumerable<Movie> query) =>
-        MovieSortOrders.Apply(query.AsQueryable(), new MovieGridSort(sortField, sortDescending, randomSortSeed), m => m.FileAddedAt ?? m.CreatedAt);
+        MovieSortOrders.Apply(query.AsQueryable(), filters.ToSort(), m => m.FileAddedAt ?? m.CreatedAt);
 
-    private int ActiveFilterCount => resolutionFilter.Count + scanTypeFilter.Count + contentTypeFilter.Count + nfoDriftFilter.Count + codecFilter.Count + studioFilter.Count + genreFilter.Count
-        + excludedStudioFilter.Count + excludedGenreFilter.Count + featureFilter.Count + countFilter.Count + rangeFilter.Count;
+    private void ResetFilters() => Change(filters.Clear);
 
-    private bool HasActiveFilters =>
-        filter is not null
-        || !string.IsNullOrEmpty(libraryFilter)
-        || !string.IsNullOrWhiteSpace(textFilter)
-        || ActiveFilterCount > 0;
-
-    private void ResetFilters()
+    private void SetSort(MovieSortChange change) => Change(() =>
     {
-        filter = null;
-        libraryFilter = null;
-        textFilter = string.Empty;
-        resolutionFilter.Clear();
-        scanTypeFilter.Clear();
-        contentTypeFilter.Clear();
-        nfoDriftFilter.Clear();
-        codecFilter.Clear();
-        studioFilter.Clear();
-        genreFilter.Clear();
-        excludedStudioFilter.Clear();
-        excludedGenreFilter.Clear();
-        featureFilter.Clear();
-        countFilter = MovieCountSelection.Empty;
-        rangeFilter = MovieRangeSelection.Empty;
-    }
-
-    private void SetFilter(MovieStatus? status) => filter = status;
-
-    private void OnLibraryFilterChanged(string? value) => libraryFilter = value;
-
-    private void OnTextFilterChanged(string value) => textFilter = value;
-
-    private void ToggleResolutionFilter(MovieResolutionFilterOption bucket)
-    {
-        resolutionFilter.Toggle(bucket);
-    }
-
-    private void ToggleNfoDriftFilter(NfoDriftKind kind)
-    {
-        nfoDriftFilter.Toggle(kind);
-    }
-
-    private void ToggleScanTypeFilter(MovieScanTypeFilterOption scanType)
-    {
-        scanTypeFilter.Toggle(scanType);
-    }
-
-    private void ToggleCodecFilter(string codec)
-    {
-        codecFilter.Toggle(codec);
-    }
-
-    private void ToggleStudioFilter(string studio)
-    {
-        studioFilter.CycleInclusion(excludedStudioFilter, studio);
-    }
-
-    // Select All includes what's visible, taking it out of the excluded set; None clears both.
-    private void SelectAllStudios(IReadOnlyList<string> studios)
-    {
-        studioFilter.UnionWith(studios);
-        excludedStudioFilter.ExceptWith(studios);
-    }
-
-    private void SelectNoneStudios()
-    {
-        studioFilter.Clear();
-        excludedStudioFilter.Clear();
-    }
-
-    private void ToggleGenreFilter(string genre)
-    {
-        genreFilter.CycleInclusion(excludedGenreFilter, genre);
-    }
-
-    private void SelectAllGenres(IReadOnlyList<string> genres)
-    {
-        genreFilter.UnionWith(genres);
-        excludedGenreFilter.ExceptWith(genres);
-    }
-
-    private void SelectNoneGenres()
-    {
-        genreFilter.Clear();
-        excludedGenreFilter.Clear();
-    }
-
-    private void ToggleFeatureFilter(MovieFeatureFilterOption feature)
-    {
-        featureFilter.Toggle(feature);
-    }
-
-    private void SetSort(MovieSortChange change)
-    {
-        sortField = change.Field;
-        sortDescending = change.Descending;
-        if (change.RandomSortSeed.HasValue) randomSortSeed = change.RandomSortSeed.Value;
-    }
+        filters.SortField = change.Field;
+        filters.SortDescending = change.Descending;
+        if (change.RandomSortSeed.HasValue) filters.RandomSortSeed = change.RandomSortSeed.Value;
+    });
 
     private async Task RefreshMetadata()
     {
@@ -815,7 +708,7 @@ else
             link.Actor.IsFavorite = actor.IsFavorite;
             link.Actor.FavoritedAt = actor.FavoritedAt;
         }
-        viewKey = null;
+        viewStale = true;
     }
 
     // Flips the heart from the returned value, like the Movies grid.
@@ -825,7 +718,7 @@ else
         // As MovieService stores it, for the Date favorited sort.
         movie.FavoritedAt = movie.IsFavorite ? DateTime.UtcNow : null;
         // Changed in place, so the view key can't see it; the Favorites filter and sort have to re-run.
-        viewKey = null;
+        viewStale = true;
     }
 
     private void OpenDeleteConfirmation() => showDeleteConfirmation = true;
@@ -932,6 +825,7 @@ else
             {
                 jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/ActorDetail.razor.js");
                 await jsModule.InvokeVoidAsync("init", moviesGridRef);
+                observedGrid = (viewVersion, posterOptions, moviesGridRef.Id);
             }
             catch (JSDisconnectedException)
             {
@@ -941,8 +835,12 @@ else
                 // In test or non-browser environments, JS module import may not resolve
             }
         }
-        else
+        else if (observedGrid != (viewVersion, posterOptions, moviesGridRef.Id))
         {
+            // Only a new view, new poster options or a new grid element can bring posters whose images still
+            // need observing; observe() skips images that already loaded (their data-src is gone), so
+            // leaving the other renders (a heart toggle, a modal opening) out loses nothing.
+            observedGrid = (viewVersion, posterOptions, moviesGridRef.Id);
             try
             {
                 await jsModule.InvokeVoidAsync("observe", moviesGridRef);

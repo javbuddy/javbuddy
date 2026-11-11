@@ -17,6 +17,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Actor Detail's Content Type filter can exclude a type.** Clicking a content type a second time now excludes it, as on the Movies page; before, the filmography could only include types, and the Movies page's exclusions were not available there. Actor Detail now shares the Movies page's filter code, so the two stay in step.
 - **Disabled toolbar buttons look disabled on Actor Detail, Actor Edit, Actor Missing and Torrent Sort.** They are dimmed, and on Actor Edit, Actor Missing and Torrent Sort no longer light up on hover, as on Movie Detail.
 - **The toolbar's back button is styled.** On Movie Detail, Actor Detail/Edit/Missing and Torrent Sort it showed as a plain blue underlined link; it now matches the other toolbar buttons.
 - **Play all / Shuffle shows the full timeline.** The Movies page's player drew a bare scrub bar; it now marks the playing movie's scenes, highlights and apexes, and the H / A jump keys work, as on Movie Detail.
