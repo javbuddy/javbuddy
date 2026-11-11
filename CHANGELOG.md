@@ -11,6 +11,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ### Changed
 
 - **The player's volume slider appears on hover.** The slider no longer sits beside the mute button permanently: it pops up above the speaker icon while you hover (or focus) it, so the timeline gets the space back.
+- **Filtering, sorting and searching the Movies page is lighter on the database.** A filter chip, sort change or search keystroke used to re-read every filter option list and the library totals on top of the count; it now re-reads only the matching count and the All / Missing / Got counts. Those library-wide lists reload when the library changes (e.g. during an import), and overlapping change notifications no longer start overlapping reloads.
 
 ### Fixed
 

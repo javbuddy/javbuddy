@@ -354,7 +354,7 @@ public sealed class SceneActorsAndTagsTests : IDisposable
 
         Assert.Equal(0, await grid.CountAsync(new MovieGridFilter(Genres: ["Rough"])));
         Assert.Equal(0, await grid.CountAsync(new MovieGridFilter(Genres: ["Play"])));
-        Assert.DoesNotContain("Play", (await grid.GetSummaryAsync(new MovieGridFilter())).Genres);
+        Assert.DoesNotContain("Play", (await grid.GetLibraryOptionsAsync()).Genres);
     }
 
     [Fact]

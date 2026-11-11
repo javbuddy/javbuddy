@@ -412,7 +412,9 @@ else
             }
         }
 
-        await LoadCountsAsync();
+        await LoadLibraryOptionsAsync();
+        NormalizeFiltersToLibrary();
+        await LoadStatusCountsAsync();
         await LoadDownloadingCodesAsync();
     }
 
@@ -529,6 +531,9 @@ else
         movie.IsFavorite = await MovieService.ToggleFavoriteAsync(movie.Id);
     }
 
+    private bool libraryReloadRunning;
+    private bool libraryReloadPending;
+
     // Raised by MovieChangeNotifier from whatever circuit (browser tab) actually added the
     // movie(s) — e.g. Add New or Library Import running in another tab — so this already-open
     // grid picks it up without the user needing to refresh. Runs off this component's own
@@ -544,9 +549,33 @@ else
                 // own dispatched reads/writes of its data version — see EnsureAsync's comment on why a
                 // racy, cross-thread bump could let a stale window-slide merge slip through.
                 window.MarkDataChanged();
-                await LoadCountsAsync();
-                await RefreshWindowInPlaceAsync();
-                StateHasChanged();
+
+                // A burst of notifications (an import raises one about every 2 s) must not stack concurrent full
+                // reloads: while one runs, later ones only ask for one more pass after it.
+                if (libraryReloadRunning)
+                {
+                    libraryReloadPending = true;
+                    return;
+                }
+
+                libraryReloadRunning = true;
+                try
+                {
+                    do
+                    {
+                        libraryReloadPending = false;
+                        await LoadLibraryOptionsAsync();
+                        NormalizeFiltersToLibrary();
+                        await LoadStatusCountsAsync();
+                        await RefreshWindowInPlaceAsync();
+                        StateHasChanged();
+                    }
+                    while (libraryReloadPending);
+                }
+                finally
+                {
+                    libraryReloadRunning = false;
+                }
             }
             catch (Exception ex)
             {
@@ -692,43 +721,52 @@ else
         }
     }
 
-    // Status counts reflect whatever other filters are active (so "All (N)" matches what the grid
-    // is showing), while the library totals and filter options stay library-wide.
-    /// <summary>Returns true when the saved Actress Attributes selection no longer fit the library
-    /// and was corrected, so the caller must re-count with the corrected filter.</summary>
-    private async Task<bool> LoadCountsAsync()
+    // The library totals and filter options are library-wide, so they load on init and when the library changes,
+    // not on every filter change.
+    private async Task LoadLibraryOptionsAsync()
     {
-        var summary = await GridQueries.GetSummaryAsync(filters.ToFilter());
-        totalCount = summary.TotalCount;
-        missingCount = summary.MissingCount;
-        gotCount = summary.GotCount;
-        filesCount = summary.FilesCount;
-        totalFileSizeBytes = summary.TotalFileSizeBytes;
-        libraryNames = summary.LibraryNames;
-        availableCodecs = summary.Codecs;
-        availableStudios = summary.Studios;
-        availableGenres = summary.Genres;
-        actorAttributeOptions = summary.ActorAttributes;
-        countOptions = summary.Counts;
-        rangeOptions = summary.Ranges;
-        availableActors = summary.Actors;
-        availableActorTags = summary.ActorTags;
+        var options = await GridQueries.GetLibraryOptionsAsync();
+        filesCount = options.FilesCount;
+        totalFileSizeBytes = options.TotalFileSizeBytes;
+        libraryNames = options.LibraryNames;
+        availableCodecs = options.Codecs;
+        availableStudios = options.Studios;
+        availableGenres = options.Genres;
+        actorAttributeOptions = options.ActorAttributes;
+        countOptions = options.Counts;
+        rangeOptions = options.Ranges;
+        availableActors = options.Actors;
+        availableActorTags = options.ActorTags;
+    }
 
-        // Likewise a remembered actor tag nothing carries any more.
+    // Status counts reflect whatever other filters are active (so "All (N)" matches what the grid is showing).
+    private async Task LoadStatusCountsAsync()
+    {
+        var counts = await GridQueries.GetStatusCountsAsync(filters.ToFilter());
+        totalCount = counts.TotalCount;
+        missingCount = counts.MissingCount;
+        gotCount = counts.GotCount;
+    }
+
+    /// <summary>Drops saved filter selections the (cached) library options no longer offer. Returns true when
+    /// anything was corrected, so the caller must count with the corrected filter.</summary>
+    private bool NormalizeFiltersToLibrary()
+    {
+        var changed = false;
+
+        // A remembered actor tag nothing carries any more.
         if (filters.ActorTagIds.RemoveWhere(id => !availableActorTags.Any(t => t.Id == id))
             + filters.ExcludedActorTagIds.RemoveWhere(id => !availableActorTags.Any(t => t.Id == id)) > 0)
         {
             filters.DropLoneMatchAll();
-            await LoadCountsAsync();
-            return true;
+            changed = true;
         }
 
         // A remembered actor no longer linked to any movie (deleted, merged) would match nothing.
         if (filters.ActorIds.RemoveWhere(id => !availableActors.Any(a => a.Id == id))
             + filters.ExcludedActorIds.RemoveWhere(id => !availableActors.Any(a => a.Id == id)) > 0)
         {
-            await LoadCountsAsync();
-            return true;
+            changed = true;
         }
 
         // Likewise a remembered excluded studio or genre no movie has any more: it would exclude nothing, yet still count as
@@ -736,26 +774,30 @@ else
         if (filters.ExcludedStudios.RemoveWhere(s => !availableStudios.Contains(s))
             + filters.ExcludedGenres.RemoveWhere(g => !availableGenres.Contains(g)) > 0)
         {
-            await LoadCountsAsync();
-            return true;
+            changed = true;
         }
 
         // A remembered selection the library no longer offers (a cup nobody has, a limit outside the new
-        // bounds) is corrected here, and the caller re-counts with the corrected filter.
+        // bounds) is corrected here.
         // A remembered library the library no longer lists (e.g. an old persisted library name) is dropped, not left as an invisible filter.
-        var libraryStale = !string.IsNullOrEmpty(filters.Library) && !libraryNames.Contains(filters.Library);
-        if (libraryStale) filters.Library = null;
+        if (!string.IsNullOrEmpty(filters.Library) && !libraryNames.Contains(filters.Library))
+        {
+            filters.Library = null;
+            changed = true;
+        }
 
         var normalized = MovieFilterOptions.NormalizeActorAttributes(filters.ActorAttributes, actorAttributeOptions);
         var normalizedCounts = MovieFilterOptions.NormalizeCounts(filters.Counts, countOptions);
         var normalizedRanges = MovieFilterOptions.NormalizeRanges(filters.Ranges, rangeOptions);
-        if (!libraryStale && normalized.SameAs(filters.ActorAttributes) && normalizedCounts == filters.Counts && normalizedRanges == filters.Ranges) return false;
+        if (!normalized.SameAs(filters.ActorAttributes) || normalizedCounts != filters.Counts || normalizedRanges != filters.Ranges)
+        {
+            filters.ActorAttributes = normalized;
+            filters.Counts = normalizedCounts;
+            filters.Ranges = normalizedRanges;
+            changed = true;
+        }
 
-        filters.ActorAttributes = normalized;
-        filters.Counts = normalizedCounts;
-        filters.Ranges = normalizedRanges;
-        await LoadCountsAsync();
-        return true;
+        return changed;
     }
 
     /// <summary>Throws away the current window and starts a fresh one — for anything that changes
@@ -778,15 +820,15 @@ else
         reloading = true;
         _ = SaveViewStateAsync();
 
+        // Against the cached library options, before counting, so the counts use the corrected filter.
+        NormalizeFiltersToLibrary();
+
         window.FilteredCount = await GridQueries.CountAsync(filters.ToFilter());
         if (!window.IsCurrent(generation)) return;
 
         // Keeps "All/Missing/Got (N)" matching whatever the other active filters (resolution,
         // library, text) currently narrow the grid down to, not just the library's global totals.
-        if (await LoadCountsAsync())
-        {
-            window.FilteredCount = await GridQueries.CountAsync(filters.ToFilter());
-        }
+        await LoadStatusCountsAsync();
         if (!window.IsCurrent(generation)) return;
 
         var filteredCount = window.FilteredCount;

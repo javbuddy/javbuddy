@@ -196,7 +196,7 @@ else
 
     private IReadOnlyList<DeoVrGroupDefinition> groups = [];
     private GroupEditor? editor;
-    private MovieGridSummary? summary;
+    private MovieLibraryOptions? summary;
     private IReadOnlyList<MovieActorOption> actorOptions = [];
     private int? matchCount;
     private string? editorError;
@@ -273,14 +273,14 @@ else
         excluded.Clear();
     }
 
-    // The filter options come from the grid's summary; the match count is what DeoVR would list
+    // The filter options come from the grid's library options; the match count is what DeoVR would list
     // (Got movies with a local file only).
     private async Task RefreshMatchesAsync()
     {
         if (editor is null) return;
         var filter = editor.ToFilter();
         matchCount = null;
-        summary = await GridQuery.GetSummaryAsync(filter);
+        summary = await GridQuery.GetLibraryOptionsAsync();
         matchCount = (await GridQuery.GetWithFilesAsync(filter, new MovieGridSort("added", true, 0))).Count;
     }
 

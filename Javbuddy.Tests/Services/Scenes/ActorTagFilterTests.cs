@@ -140,7 +140,7 @@ public sealed class ActorTagFilterTests : IDisposable
         Assert.Equal(1, await new MovieGridQueryService(factory).CountAsync(new MovieGridFilter(ActorTagIds: [hair])));
         Assert.Contains("Hair", (await wall.GetOptionsAsync()).ActorTags.Select(t => t.Name));
         Assert.Contains("Hair › Long", (await wall.GetOptionsAsync()).ActorTags.Select(t => t.Name));
-        var grid = await new MovieGridQueryService(factory).GetSummaryAsync(new MovieGridFilter());
+        var grid = await new MovieGridQueryService(factory).GetLibraryOptionsAsync();
         Assert.Contains("Hair › Long", grid.ActorTags.Select(t => t.Name));
     }
 
@@ -166,7 +166,7 @@ public sealed class ActorTagFilterTests : IDisposable
         }
         string[] expected = ["Blonde", "Brunette", "Hair", "Hair › Short", "Hair colour", "Hair colour › Black"];
 
-        var grid = await new MovieGridQueryService(factory).GetSummaryAsync(new MovieGridFilter());
+        var grid = await new MovieGridQueryService(factory).GetLibraryOptionsAsync();
         Assert.Equal(expected, grid.ActorTags.Select(t => t.Name));
         Assert.Equal(expected, (await wall.GetOptionsAsync()).ActorTags.Select(t => t.Name));
     }
