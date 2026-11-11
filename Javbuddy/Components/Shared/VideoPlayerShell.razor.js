@@ -8,8 +8,9 @@ import { isShortcutBlocked } from './ScrubBar.razor.js';
 
 const instances = new WeakMap();
 
-// `options`: { playlist (N / P are live), hasPrevious (P is live) }. Called again from `update`
-// when either changes.
+// `options`: { playlist (N / P are live) }. Called again from `update` when it changes. Whether there
+// is a previous movie is left to .NET (PreviousFromKeyAsync checks CanPrevious): it changes on every
+// N / P, and filtering on a copy here would drop a P pressed before that copy caught up.
 export function init(backdrop, dotnet, options) {
     dispose(backdrop);
     if (!backdrop) return;
@@ -25,7 +26,6 @@ export function init(backdrop, dotnet, options) {
         if (!state.options.playlist || event.shiftKey) return;
         const key = event.key.toLowerCase();
         if (key !== 'n' && key !== 'p') return;
-        if (key === 'p' && !state.options.hasPrevious) return;
         if (isShortcutBlocked(event)) return;
         send(key === 'n' ? 'NextFromKeyAsync' : 'PreviousFromKeyAsync');
     };

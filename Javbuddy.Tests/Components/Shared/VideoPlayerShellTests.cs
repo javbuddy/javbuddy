@@ -121,12 +121,13 @@ public class VideoPlayerShellTests : BunitContext
             .Add(x => x.Show, true)
             .Add(x => x.MovieId, 1)
             .Add(x => x.OnNext, () => { }));
-        Assert.Equal(new VideoPlayerShell.KeyOptions(true, false), module.Invocations.Single(i => i.Identifier == "init").Arguments[2]);
+        Assert.Equal(new VideoPlayerShell.KeyOptions(true), module.Invocations.Single(i => i.Identifier == "init").Arguments[2]);
 
-        cut.Render(p => p.Add(x => x.CanPrevious, true));
+        // A side panel (the scene editor) turns the playlist keys off.
+        cut.Render(p => p.Add(x => x.SidePanel, (RenderFragment<TrickplayLayout?>)(_ => b => b.AddContent(0, "editor"))));
 
         var update = Assert.Single(module.Invocations, i => i.Identifier == "update");
-        Assert.Equal(new VideoPlayerShell.KeyOptions(true, true), update.Arguments[1]);
+        Assert.Equal(new VideoPlayerShell.KeyOptions(false), update.Arguments[1]);
         Assert.Single(module.Invocations, i => i.Identifier == "init");
     }
 

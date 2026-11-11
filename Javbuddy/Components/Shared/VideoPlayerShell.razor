@@ -286,7 +286,7 @@
     private KeyOptions? sentKeys;
 
     /// <summary>What VideoPlayerShell.razor.js needs to filter keys, serialized camelCase.</summary>
-    public sealed record KeyOptions(bool Playlist, bool HasPrevious);
+    public sealed record KeyOptions(bool Playlist);
 
     private bool PlaylistKeys => OnNext.HasDelegate && SidePanel is null;
 
@@ -599,7 +599,7 @@
             return;
         }
 
-        var options = new KeyOptions(PlaylistKeys, CanPrevious);
+        var options = new KeyOptions(PlaylistKeys);
         if (keysBound && options == sentKeys) return;
 
         try
