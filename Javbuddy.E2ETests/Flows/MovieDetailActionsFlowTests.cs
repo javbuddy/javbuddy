@@ -206,7 +206,8 @@ public class MovieDetailActionsFlowTests
             await Expect(page.Locator(".video-player-modal-code")).ToContainTextAsync(movie.Code!);
             await Expect(page.Locator("video.video-player-video")).ToBeVisibleAsync();
 
-            // Press Escape -> closes modal
+            // Press Escape -> closes modal (the key handling is bound in the browser a moment after it opens)
+            await page.WaitForSelectorAsync(".video-player-modal-backdrop[data-keys-bound]", new() { State = Microsoft.Playwright.WaitForSelectorState.Attached });
             await page.Keyboard.PressAsync("Escape");
             await Expect(modalBackdrop).ToHaveCountAsync(0);
 

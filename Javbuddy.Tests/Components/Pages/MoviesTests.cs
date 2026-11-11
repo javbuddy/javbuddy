@@ -156,7 +156,7 @@ public class MoviesTests : BunitContext
     }
 
     [Fact]
-    public void PlayAll_PlaysOnlyGotMoviesWithAFile_WithNextAndPreviousKeys()
+    public async Task PlayAll_PlaysOnlyGotMoviesWithAFile_WithNextAndPreviousKeys()
     {
         using var factory = SetUpServices();
         using (var db = factory.CreateDbContext())
@@ -178,22 +178,32 @@ public class MoviesTests : BunitContext
         Services.AddSingleton(new TrickplayGenerationTracker());
         var cut = Render<Movies>();
 
+        var keys = JSInterop.SetupModule("./Components/Shared/VideoPlayerShell.razor.js");
+        keys.Mode = JSRuntimeMode.Loose;
+
         cut.FindAll("button").Single(b => b.TextContent.Trim() == "Play all").Click();
         var first = cut.Find(".video-player-modal-code").TextContent;
-        var backdrop = cut.Find(".video-player-modal-backdrop");
 
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "p" });
+        // N / P are picked out in the browser (VideoPlayerShell.razor.js), which calls back into the shell,
+        // the latest reference being the one bound to the open player.
+        async Task PressAsync(string key)
+        {
+            var shell = ((Microsoft.JSInterop.DotNetObjectReference<Javbuddy.Components.Shared.VideoPlayerShell>)keys.Invocations.Last(i => i.Identifier == "init").Arguments[1]!).Value;
+            await cut.InvokeAsync(() => key == "n" ? shell.NextFromKeyAsync() : shell.PreviousFromKeyAsync());
+        }
+
+        await PressAsync("p");
         Assert.Equal(first, cut.Find(".video-player-modal-code").TextContent);
 
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "n" });
+        await PressAsync("n");
         var second = cut.Find(".video-player-modal-code").TextContent;
         Assert.NotEqual(first, second);
 
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "p" });
+        await PressAsync("p");
         Assert.Equal(first, cut.Find(".video-player-modal-code").TextContent);
 
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "n" });
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "n" });
+        await PressAsync("n");
+        await PressAsync("n");
         Assert.Empty(cut.FindAll(".video-player-modal-backdrop"));
     }
 
