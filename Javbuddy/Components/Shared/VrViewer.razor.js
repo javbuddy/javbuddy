@@ -245,6 +245,9 @@ export function init(root, videoSelector) {
         dirty = true;
     };
 
+    // Not bindFullscreen (ScrubBar.razor.js): that also moves focus into the column, resumes fullscreen
+    // across a re-render and toggles a class, none of which this viewer did, and on teardown it
+    // arms a resume where this viewer exits fullscreen. Only the F key, the double-click and the video's own request go to the column here.
     // The player column includes the area plus the optional scrub bar, so fullscreening it keeps
     // all player controls visible. The viewer is rendered inside .video-player-area.
     const container = root.closest('.cleanup-player-column') || root.parentElement || video.parentElement || video;

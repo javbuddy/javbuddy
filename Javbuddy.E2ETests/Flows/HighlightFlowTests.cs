@@ -176,6 +176,25 @@ public class HighlightFlowTests
         Assert.Equal("1", await page.EvaluateAsync<string?>("() => localStorage.getItem('javbuddy-clip-loop')"));
     }
 
+    // The clip player leaves Space to a keyboard-focused button (unlike the movie player's scrub bar,
+    // which takes it): Space on Loop presses Loop and leaves playback alone.
+    [Fact]
+    public async Task HighlightWall_SpaceOnAKeyboardFocusedLoop_TogglesLoopNotPlayback()
+    {
+        var movie = await SeedPlayableMovieAsync("E2E-HILITE-11");
+        var page = await OpenWallClipAsync(movie, 0.3, 2.8, "Focus clip", loop: false);
+        var loop = page.Locator(".clip-controls-loop");
+        await page.EvaluateAsync($"() => document.querySelector('{Video}').pause()");
+        await page.WaitForFunctionAsync($"() => document.querySelector('{Video}').paused");
+
+        await loop.FocusAsync();
+        await page.Keyboard.PressAsync("Space");
+
+        await Expect(loop).ToHaveAttributeAsync("aria-pressed", "true");
+        await page.WaitForTimeoutAsync(300);
+        Assert.True(await page.EvaluateAsync<bool>($"() => document.querySelector('{Video}').paused"));
+    }
+
     [Fact]
     public async Task HighlightWall_PlayingFromTheClipsEnd_RestartsItInsteadOfClosing()
     {
