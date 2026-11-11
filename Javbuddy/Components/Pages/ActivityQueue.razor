@@ -119,7 +119,11 @@ else
         selected.RetainOnly(rows.Select(r => r.Id));
     }
 
-    private void OnChangedElsewhere() => _ = InvokeAsync(LoadAsync);
+    private void OnChangedElsewhere() => _ = InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
 
     /// <summary>Polls qBittorrent directly every few seconds while this page is open, for live
     /// progress/speed/ETA — separate from QBittorrentSyncTask, which is the durable ~1-minute
