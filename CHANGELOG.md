@@ -22,6 +22,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - **Ctrl+F no longer toggles fullscreen in the player.** The **F** shortcut also fired with Ctrl, Cmd or Alt held, so the browser's Find couldn't open. It now also stays out of the way in editable fields and while a dialog is open.
 - **The Straighten slider keeps your crop box.** Dragging it in the cover and portrait croppers reset the crop box on every tick; it now stays where you put it.
 - **Editor dialogs can't be dismissed mid-save.** A stray click outside the Edit Metadata or .nfo editor (or its × button) closed it while saving or restoring, discarding unsaved edits; the portrait and cover croppers likewise stay open while saving, deleting or fetching.
+- **Esc closes dialogs right away.** A dialog took keyboard focus only after you clicked or tabbed into it, so Esc did nothing until then; it now focuses itself when it opens. Esc also now closes Poster Options, Actor Options, Edit Metadata, the .nfo editor, Media Info, Repair Video, and the .nfo push confirmation, which ignored it before. Their look follows the shared dialog style: slightly different close button and title weight, and they go full-screen at 640px wide instead of 700px.
 
 ## [0.6.1] - 2026-11-10
 

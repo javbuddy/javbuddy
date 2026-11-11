@@ -1,6 +1,7 @@
 using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Services.Movies;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
@@ -14,6 +15,7 @@ public class MovieImageUploadModalTests : BunitContext
 
     public MovieImageUploadModalTests()
     {
+        JSInterop.AllowModalShell();
         Services.AddSingleton(service);
     }
 

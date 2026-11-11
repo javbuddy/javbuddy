@@ -1059,7 +1059,7 @@ public class ActorsTests : BunitContext
         Assert.Contains("size-2", cut.Find(".actor-grid").ClassList);
 
         cut.FindAll("button").Single(b => b.TextContent == "Options").Click();
-        Assert.Contains("Actor Options", cut.Find(".options-modal-title").TextContent);
+        Assert.Contains("Actor Options", cut.Find(".modal-shell-title").TextContent);
 
         var slider = cut.Find("#actor-card-size");
         Assert.Equal("2", slider.GetAttribute("value"));
@@ -1067,7 +1067,7 @@ public class ActorsTests : BunitContext
         Assert.Contains("size-0", cut.Find(".actor-grid").ClassList);
 
         cut.FindAll("button").Single(b => b.TextContent == "Close").Click();
-        Assert.Empty(cut.FindAll(".options-modal-panel"));
+        Assert.Empty(cut.FindAll(".modal-shell-panel"));
 
         cut.FindAll("button").Single(b => b.TextContent == "Table").Click();
         Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent == "Options");

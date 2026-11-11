@@ -2,6 +2,7 @@ using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Models;
 using Javbuddy.Services.Tags;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -9,6 +10,8 @@ namespace Javbuddy.Tests.Components.Shared;
 
 public class TagMergeModalTests : BunitContext
 {
+    public TagMergeModalTests() => JSInterop.AllowModalShell();
+
     [Fact]
     public void Modal_WhenShowFalse_RendersNothing()
     {

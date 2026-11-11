@@ -1,18 +1,21 @@
 using Bunit;
 using Javbuddy.Components.Pages.MovieDetailSections;
 using Javbuddy.Models;
+using Javbuddy.Tests.TestSupport;
 
 namespace Javbuddy.Tests.Components.Pages;
 
 public class MediaInfoModalTests : BunitContext
 {
+    public MediaInfoModalTests() => JSInterop.AllowModalShell();
+
     [Fact]
     public void ModalClosedByDefault()
     {
         var movie = new Movie { Code = "ABC-123" };
         var cut = Render<MediaInfoModal>(p => p.Add(x => x.Movie, movie));
 
-        Assert.Empty(cut.FindAll(".mediainfo-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -30,7 +33,7 @@ public class MediaInfoModalTests : BunitContext
 
         await cut.InvokeAsync(() => cut.Instance.OpenAsync());
 
-        Assert.NotEmpty(cut.FindAll(".mediainfo-modal-backdrop"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
         Assert.Empty(cut.FindAll(".mediainfo-version-tabs"));
         Assert.Contains("AVC", cut.Find("pre.mediainfo-full").TextContent);
     }
@@ -92,12 +95,12 @@ public class MediaInfoModalTests : BunitContext
         var cut = Render<MediaInfoModal>(p => p.Add(x => x.Movie, movie));
 
         await cut.InvokeAsync(() => cut.Instance.OpenAsync());
-        Assert.NotEmpty(cut.FindAll(".mediainfo-modal-backdrop"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
 
-        var closeBtn = cut.Find(".mediainfo-modal-close-btn");
+        var closeBtn = cut.Find(".modal-shell-close-btn");
         await cut.InvokeAsync(() => closeBtn.Click());
 
-        Assert.Empty(cut.FindAll(".mediainfo-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]

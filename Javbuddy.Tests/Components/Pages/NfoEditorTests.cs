@@ -72,7 +72,7 @@ public class NfoEditorTests : BunitContext
         await history.Received(1).RestoreAsync(7, 1, Arg.Any<CancellationToken>());
         cut.WaitForAssertion(() => Assert.Contains("Saved.", cut.Markup));
         Assert.Empty(cut.FindAll("select.nfo-history-select"));
-        Assert.Contains("Edit .nfo", cut.Find(".nfo-modal-title").TextContent);
+        Assert.Contains("Edit .nfo", cut.Find(".modal-shell-title").TextContent);
     }
 
     [Fact]

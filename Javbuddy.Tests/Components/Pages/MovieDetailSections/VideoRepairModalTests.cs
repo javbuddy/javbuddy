@@ -5,6 +5,7 @@ using Javbuddy.Services.Common;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.VideoRepair;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -19,6 +20,7 @@ public class VideoRepairModalTests : BunitContext
 
     public VideoRepairModalTests()
     {
+        JSInterop.AllowModalShell();
         ffmpegResolver.IsAvailable.Returns(true);
         Services.AddSingleton(repairService);
         Services.AddSingleton(jobTracker);
@@ -57,7 +59,7 @@ public class VideoRepairModalTests : BunitContext
         var cut = Render<VideoRepairModal>(p => p.Add(x => x.Movie, movie));
         await cut.InvokeAsync(() => cut.Instance.OpenAsync());
 
-        Assert.Contains("Repair Video", cut.Find(".videorepair-modal-title").TextContent);
+        Assert.Contains("Repair Video", cut.Find(".modal-shell-title").TextContent);
         Assert.Contains("ABC-123.mp4", cut.Find(".target-file-name").TextContent);
         Assert.Contains("1080p", cut.Find(".videorepair-target-card").TextContent);
         Assert.Contains("Start Repair", cut.Find("button.btn-primary").TextContent);
