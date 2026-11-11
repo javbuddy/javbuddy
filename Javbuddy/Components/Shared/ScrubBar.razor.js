@@ -81,74 +81,32 @@ export function init(root, config, videoSelector) {
     };
 
     // Play/pause, the time readout and mute + volume for a player without native controls
-    //, as ClipControls.razor.js does for a clip. Clicking the video and Space play/pause
-    // too, unless a field has focus or a dialog is open over the player. Space is claimed in the capture
-    // phase even with a button focused, like Review mode's (MovieCleanup.razor.js): otherwise it pressed
-    // the scene editor's last clicked button again instead of playing/pausing.
-    function bindTransport(bar) {
+    // (bindTransport, shared with ClipControls.razor.js). Space is claimed in the capture phase even
+    // with a button focused, like Review mode's (MovieCleanup.razor.js): otherwise it pressed the
+    // scene editor's last clicked button again instead of playing/pausing.
+    function bindPlayerControls(bar) {
         const video = document.querySelector(videoSelector);
-        if (!video) return () => { };
-        const playBtn = bar.querySelector('.scrub-bar-play');
-        const muteBtn = bar.querySelector('.scrub-bar-mute');
-        const volume = bar.querySelector('.scrub-bar-volume');
+        if (!video) return null;
         const clock = bar.querySelector('.scrub-bar-clock');
-
-        const render = () => {
-            const duration = video.duration > 0 ? video.duration : config.durationSeconds;
-            clock.textContent = `${formatTime(video.currentTime)} / ${formatTime(duration)}`;
-            bar.classList.toggle('scrub-bar-playing', !video.paused);
-            bar.classList.toggle('scrub-bar-muted', video.muted || video.volume === 0);
-            volume.value = video.muted ? 0 : video.volume;
-        };
-        const togglePlay = () => {
-            if (video.paused) {
-                video.play().catch(() => { });
-            } else {
-                video.pause();
-            }
-        };
-        const onMute = () => {
-            video.muted = !video.muted;
-            if (!video.muted && video.volume === 0) video.volume = 1;
-        };
-        const onVolume = () => {
-            video.volume = Number(volume.value);
-            video.muted = video.volume === 0;
-        };
-        const isEditable = (element) => element instanceof Element
-            && (element.closest('input, textarea, select') !== null || element.isContentEditable);
-        const onKeyDown = (event) => {
-            if (event.key !== ' ' || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-            if (isEditable(event.target) || isEditable(document.activeElement)) return;
-            if (document.querySelector('.image-lightbox-backdrop, .cleanup-modal-overlay, .delete-confirm-backdrop')) return;
-            event.preventDefault();
-            togglePlay();
-        };
-        // A mouse click leaves focus where it was, so Space keeps playing/pausing instead of pressing
-        // the last clicked button again.
-        const keepFocus = (event) => {
-            if (event.target instanceof Element && event.target.closest('button')) event.preventDefault();
-        };
-
-        const listeners = [
-            [video, 'click', togglePlay],
-            ...['play', 'pause', 'timeupdate', 'volumechange', 'loadedmetadata', 'durationchange', 'seeked'].map(type => [video, type, render]),
-            [playBtn, 'click', togglePlay],
-            [muteBtn, 'click', onMute],
-            [volume, 'input', onVolume],
-            [bar, 'mousedown', keepFocus],
-            [window, 'keydown', onKeyDown, true],
-        ];
-        for (const [target, type, handler, capture] of listeners) target.addEventListener(type, handler, capture);
-        render();
-        const unbind = () => {
-            for (const [target, type, handler, capture] of listeners) target.removeEventListener(type, handler, capture);
-        };
-        unbind.bound = true;
-        return unbind;
+        const transport = bindTransport({
+            root: bar,
+            video,
+            classPrefix: 'scrub-bar',
+            playBtn: bar.querySelector('.scrub-bar-play'),
+            muteBtn: bar.querySelector('.scrub-bar-mute'),
+            volume: bar.querySelector('.scrub-bar-volume'),
+            renderEvents: ['play', 'pause', 'timeupdate', 'volumechange', 'loadedmetadata', 'durationchange', 'seeked'],
+            renderExtra: () => {
+                const duration = video.duration > 0 ? video.duration : config.durationSeconds;
+                clock.textContent = `${formatTime(video.currentTime)} / ${formatTime(duration)}`;
+            },
+            claimSpaceFromButtons: true,
+        });
+        transport.render();
+        return transport;
     }
 
-    const unbindTransport = root.querySelector('.scrub-bar-play') ? bindTransport(root) : () => { };
+    const transport = root.querySelector('.scrub-bar-play') ? bindPlayerControls(root) : null;
 
     scrubBar.addEventListener('pointerenter', preloadSheets);
     scrubBar.addEventListener('pointermove', showPreview);
@@ -159,7 +117,7 @@ export function init(root, config, videoSelector) {
     const video = document.querySelector(videoSelector);
     const container = root.closest('.cleanup-player-column, .video-player-column') || root.parentElement;
     // Without native controls there's no strip at the video's bottom that a double-click must skip.
-    const unbindFullscreen = bindFullscreen(root, container, video, fullscreenBtn, 'scrub-bar-is-fullscreen', unbindTransport.bound ? 0 : CONTROLS_STRIP_PX);
+    const unbindFullscreen = bindFullscreen(root, container, video, fullscreenBtn, 'scrub-bar-is-fullscreen', transport ? 0 : CONTROLS_STRIP_PX);
 
     instances.set(root, () => {
         scrubBar.removeEventListener('pointerenter', preloadSheets);
@@ -168,7 +126,7 @@ export function init(root, config, videoSelector) {
         scrubBar.removeEventListener('click', seek);
         document.removeEventListener('timeupdate', onTimeUpdate, true);
         unbindFullscreen();
-        unbindTransport();
+        transport?.unbind();
     });
 }
 
@@ -402,6 +360,78 @@ export function isShortcutBlocked(event) {
     return event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey
         || isEditableElement(event.target) || isEditableElement(document.activeElement)
         || document.querySelector('.image-lightbox-backdrop, .cleanup-modal-overlay, .delete-confirm-backdrop') !== null;
+}
+
+// Transport shared by the movie player's ScrubBar and the clip player's ClipControls: click on the
+// video and the play button play/pause, the mute button and volume slider drive the video, Space
+// plays/pauses, and a mouse press on a button keeps focus where it was so Space keeps playing/pausing
+// instead of pressing that button again. Everything the two players show differs (time readout, clip
+// range, progress), so that part is theirs: `renderExtra` runs inside `render`.
+//
+// `options`: { root, video, classPrefix, playBtn, muteBtn, volume, renderEvents, renderExtra,
+// claimSpaceFromButtons, extraKeys }.
+//  - root gets `${classPrefix}-playing` / `${classPrefix}-muted`, which the host's CSS uses to swap icons.
+//  - renderEvents: the video events that re-render. A host with its own handler for an event (the clip
+//    player's play and timeupdate) leaves it out and calls the returned `render` from there.
+//  - claimSpaceFromButtons: Space is handled in the capture phase and also while a button has focus
+//    (ScrubBar); otherwise in the bubble phase, and a focused button keeps its own Space (ClipControls).
+//  - extraKeys: more bare-letter shortcuts under the same guard, { n: handler } (lower case).
+// Returns { render, unbind }; unbind removes every listener it added.
+export function bindTransport({ root, video, classPrefix, playBtn, muteBtn, volume, renderEvents, renderExtra, claimSpaceFromButtons = false, extraKeys = {} }) {
+    const render = () => {
+        renderExtra?.();
+        root.classList.toggle(`${classPrefix}-playing`, !video.paused);
+        root.classList.toggle(`${classPrefix}-muted`, video.muted || video.volume === 0);
+        volume.value = video.muted ? 0 : video.volume;
+    };
+    const togglePlay = () => {
+        if (video.paused) {
+            video.play().catch(() => { });
+        } else {
+            video.pause();
+        }
+    };
+    const onMute = () => {
+        video.muted = !video.muted;
+        if (!video.muted && video.volume === 0) video.volume = 1;
+    };
+    const onVolume = () => {
+        video.volume = Number(volume.value);
+        video.muted = video.volume === 0;
+    };
+    const isButton = (element) => element instanceof Element && element.closest('button') !== null;
+
+    const keys = { ' ': togglePlay, ...extraKeys };
+    const onKeyDown = (event) => {
+        const action = keys[event.key.length === 1 ? event.key.toLowerCase() : event.key];
+        if (!action || isShortcutBlocked(event)) return;
+        if (!claimSpaceFromButtons && (isButton(event.target) || isButton(document.activeElement))) return;
+        event.preventDefault();
+        action();
+    };
+    // A mouse click leaves focus where it was, so Space keeps playing/pausing instead of pressing the
+    // last clicked button again (e.g. flipping Loop). Keyboard focus still reaches the buttons.
+    const keepFocus = (event) => {
+        if (isButton(event.target)) event.preventDefault();
+    };
+
+    const keyCapture = claimSpaceFromButtons;
+    const listeners = [
+        [video, 'click', togglePlay],
+        ...renderEvents.map(type => [video, type, render]),
+        [playBtn, 'click', togglePlay],
+        [muteBtn, 'click', onMute],
+        [volume, 'input', onVolume],
+        [root, 'mousedown', keepFocus],
+        [window, 'keydown', onKeyDown, keyCapture],
+    ];
+    for (const [target, type, handler, capture] of listeners) target.addEventListener(type, handler, capture);
+    return {
+        render,
+        unbind: () => {
+            for (const [target, type, handler, capture] of listeners) target.removeEventListener(type, handler, capture);
+        },
+    };
 }
 
 // Fullscreen for a player column: the button, the `f` key, double-clicking the video (above its

@@ -4,7 +4,7 @@
 // in a playlist, moves to the next clip. Previous/Next and P/N also go through .NET.
 // Runs in the browser like ScrubBar.razor.js, whose trickplay, preview and fullscreen helpers it
 // reuses. Loop is remembered in localStorage, which may be unavailable (private mode, blocked).
-import { bindFullscreen, formatTime, placePreview, trickplayThumbnails } from './ScrubBar.razor.js';
+import { bindFullscreen, bindTransport, formatTime, placePreview, trickplayThumbnails } from './ScrubBar.razor.js';
 
 const LOOP_KEY = 'javbuddy-clip-loop';
 const instances = new WeakMap();
@@ -29,11 +29,6 @@ function writeLoop(loop) {
     }
 }
 
-function isEditable(element) {
-    return element instanceof Element
-        && (element.closest('input, textarea, select, button') !== null || element.isContentEditable);
-}
-
 // `options`: { videoSelector, startSeconds, endSeconds (null = the video's end), trickplay,
 // playlist, hasPrevious }. Returns the remembered Loop choice. Called again for each clip.
 export function init(root, dotnet, options) {
@@ -45,7 +40,6 @@ export function init(root, dotnet, options) {
     if (!video) return state.loop;
 
     const q = (selector) => root.querySelector(selector);
-    const playBtn = q('.clip-controls-play');
     const trackWrap = q('.clip-controls-track-wrap');
     const track = q('.clip-controls-track');
     const progress = q('.clip-controls-progress');
@@ -53,8 +47,6 @@ export function init(root, dotnet, options) {
     const thumb = q('.clip-controls-thumb');
     const previewTime = q('.clip-controls-preview-time');
     const time = q('.clip-controls-time');
-    const muteBtn = q('.clip-controls-mute');
-    const volume = q('.clip-controls-volume');
     const fullscreenBtn = q('.clip-controls-fullscreen');
     const previousBtn = q('.clip-controls-prev');
     const nextBtn = q('.clip-controls-next');
@@ -72,14 +64,12 @@ export function init(root, dotnet, options) {
     };
     state.setTrickplay(options.trickplay);
 
-    const render = () => {
+    // The time readout and progress; the transport's render adds the playing/muted state and volume.
+    const renderClip = () => {
         const len = length();
         const at = Math.min(Math.max(video.currentTime - start, 0), len);
         progress.style.width = len > 0 ? `${(at / len) * 100}%` : '0%';
         time.textContent = `${formatTime(at)} / ${len > 0 ? formatTime(len) : '-:--'}`;
-        root.classList.toggle('clip-controls-playing', !video.paused);
-        root.classList.toggle('clip-controls-muted', video.muted || video.volume === 0);
-        volume.value = video.muted ? 0 : video.volume;
     };
 
     const handOver = (method) => {
@@ -155,14 +145,6 @@ export function init(root, dotnet, options) {
         render();
     };
 
-    const togglePlay = () => {
-        if (video.paused) {
-            video.play().catch(() => { });
-        } else {
-            video.pause();
-        }
-    };
-
     const secondsAt = (clientX) => {
         const rect = track.getBoundingClientRect();
         const fraction = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
@@ -193,52 +175,32 @@ export function init(root, dotnet, options) {
         if (video.paused) video.play().catch(() => { });
     };
 
-    const onMute = () => {
-        video.muted = !video.muted;
-        if (!video.muted && video.volume === 0) video.volume = 1;
-    };
-    const onVolume = () => {
-        video.volume = Number(volume.value);
-        video.muted = video.volume === 0;
-    };
-
     // Space plays/pauses like the native controls did, and in a playlist N / P go to the next or
     // previous clip, unless a field or button has focus (a focused button's own Space already clicks
     // it) or a dialog is open over the player.
-    const keys = { ' ': togglePlay, n: next, p: previous };
-    const onKeyDown = (event) => {
-        const action = keys[event.key.length === 1 ? event.key.toLowerCase() : event.key];
-        if (!action || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
-        if (action !== togglePlay && !options.playlist) return;
-        if (isEditable(event.target) || isEditable(document.activeElement)) return;
-        if (document.querySelector('.image-lightbox-backdrop, .delete-confirm-backdrop')) return;
-        event.preventDefault();
-        action();
-    };
-
-    // A mouse click leaves focus where it was (the player), so Space keeps playing/pausing instead of
-    // pressing the last clicked button again, e.g. flipping Loop. Keyboard focus still reaches them.
-    const keepFocus = (event) => {
-        if (event.target instanceof Element && event.target.closest('button')) event.preventDefault();
-    };
+    const transport = bindTransport({
+        root,
+        video,
+        classPrefix: 'clip-controls',
+        playBtn: q('.clip-controls-play'),
+        muteBtn: q('.clip-controls-mute'),
+        volume: q('.clip-controls-volume'),
+        renderEvents: ['pause', 'volumechange', 'loadedmetadata', 'durationchange', 'seeked'],
+        renderExtra: renderClip,
+        extraKeys: options.playlist ? { n: next, p: previous } : {},
+    });
+    const render = transport.render;
 
     const listeners = [
         [video, 'play', onPlay],
         [video, 'timeupdate', onTimeUpdate],
-        [root, 'mousedown', keepFocus],
         [video, 'ended', reachEnd],
-        [video, 'click', togglePlay],
-        ...['pause', 'volumechange', 'loadedmetadata', 'durationchange', 'seeked'].map(type => [video, type, render]),
-        [playBtn, 'click', togglePlay],
         ...(previousBtn ? [[previousBtn, 'click', previous]] : []),
         ...(nextBtn ? [[nextBtn, 'click', next]] : []),
         [trackWrap, 'pointerenter', preloadSheets],
         [trackWrap, 'pointermove', showPreview],
         [trackWrap, 'pointerleave', hidePreview],
         [trackWrap, 'click', seek],
-        [muteBtn, 'click', onMute],
-        [volume, 'input', onVolume],
-        [window, 'keydown', onKeyDown],
     ];
     for (const [target, type, handler] of listeners) target.addEventListener(type, handler);
 
@@ -250,6 +212,7 @@ export function init(root, dotnet, options) {
 
     state.teardown = () => {
         for (const [target, type, handler] of listeners) target.removeEventListener(type, handler);
+        transport.unbind();
         unbindFullscreen();
         if (frame) cancelAnimationFrame(frame);
     };
