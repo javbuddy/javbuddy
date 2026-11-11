@@ -392,6 +392,18 @@ let resumeFullscreenUntil = 0;
 // replacement) resumes it, not some other player opened soon after.
 let resumeFullscreenClass = null;
 
+const isEditableElement = (element) => element instanceof Element
+    && (element.closest('input, textarea, select') !== null || element.isContentEditable);
+
+// True when a bare-letter shortcut (like F for fullscreen) must be left alone: a modifier is held
+// (Ctrl/Cmd+F is the browser's Find), another handler already claimed the key, a field has focus,
+// or a dialog is open over the player.
+export function isShortcutBlocked(event) {
+    return event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey
+        || isEditableElement(event.target) || isEditableElement(document.activeElement)
+        || document.querySelector('.image-lightbox-backdrop, .cleanup-modal-overlay, .delete-confirm-backdrop') !== null;
+}
+
 // Fullscreen for a player column: the button, the `f` key, double-clicking the video (above its
 // bottom `controlsStripPx`, where native controls sit) and the video's own fullscreen request all
 // toggle `container`, so the controls under the video stay visible. `root` gets `fullscreenClass`
@@ -440,7 +452,7 @@ export function bindFullscreen(root, container, video, button, fullscreenClass, 
 
     const onKeyDown = (event) => {
         if (event.key === 'f' || event.key === 'F') {
-            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+            if (isShortcutBlocked(event)) return;
             event.preventDefault();
             toggleFullscreen();
         }

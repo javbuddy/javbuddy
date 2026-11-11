@@ -9,6 +9,8 @@
 //
 // The video is Javbuddy's own same-origin stream, so WebGL can sample its frames directly.
 
+import { isShortcutBlocked } from './ScrubBar.razor.js';
+
 const VERTICAL_FOV_DEGREES = 75;
 const DRAG_THRESHOLD_PX = 4;
 // The strip at the bottom of the <video> where the browser draws its native controls; presses
@@ -269,7 +271,7 @@ export function init(root, videoSelector) {
 
     const onKeyDown = (event) => {
         if (event.key === 'f' || event.key === 'F') {
-            if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+            if (isShortcutBlocked(event)) return;
             event.preventDefault();
             toggleFullscreen();
         }
