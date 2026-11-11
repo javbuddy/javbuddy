@@ -23,6 +23,6 @@
     font-size: 0.8rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: #94a3b8;
+    color: var(--jb-dark-muted-cool);
     white-space: nowrap;
 }

@@ -10,12 +10,12 @@ public class BackButtonTests : BunitContext
     {
         var cut = Render<BackButton>(p => p
             .Add(x => x.Href, "/movies")
-            .Add(x => x.CssClass, "movie-toolbar-btn")
+            .Add(x => x.CssClass, "page-toolbar-btn")
             .AddChildContent("All movies"));
 
         var anchor = cut.Find("a");
         Assert.Equal("/movies", anchor.GetAttribute("href"));
-        Assert.Equal("movie-toolbar-btn", anchor.GetAttribute("class"));
+        Assert.Equal("page-toolbar-btn", anchor.GetAttribute("class"));
         Assert.Contains("All movies", anchor.TextContent);
         Assert.NotNull(cut.Find("svg"));
     }

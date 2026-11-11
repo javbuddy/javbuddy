@@ -12,7 +12,7 @@
     gap: 0.75rem;
     padding: 0.75rem;
     background-color: #2a2e3b;
-    border: 1px solid #3d4354;
+    border: 1px solid var(--jb-dark-border-strong);
     border-radius: 6px;
     min-height: 75px;
 }
@@ -66,7 +66,7 @@
 }
 
 .avatar-target {
-    background-color: #2fa84f;
+    background-color: var(--jb-status-got);
 }
 
 .actor-card-info {
@@ -82,7 +82,7 @@
 
 .actor-card-sub {
     font-size: 0.8rem;
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
 }
 
 .actor-card-meta {
@@ -92,7 +92,7 @@
 .candidate-list {
     max-height: 220px;
     overflow-y: auto;
-    border: 1px solid #3d4354;
+    border: 1px solid var(--jb-dark-border-strong);
     border-radius: 4px;
     background-color: #1a1c23;
 }
@@ -117,14 +117,14 @@
 
 .candidate-item.selected {
     background-color: #2b3a4a;
-    border-left: 3px solid #2f8fd6;
+    border-left: 3px solid var(--jb-accent);
 }
 
 .candidate-avatar {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background-color: #3d4354;
+    background-color: var(--jb-dark-border-strong);
     color: #cfd3de;
     display: flex;
     align-items: center;
@@ -174,5 +174,5 @@
 
 /* Bootstrap's .text-muted is dark grey (and !important), unreadable on the modal's dark panel. */
 .text-muted {
-    color: #9aa1af !important;
+    color: var(--jb-dark-muted) !important;
 }

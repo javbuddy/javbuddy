@@ -1,5 +1,5 @@
 <div class="toolbar-menu" @onkeydown="OnKeyDown">
-    <button type="button" class="toolbar-menu-btn" disabled="@Disabled" title="@Title"
+    <button type="button" class="page-toolbar-btn toolbar-menu-btn" disabled="@Disabled" title="@Title"
             aria-haspopup="menu" aria-expanded="@(open ? "true" : "false")" aria-busy="@(Busy ? "true" : null)" @onclick="Toggle">
         @if (Busy)
         {
@@ -26,7 +26,7 @@
 @code {
     /// <summary>A page-toolbar button that opens a menu of <see cref="ToolbarMenuItem"/>s, so rarely
     /// used actions can share one toolbar slot. Styled to match the dark page
-    /// toolbars (`.movie-toolbar-btn`). The menu closes when an item is picked, on a click outside
+    /// toolbars (`.page-toolbar-btn`). The menu closes when an item is picked, on a click outside
     /// it, or on Escape.</summary>
     [Parameter, EditorRequired] public string Label { get; set; } = "";
     [Parameter] public RenderFragment? Icon { get; set; }

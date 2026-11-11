@@ -1,12 +1,12 @@
 .search-input {
     background-color: #1a1c23;
-    border-color: #3d4354;
+    border-color: var(--jb-dark-border-strong);
     color: #ffffff;
 }
 
 .search-input:focus {
     background-color: #1a1c23;
-    border-color: #2f8fd6;
+    border-color: var(--jb-accent);
     color: #ffffff;
     box-shadow: 0 0 0 0.25rem rgba(47, 143, 214, 0.25);
 }
@@ -14,7 +14,7 @@
 .search-results-list {
     max-height: 240px;
     overflow-y: auto;
-    border: 1px solid #3d4354;
+    border: 1px solid var(--jb-dark-border-strong);
     border-radius: 4px;
     background-color: #1a1c23;
     display: flex;
@@ -41,7 +41,7 @@
 
 .search-result-item.selected {
     background-color: #2b3a4a;
-    border-left: 3px solid #2f8fd6;
+    border-left: 3px solid var(--jb-accent);
 }
 
 .search-result-thumb {

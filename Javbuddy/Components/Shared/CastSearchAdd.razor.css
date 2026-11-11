@@ -24,7 +24,7 @@
     max-height: 220px;
     overflow-y: auto;
     background-color: var(--cast-search-results-bg, #1a1c23);
-    border: 1px solid var(--cast-search-results-border, #3d4354);
+    border: 1px solid var(--cast-search-results-border, var(--jb-dark-border-strong));
     border-radius: 4px;
     color: var(--cast-search-fg, #e6e8ec);
     z-index: 5;
@@ -52,7 +52,7 @@
     flex-shrink: 0;
     border-radius: 50%;
     object-fit: cover;
-    background-color: #2f8fd6;
+    background-color: var(--jb-accent);
     color: #ffffff;
     font-size: 0.65rem;
     font-weight: 700;

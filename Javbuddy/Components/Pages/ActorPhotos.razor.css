@@ -45,7 +45,7 @@
     max-width: 100%;
     border-radius: 2px;
     overflow: hidden;
-    background: #242833;
+    background: var(--jb-dark-surface);
     cursor: pointer;
 }
 

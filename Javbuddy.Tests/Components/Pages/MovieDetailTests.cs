@@ -160,7 +160,7 @@ public class MovieDetailTests : BunitContext
         try
         {
             var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
-            cut.Find(".movie-toolbar-btn-danger").Click();
+            cut.Find(".page-toolbar-btn-danger").Click();
 
             Assert.False(cut.Find(".movie-delete-files-toggle input").HasAttribute("checked"));
             Assert.Contains("Video files on disk are left alone.", cut.Find(".delete-confirm-dialog").TextContent);
@@ -193,7 +193,7 @@ public class MovieDetailTests : BunitContext
         try
         {
             var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
-            cut.Find(".movie-toolbar-btn-danger").Click();
+            cut.Find(".page-toolbar-btn-danger").Click();
             cut.Find(".movie-delete-files-toggle input").Change(true);
 
             cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".movie-delete-files-list li").Count));
@@ -231,7 +231,7 @@ public class MovieDetailTests : BunitContext
         try
         {
             var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
-            cut.Find(".movie-toolbar-btn-danger").Click();
+            cut.Find(".page-toolbar-btn-danger").Click();
             cut.Find(".movie-delete-files-toggle input").Change(true);
             cut.WaitForElement(".movie-delete-files-error");
 
@@ -259,7 +259,7 @@ public class MovieDetailTests : BunitContext
 
         var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
 
-        var back = cut.Find(".movie-toolbar a.movie-toolbar-btn");
+        var back = cut.Find(".page-toolbar a.page-toolbar-btn");
         Assert.Equal("/", back.GetAttribute("href"));
         Assert.Equal("All movies", back.TextContent.Trim());
     }
@@ -277,7 +277,7 @@ public class MovieDetailTests : BunitContext
 
         var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
 
-        var back = cut.Find(".movie-toolbar a.movie-toolbar-btn");
+        var back = cut.Find(".page-toolbar a.page-toolbar-btn");
         Assert.Equal("/actors/Mikami%20Yua", back.GetAttribute("href"));
         Assert.Equal("Mikami Yua", back.TextContent.Trim());
     }
@@ -514,17 +514,17 @@ public class MovieDetailTests : BunitContext
         }
 
         var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
-        cut.FindAll("button.movie-toolbar-btn").Single(b => b.TextContent.Trim() == "Favorite").Click();
+        cut.FindAll("button.page-toolbar-btn").Single(b => b.TextContent.Trim() == "Favorite").Click();
 
-        Assert.Contains("Favorited", cut.Find("button.movie-toolbar-btn-favorite.active").TextContent);
+        Assert.Contains("Favorited", cut.Find("button.page-toolbar-btn-favorite.active").TextContent);
         using (var readDb = factory.CreateDbContext())
         {
             Assert.True(readDb.Movies.Single(m => m.Code == "ABC-123").IsFavorite);
         }
 
-        cut.FindAll("button.movie-toolbar-btn").Single(b => b.TextContent.Trim() == "Favorited").Click();
+        cut.FindAll("button.page-toolbar-btn").Single(b => b.TextContent.Trim() == "Favorited").Click();
 
-        Assert.Empty(cut.FindAll("button.movie-toolbar-btn-favorite"));
+        Assert.Empty(cut.FindAll("button.page-toolbar-btn-favorite"));
         using var finalDb = factory.CreateDbContext();
         Assert.False(finalDb.Movies.Single(m => m.Code == "ABC-123").IsFavorite);
     }
@@ -857,7 +857,7 @@ public class MovieDetailTests : BunitContext
         Assert.DoesNotContain("NFO Metadata Conflict:", cut.Markup);
 
         // The toolbar no longer repeats the badge with its own Resolve .nfo Conflict button.
-        Assert.DoesNotContain(cut.FindAll(".movie-toolbar button"), b => b.TextContent.Contains("Resolve .nfo Conflict"));
+        Assert.DoesNotContain(cut.FindAll(".page-toolbar button"), b => b.TextContent.Contains("Resolve .nfo Conflict"));
 
         // The badge names the drift direction and opens the review.
         var conflictBadge = cut.FindAll("button.movie-detail-badge-warning").SingleOrDefault();
@@ -990,7 +990,7 @@ public class MovieDetailTests : BunitContext
 
         Assert.DoesNotContain("Edit .nfo", ToolbarMenuItems(cut, "Tools"));
         Assert.DoesNotContain("Repair Video", ToolbarMenuItems(cut, "Tools"));
-        Assert.DoesNotContain(cut.FindAll("button.movie-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
+        Assert.DoesNotContain(cut.FindAll("button.page-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
         Assert.Empty(cut.FindAll("button.movie-detail-badge-warning"));
     }
 
@@ -1007,7 +1007,7 @@ public class MovieDetailTests : BunitContext
         var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
 
         Assert.Equal(["Crop Cover", "Edit .nfo", "Generate poster & fanart", "Generate stills", "Repair Video"], ToolbarMenuItems(cut, "Tools"));
-        Assert.Contains(cut.FindAll("button.movie-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
+        Assert.Contains(cut.FindAll("button.page-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
     }
 
     [Theory]
@@ -1082,13 +1082,13 @@ public class MovieDetailTests : BunitContext
         var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
 
         Assert.DoesNotContain("Edit .nfo", ToolbarMenuItems(cut, "Tools"));
-        Assert.DoesNotContain(cut.FindAll("button.movie-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
+        Assert.DoesNotContain(cut.FindAll("button.page-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
 
-        var toggleButton = cut.FindAll("button.movie-toolbar-btn").Single(b => b.TextContent.Contains("Mark as Got"));
+        var toggleButton = cut.FindAll("button.page-toolbar-btn").Single(b => b.TextContent.Contains("Mark as Got"));
         toggleButton.Click();
 
         Assert.Contains("Edit .nfo", ToolbarMenuItems(cut, "Tools"));
-        Assert.Contains(cut.FindAll("button.movie-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
+        Assert.Contains(cut.FindAll("button.page-toolbar-btn"), b => b.TextContent.Contains("Media Info"));
     }
 
     [Fact]
@@ -1213,7 +1213,7 @@ public class MovieDetailTests : BunitContext
         Assert.NotNull(jellyfinBadge);
 
         // Verify no play button in toolbar or on poster
-        Assert.Empty(cut.FindAll(".movie-toolbar-btn-play"));
+        Assert.Empty(cut.FindAll(".page-toolbar-btn-play"));
         Assert.Empty(cut.FindAll(".movie-detail-poster-play-btn"));
 
         var playerModal = cut.FindComponent<VideoPlayerModal>();
@@ -1238,7 +1238,7 @@ public class MovieDetailTests : BunitContext
     }
 
     private static AngleSharp.Dom.IElement ToolbarMenuTrigger(IRenderedComponent<MovieDetail> cut, string menu) =>
-        cut.FindAll(".movie-toolbar button.toolbar-menu-btn").Single(b => b.TextContent.Trim() == menu);
+        cut.FindAll(".page-toolbar button.toolbar-menu-btn").Single(b => b.TextContent.Trim() == menu);
 
     private static void AddMovieWithTwoVersions(TestDbContextFactory factory)
     {
@@ -1765,7 +1765,7 @@ public class MovieDetailTests : BunitContext
 
         Assert.Empty(cut.FindAll(".movie-detail-badge-play"));
         Assert.Empty(cut.FindAll(".movie-detail-badge-jellyfin"));
-        Assert.Empty(cut.FindAll(".movie-toolbar-btn-play"));
+        Assert.Empty(cut.FindAll(".page-toolbar-btn-play"));
         Assert.Empty(cut.FindAll(".movie-detail-poster-play-btn"));
     }
 

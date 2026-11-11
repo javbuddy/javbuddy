@@ -2,7 +2,7 @@
     text-align: center;
     font-weight: 400;
     font-size: 2.4rem;
-    color: #6c757d;
+    color: var(--jb-muted);
     margin: 1.5rem 0 2.5rem;
 }
 
@@ -38,25 +38,14 @@
 }
 
 .import-stats-row {
-    display: grid;
     grid-template-columns: 220px 1fr;
-    gap: 0.5rem;
+    align-items: normal;
     padding: 0.6rem 0.25rem;
-}
-
-.import-stats-header {
-    font-weight: 600;
-    color: #495057;
-    border-bottom: 2px solid #dee2e6;
-}
-
-.import-stats-row:not(.import-stats-header) {
-    border-bottom: 1px solid #eee;
 }
 
 .import-stats-highlight {
     font-weight: 600;
-    color: #2fa84f;
+    color: var(--jb-status-got);
 }
 
 .import-stats-error {
@@ -71,26 +60,17 @@
 }
 
 :root[data-theme="dark"] .import-title {
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
 }
 
 :root[data-theme="dark"] .import-tips h2,
 :root[data-theme="dark"] .import-section-title {
-    color: #dfe2e8;
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .import-tips code {
     background: #2a2f3b;
     color: #e7a9d0;
-}
-
-:root[data-theme="dark"] .import-stats-header {
-    color: #b9bfd1;
-    border-bottom-color: #3d4452;
-}
-
-:root[data-theme="dark"] .import-stats-row:not(.import-stats-header) {
-    border-bottom-color: #363c4a;
 }
 
 :root[data-theme="dark"] .import-stats-highlight {

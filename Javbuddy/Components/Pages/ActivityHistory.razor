@@ -11,7 +11,7 @@
 
 <PageTitle>History · Javbuddy</PageTitle>
 
-<h1 class="activity-title">History</h1>
+<h1 class="data-page-title activity-title">History</h1>
 
 <div class="mb-3">
     <StatusFilterButtonGroup Options="@ViewOptions" />
@@ -38,7 +38,7 @@
             <button type="button" class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => RequestPurge(null)">Purge all history</button>
         </div>
         <div class="activity-table">
-            <div class="activity-row activity-header activity-row-deleted">
+            <div class="data-table-row data-table-stack data-table-header activity-row activity-header activity-row-deleted">
                 <span>Movie</span>
                 <span>Title</span>
                 <span>Previous status</span>
@@ -47,8 +47,8 @@
             </div>
             @foreach (var movie in deleted.Movies)
             {
-                <div class="activity-row activity-row-deleted" @key="movie.Id">
-                    <a class="activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(movie.Code)}")">@movie.Code</a>
+                <div class="data-table-row data-table-stack activity-row activity-row-deleted" @key="movie.Id">
+                    <a class="data-table-link activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(movie.Code)}")">@movie.Code</a>
                     <span class="text-break">@(movie.MetaTitle ?? movie.Title ?? "—")</span>
                     <span>@movie.PreviousStatus</span>
                     <span>@movie.DeletedAt.ToLocalTime().ToString("MMM d yyyy, HH:mm")</span>
@@ -79,7 +79,7 @@ else if (history.TotalCount == 0)
 else
 {
     <div class="activity-table">
-        <div class="activity-row activity-header activity-row-history">
+        <div class="data-table-row data-table-stack data-table-header activity-row activity-header activity-row-history">
             <span>Movie</span>
             <span>Release</span>
             <span>Indexer</span>
@@ -91,8 +91,8 @@ else
         </div>
         @foreach (var row in history.Rows)
         {
-            <div class="activity-row activity-row-history">
-                <a class="activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(row.MovieCode)}")">@row.MovieCode</a>
+            <div class="data-table-row data-table-stack activity-row activity-row-history">
+                <a class="data-table-link activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(row.MovieCode)}")">@row.MovieCode</a>
                 <span class="text-break">@row.ReleaseTitle</span>
                 <span>@row.Indexer</span>
                 <span>@(row.Size is long size ? ByteSizeFormatter.Format(size) : "—")</span>

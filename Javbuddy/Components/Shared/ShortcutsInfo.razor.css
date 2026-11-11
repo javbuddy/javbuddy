@@ -13,7 +13,7 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--shortcuts-info-icon, #94a3b8);
+    color: var(--shortcuts-info-icon, var(--jb-dark-muted-cool));
     cursor: help;
     transition: color 0.15s ease, background-color 0.15s ease;
 }
@@ -87,7 +87,7 @@
 
 .shortcuts-info-or {
     margin: 0 0.2rem;
-    color: var(--shortcuts-info-muted, #94a3b8);
+    color: var(--shortcuts-info-muted, var(--jb-dark-muted-cool));
 }
 
 .shortcuts-info kbd {

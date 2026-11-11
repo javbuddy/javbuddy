@@ -51,7 +51,7 @@ public class SystemTasksDismissStuckTaskFlowTests
 
             // After dismiss, the dismiss button is gone and the icon transitions to warning
             await Expect(dismissButton).ToBeHiddenAsync();
-            await Expect(queueRow.Locator(".tasks-icon-warning")).ToBeVisibleAsync();
+            await Expect(queueRow.Locator(".status-icon-warning")).ToBeVisibleAsync();
 
             // The sidebar active-task status line clears
             await Expect(sidebarIndicator).ToBeHiddenAsync();

@@ -1,33 +1,7 @@
+/* Page-specific bit of the global .page-toolbar: spacing before the title. */
 .sort-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem;
-    background-color: #35394a;
-    border-radius: 4px 4px 0 0;
-    padding: 0.5rem 0.75rem;
-    margin: 0 -0.01px 1rem;
+    margin-bottom: 1rem;
 }
-
-.sort-toolbar-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: none;
-    border: none;
-    color: #cfd3de;
-    font-size: 0.85rem;
-    font-weight: 500;
-    padding: 0.4rem 0.6rem;
-    border-radius: 3px;
-    text-decoration: none;
-    white-space: nowrap;
-}
-
-    .sort-toolbar-btn:hover {
-        background-color: #454a5e;
-        color: #ffffff;
-    }
 
 .sort-title {
     font-size: 1.6rem;
@@ -51,16 +25,16 @@
     font-size: 0.8rem;
     font-weight: 600;
     background-color: #e9ecef;
-    color: #6c757d;
+    color: var(--jb-muted);
 }
 
 .sort-step-active {
-    background-color: #1c9fc4 !important;
+    background-color: var(--jb-info) !important;
     color: #ffffff !important;
 }
 
 .sort-step-done {
-    background-color: #2fa84f !important;
+    background-color: var(--jb-status-got) !important;
     color: #ffffff !important;
 }
 
@@ -102,7 +76,7 @@
     margin-top: 0.5rem;
     max-height: 400px;
     overflow-y: auto;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--jb-border);
     border-radius: 4px;
     padding: 0.25rem 0.5rem;
 }
@@ -159,15 +133,15 @@
     font-weight: 600;
     color: #ffffff;
     white-space: nowrap;
-    background-color: #6c757d;
+    background-color: var(--jb-muted);
 }
 
 .sort-badge-matched {
-    background-color: #2fa84f;
+    background-color: var(--jb-status-got);
 }
 
 .sort-badge-unmatched {
-    background-color: #dc3545;
+    background-color: var(--jb-danger);
 }
 
 .sort-quality-badge {
@@ -188,7 +162,7 @@
 
 .sort-progress-bar {
     height: 100%;
-    background-color: #1c9fc4;
+    background-color: var(--jb-info);
     transition: width 0.3s ease;
 }
 
@@ -217,7 +191,7 @@
 
 /* Movie Review Cards */
 .sort-movie-card {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--jb-border);
     border-radius: 6px;
     background-color: #ffffff;
     overflow: hidden;
@@ -232,7 +206,7 @@
     gap: 0.5rem;
     padding: 0.6rem 0.9rem;
     background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--jb-border);
 }
 
 .sort-movie-header-info {
@@ -280,7 +254,7 @@
     align-items: center;
     justify-content: center;
     background-color: #e9ecef;
-    color: #6c757d;
+    color: var(--jb-muted);
     font-size: 0.85rem;
     font-weight: 600;
     border-radius: 4px;
@@ -305,7 +279,7 @@
     align-items: center;
     gap: 0.75rem;
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--jb-muted);
     margin-bottom: 0.5rem;
 }
 
@@ -327,7 +301,7 @@
 }
 
 .sort-badge-pill-code {
-    background-color: #1c9fc4;
+    background-color: var(--jb-info);
     color: #ffffff;
     font-weight: 600;
 }
@@ -352,12 +326,12 @@
     font-size: 0.72rem;
     background-color: #f1f3f5;
     color: #495057;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--jb-border);
 }
 
 .sort-movie-description {
     font-size: 0.85rem;
-    color: #6c757d;
+    color: var(--jb-muted);
     line-height: 1.4;
     margin-bottom: 0;
     max-height: 80px;
@@ -366,13 +340,13 @@
 
 /* Excluded Section */
 .sort-excluded-section {
-    border-top: 1px dashed #dee2e6;
+    border-top: 1px dashed var(--jb-border);
     padding-top: 0.75rem;
 }
 
 .sort-excluded-list {
     background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--jb-border);
     border-radius: 4px;
     padding: 0.5rem 0.75rem;
 }
@@ -391,7 +365,7 @@
 
 /* Preview Cards */
 .sort-preview-card {
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--jb-border);
     border-radius: 6px;
     padding: 0.9rem;
     background-color: #ffffff;
@@ -435,56 +409,56 @@
 
 /* Dark theme overrides */
 :root[data-theme="dark"] .sort-title {
-    color: #dfe2e8;
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .sort-steps li {
-    background-color: #363c4a;
-    color: #b9bfd1;
+    background-color: var(--jb-dark-border);
+    color: var(--jb-dark-text-dim);
 }
 
 :root[data-theme="dark"] .sort-file-list {
-    border-color: #363c4a;
+    border-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .sort-file-row {
-    border-bottom-color: #363c4a;
+    border-bottom-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .sort-merge-file-row {
-    border-bottom-color: #363c4a;
+    border-bottom-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .sort-progress {
-    background-color: #363c4a;
+    background-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .sort-movie-card,
 :root[data-theme="dark"] .sort-preview-card {
     background-color: #232733;
-    border-color: #363c4a;
-    color: #dfe2e8;
+    border-color: var(--jb-dark-border);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .sort-movie-header {
-    background-color: #1b1e27;
-    border-bottom-color: #363c4a;
+    background-color: var(--jb-dark-bg);
+    border-bottom-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .sort-movie-poster-placeholder {
-    background-color: #363c4a;
-    color: #b9bfd1;
+    background-color: var(--jb-dark-border);
+    color: var(--jb-dark-text-dim);
 }
 
 :root[data-theme="dark"] .sort-badge-pill {
-    background-color: #363c4a;
-    color: #dfe2e8;
+    background-color: var(--jb-dark-border);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .sort-genre-tag {
     background-color: #2b303e;
-    border-color: #363c4a;
-    color: #dfe2e8;
+    border-color: var(--jb-dark-border);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .sort-movie-cast-row {
@@ -496,12 +470,12 @@
 }
 
 :root[data-theme="dark"] .sort-excluded-list {
-    background-color: #1b1e27;
-    border-color: #363c4a;
+    background-color: var(--jb-dark-bg);
+    border-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .sort-excluded-row {
-    border-bottom-color: #363c4a;
+    border-bottom-color: var(--jb-dark-border);
 }
 
 @media (max-width: 640.98px) {

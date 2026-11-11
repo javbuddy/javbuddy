@@ -35,10 +35,10 @@ public class SystemStatusHealthFlowTests
         var page = await fixture.NewPageAsync();
         await page.GotoInteractiveAsync("/system/status");
 
-        await Expect(SubServiceRow(page, "javinizer-go").Locator(".health-icon-ok")).ToBeVisibleAsync();
-        await Expect(SubServiceRow(page, "Prowlarr").Locator(".health-icon-ok")).ToBeVisibleAsync();
-        await Expect(SubServiceRow(page, "qBittorrent").Locator(".health-icon-ok")).ToBeVisibleAsync();
-        await Expect(SubServiceRow(page, "Jellyfin").Locator(".health-icon-ok")).ToBeVisibleAsync();
+        await Expect(SubServiceRow(page, "javinizer-go").Locator(".status-icon-ok")).ToBeVisibleAsync();
+        await Expect(SubServiceRow(page, "Prowlarr").Locator(".status-icon-ok")).ToBeVisibleAsync();
+        await Expect(SubServiceRow(page, "qBittorrent").Locator(".status-icon-ok")).ToBeVisibleAsync();
+        await Expect(SubServiceRow(page, "Jellyfin").Locator(".status-icon-ok")).ToBeVisibleAsync();
 
         await Expect(SubServiceRow(page, "javinizer-go")).ToContainTextAsync($"({FakeJavinizerServer.Version})");
         await Expect(SubServiceRow(page, "Prowlarr")).ToContainTextAsync($"({FakeProwlarrServer.Version})");
@@ -52,11 +52,11 @@ public class SystemStatusHealthFlowTests
         fixture.FakeProwlarr.ConnectionSucceeds = false;
         await page.GetByRole(AriaRole.Button, new() { Name = "Refresh" }).ClickAsync();
 
-        await Expect(SubServiceRow(page, "Prowlarr").Locator(".health-icon-warning")).ToBeVisibleAsync();
+        await Expect(SubServiceRow(page, "Prowlarr").Locator(".status-icon-warning")).ToBeVisibleAsync();
         await Expect(SubServiceRow(page, "Prowlarr")).ToContainTextAsync("API key was rejected");
         // The other three stay healthy — confirms the page reflects per-service state, not a
         // single global "something is down" flag.
-        await Expect(SubServiceRow(page, "javinizer-go").Locator(".health-icon-ok")).ToBeVisibleAsync();
+        await Expect(SubServiceRow(page, "javinizer-go").Locator(".status-icon-ok")).ToBeVisibleAsync();
     }
 
     [Fact]

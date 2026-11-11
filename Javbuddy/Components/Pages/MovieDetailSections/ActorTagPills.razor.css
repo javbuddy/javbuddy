@@ -34,7 +34,7 @@
 }
 
 .actor-pill-more {
-    color: #94a3b8;
+    color: var(--jb-dark-muted-cool);
     background: transparent;
     border-color: rgba(255, 255, 255, 0.18);
 }
@@ -42,7 +42,7 @@
 /* Only the movie's clips carry it: grayed and dashed like the editors' rolled-up chips. */
 .actor-pill-clip {
     font-style: italic;
-    color: #94a3b8;
+    color: var(--jb-dark-muted-cool);
     background: transparent;
     border-style: dashed;
     border-color: rgba(255, 255, 255, 0.22);
@@ -50,7 +50,7 @@
 
 .actor-pill-add {
     appearance: none;
-    color: #94a3b8;
+    color: var(--jb-dark-muted-cool);
     background: transparent;
     border-style: dashed;
     border-color: rgba(255, 255, 255, 0.28);
@@ -93,7 +93,7 @@
     transform: translateX(-50%);
     text-align: left;
     background-color: #1a1c23;
-    border: 1px solid #3d4354;
+    border: 1px solid var(--jb-dark-border-strong);
     border-radius: 6px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
 }

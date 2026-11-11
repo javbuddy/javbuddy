@@ -25,19 +25,43 @@ A legend spelling these out in words (`.movies-stats-legend` in `Movies.razor`/`
 
 **Sidebar icons** — `NavMenu.razor.css`'s `.nav-icon-*` classes use inline-SVG `mask-image`/`-webkit-mask-image` (Bootstrap Icons paths) with `background-color: currentColor`, not `<img>` tags — this lets the icon inherit the sidebar's text/hover color automatically instead of needing separate light/dark/hover SVG variants. Follow this technique for any new sidebar icon.
 
-**Dark theme** — driven by a `data-theme` attribute on `<html>`, resolved from a cookie by a small inline script in `Components/App.razor` (auto/light/dark, defaulting to `prefers-color-scheme`). Component-level dark overrides live in the same `.razor.css` file as the light styles, scoped with `:root[data-theme="dark"] .some-class { ... }` — see `PosterCard.razor.css`'s dark block (`background: #242833`) for the pattern. Don't put dark-theme rules in a separate global stylesheet; keep them next to the component they style, consistent with CSS isolation (above).
+**Dark theme** — driven by a `data-theme` attribute on `<html>`, resolved from a cookie by a small inline script in `Components/App.razor` (auto/light/dark, defaulting to `prefers-color-scheme`). Component-level dark overrides live in the same `.razor.css` file as the light styles, scoped with `:root[data-theme="dark"] .some-class { ... }` — see `PosterCard.razor.css`'s dark block (`background: #242833`) for the pattern. Don't put dark-theme rules in a separate global stylesheet; keep them next to the component they style, consistent with CSS isolation (above). The exception is the global chrome in `wwwroot/app.css` (data tables, page toolbar, below), whose dark rules are global `:root[data-theme="dark"] …` rules next to the light ones.
+
+**Color tokens** — `wwwroot/app.css` defines the app's most repeated colors as `--jb-*` custom properties in `:root`. Each has one value in both themes (the `dark-*` ones are the dark theme's greys, used from `:root[data-theme="dark"]` rules; nothing switches per theme yet). Custom properties cross CSS isolation scopes, so any `.razor.css` can use `var(--jb-…)`. New code should use a token instead of the hex when its role matches; a color that isn't here is still written as a hex (add a token only once it's repeated).
+
+| Token | Value | Role |
+|---|---|---|
+| `--jb-accent` | `#2f8fd6` | Accent blue: selected/active borders and fills, focus, checkboxes |
+| `--jb-status-wanted` | `#2f8fd6` | Tracked-but-missing movie (`status-wanted`), same blue as the accent |
+| `--jb-status-downloading` | `#e6b800` | Downloading / warning yellow |
+| `--jb-status-got` | `#2fa84f` | Got / success green |
+| `--jb-status-missing` | `#d9822b` | ActorMissing's "not in your library" orange; also the warning icon |
+| `--jb-info` | `#1c9fc4` | Teal for links in tables, progress bars, active step, info buttons |
+| `--jb-danger` | `#dc3545` | Destructive actions, error states |
+| `--jb-muted` | `#6c757d` | Muted text on light backgrounds |
+| `--jb-border` | `#dee2e6` | Light-theme borders and dividers |
+| `--jb-dark-bg` | `#1b1e27` | Dark theme page background / inset fields |
+| `--jb-dark-surface` | `#242833` | Dark theme cards and raised surfaces |
+| `--jb-dark-border` | `#363c4a` | Dark theme borders and row dividers |
+| `--jb-dark-border-strong` | `#3d4354` | Dark theme input/panel borders, hover fills |
+| `--jb-dark-text` | `#dfe2e8` | Dark theme body text |
+| `--jb-dark-text-dim` | `#b9bfd1` | Dark theme secondary text (headers, icon buttons) |
+| `--jb-dark-muted` | `#9aa1af` | Dark theme muted text (`.text-muted`) |
+| `--jb-dark-muted-cool` | `#94a3b8` | Dark theme muted text, slate-tinted (editor chrome, tag pills) |
+
+Near-duplicates of these (`#3d4256`, `#3d4452`, `#35394a`, `#2a2f3b`, `#4a5062`/`#4a5064`, …) are deliberately still hex values — don't collapse them into a token without checking the visual change.
 
 ## Existing shared components
 
 | Component | Purpose | Notes |
 |---|---|---|
-| `BackButton.razor` | Back-navigation link with chevron icon | Caller supplies its own toolbar CSS class — only the icon/wrapper markup is shared. |
+| `BackButton.razor` | Back-navigation link with chevron icon | Caller supplies the toolbar button class (normally the global `page-toolbar-btn`) — only the icon/wrapper markup is shared. |
 | `CastSearchAdd.razor` | Search-and-add box for a movie's cast (search input + results dropdown) | Shared by Movie Detail's `MovieCastSection.razor` and the Review/Cleanup card's `MovieCleanupCastTags.razor`. Injects `IActorService` for the search itself; the caller supplies `ExcludedActorIds` and handles `OnAdd`. Colors default to Movie Detail's dark look and are overridden per host via `--cast-search-*` custom properties (custom properties cross CSS isolation scopes, unlike class rules). |
 | `TagSearchAdd.razor` | Search-and-add box for a movie's tags (search input + results dropdown) | Shared by Movie Detail's `MovieGenresSection.razor` and the Review/Cleanup card's `MovieCleanupCastTags.razor`. Injects `ITagService` for the search; shows approved tags only, capped at 10, excluding `ExcludedTagIds`; the caller handles `OnAdd`. Restyle per host via `--tag-search-*` custom properties, same pattern as `CastSearchAdd`. |
 | `ActorTagsEditor.razor` | Per-actor rows of actor-tag chips (own removable, inherited dashed, rolled-up grayed) picked with `TagSearchAdd` | Used under `ClipEditor.razor`'s scene, highlight and apex edit forms (Movie Detail has its own `ActorTagPills`). Injects `IActorTagService` and saves at once; the host passes the actors, their `EffectiveActorTag`s and re-reads on `OnChanged`. Colors default to the clip editors' dark look via `--scene-editor-*`; `TagSearchAdd`'s `Search` parameter points its search at the actor-tag library. |
 | `ConnectionSettingsCard.razor` | Generic `TSettings`-typed card for an integration's connection settings form | Handles the env-configured banner + loading state. |
 | `DropdownMenuButton.razor` | Toggle button + dropdown menu chrome | Shared by `Movies.razor`'s sort dropdown and `ActorMissing.razor`'s sort/filter dropdowns; deliberately doesn't own open/close state — callers manage that themselves. |
-| `ToolbarMenuButton.razor` / `ToolbarMenuItem.razor` | A dark page-toolbar button that opens a menu of actions | Used by `MovieDetail.razor`'s **Refresh ▾** and **Tools ▾**. Items are `ToolbarMenuItem`s in `ChildContent`; picking one closes the menu (via a cascaded parent) and runs its `OnClick`. Closes on a backdrop click or Escape. `Busy` swaps the icon for a spinner while one of its actions runs, so progress shows with the menu closed (Refresh while rescanning; Tools while generating poster & fanart or loading the .nfo). Its button copies `.movie-toolbar-btn`'s look because CSS isolation stops the two from sharing rules. |
+| `ToolbarMenuButton.razor` / `ToolbarMenuItem.razor` | A dark page-toolbar button that opens a menu of actions | Used by `MovieDetail.razor`'s **Refresh ▾** and **Tools ▾**. Items are `ToolbarMenuItem`s in `ChildContent`; picking one closes the menu (via a cascaded parent) and runs its `OnClick`. Closes on a backdrop click or Escape. `Busy` swaps the icon for a spinner while one of its actions runs, so progress shows with the menu closed (Refresh while rescanning; Tools while generating poster & fanart or loading the .nfo). Its button is a global `.page-toolbar-btn` (plus `.toolbar-menu-btn` for the open-menu highlight). |
 | `GalleryLightbox.razor` | Full-screen, navigable image viewer (story-style progress bar, prev/next strips, ←/→/Esc, swipe, Original toggle, zoom/pan via `ImageZoomControls`) | Shared by `MovieGallery.razor`, `ActorPhotos.razor` and `ActorPhotoGallery.razor`. The caller renders it only while open, owns the index (`@bind-Index`) and hands it a `Count` plus URL callbacks (`ImageUrl`, optional `OriginalUrl`), so it works over any list, including one that changes while open. `Title`/`Actions` are `RenderFragment<int>` slots for the top bar; content passed in them is styled by the caller's own `.razor.css`. Not for a single image — use `ImageLightboxModal` for that. |
 | `ImageZoomControls.razor` | Zoom out/in/reset buttons for a lightbox top bar, plus wheel, double-click/tap, drag-to-pan and pinch zoom | Used by `GalleryLightbox` and `ImageLightboxModal`. The host marks its full-screen root `data-zoom-container` and the `<img>` `data-zoom-image`, and renders this inside the root. All gesture handling is client-side in `ImageZoomControls.razor.js` (a CSS transform on the image), so it reports only fit ↔ zoomed changes back through `ZoomedChanged`. Zoom resets when `ResetKey` changes. Buttons hidden ≤576px, where pinch covers it. |
 | `ImageLightboxModal.razor` | Full-screen single-image viewer | Shared by `ActorDetail.razor`'s hero avatar (with an optional Original/Cropped variant toggle via `AlternateImageUrl`) and `MovieDetail.razor`'s main poster (single `ImageUrl`, no toggle). |
@@ -66,9 +90,14 @@ A legend spelling these out in words (`.movies-stats-legend` in `Movies.razor`/`
 
 `.razor.css` files are scoped per component — identical class names in two different `.razor.css` files do **not** share styles. When a new component needs the same look as an existing one, copy the needed CSS rules into the new component's own `.razor.css` rather than assuming reuse across components.
 
-Real example from this codebase: `TorrentSort.razor.css` copies rules it needs from `ActivityQueue.razor`/`MovieDetail.razor`'s own `.razor.css` files rather than referencing them — each page/component keeps its own copy.
+Real example from this codebase: `SystemStatus.razor.css`'s own `.health-icon` size and `Missing.razor.css`'s `.missing-icon-search` live in their page's scope because nothing else uses them, while the chrome those pages share with others is global (below).
 
-The exception is chrome that many components render identically: the sort/filter dropdown classes (`.sort-dropdown-wrapper`, `.sort-dropdown-item`, `.sort-dropdown-arrow`, `.sort-dropdown-divider`, `.dropdown-backdrop`) are plain global rules in `wwwroot/app.css` instead of a scoped copy per page. Reach for that only when the same rules were already duplicated verbatim in several `.razor.css` files; a component that needs a variation keeps its own scoped override (scoped rules win on specificity).
+The exception is chrome that many components render identically: the sort/filter dropdown classes (`.sort-dropdown-wrapper`, `.sort-dropdown-item`, `.sort-dropdown-arrow`, `.sort-dropdown-divider`, `.dropdown-backdrop`) are plain global rules in `wwwroot/app.css` instead of a scoped copy per page. Reach for that only when the same rules were already duplicated verbatim in several `.razor.css` files; a component that needs a variation keeps its own scoped override (scoped rules win on specificity). Other global sets in `app.css`:
+
+- **Page toolbar** — `.page-toolbar` (container), `.page-toolbar-btn` (a button or link, also the back button via `BackButton`'s `CssClass` and `ToolbarMenuButton`), `-btn-danger`, `-btn-favorite` (+ `.active`) and `.page-toolbar-sep`, used by Movie Detail, Actor Detail/Edit/Missing and Torrent Sort. Hover is `:hover:not(:disabled)` and a disabled button is dimmed. A page that needs another edge or spacing adds its own class next to `page-toolbar` with a scoped override (`ActorEdit`/`ActorMissing` `.actor-toolbar`, `TorrentSort` `.sort-toolbar`).
+- **Data-table pages** (System Tasks/Status, Activity Queue/History, Missing, Library Import) — `.data-page-title`, `.data-table-header`, `.data-table-row` (grid base + divider; the page's scoped class sets `grid-template-columns` and any padding/gap difference), `.data-table-stack` (phone layout: header hidden, tighter rows; the page's scoped media rule sets the single column), `.data-table-link`, `.status-icon` + `-warning`/`-ok` (mask-image icons), and the `.activity-badge-*` download-status badges. Pages keep their old class names beside the global ones (tests select them); the global classes carry the style.
+
+New pages with the same chrome should use these instead of copying the rules.
 
 ## Page vs. component vs. service boundary
 

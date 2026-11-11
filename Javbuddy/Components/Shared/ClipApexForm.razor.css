@@ -20,8 +20,8 @@
 }
 
 .apex-editor-save-btn {
-    background-color: #2f8fd6;
-    border-color: #2f8fd6;
+    background-color: var(--jb-accent);
+    border-color: var(--jb-accent);
     color: #fff;
 }
 
@@ -45,7 +45,7 @@
 .apex-editor-label {
     font-size: 0.72rem;
     font-weight: 600;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .apex-editor-hint {
@@ -110,7 +110,7 @@
     padding: 0.1rem 0.5rem;
     color: var(--scene-editor-fg, #e2e8f0);
     background-color: rgba(47, 143, 214, 0.18);
-    border-color: #2f8fd6;
+    border-color: var(--jb-accent);
 }
 
 .apex-editor-chip-remove {

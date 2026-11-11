@@ -30,7 +30,7 @@
 
 .stats-tile-label {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: var(--jb-muted);
 }
 
 .stats-grid {
@@ -60,11 +60,11 @@
 }
 
 .stats-stack-got {
-    background: #2fa84f;
+    background: var(--jb-status-got);
 }
 
 .stats-stack-missing {
-    background: #2f8fd6;
+    background: var(--jb-accent);
 }
 
 .stats-legend {

@@ -12,7 +12,7 @@
     padding: 0 0.4rem;
     font-size: 0.75rem;
     font-style: italic;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     background: transparent;
     border: 1px dashed var(--scene-editor-border, rgba(255, 255, 255, 0.22));
     border-radius: 999px;

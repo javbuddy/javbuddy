@@ -54,7 +54,7 @@
     }
 
     .gallery-progress-segment.is-current {
-        background-color: #2f8fd6;
+        background-color: var(--jb-accent);
     }
 
 .gallery-topbar-row {

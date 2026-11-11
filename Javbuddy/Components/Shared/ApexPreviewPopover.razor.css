@@ -5,9 +5,9 @@
     box-sizing: border-box;
     width: 240px;
     padding: 4px;
-    border: 1px solid #3d4354;
+    border: 1px solid var(--jb-dark-border-strong);
     border-radius: 6px;
-    background-color: #242833;
+    background-color: var(--jb-dark-surface);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
     transform-origin: 50% 100%;
     animation: apex-preview-pop 120ms ease-out;
@@ -20,7 +20,7 @@
     left: var(--apex-preview-arrow, 50%);
     margin-left: -6px;
     border: 6px solid transparent;
-    border-top-color: #3d4354;
+    border-top-color: var(--jb-dark-border-strong);
 }
 
 @keyframes apex-preview-pop {

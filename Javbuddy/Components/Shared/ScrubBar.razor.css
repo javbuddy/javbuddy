@@ -112,7 +112,7 @@
     box-sizing: content-box;
     background: rgba(15, 23, 42, 0.95);
     border-radius: 4px;
-    accent-color: #2f8fd6;
+    accent-color: var(--jb-accent);
     cursor: pointer;
 }
 
@@ -130,7 +130,7 @@
     width: 26px;
     height: 22px;
     padding: 0;
-    color: #94a3b8;
+    color: var(--jb-dark-muted-cool);
     background: transparent;
     border: none;
     border-radius: 4px;
@@ -177,7 +177,7 @@
 .scrub-bar-progress {
     width: 0;
     height: 100%;
-    background-color: #2f8fd6;
+    background-color: var(--jb-accent);
 }
 
 .scrub-bar-preview {
@@ -222,5 +222,5 @@
 }
 
 :root[data-theme="dark"] .scrub-bar-track {
-    background-color: #3d4354;
+    background-color: var(--jb-dark-border-strong);
 }

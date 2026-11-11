@@ -32,6 +32,6 @@ public class SystemTasksRunNowFlowTests
         await Expect(page.GetByText("Jellyfin Link Sync queued.")).ToBeVisibleAsync();
 
         var queueRow = page.Locator(".tasks-row-queue", new() { HasText = "Jellyfin Link Sync" });
-        await Expect(queueRow.Locator(".tasks-icon-ok")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Expect(queueRow.Locator(".status-icon-ok")).ToBeVisibleAsync(new() { Timeout = 15_000 });
     }
 }

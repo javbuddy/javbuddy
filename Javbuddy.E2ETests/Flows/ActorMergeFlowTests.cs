@@ -61,7 +61,7 @@ public class ActorMergeFlowTests
         await Expect(page.Locator("h1.actor-hero-title")).ToContainTextAsync(sourceDisplayName);
 
         // Click Merge in toolbar
-        await page.Locator(".actor-toolbar").GetByRole(AriaRole.Button, new() { Name = "Merge..." }).ClickAsync();
+        await page.Locator(".page-toolbar").GetByRole(AriaRole.Button, new() { Name = "Merge..." }).ClickAsync();
         await Expect(page.Locator(".modal-shell-backdrop")).ToBeVisibleAsync();
         await Expect(page.Locator(".modal-shell-title")).ToContainTextAsync($"Merge Actor — {sourceDisplayName}");
 

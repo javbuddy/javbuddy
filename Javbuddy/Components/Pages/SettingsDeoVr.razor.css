@@ -11,12 +11,12 @@
 }
 
 .deovr-editor {
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--jb-border);
     padding-top: 1rem;
 }
 
 .deovr-match-count {
-    color: #6c757d;
+    color: var(--jb-muted);
 }
 
 :root[data-theme="dark"] .deovr-editor {

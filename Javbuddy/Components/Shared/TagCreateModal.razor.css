@@ -1,7 +1,7 @@
 .tag-parent-suggestions {
     max-height: 150px;
     overflow-y: auto;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--jb-border);
     border-radius: 4px;
     margin-top: 0.35rem;
     background-color: #ffffff;
@@ -31,11 +31,11 @@
 
 :root[data-theme="dark"] .tag-parent-suggestions {
     background-color: rgba(255, 255, 255, 0.04);
-    border-color: #363c4a;
+    border-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .tag-parent-suggestion-item {
-    border-bottom-color: #363c4a;
+    border-bottom-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .tag-parent-suggestion-item:hover {

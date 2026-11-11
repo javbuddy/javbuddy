@@ -16,7 +16,7 @@
 }
 
 .scene-wall-count {
-    color: #6c757d;
+    color: var(--jb-muted);
     font-size: 0.9rem;
 }
 
@@ -45,7 +45,7 @@
 }
 
 .scene-wall-empty {
-    color: #6c757d;
+    color: var(--jb-muted);
 }
 
 .scene-wall-grid {
@@ -84,5 +84,5 @@
 
 :root[data-theme="dark"] .scene-wall-view-toggle,
 :root[data-theme="dark"] .scene-wall-view-btn + .scene-wall-view-btn {
-    border-color: #3d4354;
+    border-color: var(--jb-dark-border-strong);
 }

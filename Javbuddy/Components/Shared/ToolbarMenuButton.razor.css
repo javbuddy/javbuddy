@@ -4,31 +4,11 @@
     align-items: center;
 }
 
-/* Same look as .movie-toolbar-btn — CSS isolation means it can't be shared, so it's copied here. */
-.toolbar-menu-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: none;
-    border: none;
-    color: #cfd3de;
-    font-size: 0.85rem;
-    font-weight: 500;
-    padding: 0.4rem 0.6rem;
-    border-radius: 3px;
-    white-space: nowrap;
+/* Its look is the global .page-toolbar-btn; an open menu keeps the hover highlight. */
+.toolbar-menu-btn[aria-expanded="true"] {
+    background-color: #454a5e;
+    color: #ffffff;
 }
-
-    .toolbar-menu-btn:hover:not(:disabled),
-    .toolbar-menu-btn[aria-expanded="true"] {
-        background-color: #454a5e;
-        color: #ffffff;
-    }
-
-    .toolbar-menu-btn:disabled {
-        opacity: 0.45;
-        cursor: default;
-    }
 
 .toolbar-menu-caret {
     margin-left: -0.1rem;
@@ -61,7 +41,7 @@
     width: 15px;
     height: 15px;
     border: 2px solid rgba(207, 211, 222, 0.35);
-    border-top-color: #1c9fc4;
+    border-top-color: var(--jb-info);
     border-radius: 50%;
     animation: toolbar-menu-spin 0.8s linear infinite;
 }

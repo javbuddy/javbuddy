@@ -1,10 +1,10 @@
 .releases-summary {
     margin-bottom: 0.75rem;
-    color: #6c757d;
+    color: var(--jb-muted);
 }
 
 :root[data-theme="dark"] .releases-summary {
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
 }
 
 .releases-show-more-wrapper {

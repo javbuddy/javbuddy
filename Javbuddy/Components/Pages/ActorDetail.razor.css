@@ -1,60 +1,8 @@
-.actor-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.25rem;
-    background-color: #35394a;
-    border-radius: 4px 4px 0 0;
-    padding: 0.5rem 0.75rem;
-    margin: 0 -0.01px;
-}
-
-.actor-toolbar-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    background: none;
-    border: none;
-    color: #cfd3de;
-    font-size: 0.85rem;
-    font-weight: 500;
-    padding: 0.4rem 0.6rem;
-    border-radius: 3px;
-    text-decoration: none;
-    white-space: nowrap;
-}
-
-    .actor-toolbar-btn:hover:not(:disabled) {
-        background-color: #454a5e;
-        color: #ffffff;
-    }
-
-    .actor-toolbar-btn-favorite.active {
-        color: #e23b57;
-    }
-
-    .actor-toolbar-btn-favorite.active:hover:not(:disabled) {
-        background-color: rgba(226, 59, 87, 0.15);
-        color: #e23b57;
-    }
-
-    .actor-toolbar-btn-danger:hover:not(:disabled) {
-        background-color: #7a2e33;
-        color: #ffffff;
-    }
-
-.actor-toolbar-sep {
-    width: 1px;
-    align-self: stretch;
-    background-color: #454a5e;
-    margin: 0.25rem 0.25rem;
-}
-
 .actor-hero {
     display: flex;
     align-items: center;
     gap: 1.5rem;
-    background-color: #1b1e27;
+    background-color: var(--jb-dark-bg);
     border-radius: 0 0 4px 4px;
     padding: 1.75rem;
     margin-bottom: 2rem;
@@ -66,7 +14,7 @@
     width: 96px;
     height: 96px;
     border-radius: 50%;
-    background: #2f8fd6;
+    background: var(--jb-accent);
     color: #fff;
     display: flex;
     align-items: center;
@@ -113,7 +61,7 @@
     display: inline-block;
     font-size: 1.1rem;
     font-weight: 400;
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
     margin-left: 0.75rem;
     vertical-align: middle;
 }
@@ -130,7 +78,7 @@
 
 .actor-hero-meta {
     font-size: 0.9rem;
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
     margin-bottom: 0;
 }
 
@@ -154,14 +102,14 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    background-color: #242833;
+    background-color: var(--jb-dark-surface);
     padding: 0.2rem 0.6rem;
     border-radius: 4px;
     border: 1px solid #35394a;
 }
 
 .actor-attribute-label {
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
     font-weight: 500;
 }
 
@@ -181,7 +129,7 @@
 }
 
 .actor-cup-step:not(.actor-cup-step-current)[title] {
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
     font-weight: 500;
 }
 
@@ -195,7 +143,7 @@
 }
 
     .actor-cup-info-icon:hover {
-        color: #2f8fd6;
+        color: var(--jb-accent);
     }
 
 .actor-badge {
@@ -206,7 +154,7 @@
     font-weight: 600;
     background-color: #2b303c;
     color: #cfd3de;
-    border: 1px solid #3d4354;
+    border: 1px solid var(--jb-dark-border-strong);
     border-radius: 3px;
 }
 
@@ -252,7 +200,7 @@
     padding: 0.1rem 0.45rem;
     font-size: 0.75rem;
     background-color: #242834;
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
     border: 1px solid #383d4c;
     border-radius: 3px;
 }
@@ -294,7 +242,7 @@
 }
 
 :root[data-theme="dark"] .actor-delete-modal-panel {
-    background: #242833;
+    background: var(--jb-dark-surface);
     color: #e3e5e8;
 }
 
@@ -307,6 +255,6 @@
 .actor-detail-movies { border-color: #dfe3e8; }
 .actor-detail-movies-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .actor-detail-movies-header .card-title { margin: 0; }
-.actor-detail-movies-count { color: #6c757d; font-weight: 400; }
+.actor-detail-movies-count { color: var(--jb-muted); font-weight: 400; }
 
-:root[data-theme="dark"] .actor-detail-movies { color: #e3e5e8; background: #242833; border-color: #3d4354; }
+:root[data-theme="dark"] .actor-detail-movies { color: #e3e5e8; background: var(--jb-dark-surface); border-color: var(--jb-dark-border-strong); }

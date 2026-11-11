@@ -13,7 +13,7 @@
 }
 
     .toolbar-menu-item:hover:not(:disabled) {
-        background-color: #3d4354;
+        background-color: var(--jb-dark-border-strong);
         color: #ffffff;
     }
 

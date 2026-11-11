@@ -2,7 +2,7 @@
     text-align: center;
     font-weight: 400;
     font-size: 2.4rem;
-    color: #6c757d;
+    color: var(--jb-muted);
     margin: 1.5rem 0 2.5rem;
 }
 
@@ -60,7 +60,7 @@
     gap: 0.75rem;
     padding: 0.75rem 1rem;
     background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--jb-border);
 }
 
 .candidate-table {
@@ -73,7 +73,7 @@
     font-size: 0.85rem;
     padding: 0.75rem 1rem;
     color: #495057;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--jb-border);
 }
 
 .candidate-table td {
@@ -85,7 +85,7 @@
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background-color: #2f8fd6;
+    background-color: var(--jb-accent);
     color: #ffffff;
     display: flex;
     align-items: center;
@@ -122,18 +122,18 @@
 
 /* Dark theme overrides */
 :root[data-theme="dark"] .import-title {
-    color: #dfe2e8;
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .import-tips-title,
 :root[data-theme="dark"] .import-section-title {
-    color: #dfe2e8;
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .source-card,
 :root[data-theme="dark"] .candidate-card {
-    background-color: #242833;
-    border-color: #363c4a;
+    background-color: var(--jb-dark-surface);
+    border-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .import-tips-card code,
@@ -145,36 +145,36 @@
 :root[data-theme="dark"] .candidate-source-badge {
     background-color: #2b303c;
     color: #cfd3de;
-    border-color: #3d4354;
+    border-color: var(--jb-dark-border-strong);
 }
 
 :root[data-theme="dark"] .candidate-toolbar {
     background-color: #20242e;
-    border-bottom-color: #363c4a;
-    color: #dfe2e8;
+    border-bottom-color: var(--jb-dark-border);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .candidate-table {
     --bs-table-bg: transparent;
-    --bs-table-color: #dfe2e8;
-    --bs-table-border-color: #363c4a;
+    --bs-table-color: var(--jb-dark-text);
+    --bs-table-border-color: var(--jb-dark-border);
     --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
-    --bs-table-striped-color: #dfe2e8;
+    --bs-table-striped-color: var(--jb-dark-text);
     --bs-table-active-bg: rgba(255, 255, 255, 0.06);
-    --bs-table-active-color: #dfe2e8;
+    --bs-table-active-color: var(--jb-dark-text);
     --bs-table-hover-bg: rgba(255, 255, 255, 0.04);
-    --bs-table-hover-color: #dfe2e8;
-    color: #dfe2e8;
+    --bs-table-hover-color: var(--jb-dark-text);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .candidate-table th {
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
     border-bottom-color: #3d4452;
 }
 
 :root[data-theme="dark"] .candidate-table td {
-    border-color: #363c4a;
-    color: #dfe2e8;
+    border-color: var(--jb-dark-border);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .candidate-table tr.table-active {
@@ -183,7 +183,7 @@
 }
 
 :root[data-theme="dark"] .form-check-input {
-    background-color: #1b1e27;
+    background-color: var(--jb-dark-bg);
     border-color: #4a5062;
 }
 
@@ -193,13 +193,13 @@
 }
 
 :root[data-theme="dark"] .candidate-avatar:not(.candidate-avatar-photo) {
-    background-color: #2f8fd6;
+    background-color: var(--jb-accent);
     color: #ffffff;
 }
 
 :root[data-theme="dark"] .candidate-inline-progress,
 :root[data-theme="dark"] .scan-inline-progress {
-    background-color: #1b1e27;
+    background-color: var(--jb-dark-bg);
 }
 
 :root[data-theme="dark"] .candidate-progress-label,
