@@ -21,6 +21,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - **Activity > Queue shows a new grab right away.** A release grabbed elsewhere appeared only after a manual refresh when the queue was empty.
 - **Ctrl+F no longer toggles fullscreen in the player.** The **F** shortcut also fired with Ctrl, Cmd or Alt held, so the browser's Find couldn't open. It now also stays out of the way in editable fields and while a dialog is open.
 - **The Straighten slider keeps your crop box.** Dragging it in the cover and portrait croppers reset the crop box on every tick; it now stays where you put it.
+- **Editor dialogs can't be dismissed mid-save.** A stray click outside the Edit Metadata or .nfo editor (or its × button) closed it while saving or restoring, discarding unsaved edits; the portrait and cover croppers likewise stay open while saving, deleting or fetching.
 
 ## [0.6.1] - 2026-11-10
 

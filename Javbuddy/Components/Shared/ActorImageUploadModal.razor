@@ -7,7 +7,7 @@
 
 @if (Show)
 {
-    <ModalShell SpreadFooter="true" MaxWidth="780px" OnClose="CloseAsync">
+    <ModalShell SpreadFooter="true" MaxWidth="780px" OnClose="CloseAsync" Busy="@(saving || deleting || fetchingUrl)">
         <TitleContent>Change Portrait — @ActorName</TitleContent>
         <HeaderActions>
             @if (selectedImageBytes is not null)

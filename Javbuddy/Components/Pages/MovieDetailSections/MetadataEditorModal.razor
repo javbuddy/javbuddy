@@ -9,7 +9,7 @@
         <div class="metadata-editor-modal-panel" @onclick:stopPropagation="true">
             <div class="metadata-editor-modal-header">
                 <h5 class="metadata-editor-modal-title">Edit Metadata</h5>
-                <button class="metadata-editor-modal-close-btn" @onclick="Close" aria-label="Close">
+                <button class="metadata-editor-modal-close-btn" @onclick="Close" aria-label="Close" disabled="@saving">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
                 </button>
             </div>
@@ -193,7 +193,11 @@
         return Task.CompletedTask;
     }
 
-    private void Close() => show = false;
+    private void Close()
+    {
+        if (saving) return;
+        show = false;
+    }
 
     private async Task SaveAsync()
     {

@@ -260,4 +260,24 @@ public class MetadataEditorModalTests : BunitContext
         Assert.Single(cut.FindAll("select[id^=metadata-vr-]"));
         Assert.Empty(cut.FindAll(".metadata-editor-vr-version"));
     }
+
+    [Fact]
+    public async Task WhileSaving_BackdropAndCloseButtonDoNotClose()
+    {
+        var movieService = SetUpMovieService();
+        var pending = new TaskCompletionSource<OperationResult>();
+        movieService.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>())
+            .Returns(pending.Task);
+
+        var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, new Movie { Id = 1, Code = "ABC-123" }));
+        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        await cut.InvokeAsync(() => cut.Find("form").Submit());
+
+        cut.Find(".metadata-editor-modal-backdrop").Click();
+        Assert.True(cut.Find(".metadata-editor-modal-close-btn").HasAttribute("disabled"));
+        Assert.NotEmpty(cut.FindAll(".metadata-editor-modal-backdrop"));
+
+        pending.SetResult(OperationResult.Ok());
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".metadata-editor-modal-backdrop")));
+    }
 }
