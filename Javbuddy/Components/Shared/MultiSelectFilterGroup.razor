@@ -1,9 +1,6 @@
 @if (!AlwaysExpanded)
 {
-    <button type="button" class="sort-dropdown-item @(ActiveCount > 0 ? "active" : "")" @onclick="ToggleExpanded">
-        <span>@GroupLabel@(ActiveCount > 0 ? $" ({ActiveCount})" : "")</span>
-        <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
-    </button>
+    <FilterGroupHeader Text="@($"{GroupLabel}{(ActiveCount > 0 ? $" ({ActiveCount})" : "")}")" Active="ActiveCount > 0" Expanded="expanded" OnToggle="ToggleExpanded" />
 }
 @if (expanded || AlwaysExpanded)
 {

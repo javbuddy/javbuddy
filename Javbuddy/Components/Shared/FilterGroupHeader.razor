@@ -1,0 +1,15 @@
+<button type="button" class="sort-dropdown-item @(Active ? "active" : "")" @onclick="OnToggle">
+    <span>@Text</span>
+    <span class="sort-dropdown-arrow">@(Expanded ? "▲" : "▼")</span>
+</button>
+
+@code {
+    /// <summary>The header row of a collapsible group in a filter dropdown: the text, highlighted while the group
+    /// has something set, and an arrow showing whether it is expanded. Shared by <see cref="FilterSection"/>,
+    /// <see cref="MultiSelectFilterGroup"/>, <see cref="ChipMultiSelectGroup"/> and <see cref="RangeFilter"/>,
+    /// which each own their expanded state and the text (a label, with the active count or range after it).</summary>
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+    [Parameter] public bool Active { get; set; }
+    [Parameter] public bool Expanded { get; set; }
+    [Parameter] public EventCallback OnToggle { get; set; }
+}

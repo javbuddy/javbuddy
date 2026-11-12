@@ -44,13 +44,7 @@
             }
             @if (ReleasesBrowseMode)
             {
-                <button type="button" class="sort-dropdown-item @(HidePreviouslyDeleted ? "active" : "")" aria-pressed="@(HidePreviouslyDeleted ? "true" : "false")" @onclick="OnToggleHidePreviouslyDeleted">
-                    <span>Hide previously deleted</span>
-                    @if (HidePreviouslyDeleted)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
+                <DropdownToggleItem Label="Hide previously deleted" Active="@(HidePreviouslyDeleted)" Pressed="@(HidePreviouslyDeleted)" OnClick="OnToggleHidePreviouslyDeleted" />
             }
             @if (AvailableStudios.Count > 0)
             {

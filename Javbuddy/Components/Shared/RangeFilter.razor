@@ -1,9 +1,6 @@
 @using System.Globalization
 
-<button type="button" class="sort-dropdown-item @(IsActive ? "active" : "")" @onclick="ToggleExpanded">
-    <span>@HeaderText</span>
-    <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
-</button>
+<FilterGroupHeader Text="@HeaderText" Active="IsActive" Expanded="expanded" OnToggle="ToggleExpanded" />
 @if (expanded)
 {
     <div class="height-range-panel">

@@ -50,11 +50,11 @@
         ChangeAsync(Filter with { Genres = Filter.Genres.Union(visible, StringComparer.OrdinalIgnoreCase).ToList() });
 
     // A thumb at its end stop means "no limit" on that side, like the actress attribute sliders.
-    private Task CommitYearsAsync((int Min, int Max) range, int minYear, int maxYear) => ChangeAsync(Filter with
+    private Task CommitYearsAsync((int Min, int Max) range, int minYear, int maxYear)
     {
-        YearFrom = range.Min <= minYear ? null : range.Min,
-        YearTo = range.Max >= maxYear ? null : range.Max,
-    });
+        var years = RangeCommit.ToIntRange(range, new RangeBounds(minYear, maxYear));
+        return ChangeAsync(Filter with { YearFrom = years.Min, YearTo = years.Max });
+    }
 
     private static readonly (R18DevCastSize Size, string Label)[] CastSizes =
     [
