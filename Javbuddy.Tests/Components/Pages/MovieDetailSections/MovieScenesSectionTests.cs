@@ -764,7 +764,7 @@ public class MovieScenesSectionTests : BunitContext
 
         var alice = cut.FindAll(".movie-scenes-grid .actor-hover").First(a => a.TextContent.Contains("Alice"));
         Assert.Contains("Blonde", alice.QuerySelector(".actor-hover-popover")!.TextContent);
-        Assert.Null(alice.GetAttribute("title"));
+        Assert.Equal("", alice.GetAttribute("title"));
         // Bea has none and isn't inherited, so there's nothing to open.
         Assert.DoesNotContain(cut.FindAll(".movie-scenes-grid .actor-hover"), a => a.TextContent.Contains("Bea"));
     }
