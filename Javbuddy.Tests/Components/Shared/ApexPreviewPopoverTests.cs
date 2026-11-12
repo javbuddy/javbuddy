@@ -8,18 +8,20 @@ public class ApexPreviewPopoverTests : BunitContext
 {
     private IRenderedComponent<ApexPreviewPopover> RenderPopover(string? previewUrl = null, bool generating = false, IReadOnlyList<SceneTagItem>? tags = null, IReadOnlyList<SceneActorItem>? actors = null) =>
         Render<ApexPreviewPopover>(p => p
-            .Add(x => x.PreviewUrl, previewUrl)
+            .Add(x => x.HoverPreviewUrl, previewUrl)
             .Add(x => x.Generating, generating)
             .Add(x => x.Actors, actors ?? [])
             .Add(x => x.Tags, tags ?? [])
             .Add(x => x.Seconds, 2530));
 
     [Fact]
-    public void WithAPreview_PlaysIt()
+    public void WithAPreview_LeavesItForTheBrowserToPlayWhileHovered()
     {
         var cut = RenderPopover("/apex-image/4/preview?v=9");
 
-        Assert.Equal("/apex-image/4/preview?v=9", cut.Find("video").GetAttribute("src"));
+        // ClipCard.razor.js's bindHoverPreviews puts the video in, so only the hovered apex's loads.
+        Assert.Equal("/apex-image/4/preview?v=9", cut.Find(".scene-preview-live").GetAttribute("data-preview-src"));
+        Assert.Empty(cut.FindAll("video"));
         Assert.Empty(cut.FindAll(".scene-preview-shimmer"));
     }
 

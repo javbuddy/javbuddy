@@ -42,12 +42,11 @@ public sealed record MovieGridSort(string Field, bool Descending, int RandomSeed
 
 public sealed record MissingMoviesPage(IReadOnlyList<Movie> Movies, int TotalCount);
 
-/// <summary>Status counts narrowed by the grid's other active filters, plus library-wide totals
-/// and filter options that deliberately ignore every active filter.</summary>
-public sealed record MovieGridSummary(
-    int TotalCount,
-    int MissingCount,
-    int GotCount,
+/// <summary>The All / Missing / Got counts, narrowed by the grid's other active filters (everything but status itself).</summary>
+public sealed record MovieStatusCounts(int TotalCount, int MissingCount, int GotCount);
+
+/// <summary>Library-wide totals and filter options that deliberately ignore every active filter.</summary>
+public sealed record MovieLibraryOptions(
     int FilesCount,
     long TotalFileSizeBytes,
     List<string> LibraryNames,
@@ -76,7 +75,13 @@ public interface IMovieGridQueryService
 {
     Task<int> CountAsync(MovieGridFilter filter, CancellationToken ct = default);
 
-    Task<MovieGridSummary> GetSummaryAsync(MovieGridFilter filter, CancellationToken ct = default);
+    /// <summary>The All / Missing / Got counts under <paramref name="filter"/>'s other filters — the only part of the
+    /// grid's header that changes with a filter, so it's all a filter change needs to re-read.</summary>
+    Task<MovieStatusCounts> GetStatusCountsAsync(MovieGridFilter filter, CancellationToken ct = default);
+
+    /// <summary>The library-wide totals and filter options. They don't depend on any filter, so a caller reads them
+    /// once and again only when the library changes.</summary>
+    Task<MovieLibraryOptions> GetLibraryOptionsAsync(CancellationToken ct = default);
 
     /// <summary>Only the columns the grid renders, untracked — the window is re-queried on every
     /// scroll, so a Movie row's unread text columns would be dead weight.</summary>
@@ -88,11 +93,11 @@ public interface IMovieGridQueryService
     Task<List<Movie>> GetWithFilesAsync(MovieGridFilter filter, MovieGridSort sort, CancellationToken ct = default);
 
     /// <summary>The tracked actors linked to any movie, by name — the same list as
-    /// <see cref="MovieGridSummary.Actors"/>, on its own for a caller that already has the rest of
+    /// <see cref="MovieLibraryOptions.Actors"/>, on its own for a caller that already has the rest of
     /// the summary.</summary>
     Task<List<MovieActorOption>> GetActorOptionsAsync(CancellationToken ct = default);
 
-    /// <summary>The actor-tag filter's options (as in <see cref="MovieGridSummary.ActorTags"/>), for a page restored from its
+    /// <summary>The actor-tag filter's options (as in <see cref="MovieLibraryOptions.ActorTags"/>), for a page restored from its
     /// prerendered state, which carries the other options but not these.</summary>
     Task<List<MovieActorOption>> GetActorTagOptionsAsync(CancellationToken ct = default);
 
@@ -128,7 +133,7 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         return await BuildFilterQuery(db, filter).CountAsync(ct);
     }
 
-    public async Task<MovieGridSummary> GetSummaryAsync(MovieGridFilter filter, CancellationToken ct = default)
+    public async Task<MovieStatusCounts> GetStatusCountsAsync(MovieGridFilter filter, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
@@ -138,6 +143,12 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         var totalCount = await statusCountQuery.CountAsync(ct);
         var missingCount = await statusCountQuery.CountAsync(m => m.Status == MovieStatus.Missing, ct);
         var gotCount = await statusCountQuery.CountAsync(m => m.Status == MovieStatus.Got, ct);
+        return new MovieStatusCounts(totalCount, missingCount, gotCount);
+    }
+
+    public async Task<MovieLibraryOptions> GetLibraryOptionsAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
 
         var filesCount = await db.MovieFiles.CountAsync(ct);
         if (filesCount == 0)
@@ -175,8 +186,8 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         var actorAttributes = await ActorAttributeOptionsQuery.LoadAsync(
             ActorAttributeOptionsQuery.ForMovies(db), DateOnly.FromDateTime(DateTime.UtcNow), ct);
 
-        return new MovieGridSummary(
-            totalCount, missingCount, gotCount, filesCount, totalFileSizeBytes,
+        return new MovieLibraryOptions(
+            filesCount, totalFileSizeBytes,
             libraryNames, codecs, studios, await LoadGenreOptionsAsync(db, ct),
             actorAttributes)
         {

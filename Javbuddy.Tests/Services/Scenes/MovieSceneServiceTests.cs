@@ -246,7 +246,7 @@ public class MovieSceneServiceTests
         using var factory = new TestDbContextFactory();
         var grid = await SeedCountsAsync(factory);
 
-        var counts = (await grid.GetSummaryAsync(new MovieGridFilter())).Counts;
+        var counts = (await grid.GetLibraryOptionsAsync()).Counts;
 
         Assert.Equal(new RangeBounds(0, 3), counts.Scenes);
         Assert.Equal(new RangeBounds(0, 2), counts.Highlights);
@@ -258,7 +258,7 @@ public class MovieSceneServiceTests
     {
         using var factory = new TestDbContextFactory();
 
-        Assert.False((await new MovieGridQueryService(factory).GetSummaryAsync(new MovieGridFilter())).Counts.HasAny);
+        Assert.False((await new MovieGridQueryService(factory).GetLibraryOptionsAsync()).Counts.HasAny);
     }
 
     [Fact]

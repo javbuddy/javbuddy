@@ -156,7 +156,7 @@ public class MoviesTests : BunitContext
     }
 
     [Fact]
-    public void PlayAll_PlaysOnlyGotMoviesWithAFile_WithNextAndPreviousKeys()
+    public async Task PlayAll_PlaysOnlyGotMoviesWithAFile_WithNextAndPreviousKeys()
     {
         using var factory = SetUpServices();
         using (var db = factory.CreateDbContext())
@@ -178,22 +178,32 @@ public class MoviesTests : BunitContext
         Services.AddSingleton(new TrickplayGenerationTracker());
         var cut = Render<Movies>();
 
+        var keys = JSInterop.SetupModule("./Components/Shared/VideoPlayerShell.razor.js");
+        keys.Mode = JSRuntimeMode.Loose;
+
         cut.FindAll("button").Single(b => b.TextContent.Trim() == "Play all").Click();
         var first = cut.Find(".video-player-modal-code").TextContent;
-        var backdrop = cut.Find(".video-player-modal-backdrop");
 
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "p" });
+        // N / P are picked out in the browser (VideoPlayerShell.razor.js), which calls back into the shell,
+        // the latest reference being the one bound to the open player.
+        async Task PressAsync(string key)
+        {
+            var shell = ((Microsoft.JSInterop.DotNetObjectReference<Javbuddy.Components.Shared.VideoPlayerShell>)keys.Invocations.Last(i => i.Identifier == "init").Arguments[1]!).Value;
+            await cut.InvokeAsync(() => key == "n" ? shell.NextFromKeyAsync() : shell.PreviousFromKeyAsync());
+        }
+
+        await PressAsync("p");
         Assert.Equal(first, cut.Find(".video-player-modal-code").TextContent);
 
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "n" });
+        await PressAsync("n");
         var second = cut.Find(".video-player-modal-code").TextContent;
         Assert.NotEqual(first, second);
 
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "p" });
+        await PressAsync("p");
         Assert.Equal(first, cut.Find(".video-player-modal-code").TextContent);
 
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "n" });
-        backdrop.KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "n" });
+        await PressAsync("n");
+        await PressAsync("n");
         Assert.Empty(cut.FindAll(".video-player-modal-backdrop"));
     }
 
@@ -1969,6 +1979,73 @@ public class MoviesTests : BunitContext
             var gotRow = cut.FindAll(".movies-stats-row").First(r => r.TextContent.Contains("Got"));
             Assert.Equal("1", gotRow.QuerySelector("span")!.TextContent.Trim());
         }, TimeSpan.FromSeconds(2));
+    }
+
+    [Fact]
+    public void FilterChange_RereadsOnlyStatusCounts_NotTheLibraryOptions()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "AAA-001", Status = MovieStatus.Missing });
+            db.Movies.Add(new Movie { Code = "BBB-002", Status = MovieStatus.Got });
+            db.SaveChanges();
+        }
+        var grid = CountGridQueries(factory);
+
+        var cut = Render<Movies>();
+        Assert.Equal(1, grid.Calls("GetLibraryOptionsAsync"));
+        var statusBefore = grid.Calls("GetStatusCountsAsync");
+
+        cut.FindAll("button").Single(b => b.TextContent.Contains("Missing (")).Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(new[] { "AAA-001" }, RenderedCodes(cut)));
+        Assert.Equal(1, grid.Calls("GetLibraryOptionsAsync"));
+        Assert.Equal(statusBefore + 1, grid.Calls("GetStatusCountsAsync"));
+        Assert.Contains("All (2)", cut.Markup);
+    }
+
+    [Fact]
+    public void MovieChangeNotifier_NotifyChanged_ReloadsLibraryOptions()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "AAA-001", MetaStudio = "S1" });
+            db.SaveChanges();
+        }
+        var grid = CountGridQueries(factory);
+        var cut = Render<Movies>();
+        Assert.Equal(1, grid.Calls("GetLibraryOptionsAsync"));
+
+        Services.GetRequiredService<MovieChangeNotifier>().NotifyChanged();
+
+        cut.WaitForAssertion(() => Assert.Equal(2, grid.Calls("GetLibraryOptionsAsync")), TimeSpan.FromSeconds(2));
+    }
+
+    /// <summary>Replaces the grid query service with a pass-through that counts calls per method.</summary>
+    private CountingGridQueries CountGridQueries(IDbContextFactory<AppDbContext> factory)
+    {
+        var real = new MovieGridQueryService(factory);
+        var proxy = System.Reflection.DispatchProxy.Create<IMovieGridQueryService, CountingGridQueries>();
+        var counting = (CountingGridQueries)(object)proxy;
+        counting.Inner = real;
+        Services.AddSingleton<IMovieGridQueryService>(proxy);
+        return counting;
+    }
+
+    public class CountingGridQueries : System.Reflection.DispatchProxy
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> calls = new();
+        public IMovieGridQueryService Inner { get; set; } = null!;
+
+        public int Calls(string method) => calls.GetValueOrDefault(method);
+
+        protected override object? Invoke(System.Reflection.MethodInfo? targetMethod, object?[]? args)
+        {
+            calls.AddOrUpdate(targetMethod!.Name, 1, (_, n) => n + 1);
+            return targetMethod.Invoke(Inner, args);
+        }
     }
 
     [Fact]

@@ -85,7 +85,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         Assert.Equal(["CUP-001", "CUP-003"], Codes(await service.GetRangeAsync(Attr(new ActorAttributeSelection { CupSizes = ["C"] }), CodeAscending, 0, 10)));
         Assert.Equal(["CUP-002"], Codes(await service.GetRangeAsync(Attr(new ActorAttributeSelection { CupSizes = ["E"] }), CodeAscending, 0, 10)));
         Assert.Equal(1, await service.CountAsync(Attr(new ActorAttributeSelection { CupSizes = ["E"] })));
-        Assert.Equal(["C", "E"], (await service.GetSummaryAsync(new MovieGridFilter())).ActorAttributes.CupSizes);
+        Assert.Equal(["C", "E"], (await service.GetLibraryOptionsAsync()).ActorAttributes.CupSizes);
     }
 
     [Fact]
@@ -180,7 +180,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
             db.SaveChanges();
         }
 
-        var options = (await service.GetSummaryAsync(Attr(new ActorAttributeSelection { CupSizes = ["C"] }))).ActorAttributes;
+        var options = (await service.GetLibraryOptionsAsync()).ActorAttributes;
 
         Assert.Equal(["C", "E", "DD"], options.CupSizes);
         Assert.Equal(new RangeBounds(150, 172), options.Height);
@@ -200,13 +200,13 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         }
 
         Assert.Equal(1, await service.CountAsync(Attr(new ActorAttributeSelection { CupSizes = ["E"] })));
-        Assert.Equal(["E"], (await service.GetSummaryAsync(new MovieGridFilter())).ActorAttributes.CupSizes);
+        Assert.Equal(["E"], (await service.GetLibraryOptionsAsync()).ActorAttributes.CupSizes);
     }
 
     [Fact]
     public async Task Summary_NoActorAttributes_OffersNothing()
     {
-        var options = (await service.GetSummaryAsync(new MovieGridFilter())).ActorAttributes;
+        var options = (await service.GetLibraryOptionsAsync()).ActorAttributes;
 
         Assert.Empty(options.CupSizes);
         Assert.Null(options.Height);
@@ -214,7 +214,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task Summary_StatusCountsIgnoreStatusButHonorOtherFilters_OptionsStayLibraryWide()
+    public async Task StatusCounts_IgnoreStatusButHonorOtherFilters_LibraryOptionsStayLibraryWide()
     {
         using (var db = factory.CreateDbContext())
         {
@@ -225,9 +225,11 @@ public sealed class MovieGridQueryServiceTests : IDisposable
             db.SaveChanges();
         }
 
-        var summary = await service.GetSummaryAsync(new MovieGridFilter(Status: MovieStatus.Got, Studios: ["S1"]));
+        var counts = await service.GetStatusCountsAsync(new MovieGridFilter(Status: MovieStatus.Got, Studios: ["S1"]));
+        var summary = await service.GetLibraryOptionsAsync();
 
-        Assert.Equal((2, 1, 1), (summary.TotalCount, summary.MissingCount, summary.GotCount));
+        Assert.Equal((2, 1, 1), (counts.TotalCount, counts.MissingCount, counts.GotCount));
+        Assert.Equal(new MovieStatusCounts(0, 0, 0), await service.GetStatusCountsAsync(new MovieGridFilter(Text: "nothing matches this")));
         Assert.Equal(2, summary.FilesCount);
         Assert.Equal(150, summary.TotalFileSizeBytes);
         Assert.Equal(["/media/main", "/media/other"], summary.LibraryNames);
@@ -396,7 +398,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
             db.SaveChanges();
         }
 
-        var summary = await service.GetSummaryAsync(new MovieGridFilter());
+        var summary = await service.GetLibraryOptionsAsync();
 
         Assert.Equal(["Play", "Play##Rough", "solo"], summary.Genres);
         Assert.Equal(0, await service.CountAsync(new MovieGridFilter(Genres: ["Legacy"])));
@@ -646,7 +648,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         var options = await service.GetActorOptionsAsync();
 
         Assert.Equal(["Amy", "Zed"], options.Select(a => a.Name));
-        Assert.Equal((await service.GetSummaryAsync(new MovieGridFilter())).Actors, options);
+        Assert.Equal((await service.GetLibraryOptionsAsync()).Actors, options);
     }
 
     [Fact]
@@ -662,7 +664,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
             db.SaveChanges();
         }
 
-        var summary = await service.GetSummaryAsync(new MovieGridFilter(Text: "nothing matches this"));
+        var summary = await service.GetLibraryOptionsAsync();
 
         Assert.Equal(["Amy", "Zed"], summary.Actors.Select(a => a.Name));
     }
@@ -681,7 +683,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
             db.SaveChanges();
         }
 
-        var summary = await service.GetSummaryAsync(new MovieGridFilter());
+        var summary = await service.GetLibraryOptionsAsync();
 
         Assert.Equal(["Cosplay"], summary.Genres);
     }
@@ -786,7 +788,7 @@ public sealed class MovieGridQueryServiceTests : IDisposable
             db.SaveChanges();
         }
 
-        var ranges = (await service.GetSummaryAsync(new MovieGridFilter(Ranges: new() { ReleaseYear = new(2023, null) }))).Ranges;
+        var ranges = (await service.GetLibraryOptionsAsync()).Ranges;
 
         Assert.Equal(new RangeBounds(2018, 2023), ranges.ReleaseYear);
         Assert.Equal(new RangeBounds(60, 150), ranges.RuntimeMinutes);
