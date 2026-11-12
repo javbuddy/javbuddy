@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
+- **Highlight and apex rows in the clip editor show actor names like scene rows do.** Hovering or focusing an actor's name, own or inherited, opens the popover with where the actor comes from and their actor tags; before, only scene rows had it and highlight and apex rows showed plain text.
 - **Actor Detail's delete confirmation matches the other delete dialogs.** It now uses the shared dialog, so it is a little narrower, with a smaller heading and buttons; the wording, Cancel, Esc and clicking outside behave as before.
 - **Every page loads about 14 KB less HTML.** The scripts that set the theme, sidebar and poster blur-up used to be pasted into every page response; they are now one cached file, so the page itself is smaller (a page was about 92 KB before compression, now about 78 KB) and the browser fetches the script once. Nothing looks or behaves differently, and the theme is still applied before the page first paints.
 - **Editing a movie on Movie Detail is lighter on the server.** A tag, cast or status change, marking a movie Got or Missing, or removing it from the Cleanup blacklist used to read the whole page again: the poster, scenes, highlights, apexes, Jellyfin link, cast, actor tags and the extrafanart folder on disk. Each edit now reads only what it can have changed (a tag or status edit just the movie itself); rescans, metadata refreshes, .nfo conflict resolutions, video repairs and version switches still reload everything.
@@ -21,6 +22,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Dropdowns on the Actors, Actor Photos, Missing and Scenes pages close the same way.** Open **Columns** on the Actors page and then **Filter**, and Columns used to stay open beside it; opening one dropdown now closes the others. A click outside a dropdown or Escape closes it too (Escape puts keyboard focus back on its button), where the Actors **Sort** dropdown closed only when it lost focus, after a short delay, and the Movie Detail **Primary version** menu ignored Escape.
 - **Moving between pages now moves keyboard focus and screen readers to the new page's heading everywhere.** Discover, Settings, System > Backups and the Not Found page had no top-level heading, so after navigating to them focus stayed on the link that was clicked; System > Status and Tasks had several, and now have one. These pages look the same as before.
 - **The Missing heading on an actor's Missing page matches the Missing page's.** It was larger and bold; it now uses the same size and weight as the other page titles.
 - **Selecting text in a dialog's field no longer closes the dialog.** Dragging a text selection out of an input and releasing the mouse over the dimmed backdrop counted as a click outside and closed the dialog, discarding what you had typed (the metadata and .nfo editors, tag and actor dialogs, the settings drawers, delete confirmations, the poster crop and the player). A dialog now closes only when the click both starts and ends on the backdrop.

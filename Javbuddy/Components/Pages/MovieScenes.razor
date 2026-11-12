@@ -71,7 +71,7 @@
                                     OnClear="ResetFiltersAsync"
                                     ShowMenu="showFilterDropdown"
                                     MenuMinWidth="260px"
-                                    OnToggle="ToggleFilterDropdown">
+                                    OnToggle="ToggleFilterDropdown" OnClose="CloseDropdowns">
                     @if (options.Tags.Count > 0)
                     {
                         <MultiSelectFilterGroup GroupLabel="Tag" Options="@TagOptions" Searchable="true"
@@ -158,7 +158,7 @@
             </div>
 
             <div class="sort-dropdown-wrapper">
-                <DropdownMenuButton Label="@($"Sort: {SortLabel(sort)}")" Arrow="" ShowMenu="showSortDropdown" OnToggle="ToggleSortDropdown">
+                <DropdownMenuButton Label="@($"Sort: {SortLabel(sort)}")" Arrow="" ShowMenu="showSortDropdown" OnToggle="ToggleSortDropdown" OnClose="CloseDropdowns">
                     @foreach (var option in Enum.GetValues<SceneWallSort>())
                     {
                         <button type="button" class="sort-dropdown-item @(sort == option ? "active" : "")" @onclick="() => SelectSortAsync(option)">

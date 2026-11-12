@@ -462,17 +462,7 @@
                     <span class="clip-editor-collapsed-badge">@CollapsedSummary(node)</span>
                 }
                 <span class="scene-editor-range">@SceneTimeFormat.Format(scene.StartSeconds)–@(scene.EffectiveEndSeconds is { } end ? SceneTimeFormat.Format(end) : "end")</span>
-                @if (scene.Actors.Count > 0)
-                {
-                    var sceneActorTags = actorTags.Scenes.GetValueOrDefault(scene.Id) ?? [];
-                    <span class="scene-editor-meta-actors">
-                        @for (var i = 0; i < scene.Actors.Count; i++)
-                        {
-                            var actor = scene.Actors[i];
-                            <ActorTagHover Tags="@sceneActorTags.Where(t => t.ActorId == actor.ActorId).ToList()" Library="actorTagLibrary">@actor.Name</ActorTagHover>@(i < scene.Actors.Count - 1 ? ", " : null)
-                        }
-                    </span>
-                }
+                <ClipActorNames Class="scene-editor-meta-actors" Actors="scene.Actors" Tags="@(actorTags.Scenes.GetValueOrDefault(scene.Id) ?? [])" Library="actorTagLibrary" />
                 <ImplicitChips Items="@ImplicitChip.ForActors(node.Actors)" ActorTags="@(actorTags.Scenes.GetValueOrDefault(scene.Id) ?? [])" Library="actorTagLibrary" />
                 @foreach (var tag in scene.Tags)
                 {
@@ -506,6 +496,7 @@
                     {
                         <div class="clip-editor-line">
                         <ClipHighlightRow Node="node" Busy="busy"
+                                          ActorTags="@(actorTags.Highlights.GetValueOrDefault(node.Highlight.Id) ?? [])" ActorTagLibrary="actorTagLibrary"
                                           OnSeek="() => SeekToAsync(node.Highlight.StartSeconds)"
                                           OnPlay="() => PlayHighlightAsync(node.Highlight)"
                                           OnToggleFavorite="() => ToggleHighlightFavoriteAsync(node.Highlight)"
@@ -537,6 +528,7 @@
             {
                 <div class="clip-editor-line">
                 <ClipApexRow Node="node" Busy="busy"
+                             ActorTags="@(actorTags.Apexes.GetValueOrDefault(node.Apex.Id) ?? [])" ActorTagLibrary="actorTagLibrary"
                              OnSeek="() => SeekToAsync(ApexRanges.StartFor(node.Apex))"
                              OnToggleFavorite="() => ToggleApexFavoriteAsync(node.Apex)"
                              OnEdit="() => StartEditApexAsync(node.Apex)"

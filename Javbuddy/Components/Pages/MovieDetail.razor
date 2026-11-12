@@ -255,7 +255,7 @@ else
                 @if (movie.MovieFiles.Count > 1)
                 {
                     @* Picks the movie's primary version. *@
-                    <span class="movie-detail-version-anchor">
+                    <span class="movie-detail-version-anchor" @onkeydown="OnVersionMenuKeyDown">
                         <button type="button" class="movie-detail-badge movie-detail-badge-versions"
                                 aria-haspopup="menu" aria-expanded="@(showPrimaryVersionMenu ? "true" : "false")"
                                 title="Choose the primary version" @onclick="() => ToggleVersionMenu()">
@@ -895,6 +895,12 @@ else
     }
 
     private void CloseVersionMenu() => showPrimaryVersionMenu = false;
+
+    // Escape closes the open version menu, from wherever focus is inside it.
+    private void OnVersionMenuKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") showPrimaryVersionMenu = false;
+    }
 
     private static string ClipSummary(int count, double seconds) =>
         $"{count} {(count == 1 ? "clip" : "clips")} · {SceneTimeFormat.Format(seconds)}";

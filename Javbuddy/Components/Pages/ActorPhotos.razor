@@ -30,9 +30,9 @@ else
                value="@textFilter"
                @oninput="OnTextFilterInput" />
 
-        @if (showFilterDropdown)
+        @if (showFilterDropdown || showSortDropdown || showDensityDropdown)
         {
-            <div class="dropdown-backdrop" @onclick="CloseFilterDropdown"></div>
+            <div class="dropdown-backdrop" @onclick="CloseDropdowns"></div>
         }
         <div class="sort-dropdown-wrapper">
             <DropdownMenuButton Label="@($"Filter{(ActiveFilterCount > 0 ? $" ({ActiveFilterCount})" : "")}")"
@@ -42,7 +42,8 @@ else
                                 ClearTitle="Reset all filters"
                                 ClearAriaLabel="Reset all filters"
                                 ShowMenu="showFilterDropdown"
-                                OnToggle="ToggleFilterDropdown">
+                                OnToggle="ToggleFilterDropdown"
+                                OnClose="CloseDropdowns">
                 <button type="button" class="sort-dropdown-item @(selectedActorId is null ? "active" : "")" @onclick="() => SetActorFilter(null)">
                     <span>All Actors</span>
                     @if (selectedActorId is null)
@@ -96,14 +97,11 @@ else
             </DropdownMenuButton>
         </div>
 
-        @if (showDensityDropdown)
-        {
-            <div class="dropdown-backdrop" @onclick="CloseDensityDropdown"></div>
-        }
         <div class="sort-dropdown-wrapper">
             <DropdownMenuButton Label="@($"Size: {density}")"
                                 ShowMenu="showDensityDropdown"
-                                OnToggle="ToggleDensityDropdown">
+                                OnToggle="ToggleDensityDropdown"
+                                OnClose="CloseDropdowns">
                 @foreach (var option in Enum.GetValues<PhotoDensity>())
                 {
                     var current = option;
@@ -115,15 +113,12 @@ else
             </DropdownMenuButton>
         </div>
 
-        @if (showSortDropdown)
-        {
-            <div class="dropdown-backdrop" @onclick="CloseSortDropdown"></div>
-        }
         <div class="sort-dropdown-wrapper">
             <DropdownMenuButton Label="@($"Sort: {SortLabel(sort)}")"
                                 Arrow="@(sort == "oldest" ? "▲" : "▼")"
                                 ShowMenu="showSortDropdown"
-                                OnToggle="ToggleSortDropdown">
+                                OnToggle="ToggleSortDropdown"
+                                OnClose="CloseDropdowns">
                 <button type="button" class="sort-dropdown-item @(sort == "newest" ? "active" : "")" @onclick="@(() => SetSort("newest"))">
                     <span>Newest</span>
                     @if (sort == "newest") { <span class="ms-2">✓</span> }
@@ -297,7 +292,12 @@ else
         showDensityDropdown = false;
     }
 
-    private void CloseFilterDropdown() => showFilterDropdown = false;
+    private void CloseDropdowns()
+    {
+        showFilterDropdown = false;
+        showSortDropdown = false;
+        showDensityDropdown = false;
+    }
 
     private void ToggleSortDropdown()
     {
@@ -313,8 +313,6 @@ else
         showSortDropdown = false;
     }
 
-    private void CloseDensityDropdown() => showDensityDropdown = false;
-
     private void SetDensity(PhotoDensity value)
     {
         density = value;
@@ -322,8 +320,6 @@ else
         // Row height changes the placeholder's reserved height; the DOM grid itself is CSS-driven.
         StateHasChanged();
     }
-
-    private void CloseSortDropdown() => showSortDropdown = false;
 
     private void SetActorFilter(int? actorId)
     {

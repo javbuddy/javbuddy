@@ -1,0 +1,24 @@
+@* A clip's own actors as comma-separated names in a clip row, each with ActorTagHover's popover of the actor's tags
+   on that clip. Shared by ClipEditor's scene rows and ClipHighlightRow / ClipApexRow. The caller passes its row's
+   class so its scoped styles reach the span. *@
+@if (Actors.Count > 0)
+{
+    <span class="@Class">
+        @for (var i = 0; i < Actors.Count; i++)
+        {
+            var actor = Actors[i];
+            <ActorTagHover Tags="@Tags.Where(t => t.ActorId == actor.ActorId).ToList()" Library="Library">@actor.Name</ActorTagHover>@(i < Actors.Count - 1 ? ", " : null)
+        }
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SceneActorItem> Actors { get; set; } = [];
+
+    /// <summary>The clip's actor tags (ClipActorTags); each actor's popover shows their own.</summary>
+    [Parameter] public IReadOnlyList<EffectiveActorTag> Tags { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<ActorTagListItem> Library { get; set; } = [];
+
+    [Parameter] public string? Class { get; set; }
+}

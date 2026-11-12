@@ -1,39 +1,45 @@
 @if (ShowClear)
 {
     <div class="btn-group btn-group-sm dropdown-menu-group" role="group">
-        <button class="btn @(Active ? "btn-secondary" : "btn-outline-secondary") dropdown-main-btn" type="button" @onclick="OnToggle">
+        <button class="btn @(Active ? "btn-secondary" : "btn-outline-secondary") dropdown-main-btn" type="button" @onclick="OnToggle" @onkeydown="OnKeyDownAsync" @ref="toggleButton"
+                aria-haspopup="true" aria-expanded="@(ShowMenu ? "true" : "false")">
             @Label
         </button>
-        <button class="btn @(Active ? "btn-secondary" : "btn-outline-secondary") dropdown-clear-btn" type="button" @onclick="OnClear" title="@ClearTitle" aria-label="@ClearAriaLabel">
+        <button class="btn @(Active ? "btn-secondary" : "btn-outline-secondary") dropdown-clear-btn" type="button" @onclick="OnClear" @onkeydown="OnKeyDownAsync" title="@ClearTitle" aria-label="@ClearAriaLabel">
             <span aria-hidden="true">×</span>
         </button>
-        <button class="btn @(Active ? "btn-secondary" : "btn-outline-secondary") dropdown-arrow-btn" type="button" @onclick="OnToggle" aria-label="Toggle dropdown">
+        <button class="btn @(Active ? "btn-secondary" : "btn-outline-secondary") dropdown-arrow-btn" type="button" @onclick="OnToggle" @onkeydown="OnKeyDownAsync" aria-label="Toggle dropdown"
+                aria-haspopup="true" aria-expanded="@(ShowMenu ? "true" : "false")">
             <span class="sort-dropdown-arrow">@Arrow</span>
         </button>
     </div>
 }
 else
 {
-    <button class="btn btn-sm @(Active ? "btn-secondary" : "btn-outline-secondary")" type="button" @onclick="OnToggle">
+    <button class="btn btn-sm @(Active ? "btn-secondary" : "btn-outline-secondary")" type="button" @onclick="OnToggle" @onkeydown="OnKeyDownAsync" @ref="toggleButton"
+            aria-haspopup="true" aria-expanded="@(ShowMenu ? "true" : "false")">
         @Label
         <span class="sort-dropdown-arrow">@Arrow</span>
     </button>
 }
 @if (ShowMenu)
 {
-    <div class="sort-dropdown-menu" style="@(MenuMinWidth is not null ? $"min-width:{MenuMinWidth}" : null)">
+    <div class="sort-dropdown-menu" @onkeydown="OnKeyDownAsync" style="@(MenuMinWidth is not null ? $"min-width:{MenuMinWidth}" : null)">
         @ChildContent
     </div>
 }
 
 @code {
-    /// <summary>Toggle-button + arrow + dropdown-menu-container chrome shared by Movies.razor's
-    /// sort dropdown and ActorMissing.razor's sort/filter dropdowns. Deliberately doesn't own the
-    /// open/close interaction itself (no @onfocusout, no backdrop) — Movies.razor closes its
-    /// dropdown on blur, ActorMissing.razor's (which contains real &lt;select&gt; elements, where
-    /// blur-to-close fires before a click inside registers) closes via a full-page backdrop click
-    /// instead. That's a real, page-specific interaction difference, not incidental duplication,
-    /// so it stays on the caller's own wrapper element.</summary>
+    /// <summary>Toggle-button + arrow + dropdown-menu-container chrome shared by the sort, filter and
+    /// column dropdowns. The caller owns the open state (<see cref="ShowMenu"/>), opens the menu in
+    /// <see cref="OnToggle"/> (closing its sibling dropdowns there, so only one is open) and renders ONE
+    /// page-level `.dropdown-backdrop` while any of them is open, as a sibling before the
+    /// `.sort-dropdown-wrapper`s: a click outside the menus closes them, and a click on another toggle
+    /// still reaches it, since the wrappers stack above the backdrop. A backdrop rather than blur-to-close,
+    /// because blur fires before a click inside registers, which breaks menus holding sliders and selects.
+    /// A backdrop inside this component would sit in its own wrapper's stacking context and cover earlier
+    /// siblings' toggles, which is why it isn't rendered here. <see cref="OnClose"/> adds Escape, from the
+    /// toggle or anywhere in the menu, which also returns focus to the toggle.</summary>
     [Parameter, EditorRequired] public string Label { get; set; } = "";
     [Parameter] public string Arrow { get; set; } = "▼";
     [Parameter] public bool Active { get; set; }
@@ -44,5 +50,17 @@ else
     [Parameter] public bool ShowMenu { get; set; }
     [Parameter] public string? MenuMinWidth { get; set; }
     [Parameter, EditorRequired] public EventCallback OnToggle { get; set; }
+    /// <summary>Closes the menu on Escape; the caller wires the same handler to its page-level backdrop.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private ElementReference toggleButton;
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Escape" || !ShowMenu || !OnClose.HasDelegate)
+            return;
+        await OnClose.InvokeAsync();
+        await toggleButton.FocusAsync();
+    }
 }
