@@ -1,4 +1,4 @@
-import { isShortcutBlocked } from '../Shared/ScrubBar.razor.js';
+import { isShortcutBlocked, releaseVideo as releaseMedia } from '../Shared/ScrubBar.razor.js';
 
 // Stops the card's video and aborts its stream before the movie's folder is deleted.
 // Just removing the <video> from the DOM doesn't reliably end the download, and while
@@ -8,9 +8,7 @@ import { isShortcutBlocked } from '../Shared/ScrubBar.razor.js';
 export function releaseVideo(selector) {
     const video = document.querySelector(selector);
     if (!video) return;
-    video.pause();
-    video.removeAttribute('src');
-    video.load();
+    releaseMedia(video);
 }
 
 // Review mode's keyboard shortcuts: Space toggles the card's video, N clicks Next

@@ -1,0 +1,37 @@
+/* Movie Detail is always dark, so these are dark-only colors. */
+.detail-section {
+    margin: 1.75rem 0;
+}
+
+.detail-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--jb-dark-border);
+    margin-bottom: 0.9rem;
+    padding-bottom: 0.5rem;
+}
+
+    .detail-section-header h2 {
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+    }
+
+.detail-section-btn {
+    appearance: none;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 3px;
+    color: #6ea8fe;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+}
+
+    .detail-section-btn:hover {
+        background-color: rgba(255, 255, 255, 0.16);
+        color: #8fbcfe;
+    }

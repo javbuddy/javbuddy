@@ -25,5 +25,5 @@ public sealed record ImplicitChip(string Label, string Tooltip)
     public static string RedundantTagTooltip(IEnumerable<string> sources) =>
         $"Also from {string.Join(", ", sources)}. Remove it and it stays, grayed, as implied.";
 
-    public static string TagLabel(SceneTagItem tag) => tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}";
+    public static string TagLabel(SceneTagItem tag) => Javbuddy.Services.Tags.TagLabel.Format(tag.ParentName, tag.Name);
 }

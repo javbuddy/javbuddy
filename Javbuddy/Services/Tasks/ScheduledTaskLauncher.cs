@@ -11,11 +11,23 @@ public sealed class ScheduledTaskLauncher(BackgroundJobRunner jobs)
 {
     private readonly BackgroundJobRunner jobs = jobs;
 
-    public Task Queue(string taskName) => jobs.Enqueue(taskName, async (services, ct) =>
+    public Task Queue(string taskName) => Queue(taskName, onRecorded: null);
+
+    /// <summary>Queues the run and returns once its "queued" row is saved, so a page that reloads the
+    /// run list right after is sure to find it. Also returns when the job ends first (an unknown task
+    /// name, or a failure before the row).</summary>
+    public async Task QueueAndWaitUntilRecordedAsync(string taskName)
+    {
+        var recorded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var job = Queue(taskName, () => recorded.TrySetResult());
+        await Task.WhenAny(recorded.Task, job);
+    }
+
+    private Task Queue(string taskName, Action? onRecorded) => jobs.Enqueue(taskName, async (services, ct) =>
     {
         var task = services.GetServices<IScheduledTask>().FirstOrDefault(t => t.Name == taskName);
         if (task is null) return;
 
-        await services.GetRequiredService<ScheduledTaskRunner>().RunAsync(task, ct);
+        await services.GetRequiredService<ScheduledTaskRunner>().RunAsync(task, ct, onRecorded);
     });
 }

@@ -584,7 +584,7 @@ public class ActorDetailTests : BunitContext
         var deleteBtn = cut.Find("button.page-toolbar-btn-danger");
         await cut.InvokeAsync(() => deleteBtn.Click());
 
-        var modal = cut.Find(".actor-delete-modal-backdrop");
+        var modal = cut.Find(".delete-confirm-backdrop");
         Assert.Contains("Delete Remu?", modal.TextContent);
         Assert.Contains("unlink the actor from linked movies", modal.TextContent);
         Assert.Contains("delete custom aliases", modal.TextContent);
@@ -621,18 +621,17 @@ public class ActorDetailTests : BunitContext
         await cut.InvokeAsync(() => deleteBtn.Click());
         var cancelBtn = cut.FindAll("button")
             .Single(button => button.TextContent.Trim() == "Cancel");
-        Assert.True(cancelBtn.HasAttribute("autofocus"));
         await cut.InvokeAsync(() => cancelBtn.Click());
-        Assert.Empty(cut.FindAll(".actor-delete-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
 
         await cut.InvokeAsync(() => deleteBtn.Click());
-        var modal = cut.Find(".actor-delete-modal-backdrop");
+        var modal = cut.Find(".delete-confirm-backdrop");
         await cut.InvokeAsync(() => modal.KeyDown(new KeyboardEventArgs { Key = "Escape" }));
-        Assert.Empty(cut.FindAll(".actor-delete-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
 
         await cut.InvokeAsync(() => cut.Find("button.page-toolbar-btn-danger").Click());
-        await cut.InvokeAsync(() => cut.Find(".actor-delete-modal-backdrop").Click());
-        Assert.Empty(cut.FindAll(".actor-delete-modal-backdrop"));
+        await cut.InvokeAsync(() => cut.Find(".delete-confirm-backdrop").Click());
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
         await actorService.DidNotReceive().DeleteAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 

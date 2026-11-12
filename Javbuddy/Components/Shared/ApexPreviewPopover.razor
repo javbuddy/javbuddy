@@ -21,7 +21,7 @@
             }
             @foreach (var tag in Tags)
             {
-                <span class="apex-preview-tag">@(tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}")</span>
+                <span class="apex-preview-tag">@ImplicitChip.TagLabel(tag)</span>
             }
         </div>
         <span class="apex-preview-time">@SceneTimeFormat.Format(Seconds)</span>

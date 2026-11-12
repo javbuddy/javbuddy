@@ -1,42 +1,5 @@
 /* Movie Detail's Scenes section: timeline, highlights shelf and scene grid. Movie
    Detail is always dark, so these are dark-only colors. */
-.movie-detail-section {
-    margin: 1.75rem 0;
-}
-
-.movie-scenes-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    border-bottom: 1px solid var(--jb-dark-border);
-    margin-bottom: 0.9rem;
-    padding-bottom: 0.5rem;
-}
-
-    .movie-scenes-header h2 {
-        font-size: 1rem;
-        font-weight: 700;
-        margin: 0;
-    }
-
-.movie-scenes-edit-btn {
-    appearance: none;
-    background-color: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 3px;
-    color: #6ea8fe;
-    cursor: pointer;
-    font-size: 0.78rem;
-    font-weight: 600;
-    padding: 0.2rem 0.55rem;
-}
-
-    .movie-scenes-edit-btn:hover {
-        background-color: rgba(255, 255, 255, 0.16);
-        color: #8fbcfe;
-    }
-
 .movie-scenes-empty {
     margin: 0;
     color: #8a90a0;

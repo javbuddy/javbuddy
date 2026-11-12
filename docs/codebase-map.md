@@ -29,6 +29,7 @@ One row per product area.
 | Component | Provides | bUnit test |
 |---|---|---|
 | `BackButton.razor` | Standard "‹ Back" link | `BackButtonTests.cs` |
+| `DetailSection.razor` | Movie Detail section chrome: heading, optional action button, body | `DetailSectionTests.cs` |
 | `CropperViewport.razor` (+ `.razor.js`) | The image-crop viewport (image, crop box, eight handles) and the shared JS cropper core (`ImageCropper`, `createCropperSession`) that `MovieCoverCropModal` and `ActorImageUploadModal` build on | `CropperViewportTests.cs` |
 | `ImageUploadPicker.cs` | The batch/extension/size checks the multi-image upload modals run on picked files | `ImageUploadPickerTests.cs` |
 | `ModalShell.razor` | Dark dialog chrome (backdrop, header with close, body, footer) shared by the actor/tag/metadata modals | `ModalShellTests.cs` |
@@ -38,6 +39,7 @@ One row per product area.
 | `LoadingIndicator.razor` | Spinner/placeholder shown while data loads | `LoadingIndicatorTests.cs` |
 | `CastSearchAdd.razor` | Actor search box + results list for adding a tracked actor to a movie's cast; restylable via `--cast-search-*` CSS custom properties | `CastSearchAddTests.cs` |
 | `TagSearchAdd.razor` | Tag-library search box + results list for adding an approved tag to a movie; restylable via `--tag-search-*` CSS custom properties | `TagSearchAddTests.cs` |
+| `SearchAddBox.razor` | Generic debounced search box + results dropdown (the base of `CastSearchAdd` and `TagSearchAdd`) | `SearchAddBoxTests.cs` |
 | `MovieGallery.razor` | Thumbnail gallery for extrafanart/preview images, opening `GalleryLightbox` | `MovieGalleryTests.cs` |
 | `GalleryLightbox.razor` | Full-screen, navigable image viewer (progress bar, prev/next, keys, swipe, Original toggle, zoom) shared by `MovieGallery`, `ActorPhotos` and `ActorPhotoGallery` | `GalleryLightboxTests.cs`; real-browser coverage in `GalleryLightboxNavZoneFlowTests.cs` and `GalleryLightboxZoomFlowTests.cs` |
 | `ImageZoomControls.razor` | Lightbox zoom buttons plus wheel/double-click/drag/pinch zoom and pan (`.razor.js`), used by `GalleryLightbox` and `ImageLightboxModal` | `ImageZoomControlsTests.cs`; real-browser coverage in `GalleryLightboxZoomFlowTests.cs` |
@@ -49,7 +51,7 @@ One row per product area.
 | `ActorPhotoUploadModal.razor` | Batch actor-photo upload and optional album creation | `ActorPhotoUploadModalTests.cs` |
 | `MovieStillsGenerateModal.razor` | Movie Detail's Tools → "Generate stills": pick count/quality/existing-image mode, preview candidate video frames, save the ticked ones as extrafanart | `MovieStillsGenerateModalTests.cs` |
 | `MovieImageUploadModal.razor` | Movie Detail's "Add Images": multi-file upload / drag & drop or one URL import into the movie's local `extrafanart` folder, plus a hand-off to Generate stills | `MovieImageUploadModalTests.cs` |
-| `DeleteConfirmDialog.razor` | Modal "Delete "X"?" confirmation (Cancel/Esc/backdrop cancel without closing a surrounding player modal; Cancel focused on open), used by the scene, highlight and apex editors and Movie Detail's image delete | `DeleteConfirmDialogTests.cs`; real-browser coverage in `SceneDeleteConfirmFlowTests.cs`, `HighlightFlowTests.cs` |
+| `DeleteConfirmDialog.razor` | Modal "Delete "X"?" confirmation (Cancel/Esc/backdrop cancel without closing a surrounding player modal; Cancel focused on open), used by the scene, highlight and apex editors Movie Detail's image delete and Actor Detail's delete (custom `Title` / `ConfirmText`) | `DeleteConfirmDialogTests.cs`; real-browser coverage in `SceneDeleteConfirmFlowTests.cs`, `HighlightFlowTests.cs` |
 | `ClipEditor.razor` (+ `.razor.js`) | A movie's scenes, highlights and apexes as one tree (built by `ClipTree`): scene rows and form, chapter import, the Detect / Write chapters row, the player bridge and the M / Shift+M, H / Shift+H and A shortcuts; rolled-up tags and inherited actors show grayed. Shared by `MovieCleanup.razor`'s Review card and `VideoPlayerModal`'s side panel | `ClipEditorSceneTests.cs`, `ClipEditorHighlightTests.cs`, `ClipEditorApexTests.cs`, `ClipEditorTreeTests.cs` (on `ClipEditorTestBase`); real-browser coverage in `ClipEditorFlowTests.cs`, `HighlightFlowTests.cs` |
 | `ClipHighlightRow.razor` / `ClipHighlightForm.razor` / `ClipSceneForm.razor` | A highlight's row and add/edit form, and the scene add/edit form, inside `ClipEditor` | via `ClipEditorHighlightTests.cs` |
 | `ClipApexRow.razor` / `ClipApexForm.razor` | An apex's row and add/edit form inside `ClipEditor`, with the previous apex's tag suggestions | via `ClipEditorApexTests.cs` |
@@ -78,7 +80,9 @@ One row per product area.
 | `UptimeClock.razor` (+ `.razor.js`) | Ticking elapsed-time readout (System > Status) | `UptimeClockTests.cs` |
 | `BirthdayIndicator.razor` | 🎉 "birthday today" marker next to an actor's name | `BirthdayIndicatorTests.cs` |
 | `FavoriteHeartIcon.razor` / `ShuffleIcon.razor` / `SparkleIcon.razor` / `ApexIcon.razor` | Small inline-SVG icons (heart, shuffle, highlight sparkle, apex diamond) | — |
+| `JellyfinIcon.razor` | The Jellyfin logo ("Open in Jellyfin" badges) | — |
 | `MoviePosterGrid.razor` / `PosterGridSkeleton.razor` | The movie poster grid under the shared poster options (Movies, Actor Detail) and its loading placeholder | `MoviePosterGridTests.cs`, `PosterGridSkeletonTests.cs` |
+| `Playlist.cs` | Cursor over the player's playlist (Play all / Shuffle, a scene's siblings): current entry, next, previous | `PlaylistTests.cs` |
 | `MovieFilterToolbar.razor` | The Movies filter row (search, status, filter dropdown, sort); also Actor Detail's Movies section and a DeoVR group's filter | `MovieFilterToolbarTests.cs` |
 | `FilterSection.razor` / `RangeFilter.razor` / `ChipMultiSelectGroup.razor` / `MatchAllCheck.razor` | Expandable pieces of the filter dropdown: collapsible section, min/max range, chip multi-select, "Match all" checkbox | `FilterSectionTests.cs`, `RangeFilterTests.cs`, `ChipMultiSelectGroupTests.cs` |
 | `MovieRangeFilters.razor` / `MovieCountFilters.razor` / `ActorAttributeFilters.razor` | `RangeFilter` rows for a movie's ranges and counts, and the actor-attribute filters | `MovieCountFiltersTests.cs`, `ActorAttributeFiltersTests.cs` |
@@ -107,7 +111,7 @@ Domain services are grouped into `Services/<Group>/` folders whose namespace mat
 | `Actors/` | actor CRUD/merge/import, discovery, photos, name and physical-attribute helpers |
 | `Scenes/` | scenes, highlights, chapter import/write, scene detection and time helpers, the scenes wall queries |
 | `Nfo/` | .nfo sync, drift detection/push, history, the .nfo file writer and the pure XML helpers |
-| `Tags/` | tag management, normalization, script detection, actor tags (`ActorTagService`, the filters' `ActorTagOptions`) |
+| `Tags/` | tag management, normalization, script detection, actor tags (`ActorTagService`, the filters' `ActorTagOptions`), `TagLabel` ("Parent › Name" for a subtag, used by every tag chip, option and log line) |
 | `Torrents/` | grab, the Activity Queue and History services, change notifier, path mapping, and the TorrentSort wizard (`TorrentSortService`, the thin `TorrentSortWizardState` coordinator, its per-step parts in `SortWizard/`, its helpers) |
 | `Settings/` | connection settings save/read and connection status tiles (per-source discovery toggles live in `MovieDiscovery/DiscoverySettingsService`) |
 | `Monitoring/` | system status, disk space, task activity and change notifiers |

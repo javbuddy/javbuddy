@@ -26,14 +26,9 @@
    Hovering an apex marker instead pops up its own clip, tags and time. The popovers are all drawn,
    hidden, and shown by CSS; ClipCard.razor.js's bindHoverPreviews starts the hovered apex's (and a
    hovered card's) preview video in the browser, so hovering costs no server round trip. *@
-<div class="movie-detail-section movie-scenes" @ref="sectionRef">
-    <div class="movie-scenes-header">
-        <h2>Scenes@(Scenes.Count > 0 ? $" ({Scenes.Count})" : null)</h2>
-        @if (CanPlay)
-        {
-            <button type="button" class="movie-scenes-edit-btn" @onclick="() => OnEdit.InvokeAsync((null, null))" title="Open the player with the scene editor">Edit scenes</button>
-        }
-    </div>
+<DetailSection @ref="section" Class="movie-scenes" Title="@($"Scenes{(Scenes.Count > 0 ? $" ({Scenes.Count})" : null)}")"
+               ActionText="@(CanPlay ? "Edit scenes" : null)" ActionClass="movie-scenes-edit-btn"
+               ActionTitle="Open the player with the scene editor" OnAction="() => OnEdit.InvokeAsync((null, null))">
 
     @if (TimelineShown && DurationSeconds is > 0 and var duration)
     {
@@ -224,7 +219,7 @@
                                 <div class="movie-scenes-tags">
                                     @foreach (var tag in scene.Tags)
                                     {
-                                        <span class="movie-scenes-tag">@(tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}")</span>
+                                        <span class="movie-scenes-tag">@ImplicitChip.TagLabel(tag)</span>
                                     }
                                 </div>
                             }
@@ -234,11 +229,11 @@
             </div>
         }
     }
-</div>
+</DetailSection>
 
 <ClipPlayerModal Clip="playingClip"
-                 Position="@(playlist is null ? null : playlistIndex + 1)"
-                 Count="playlist?.Length"
+                 Position="playlist?.Position"
+                 Count="playlist?.Count"
                  OnEnded="NextClip"
                  OnNext="EventCallback.Factory.Create(this, NextClip)"
                  OnPrevious="EventCallback.Factory.Create(this, PreviousClip)"
@@ -319,12 +314,11 @@
     // What the actor tags were last loaded for. Any change to the clips, the cast or an actor tag reaches here as new
     // lists from the page (the editor reloads them after each save); a render with the same ones needn't query again.
     private (int MovieId, object Cast, object Scenes, object Highlights, object Apexes)? actorTagsLoadedFor;
-    private ElementReference sectionRef;
+    private DetailSection section = null!;
     private IJSObjectReference? clipCardModule;
     private IJSObjectReference? hoverPreviews;
     private PlayerClip? playingClip;
-    private PlayerClip[]? playlist;
-    private int playlistIndex;
+    private Playlist<PlayerClip>? playlist;
     private bool disposed;
 
     protected override void OnInitialized()
@@ -438,7 +432,7 @@
         try
         {
             clipCardModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
-            hoverPreviews = await clipCardModule.InvokeAsync<IJSObjectReference>("bindHoverPreviews", sectionRef,
+            hoverPreviews = await clipCardModule.InvokeAsync<IJSObjectReference>("bindHoverPreviews", section.Element,
                 ".movie-scenes-card, .movie-scenes-timeline-apex-host");
         }
         catch (JSDisconnectedException)
@@ -539,22 +533,19 @@
     private void PlayScene(SceneItem scene)
     {
         if (!CanPlay) return;
-        playlist = Scenes.Select(SceneClip).ToArray();
-        PlayAt(Scenes.ToList().FindIndex(s => s.Id == scene.Id));
+        StartPlaylist(Scenes.Select(SceneClip).ToArray(), Scenes.ToList().FindIndex(s => s.Id == scene.Id));
     }
 
     private void PlayHighlight(HighlightItem highlight)
     {
         if (!CanPlay) return;
-        playlist = Highlights.Select(HighlightClip).ToArray();
-        PlayAt(Highlights.ToList().FindIndex(h => h.Id == highlight.Id));
+        StartPlaylist(Highlights.Select(HighlightClip).ToArray(), Highlights.ToList().FindIndex(h => h.Id == highlight.Id));
     }
 
     private void PlayApex(ApexItem apex)
     {
         if (!CanPlay) return;
-        playlist = Apexes.Select(ApexClip).ToArray();
-        PlayAt(Apexes.ToList().FindIndex(a => a.Id == apex.Id));
+        StartPlaylist(Apexes.Select(ApexClip).ToArray(), Apexes.ToList().FindIndex(a => a.Id == apex.Id));
     }
 
     /// <summary>Plays every highlight of the movie one after another in the clip player, in timeline order or
@@ -569,22 +560,21 @@
     {
         if (!CanPlay || clips.Length == 0) return;
         if (shuffle) Random.Shared.Shuffle(clips);
-        playlist = clips;
-        PlayAt(0);
+        StartPlaylist(clips, 0);
         StateHasChanged();
     }
 
-    private void PlayAt(int index)
+    private void StartPlaylist(PlayerClip[] clips, int startIndex)
     {
-        playlistIndex = Math.Max(index, 0);
-        playingClip = playlist![playlistIndex];
+        playlist = new Playlist<PlayerClip>(clips, startIndex);
+        playingClip = playlist.Current;
     }
 
     private void NextClip()
     {
-        if (playlist is not null && playlistIndex + 1 < playlist.Length)
+        if (playlist?.TryNext() == true)
         {
-            PlayAt(playlistIndex + 1);
+            playingClip = playlist.Current;
         }
         else
         {
@@ -594,7 +584,7 @@
 
     private void PreviousClip()
     {
-        if (playlist is not null && playlistIndex > 0) PlayAt(playlistIndex - 1);
+        if (playlist?.TryPrevious() == true) playingClip = playlist.Current;
     }
 
     private void ClosePlayer()

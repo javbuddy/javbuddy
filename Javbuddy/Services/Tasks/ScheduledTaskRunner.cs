@@ -20,10 +20,13 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
 
     private static readonly TimeSpan RunRetention = TimeSpan.FromDays(90);
 
-    public async Task RunAsync(IScheduledTask task, CancellationToken ct)
+    /// <param name="onRecorded">Called once the run's "queued" row is saved (at once for a task that records no
+    /// history), so the caller that queued it knows a refresh will find it.</param>
+    public async Task RunAsync(IScheduledTask task, CancellationToken ct, Action? onRecorded = null)
     {
         if (!task.RecordRunHistory)
         {
+            onRecorded?.Invoke();
             await RunWithoutHistoryAsync(task, ct);
             return;
         }
@@ -35,6 +38,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
             await db.SaveChangesAsync(ct);
         }
         changeNotifier.NotifyChanged();
+        onRecorded?.Invoke();
 
         // Linked to the caller's token (app shutdown) plus a per-run source CancelRunAsync can
         // trip from System > Tasks.

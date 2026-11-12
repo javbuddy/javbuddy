@@ -126,10 +126,9 @@ else
         // Queued on application-owned background execution so the run keeps going (and gets
         // recorded) even after this click handler returns or the user navigates away — a full
         // rescan can take minutes. Mirrors System > Tasks' own "Run now" button (see SystemTasks.razor).
-        _ = TaskLauncher.Queue(TaskName);
+        await TaskLauncher.QueueAndWaitUntilRecordedAsync(TaskName);
 
-        // Give the runner a moment to write the "queued" row, then refresh.
-        await Task.Delay(500);
+        // The "queued" row exists now, so the refresh finds it.
         await LoadAsync();
         StartPollingIfNeeded();
     }

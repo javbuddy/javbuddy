@@ -353,6 +353,15 @@ let resumeFullscreenClass = null;
 const isEditableElement = (element) => element instanceof Element
     && (element.closest('input, textarea, select') !== null || element.isContentEditable);
 
+// Stops a <video> and aborts its stream: emptying the element (dropping src and calling load()) is the
+// spec'd way to release a media resource. Taking a <video> out of the page only pauses it; it keeps its
+// HTTP request open, and its buffered media, until it is garbage-collected.
+export function releaseVideo(video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+}
+
 // True when a bare-letter shortcut (like F for fullscreen) must be left alone: a modifier is held
 // (Ctrl/Cmd+F is the browser's Find), another handler already claimed the key, a field has focus,
 // or a dialog is open over the player.

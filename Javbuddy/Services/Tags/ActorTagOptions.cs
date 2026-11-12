@@ -7,7 +7,7 @@ namespace Javbuddy.Services.Tags;
 public static class ActorTagOptions
 {
     /// <summary>Between a subtag's parent and name in an option's label; the filter menus nest on it.</summary>
-    public const string LabelSeparator = " › ";
+    public const string LabelSeparator = TagLabel.Separator;
 
     /// <summary>The used tags, "Hair › Long" for a subtag, plus the parents of those (a parent matches its subtags in the
     /// filters). Grouped by parent, the parent first and its subtags after it: ordering by the full label would slip

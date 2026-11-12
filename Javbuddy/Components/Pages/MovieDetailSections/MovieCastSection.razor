@@ -4,11 +4,7 @@
 @inject IMovieService MovieService
 @inject IActorTagService ActorTagService
 
-<div class="movie-detail-section">
-    <div class="movie-detail-section-header">
-        <h2>Cast</h2>
-        <button type="button" class="movie-detail-edit-tags-btn movie-detail-edit-cast-btn" @onclick="ToggleCastEdit">@(editingCast ? "Done" : "Edit Cast")</button>
-    </div>
+<DetailSection Title="Cast" ActionText="@(editingCast ? "Done" : "Edit Cast")" ActionClass="movie-detail-edit-cast-btn" OnAction="ToggleCastEdit">
     @if (castEditError is not null)
     {
         <p class="movie-detail-cast-error">@castEditError</p>
@@ -83,7 +79,7 @@
     {
         <CastSearchAdd ExcludedActorIds="@Cast.Where(c => c.ActorId is not null).Select(c => c.ActorId!.Value).ToHashSet()" OnAdd="AddCastActorAsync" />
     }
-</div>
+</DetailSection>
 
 @code {
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;

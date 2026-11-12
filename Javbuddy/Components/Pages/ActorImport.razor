@@ -215,7 +215,7 @@
                                     }
                                     else
                                     {
-                                        <span>@Initials(candidate.DisplayName)</span>
+                                        <span>@ActorMatching.Initials(candidate.DisplayName)</span>
                                     }
                                 </div>
                             </td>
@@ -444,17 +444,5 @@
     {
         activeCts?.Cancel();
         activeCts?.Dispose();
-    }
-
-    private static string Initials(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "?";
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length switch
-        {
-            0 => "?",
-            1 => parts[0][..1].ToUpperInvariant(),
-            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant()
-        };
     }
 }

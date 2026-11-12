@@ -444,7 +444,7 @@ public class MovieScenesSectionTests : BunitContext
             .Add(x => x.Apexes, apexes)
             .Add(x => x.ApexCounts, new Dictionary<int, int> { [1] = 1, [2] = 2 }));
 
-        Assert.Equal("Scenes (2)", cut.Find(".movie-scenes-header h2").TextContent);
+        Assert.Equal("Scenes (2)", cut.Find(".detail-section-header h2").TextContent);
         var badges = cut.FindAll(".movie-scenes-grid .movie-scenes-apex-count");
         Assert.Equal(["1 apex", "2 apexes"], badges.Select(b => b.GetAttribute("title")));
         Assert.Equal("2", badges[1].TextContent.Trim());

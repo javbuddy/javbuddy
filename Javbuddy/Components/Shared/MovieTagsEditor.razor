@@ -121,7 +121,7 @@
         if (result.Success) await OnChanged.InvokeAsync();
     }
 
-    private static string Label(TagChip tag) => tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}";
+    private static string Label(TagChip tag) => TagLabel.Format(tag.ParentName, tag.Name);
 
     private IReadOnlyList<ImplicitChip> ImpliedChips =>
         tags.Where(t => t.IsImplicit).Select(t => new ImplicitChip(Label(t), "From scenes, highlights or apexes")).ToList();

@@ -1,0 +1,92 @@
+@* A debounced search box with a results dropdown: typing looks matches up (a lookup doesn't run per
+   keystroke), clicking one raises OnAdd with it and the box resets. CastSearchAdd and TagSearchAdd are
+   thin wrappers that supply the lookup and how a result looks. The class names derive from
+   ClassPrefix ("cast-search" gives cast-search, -input, -results and -candidate) so tests and hosts
+   keep selecting by them. Colors come from --search-add-* custom properties, so a host restyles it
+   (dark by default) by setting them on a wrapping element. *@
+@typeparam TItem
+@implements IDisposable
+
+<div class="search-add @(Compact ? "search-add-compact" : null) @ClassPrefix">
+    <input type="text" class="search-add-input @(ClassPrefix)-input" placeholder="@Placeholder" value="@query" @oninput="OnInputAsync" @onkeydown="OnKeyDownAsync" />
+    @if (results.Count > 0)
+    {
+        <div class="search-add-results @(ClassPrefix)-results">
+            @foreach (var candidate in results)
+            {
+                <div class="search-add-candidate @(ClassPrefix)-candidate" @onclick="() => AddAsync(candidate)">
+                    @ItemTemplate(candidate)
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Looks the term up. Returns what may be offered (the caller filters out what's already added).</summary>
+    [Parameter, EditorRequired] public Func<string, CancellationToken, Task<IReadOnlyList<TItem>>> Search { get; set; } = default!;
+
+    /// <summary>How one result looks inside its row.</summary>
+    [Parameter, EditorRequired] public RenderFragment<TItem> ItemTemplate { get; set; } = default!;
+
+    /// <summary>Raised with the chosen result; the box resets itself afterwards.</summary>
+    [Parameter] public EventCallback<TItem> OnAdd { get; set; }
+
+    /// <summary>When set, Enter adds the typed text as-is, for values that aren't a result yet.</summary>
+    [Parameter] public EventCallback<string> OnAddFreeText { get; set; }
+
+    [Parameter] public string Placeholder { get; set; } = "";
+
+    /// <summary>Less room above the box (for one that sits right under a row of chips).</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    /// <summary>Base of the element class names (<c>cast-search</c>, <c>tag-search</c>).</summary>
+    [Parameter, EditorRequired] public string ClassPrefix { get; set; } = "";
+
+    private string query = "";
+    private IReadOnlyList<TItem> results = [];
+
+    private readonly Debouncer debouncer = new();
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        query = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            debouncer.Cancel();
+            results = [];
+            return;
+        }
+
+        var term = query;
+        await debouncer.RunAsync(async ct =>
+        {
+            var matches = await Search(term, ct);
+            if (ct.IsCancellationRequested) return;
+            results = matches;
+        });
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter" || !OnAddFreeText.HasDelegate || string.IsNullOrWhiteSpace(query)) return;
+        var text = query.Trim();
+        Reset();
+        await OnAddFreeText.InvokeAsync(text);
+    }
+
+    private async Task AddAsync(TItem candidate)
+    {
+        Reset();
+        await OnAdd.InvokeAsync(candidate);
+    }
+
+    private void Reset()
+    {
+        debouncer.Cancel();
+        query = "";
+        results = [];
+    }
+
+    public void Dispose() => debouncer.Dispose();
+}

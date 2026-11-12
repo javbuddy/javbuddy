@@ -32,16 +32,7 @@ else
         <BackButton Href="/actors" CssClass="page-toolbar-btn">All actors</BackButton>
         <span class="page-toolbar-sep"></span>
         <button class="page-toolbar-btn @(actor.IsFavorite ? "page-toolbar-btn-favorite active" : "")" @onclick="ToggleFavorite" title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")">
-            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true">
-                @if (actor.IsFavorite)
-                {
-                    <path fill-rule="evenodd" d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z"/>
-                }
-                else
-                {
-                    <path d="m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-4.385C13.486.878 10.4.28 8.717 2.01L8 2.748zM8 15C-7.333 4.868 3.279-3.04 7.824 1.143c.06.055.119.112.176.171a3.12 3.12 0 0 1 .176-.17C12.72-3.042 23.333 4.867 8 15z"/>
-                }
-            </svg>
+            <FavoriteHeartIcon Filled="actor.IsFavorite" Size="15" />
             @(actor.IsFavorite ? "Favorited" : "Favorite")
         </button>
         <span class="page-toolbar-sep"></span>
@@ -109,7 +100,7 @@ else
         }
         else
         {
-            <div class="actor-hero-avatar actor-hero-avatar-clickable" @onclick="OpenPhotoUploadModal" title="Click to upload photo">@Initials(actor.DisplayName)</div>
+            <div class="actor-hero-avatar actor-hero-avatar-clickable" @onclick="OpenPhotoUploadModal" title="Click to upload photo">@ActorMatching.Initials(actor.DisplayName)</div>
         }
         <div class="actor-hero-info">
             <h1 class="actor-hero-title">
@@ -203,20 +194,7 @@ else
                     @if (!string.IsNullOrWhiteSpace(jellyfinWebUrl))
                     {
                         <a class="actor-badge actor-badge-jellyfin" href="@jellyfinWebUrl" target="_blank" rel="noopener noreferrer" title="Open in Jellyfin">
-                            <svg width="12" height="12" viewBox="0 0 72 72" fill="none" aria-hidden="true">
-                                <path d="M24.2116 49.1581C22.6599 46.0424 32.8378 27.5879 35.9999 27.5879C39.1666 27.5895 49.3228 46.0764 47.7882 49.1581C46.2536 52.2398 25.7632 52.2738 24.2116 49.1581Z" fill="url(#actor-jellyfin-icon-gradient-a)" />
-                                <path fill-rule="evenodd" clip-rule="evenodd" d="M0.481861 64.9951C-4.19479 55.6047 26.4765 0 36 0C45.5328 0 76.153 55.713 71.5274 64.9951C66.9018 74.2773 5.15852 74.3856 0.481861 64.9951ZM12.7358 56.847C15.8005 62.9995 56.2536 62.9314 59.2843 56.847C62.3149 50.761 42.2515 14.2605 36.0093 14.2605C29.767 14.2605 9.67118 50.6944 12.7358 56.847Z" fill="url(#actor-jellyfin-icon-gradient-b)" />
-                                <defs>
-                                    <linearGradient id="actor-jellyfin-icon-gradient-a" x1="11.9999" y1="30.0006" x2="71.9989" y2="63.0024" gradientUnits="userSpaceOnUse">
-                                        <stop stop-color="#AA5CC3" />
-                                        <stop offset="1" stop-color="#00A4DC" />
-                                    </linearGradient>
-                                    <linearGradient id="actor-jellyfin-icon-gradient-b" x1="12" y1="29.9992" x2="71.999" y2="63.001" gradientUnits="userSpaceOnUse">
-                                        <stop stop-color="#AA5CC3" />
-                                        <stop offset="1" stop-color="#00A4DC" />
-                                    </linearGradient>
-                                </defs>
-                            </svg>
+                            <JellyfinIcon Size="12" />
                             Open in Jellyfin
                         </a>
                     }
@@ -379,17 +357,13 @@ else
 
     @if (showDeleteConfirmation)
     {
-        <div class="actor-delete-modal-backdrop" data-backdrop-dismiss tabindex="-1" role="presentation" @onclick="CloseDeleteConfirmation" @onkeydown="HandleDeleteConfirmationKeyDown">
-            <div class="actor-delete-modal-panel" role="dialog" aria-modal="true" aria-labelledby="actor-delete-modal-title" @onclick:stopPropagation="true">
-                <h2 id="actor-delete-modal-title">Delete @actor!.DisplayName?</h2>
-                <p>This will unlink the actor from linked movies, delete custom aliases, and remove cached portraits.</p>
-                <div class="actor-delete-modal-actions">
-                    <button class="btn btn-outline-secondary" @onclick="CloseDeleteConfirmation" disabled="@deleting" autofocus>Cancel</button>
-                    <button class="btn btn-danger" @onclick="DeleteActor" disabled="@deleting">
-                        @(deleting ? "Deleting…" : "Delete Actor")
-                    </button>
-                </div>
-            </div>
+        <div class="actor-delete-theme">
+            <DeleteConfirmDialog Title="@($"Delete {actor!.DisplayName}?")"
+                                 Message="This will unlink the actor from linked movies, delete custom aliases, and remove cached portraits."
+                                 ConfirmText="@(deleting ? "Deleting…" : "Delete Actor")"
+                                 Busy="deleting"
+                                 OnConfirm="DeleteActor"
+                                 OnCancel="CloseDeleteConfirmation" />
         </div>
     }
 }
@@ -728,14 +702,6 @@ else
         }
     }
 
-    private void HandleDeleteConfirmationKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape")
-        {
-            CloseDeleteConfirmation();
-        }
-    }
-
     private async Task DeleteActor()
     {
         if (actor is null) return;
@@ -883,17 +849,5 @@ else
             {
             }
         }
-    }
-
-    private static string Initials(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "?";
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length switch
-        {
-            0 => "?",
-            1 => parts[0][..1].ToUpperInvariant(),
-            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant()
-        };
     }
 }

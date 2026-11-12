@@ -380,9 +380,7 @@ else
         importMessage = null;
         StateHasChanged();
 
-        _ = TaskLauncher.Queue("r18.dev Dump Import");
-
-        await Task.Delay(500);
+        await TaskLauncher.QueueAndWaitUntilRecordedAsync("r18.dev Dump Import");
         importing = false;
         await LoadAsync();
         importMessage = "Import queued — see System → Tasks for progress and the result.";
@@ -419,7 +417,6 @@ else
         // away from Settings. The job only captures the overwrite flag, never this component.
         _ = EnrichmentLauncher.QueueMinnanoAv(minnanoAvSettings.OverwriteExisting);
 
-        await Task.Delay(500);
         minnanoAvBatchEnriching = false;
         await LoadAsync();
         minnanoAvBatchEnrichMessage = "Enrichment queued — see the sidebar for progress.";

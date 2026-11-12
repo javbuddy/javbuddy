@@ -1,28 +1,19 @@
-@implements IDisposable
 @inject IActorService ActorService
 
-<div class="cast-search">
-    <input type="text" class="cast-search-input" placeholder="Search actors to add…" value="@query" @oninput="OnInputAsync" />
-    @if (results.Count > 0)
-    {
-        <div class="cast-search-results">
-            @foreach (var candidate in results)
-            {
-                <div class="cast-search-candidate" @onclick="() => AddAsync(candidate.Id)">
-                    @if (candidate.HasImage)
-                    {
-                        <img class="cast-search-avatar" src="@($"/actor-image/{candidate.Id}/thumb")" alt="" loading="lazy" />
-                    }
-                    else
-                    {
-                        <span class="cast-search-avatar">@ActorMatching.Initials(candidate.DisplayName)</span>
-                    }
-                    <span>@candidate.DisplayName</span>
-                </div>
-            }
-        </div>
-    }
-</div>
+<SearchAddBox TItem="ActorSearchItem" ClassPrefix="cast-search" Placeholder="Search actors to add…"
+              Search="SearchAsync" OnAdd="candidate => OnAdd.InvokeAsync(candidate.Id)">
+    <ItemTemplate Context="candidate">
+        @if (candidate.HasImage)
+        {
+            <img class="cast-search-avatar" src="@($"/actor-image/{candidate.Id}/thumb")" alt="" loading="lazy" />
+        }
+        else
+        {
+            <span class="cast-search-avatar">@ActorMatching.Initials(candidate.DisplayName)</span>
+        }
+        <span>@candidate.DisplayName</span>
+    </ItemTemplate>
+</SearchAddBox>
 
 @code {
     /// <summary>Tracked actors already on the movie, hidden from the results.</summary>
@@ -31,38 +22,9 @@
     /// <summary>Raised with the chosen actor's ID; the search box resets itself afterwards.</summary>
     [Parameter] public EventCallback<int> OnAdd { get; set; }
 
-    private string query = "";
-    private IReadOnlyList<ActorSearchItem> results = [];
-
-    private readonly Debouncer debouncer = new();
-
-    private async Task OnInputAsync(ChangeEventArgs e)
+    private async Task<IReadOnlyList<ActorSearchItem>> SearchAsync(string term, CancellationToken ct)
     {
-        query = e.Value?.ToString() ?? "";
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            debouncer.Cancel();
-            results = [];
-            return;
-        }
-
-        // Debounced, so a lookup doesn't run per keystroke.
-        var term = query;
-        await debouncer.RunAsync(async ct =>
-        {
-            var matches = await ActorService.SearchActorsAsync(term, ct);
-            if (ct.IsCancellationRequested) return;
-            results = matches.Where(a => !ExcludedActorIds.Contains(a.Id)).ToList();
-        });
-    }
-
-    public void Dispose() => debouncer.Dispose();
-
-    private async Task AddAsync(int actorId)
-    {
-        debouncer.Cancel();
-        query = "";
-        results = [];
-        await OnAdd.InvokeAsync(actorId);
+        var matches = await ActorService.SearchActorsAsync(term, ct);
+        return matches.Where(a => !ExcludedActorIds.Contains(a.Id)).ToList();
     }
 }
