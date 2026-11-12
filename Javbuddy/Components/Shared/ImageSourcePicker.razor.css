@@ -1,0 +1,80 @@
+.upload-dropzone {
+    border: 2px dashed #454a5e;
+    border-radius: 6px;
+    padding: 1.75rem 1.5rem;
+    text-align: center;
+    background-color: var(--jb-dark-bg);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    position: relative;
+}
+
+.upload-dropzone:hover {
+    border-color: var(--jb-accent);
+    background-color: #1e2430;
+}
+
+.upload-dropzone-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.upload-icon {
+    color: var(--jb-accent);
+    margin-bottom: 0.75rem;
+}
+
+.upload-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    margin: 0.75rem 0;
+    color: var(--jb-dark-muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+.upload-divider::before,
+.upload-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid var(--jb-dark-border-strong);
+}
+
+.upload-divider span {
+    padding: 0 0.75rem;
+}
+
+.upload-url-section {
+    background-color: var(--jb-dark-bg);
+    border: 1px solid var(--jb-dark-border-strong);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+}
+
+.url-input {
+    background-color: #14161d;
+    border-color: var(--jb-dark-border-strong);
+    color: #ffffff;
+}
+
+.url-input:focus {
+    background-color: #14161d;
+    border-color: var(--jb-accent);
+    color: #ffffff;
+    box-shadow: 0 0 0 0.2rem rgba(47, 143, 214, 0.25);
+}
+
+.url-input::placeholder {
+    color: var(--jb-muted);
+}
+
+.fetch-btn {
+    min-width: 80px;
+}

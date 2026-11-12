@@ -1,0 +1,95 @@
+.cropper-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem 1.1rem;
+    margin-top: 0.75rem;
+}
+
+.ratio-group {
+    display: inline-flex;
+}
+
+.ratio-group .btn-tool {
+    border-radius: 0;
+    margin-left: -1px;
+}
+
+.ratio-group .btn-tool:first-child {
+    border-radius: 4px 0 0 4px;
+    margin-left: 0;
+}
+
+.ratio-group .btn-tool:last-child {
+    border-radius: 0 4px 4px 0;
+}
+
+.btn-tool {
+    background-color: #2b303c;
+    border: 1px solid var(--jb-dark-border-strong);
+    color: #cfd3de;
+    font-size: 0.8rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-tool.btn-icon {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+}
+
+.btn-tool:hover:not(:disabled) {
+    background-color: #35394a;
+    color: #ffffff;
+}
+
+.btn-tool:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-tool.active {
+    background-color: var(--jb-accent);
+    border-color: var(--jb-accent);
+    color: #ffffff;
+    position: relative;
+}
+
+.straighten-controls,
+.rotate-controls,
+.zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.zoom-controls,
+.straighten-controls {
+    flex: 1 1 160px;
+    min-width: 150px;
+}
+
+.slider-label {
+    font-size: 0.78rem;
+    color: var(--jb-dark-muted);
+    margin: 0;
+}
+
+.slider-value {
+    min-width: 2.8rem;
+    font-size: 0.78rem;
+    color: #cfd3de;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.zoom-slider,
+.straighten-slider {
+    flex: 1;
+    min-width: 60px;
+    cursor: pointer;
+}

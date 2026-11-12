@@ -1,0 +1,145 @@
+@* The "get me an image" half of the single-image dialogs (ActorImageUploadModal, MovieCoverCropModal):
+   a drop zone that takes a picked or dropped file (the full-size InputFile accepts drops natively), then
+   an "Import from URL" box. The picked bytes are raised through OnPicked; the dialog decides what to do
+   with them. Size and format of a local file are checked here, before any bytes are read; a URL import is
+   delegated to the caller's FetchAsync because each dialog's service owns its own download rules. *@
+
+<div class="upload-dropzone">
+    <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
+    <div class="upload-icon">
+        <svg viewBox="0 0 16 16" width="36" height="36" fill="currentColor" aria-hidden="true">
+            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+            <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+        </svg>
+    </div>
+    <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
+    <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
+</div>
+
+<div class="upload-divider" aria-hidden="true">
+    <span>OR</span>
+</div>
+
+<div class="upload-url-section">
+    <label class="form-label text-light small mb-1" for="@UrlInputId">Import from URL</label>
+    <div class="input-group">
+        <input id="@UrlInputId"
+               type="url"
+               class="form-control form-control-sm url-input"
+               placeholder="@UrlPlaceholder"
+               @bind="imageUrlInput"
+               @bind:event="oninput"
+               @onkeydown="HandleUrlKeyDown"
+               disabled="@fetchingUrl" />
+        <button type="button"
+                class="btn btn-primary btn-sm fetch-btn"
+                @onclick="FetchFromUrlAsync"
+                disabled="@(fetchingUrl || string.IsNullOrWhiteSpace(imageUrlInput))">
+            @(fetchingUrl ? "Fetching…" : "Fetch")
+        </button>
+    </div>
+</div>
+
+@code {
+    /// <summary>An image the user picked or imported: the bytes to work on and their content type.</summary>
+    public sealed record PickedImage(byte[] Bytes, string ContentType);
+
+    /// <summary>What a URL import came back with: the bytes, or the message to show instead.</summary>
+    public sealed record FetchResult(byte[]? Bytes, string? ContentType, string? ErrorMessage);
+
+    /// <summary>The input's id, so the label points at it and the dialog's tests/E2E can address it.</summary>
+    [Parameter, EditorRequired] public string UrlInputId { get; set; } = string.Empty;
+
+    [Parameter] public string UrlPlaceholder { get; set; } = "https://example.com/image.jpg";
+
+    /// <summary>Downloads the URL typed in the import box (the dialog's own service decides what is allowed).</summary>
+    [Parameter, EditorRequired] public Func<string, Task<FetchResult>> FetchAsync { get; set; } = default!;
+
+    /// <summary>Raised with the file or imported image once it has been read.</summary>
+    [Parameter] public EventCallback<PickedImage> OnPicked { get; set; }
+
+    /// <summary>Raised with a message when picking or importing fails, and with null when a new attempt
+    /// starts, so the dialog can clear the previous message.</summary>
+    [Parameter] public EventCallback<string?> OnError { get; set; }
+
+    /// <summary>Raised when a URL import starts and ends, for a dialog that must stay open meanwhile.</summary>
+    [Parameter] public EventCallback<bool> OnFetchingChanged { get; set; }
+
+    [Inject] private IServiceProvider Sp { get; set; } = default!;
+    private ImageUploadSettings UploadSettings => Sp.GetService<ImageUploadSettings>() ?? ImageUploadSettings.Default;
+
+    private string imageUrlInput = string.Empty;
+    private bool fetchingUrl;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        await OnError.InvokeAsync(null);
+        var file = e.File;
+        if (file is null) return;
+
+        if (file.Size > UploadSettings.MaxSizeBytes)
+        {
+            await OnError.InvokeAsync($"Image size exceeds {UploadSettings.MaxSizeMb} MB limit.");
+            return;
+        }
+
+        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
+        {
+            await OnError.InvokeAsync("Unsupported image format. Please select a JPEG, PNG, or WebP image.");
+            return;
+        }
+
+        try
+        {
+            using var stream = file.OpenReadStream(UploadSettings.MaxSizeBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType;
+            await OnPicked.InvokeAsync(new PickedImage(ms.ToArray(), contentType));
+        }
+        catch (Exception ex)
+        {
+            await OnError.InvokeAsync($"Error loading image: {ex.Message}");
+        }
+    }
+
+    private async Task HandleUrlKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !fetchingUrl && !string.IsNullOrWhiteSpace(imageUrlInput))
+        {
+            await FetchFromUrlAsync();
+        }
+    }
+
+    private async Task FetchFromUrlAsync()
+    {
+        if (string.IsNullOrWhiteSpace(imageUrlInput) || fetchingUrl) return;
+
+        fetchingUrl = true;
+        await OnFetchingChanged.InvokeAsync(true);
+        await OnError.InvokeAsync(null);
+
+        try
+        {
+            var result = await FetchAsync(imageUrlInput);
+            if (result.Bytes is null)
+            {
+                await OnError.InvokeAsync(result.ErrorMessage ?? "Failed to download image.");
+                return;
+            }
+
+            var contentType = string.IsNullOrWhiteSpace(result.ContentType) ? "image/jpeg" : result.ContentType;
+            await OnPicked.InvokeAsync(new PickedImage(result.Bytes, contentType));
+        }
+        catch (Exception ex)
+        {
+            await OnError.InvokeAsync($"Error downloading image: {ex.Message}");
+        }
+        finally
+        {
+            fetchingUrl = false;
+            await OnFetchingChanged.InvokeAsync(false);
+        }
+    }
+}
