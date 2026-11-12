@@ -197,9 +197,9 @@ else
             else
             {
                 <PosterGrid>
-                    @foreach (var entry in displayedFilmography)
+                    @for (var i = 0; i < displayedFilmography.Count; i++)
                     {
-                        <R18DevReleaseCard Release="entry" OnSearch="OpenSearchModal" />
+                        <R18DevReleaseCard @key="displayedKeys[i]" Release="displayedFilmography[i]" OnSearch="OpenSearchModal" />
                     }
                 </PosterGrid>
                 <ProwlarrSearchModal Code="@searchCode" Show="showSearchModal" OnClose="CloseSearchModal" OnMovieAdded="OnMovieAdded" />
@@ -228,6 +228,7 @@ else
     private int linkedMovieCount;
     private List<R18DevReleaseRow> rawFilmography = new();
     private List<R18DevReleaseRow> displayedFilmography = new();
+    private List<(string CanonicalKey, int Occurrence)> displayedKeys = new();
     private CancellationTokenSource? loadCts;
 
     private List<string> availableMakers = new();
@@ -300,6 +301,7 @@ else
         linkedMovieCount = 0;
         rawFilmography = new();
         displayedFilmography = new();
+        displayedKeys = new();
         availableMakers = new();
         availableYears = new();
         dumpAvailable = false;
@@ -488,6 +490,23 @@ else
         };
 
         displayedFilmography = working.ToList();
+        displayedKeys = UniqueKeys(displayedFilmography);
+    }
+
+    /// <summary>A stable @key per card: the release's canonical key, plus how many earlier cards share
+    /// it. The same release can appear several times while "Hide duplicates" is off, and Blazor throws
+    /// on two siblings with the same key.</summary>
+    private static List<(string CanonicalKey, int Occurrence)> UniqueKeys(IReadOnlyList<R18DevReleaseRow> rows)
+    {
+        var seen = new Dictionary<string, int>(StringComparer.Ordinal);
+        var keys = new List<(string, int)>(rows.Count);
+        foreach (var row in rows)
+        {
+            seen.TryGetValue(row.CanonicalKey, out var occurrence);
+            seen[row.CanonicalKey] = occurrence + 1;
+            keys.Add((row.CanonicalKey, occurrence));
+        }
+        return keys;
     }
 
     private void SetStatusFilter(StatusFilterOption? opt)
