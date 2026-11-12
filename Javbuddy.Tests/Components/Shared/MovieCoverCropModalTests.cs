@@ -568,15 +568,22 @@ public class MovieCoverCropModalTests : BunitContext
             .Add(m => m.Code, "IPX-535"));
         cut.WaitForAssertion(() => module.VerifyInvoke("initCropper"));
 
+        // The toolbar and Save stay disabled until the cropper is fully set up (after its last JS call), and a
+        // click on a disabled button does nothing: each step waits for that before clicking.
+        void WaitUntilIdle() => cut.WaitForAssertion(() => Assert.False(cut.Find(".crop-save-btn").HasAttribute("disabled")));
+
         // A 90° turn carries the angle read from the browser onto the reloaded cropper...
+        WaitUntilIdle();
         cut.Find(".rotate-right-btn").Click();
         cut.WaitForAssertion(() => Assert.Equal(1, module.Invocations.Count(i => i.Identifier == "setRotation")));
         Assert.Equal(-12.3, module.Invocations.Last(i => i.Identifier == "setRotation").Arguments[0]);
 
         // ...but switching source reloads the image and clears the fine angle (no setRotation for the new cropper).
+        WaitUntilIdle();
         cut.FindAll(".source-thumb").First(b => b.GetAttribute("title") == "Current Poster").Click();
         cut.WaitForAssertion(() => module.VerifyInvoke("initCropper", 3));
         cut.WaitForAssertion(() => Assert.Equal(3, module.Invocations.Count(i => i.Identifier == "bindControls")));
+        WaitUntilIdle();
         Assert.Equal(1, module.Invocations.Count(i => i.Identifier == "setRotation"));
 
         // Save asks the browser for the angle.

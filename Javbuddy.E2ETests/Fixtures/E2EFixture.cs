@@ -25,8 +25,17 @@ public sealed class E2EFixture : IAsyncLifetime
     public FakeJellyfinServer FakeJellyfin { get; } = new();
     public FakeQBittorrentServer FakeQBittorrent { get; } = new();
 
+    /// <summary>How long an <c>Expect(...)</c> assertion keeps polling before it fails. Playwright retries
+    /// the check until it passes, so this is a ceiling, not a wait: a fast run continues as soon as the
+    /// condition holds. Playwright's 5 s default was too short for a SignalR round trip on a loaded machine
+    /// (a "Play all" click took 6.7 s to open the player at load ~60), which failed tests whose condition
+    /// was right. An explicit <c>Timeout</c> on a call still wins.</summary>
+    public const float ExpectTimeoutMs = 15_000;
+
     public async Task InitializeAsync()
     {
+        Assertions.SetDefaultExpectTimeout(ExpectTimeoutMs);
+
         await Task.WhenAll(
             FakeJavinizer.StartAsync(),
             FakeProwlarr.StartAsync(),

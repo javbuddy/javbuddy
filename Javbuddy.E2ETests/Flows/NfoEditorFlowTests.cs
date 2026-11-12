@@ -403,6 +403,10 @@ public class NfoEditorFlowTests : IAsyncLifetime
         await page.GetByPlaceholder("Filter by code or title…").FillAsync(movieB.Code!);
         await page.Locator($"a[href='/movies/{movieB.Code}']").ClickAsync();
 
+        // Enhanced navigation shows movie B's prerendered page before its circuit takes over, and a click in
+        // that window is dropped (#155): wait for B's page to be the live one before clicking its badge.
+        await Expect(page.GetByRole(AriaRole.Heading, new() { Level = 1 })).ToContainTextAsync(movieB.Code!);
+        await conflictBadge.WaitForInteractiveAsync();
         await conflictBadge.ClickAsync();
 
         // Before the fix: this crashed the circuit (JSException: "ModelService: Cannot add model

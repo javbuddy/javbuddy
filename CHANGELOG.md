@@ -22,6 +22,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Movie Detail's badges wait until the page is ready.** Right after opening a movie from another page, the page shows briefly before it can respond, and a click on the **NFO** conflict, **Blacklisted from Cleanup** or content-type badge in that moment did nothing. These badges are now disabled for that moment, like the toolbar buttons already were. (#155)
 - **Dropdowns on the Movies, Actors, Actor Detail, Actor Photos, Missing and Scenes pages close the same way.** Open **Columns** on the Actors page and then **Filter**, and Columns used to stay open beside it; opening one dropdown now closes the others. A click outside a dropdown or Escape closes it too (Escape puts keyboard focus back on its button), where the Actors and Movies **Sort** dropdowns closed only when they lost focus, after a short delay, and the Movie Detail **Primary version** menu ignored Escape.
 - **Moving between pages now moves keyboard focus and screen readers to the new page's heading everywhere.** Discover, Settings, System > Backups and the Not Found page had no top-level heading, so after navigating to them focus stayed on the link that was clicked; System > Status and Tasks had several, and now have one. These pages look the same as before.
 - **The Missing heading on an actor's Missing page matches the Missing page's.** It was larger and bold; it now uses the same size and weight as the other page titles.

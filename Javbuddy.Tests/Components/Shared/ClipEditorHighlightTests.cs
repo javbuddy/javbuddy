@@ -70,10 +70,11 @@ public class ClipEditorHighlightTests : ClipEditorTestBase
         cut.Find(".highlight-editor-title-input").Input("Tease");
         cut.Find(".highlight-editor-form").Submit();
 
+        // Saving awaits the service and then reloads; wait for the form to close before reading what was stored.
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".highlight-editor-form")));
         var stored = Assert.Single(await StoredAsync());
         Assert.Equal((125.5, 150d, "Tease"), (stored.StartSeconds, stored.EndSeconds, stored.Title));
-        Assert.Empty(cut.FindAll(".highlight-editor-form"));
-        Assert.Single(reported!);
+        cut.WaitForAssertion(() => Assert.Single(reported!));
     }
 
     [Fact]
@@ -130,19 +131,26 @@ public class ClipEditorHighlightTests : ClipEditorTestBase
     {
         await highlightService.AddHighlightAsync(movieId, 10, 20, null);
         var cut = RenderEditor();
+        // Each step awaits a service call and re-renders when it returns, so wait for the markup to show the
+        // result (polling until it does) before reading the database or clicking the next button.
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".highlight-editor-item")));
 
         cut.Find(".highlight-editor-fav-btn").Click();
+        cut.WaitForAssertion(() => Assert.Equal("true", cut.Find(".highlight-editor-fav-btn").GetAttribute("aria-pressed")));
         Assert.True((await StoredAsync()).Single().IsFavorite);
-        Assert.Equal("true", cut.Find(".highlight-editor-fav-btn").GetAttribute("aria-pressed"));
 
+        cut.WaitForAssertion(() => Assert.False(cut.Find(".highlight-editor-delete-btn").HasAttribute("disabled")));
         cut.Find(".highlight-editor-delete-btn").Click();
+        cut.WaitForAssertion(() => Assert.Equal("Delete \"Highlight 1\"?", cut.Find(".delete-confirm-dialog h2").TextContent));
         Assert.Single(await StoredAsync());
-        Assert.Equal("Delete \"Highlight 1\"?", cut.Find(".delete-confirm-dialog h2").TextContent);
 
         cut.Find(".delete-confirm-confirm-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+            Assert.Empty(cut.FindAll(".highlight-editor-item"));
+        });
         Assert.Empty(await StoredAsync());
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
-        Assert.Empty(cut.FindAll(".highlight-editor-item"));
     }
 
     [Fact]
