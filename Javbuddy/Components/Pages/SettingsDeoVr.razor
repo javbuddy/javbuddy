@@ -1,4 +1,6 @@
 @page "/settings/deovr"
+@using System.Text.Json
+@using Javbuddy.Components.Pages.MoviesSections
 @using Javbuddy.Models
 @using Javbuddy.Services.DeoVr
 @inject IDeoVrSettingsService SettingsService
@@ -108,59 +110,14 @@ else
                                value="@editor.Name" @oninput="e => editor.Name = e.Value?.ToString() ?? string.Empty" />
                     </div>
 
-                    <MovieFilterToolbar ShowStatusFilter="false"
-                                        LibraryNames="@(summary?.LibraryNames ?? [])"
-                                        LibraryFilter="@editor.Library"
-                                        OnLibraryFilterChanged="l => UpdateAsync(() => editor.Library = l)"
-                                        TextFilter="@editor.Text"
-                                        OnTextFilterChanged="t => UpdateAsync(() => editor.Text = t)"
-                                        ResolutionFilter="@editor.Resolutions"
-                                        OnToggleResolution="o => UpdateAsync(() => Toggle(editor.Resolutions, o))"
-                                        ScanTypeFilter="@editor.ScanTypes"
-                                        OnToggleScanType="o => UpdateAsync(() => Toggle(editor.ScanTypes, o))"
-                                        ContentTypeFilter="@editor.ContentTypes"
-                                        OnToggleContentType="o => UpdateAsync(() => Toggle(editor.ContentTypes, o))"
-                                        NfoDriftFilter="@editor.NfoDriftKinds"
-                                        OnToggleNfoDrift="o => UpdateAsync(() => Toggle(editor.NfoDriftKinds, o))"
-                                        AvailableCodecs="@(summary?.Codecs ?? [])"
-                                        CodecFilter="@editor.Codecs"
-                                        OnToggleCodec="o => UpdateAsync(() => Toggle(editor.Codecs, o))"
-                                        AvailableStudios="@(summary?.Studios ?? [])"
-                                        StudioFilter="@editor.Studios"
-                                        OnToggleStudio="o => UpdateAsync(() => editor.Studios.CycleInclusion(editor.ExcludedStudios, o))"
-                                        OnSelectAllStudios="all => UpdateAsync(() => SelectAll(editor.Studios, editor.ExcludedStudios, all))"
-                                        OnSelectNoneStudios="() => UpdateAsync(() => SelectNone(editor.Studios, editor.ExcludedStudios))"
+                    <MovieFilterToolbar State="editor.Filter"
+                                        OnChanged="OnFilterChangedAsync"
+                                        Choices="FilterChoices"
+                                        ShowStatusFilter="false"
                                         Excludable="true"
-                                        ExcludedStudioFilter="@editor.ExcludedStudios"
-                                        ExcludedGenreFilter="@editor.ExcludedGenres"
-                                        ExcludedActorFilter="@editor.ExcludedActors"
-                                        AvailableGenres="@(summary?.Genres ?? [])"
-                                        GenreFilter="@editor.Genres"
-                                        OnToggleGenre="o => UpdateAsync(() => editor.Genres.CycleInclusion(editor.ExcludedGenres, o))"
-                                        OnSelectAllGenres="all => UpdateAsync(() => SelectAll(editor.Genres, editor.ExcludedGenres, all))"
-                                        OnSelectNoneGenres="() => UpdateAsync(() => SelectNone(editor.Genres, editor.ExcludedGenres))"
-                                        FeatureFilter="@editor.Features"
-                                        OnToggleFeature="o => UpdateAsync(() => Toggle(editor.Features, o))"
-                                        CountOptions="@(summary?.Counts ?? MovieCountOptions.None)"
-                                        CountSelection="@editor.Counts"
-                                        OnCountsChanged="c => UpdateAsync(() => editor.Counts = MovieFilterOptions.MergeCounts(editor.Counts, c, summary?.Counts ?? MovieCountOptions.None))"
-                                        RangeOptions="@(summary?.Ranges ?? MovieRangeOptions.None)"
-                                        RangeSelection="@editor.Ranges"
-                                        OnRangesChanged="r => UpdateAsync(() => editor.Ranges = MovieFilterOptions.MergeRanges(editor.Ranges, r, summary?.Ranges ?? MovieRangeOptions.None))"
+                                        ExcludableContentTypes="false"
                                         ShowActorAttributes="true"
-                                        ActorAttributeOptions="@(summary?.ActorAttributes ?? ActorAttributeOptions.None)"
-                                        ActorAttributeSelection="@editor.ActorAttributes"
-                                        OnActorAttributesChanged="a => UpdateAsync(() => editor.ActorAttributes = MovieFilterOptions.MergeActorAttributes(editor.ActorAttributes, a, summary?.ActorAttributes ?? ActorAttributeOptions.None))"
-                                        AvailableActors="@actorOptions"
-                                        ActorFilter="@editor.Actors"
-                                        OnToggleActor="id => UpdateAsync(() => editor.Actors.CycleInclusion(editor.ExcludedActors, id))"
-                                        OnSelectAllActors="ids => UpdateAsync(() => SelectAll(editor.Actors, editor.ExcludedActors, ids))"
-                                        OnSelectNoneActors="() => UpdateAsync(() => SelectNone(editor.Actors, editor.ExcludedActors))"
-                                        SortField="@editor.SortField"
-                                        SortDescending="@editor.SortDescending"
-                                        OnSortChanged="c => { editor.SortField = c.Field; editor.SortDescending = c.Descending; }"
-                                        HasActiveFilters="@editor.HasFilters"
-                                        OnResetFilters="() => UpdateAsync(editor.ClearFilters)" />
+                                        OnResetFilters="() => UpdateAsync(editor.Filter.Clear)" />
 
                     <p class="deovr-match-count">
                         @(matchCount is null ? "Counting…" : $"{matchCount} Got movie{(matchCount == 1 ? "" : "s")} with a local file match.")
@@ -198,6 +155,7 @@ else
     private MovieLibraryOptions? summary;
     private IReadOnlyList<MovieActorOption> actorOptions = [];
     private int? matchCount;
+    private string? countedFilter;
     private string? editorError;
     private DeoVrGroupDefinition? deleting;
     private bool busy;
@@ -253,24 +211,16 @@ else
         await RefreshMatchesAsync();
     }
 
-    private static void Toggle<T>(HashSet<T> set, T value)
+    // The toolbar edits editor.Filter in place. A sort change doesn't change what DeoVR would list, so it doesn't recount.
+    private async Task OnFilterChangedAsync()
     {
-        if (!set.Remove(value)) set.Add(value);
+        if (editor is null || JsonSerializer.Serialize(editor.ToFilter()) == countedFilter) return;
+        await RefreshMatchesAsync();
     }
 
-    // Select All includes what's visible, taking it out of the excluded set; None clears both.
-    private static void SelectAll<T>(HashSet<T> included, HashSet<T> excluded, IEnumerable<T> values)
-    {
-        var list = values.ToList();
-        included.UnionWith(list);
-        excluded.ExceptWith(list);
-    }
-
-    private static void SelectNone<T>(HashSet<T> included, HashSet<T> excluded)
-    {
-        included.Clear();
-        excluded.Clear();
-    }
+    // The library's options, with the actors that have a file to list (and no actor tags, which DeoVR groups can't use).
+    private MovieFilterChoices FilterChoices => (summary is null ? MovieFilterChoices.None : MovieFilterChoices.From(summary))
+        with { Actors = actorOptions, ActorTags = [] };
 
     // The filter options come from the grid's library options; the match count is what DeoVR would list
     // (Got movies with a local file only).
@@ -278,6 +228,7 @@ else
     {
         if (editor is null) return;
         var filter = editor.ToFilter();
+        countedFilter = JsonSerializer.Serialize(filter);
         matchCount = null;
         summary = await GridQuery.GetLibraryOptionsAsync();
         matchCount = (await GridQuery.GetWithFilesAsync(filter, new MovieGridSort("added", true, 0))).Count;
@@ -295,7 +246,7 @@ else
         busy = true;
         try
         {
-            await GroupService.SaveAsync(editor.Id, editor.Name, editor.ToFilter(), editor.SortField, editor.SortDescending);
+            await GroupService.SaveAsync(editor.Id, editor.Name, editor.ToFilter(), editor.Filter.SortField, editor.Filter.SortDescending);
             groups = await GroupService.ListAsync();
             editor = null;
             editorError = null;
@@ -341,107 +292,60 @@ else
         }
     }
 
-    /// <summary>The group being added or edited, in the toolbar's own shapes.</summary>
+    /// <summary>The group being added or edited. Its filter is the toolbar's own state, mapped to and from the saved
+    /// <see cref="MovieGridFilter"/> (the DeoVR lists have no status, code prefix, excluded content types or actor tags).</summary>
     private sealed class GroupEditor
     {
         public int Id { get; init; }
         public string OriginalName { get; init; } = string.Empty;
         public string Name { get; set; } = string.Empty;
-        public string? Library { get; set; }
-        public string Text { get; set; } = string.Empty;
-        public HashSet<MovieResolutionFilterOption> Resolutions { get; init; } = [];
-        public HashSet<MovieScanTypeFilterOption> ScanTypes { get; init; } = [];
-        public HashSet<MovieContentType> ContentTypes { get; init; } = [];
-        public HashSet<NfoDriftKind> NfoDriftKinds { get; init; } = [];
-        public HashSet<string> Codecs { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-        public HashSet<string> Studios { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-        public HashSet<string> Genres { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-        public HashSet<MovieFeatureFilterOption> Features { get; init; } = [];
-        public HashSet<int> Actors { get; init; } = [];
-        public HashSet<string> ExcludedStudios { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-        public HashSet<string> ExcludedGenres { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-        public HashSet<int> ExcludedActors { get; init; } = [];
-        public ActorAttributeSelection ActorAttributes { get; set; } = ActorAttributeSelection.Empty;
-        public MovieCountSelection Counts { get; set; } = MovieCountSelection.Empty;
-        public MovieRangeSelection Ranges { get; set; } = MovieRangeSelection.Empty;
-        public string SortField { get; set; } = "added";
-        public bool SortDescending { get; set; } = true;
-
-        public bool HasFilters =>
-            !string.IsNullOrEmpty(Library) || !string.IsNullOrWhiteSpace(Text)
-            || Resolutions.Count + ScanTypes.Count + ContentTypes.Count + NfoDriftKinds.Count + Codecs.Count + Studios.Count + Genres.Count + Features.Count + Actors.Count > 0
-            || ExcludedStudios.Count + ExcludedGenres.Count + ExcludedActors.Count > 0
-            || !ActorAttributes.IsEmpty || !Counts.IsEmpty || !Ranges.IsEmpty;
-
-        public void ClearFilters()
-        {
-            Library = null;
-            Text = string.Empty;
-            Resolutions.Clear();
-            ScanTypes.Clear();
-            ContentTypes.Clear();
-            NfoDriftKinds.Clear();
-            Codecs.Clear();
-            Studios.Clear();
-            Genres.Clear();
-            Features.Clear();
-            Actors.Clear();
-            ExcludedStudios.Clear();
-            ExcludedGenres.Clear();
-            ExcludedActors.Clear();
-            ActorAttributes = ActorAttributeSelection.Empty;
-            Counts = MovieCountSelection.Empty;
-            Ranges = MovieRangeSelection.Empty;
-        }
+        public MovieGridFilterState Filter { get; } = new();
 
         // No status: the DeoVR lists only ever hold Got movies (MovieGridQueryService.GetWithFilesAsync).
         public MovieGridFilter ToFilter() => new(
-            Library: string.IsNullOrEmpty(Library) ? null : Library,
-            Resolutions: Resolutions.ToList(),
-            ScanTypes: ScanTypes.ToList(),
-            ContentTypes: ContentTypes.ToList(),
-            Codecs: Codecs.ToList(),
-            Studios: Studios.ToList(),
-            Genres: Genres.ToList(),
-            Features: Features.ToList(),
-            Text: string.IsNullOrWhiteSpace(Text) ? null : Text.Trim(),
-            NfoDriftKinds: NfoDriftKinds.ToList(),
-            ActorAttributes: ActorAttributes,
-            ActorIds: Actors.ToList(),
-            Counts: Counts.IsEmpty ? null : Counts,
-            Ranges: Ranges.IsEmpty ? null : Ranges,
-            ExcludedStudios: ExcludedStudios.ToList(),
-            ExcludedGenres: ExcludedGenres.ToList(),
-            ExcludedActorIds: ExcludedActors.ToList());
+            Library: string.IsNullOrEmpty(Filter.Library) ? null : Filter.Library,
+            Resolutions: Filter.Resolutions.ToList(),
+            ScanTypes: Filter.ScanTypes.ToList(),
+            ContentTypes: Filter.ContentTypes.ToList(),
+            Codecs: Filter.Codecs.ToList(),
+            Studios: Filter.Studios.ToList(),
+            Genres: Filter.Genres.ToList(),
+            Features: Filter.Features.ToList(),
+            Text: string.IsNullOrWhiteSpace(Filter.Text) ? null : Filter.Text.Trim(),
+            NfoDriftKinds: Filter.NfoDriftKinds.ToList(),
+            ActorAttributes: Filter.ActorAttributes,
+            ActorIds: Filter.ActorIds.ToList(),
+            Counts: Filter.Counts.IsEmpty ? null : Filter.Counts,
+            Ranges: Filter.Ranges.IsEmpty ? null : Filter.Ranges,
+            ExcludedStudios: Filter.ExcludedStudios.ToList(),
+            ExcludedGenres: Filter.ExcludedGenres.ToList(),
+            ExcludedActorIds: Filter.ExcludedActorIds.ToList());
 
         public static GroupEditor From(DeoVrGroupDefinition group)
         {
             var f = group.Filter;
-            return new GroupEditor
-            {
-                Id = group.Id,
-                OriginalName = group.Name,
-                Name = group.Name,
-                Library = f.Library,
-                Text = f.Text ?? string.Empty,
-                Resolutions = [.. f.Resolutions ?? []],
-                ScanTypes = [.. f.ScanTypes ?? []],
-                ContentTypes = [.. f.ContentTypes ?? []],
-                NfoDriftKinds = [.. f.NfoDriftKinds ?? []],
-                Codecs = new(f.Codecs ?? [], StringComparer.OrdinalIgnoreCase),
-                Studios = new(f.Studios ?? [], StringComparer.OrdinalIgnoreCase),
-                Genres = new(f.Genres ?? [], StringComparer.OrdinalIgnoreCase),
-                Features = [.. f.Features ?? []],
-                Counts = f.Counts ?? MovieCountSelection.Empty,
-                Actors = [.. f.ActorIds ?? []],
-                ExcludedStudios = new(f.ExcludedStudios ?? [], StringComparer.OrdinalIgnoreCase),
-                ExcludedGenres = new(f.ExcludedGenres ?? [], StringComparer.OrdinalIgnoreCase),
-                ExcludedActors = [.. f.ExcludedActorIds ?? []],
-                Ranges = f.Ranges ?? MovieRangeSelection.Empty,
-                ActorAttributes = f.ActorAttributes ?? ActorAttributeSelection.Empty,
-                SortField = group.Sort.Field,
-                SortDescending = group.Sort.Descending,
-            };
+            var editor = new GroupEditor { Id = group.Id, OriginalName = group.Name, Name = group.Name };
+            var state = editor.Filter;
+            state.Library = f.Library;
+            state.Text = f.Text ?? string.Empty;
+            state.Resolutions.UnionWith(f.Resolutions ?? []);
+            state.ScanTypes.UnionWith(f.ScanTypes ?? []);
+            state.ContentTypes.UnionWith(f.ContentTypes ?? []);
+            state.NfoDriftKinds.UnionWith(f.NfoDriftKinds ?? []);
+            state.Codecs.UnionWith(f.Codecs ?? []);
+            state.Studios.UnionWith(f.Studios ?? []);
+            state.Genres.UnionWith(f.Genres ?? []);
+            state.Features.UnionWith(f.Features ?? []);
+            state.Counts = f.Counts ?? MovieCountSelection.Empty;
+            state.ActorIds.UnionWith(f.ActorIds ?? []);
+            state.ExcludedStudios.UnionWith(f.ExcludedStudios ?? []);
+            state.ExcludedGenres.UnionWith(f.ExcludedGenres ?? []);
+            state.ExcludedActorIds.UnionWith(f.ExcludedActorIds ?? []);
+            state.Ranges = f.Ranges ?? MovieRangeSelection.Empty;
+            state.ActorAttributes = f.ActorAttributes ?? ActorAttributeSelection.Empty;
+            state.SortField = group.Sort.Field;
+            state.SortDescending = group.Sort.Descending;
+            return editor;
         }
     }
 }

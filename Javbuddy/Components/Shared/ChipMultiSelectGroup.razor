@@ -1,7 +1,4 @@
-<button type="button" class="sort-dropdown-item @(SelectedCount > 0 ? "active" : "")" @onclick="ToggleExpanded">
-    <span>@GroupLabel@(SelectedCount > 0 ? $" ({SelectedCount})" : "")</span>
-    <span class="sort-dropdown-arrow">@(expanded ? "▲" : "▼")</span>
-</button>
+<FilterGroupHeader Text="@($"{GroupLabel}{(SelectedCount > 0 ? $" ({SelectedCount})" : "")}")" Active="SelectedCount > 0" Expanded="expanded" OnToggle="ToggleExpanded" />
 @if (expanded)
 {
     <div class="multiselect-actions-row">

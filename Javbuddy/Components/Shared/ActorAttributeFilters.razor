@@ -9,16 +9,7 @@
     <ChipMultiSelectGroup GroupLabel="Transgender" Options="@TransgenderOptions" ShowSelectAll="false"
                           OnSelectNone="SelectNoTransgenderAsync" />
 }
-@foreach (var row in Rows)
-{
-    @if (row.Bounds is { } bounds)
-    {
-        <RangeFilter @key="row.Label" Label="@row.Label" Unit="@row.Unit"
-                     BoundsMin="bounds.Min" BoundsMax="bounds.Max"
-                     SelectedMin="@(row.Selected.Min ?? bounds.Min)" SelectedMax="@(row.Selected.Max ?? bounds.Max)"
-                     OnRangeCommitted="r => CommitRangeAsync(row, r)" />
-    }
-}
+<RangeFilterRows Rows="Rows" Selection="Selection" SelectionChanged="SelectionChanged" />
 
 @code {
     /// <summary>The Actress Attributes filter groups shared by the Movies filter toolbar and the
@@ -28,9 +19,7 @@
     [Parameter, EditorRequired] public ActorAttributeSelection Selection { get; set; } = ActorAttributeSelection.Empty;
     [Parameter] public EventCallback<ActorAttributeSelection> SelectionChanged { get; set; }
 
-    private sealed record Row(string Label, string Unit, RangeBounds? Bounds, IntRange Selected, Func<ActorAttributeSelection, IntRange, ActorAttributeSelection> With);
-
-    private IEnumerable<Row> Rows =>
+    private IEnumerable<RangeRow<ActorAttributeSelection>> Rows =>
     [
         new("Height", "cm", Options.Height, Selection.Height, (s, r) => s with { Height = r }),
         new("Bust", "cm", Options.Bust, Selection.Bust, (s, r) => s with { Bust = r }),
@@ -70,12 +59,4 @@
     private Task SelectAllCupsAsync() => SelectionChanged.InvokeAsync(Selection with { CupSizes = Options.CupSizes.ToList() });
 
     private Task SelectNoCupsAsync() => SelectionChanged.InvokeAsync(Selection with { CupSizes = [] });
-
-    // A thumb at its end stop means "no limit" on that side, so an actress added later beyond today's extremes isn't excluded.
-    private Task CommitRangeAsync(Row row, (int Min, int Max) range)
-    {
-        var bounds = row.Bounds!;
-        var next = new IntRange(range.Min <= bounds.Min ? null : range.Min, range.Max >= bounds.Max ? null : range.Max);
-        return SelectionChanged.InvokeAsync(row.With(Selection, next));
-    }
 }

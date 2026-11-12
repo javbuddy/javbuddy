@@ -244,53 +244,11 @@ else
                         }
                         else
                         {
-                            <MovieFilterToolbar TotalCount="@StatusCounts.Total"
-                                                MissingCount="@StatusCounts.Missing"
-                                                GotCount="@StatusCounts.Got"
-                                                StatusFilter="@filters.Status"
-                                                OnStatusFilterChanged="status => Change(() => filters.Status = status)"
-                                                LibraryNames="@libraryNames"
-                                                LibraryFilter="@filters.Library"
-                                                OnLibraryFilterChanged="library => Change(() => filters.Library = library)"
-                                                TextFilter="@filters.Text"
-                                                OnTextFilterChanged="text => Change(() => filters.Text = text)"
-                                                ResolutionFilter="@filters.Resolutions"
-                                                OnToggleResolution="bucket => Change(() => filters.Resolutions.Toggle(bucket))"
-                                                ScanTypeFilter="@filters.ScanTypes"
-                                                OnToggleScanType="scanType => Change(() => filters.ScanTypes.Toggle(scanType))"
-                                                ContentTypeFilter="@filters.ContentTypes"
-                                                ExcludedContentTypeFilter="@filters.ExcludedContentTypes"
-                                                OnToggleContentType="type => Change(() => filters.ContentTypes.CycleInclusion(filters.ExcludedContentTypes, type))"
-                                                NfoDriftFilter="@filters.NfoDriftKinds"
-                                                OnToggleNfoDrift="kind => Change(() => filters.NfoDriftKinds.Toggle(kind))"
-                                                AvailableCodecs="@availableCodecs"
-                                                CodecFilter="@filters.Codecs"
-                                                OnToggleCodec="codec => Change(() => filters.Codecs.Toggle(codec))"
-                                                AvailableStudios="@availableStudios"
-                                                StudioFilter="@filters.Studios"
-                                                OnToggleStudio="studio => Change(() => filters.Studios.CycleInclusion(filters.ExcludedStudios, studio))"
-                                                OnSelectAllStudios="studios => Change(() => MovieGridFilterState.SelectAll(filters.Studios, filters.ExcludedStudios, studios))"
-                                                OnSelectNoneStudios="() => Change(() => MovieGridFilterState.SelectNone(filters.Studios, filters.ExcludedStudios))"
+                            <MovieFilterToolbar State="filters"
+                                                OnChanged="OnFiltersChanged"
+                                                Choices="FilterChoices"
+                                                StatusCounts="@(new MovieStatusCounts(StatusCounts.Total, StatusCounts.Missing, StatusCounts.Got))"
                                                 Excludable="true"
-                                                ExcludedStudioFilter="@filters.ExcludedStudios"
-                                                ExcludedGenreFilter="@filters.ExcludedGenres"
-                                                AvailableGenres="@availableGenres"
-                                                GenreFilter="@filters.Genres"
-                                                OnToggleGenre="genre => Change(() => filters.Genres.CycleInclusion(filters.ExcludedGenres, genre))"
-                                                OnSelectAllGenres="genres => Change(() => MovieGridFilterState.SelectAll(filters.Genres, filters.ExcludedGenres, genres))"
-                                                OnSelectNoneGenres="() => Change(() => MovieGridFilterState.SelectNone(filters.Genres, filters.ExcludedGenres))"
-                                                FeatureFilter="@filters.Features"
-                                                OnToggleFeature="feature => Change(() => filters.Features.Toggle(feature))"
-                                                CountOptions="@countOptions"
-                                                CountSelection="@filters.Counts"
-                                                OnCountsChanged="edited => Change(() => filters.Counts = MovieFilterOptions.MergeCounts(filters.Counts, edited, countOptions))"
-                                                RangeOptions="@rangeOptions"
-                                                RangeSelection="@filters.Ranges"
-                                                OnRangesChanged="edited => Change(() => filters.Ranges = MovieFilterOptions.MergeRanges(filters.Ranges, edited, rangeOptions))"
-                                                SortField="@filters.SortField"
-                                                SortDescending="@filters.SortDescending"
-                                                OnSortChanged="SetSort"
-                                                HasActiveFilters="@filters.HasActiveFilters"
                                                 OnResetFilters="ResetFilters" />
 
                             @if (!DisplayedMovies.Any())
@@ -526,7 +484,7 @@ else
     // The filtered, counted and sorted movies are worked out once per change to the filters, sort or loaded
     // movies, not once per use: the markup reads the counts and the list several times a render, and every
     // read used to filter and sort the whole filmography again. Everything that changes the view goes through
-    // Change() (or marks the view stale itself), so no per-read comparison of the filter state is needed.
+    // Change() or the toolbar's OnFiltersChanged (or marks the view stale itself), so no per-read comparison of the filter state is needed.
     private bool viewStale = true;
     private int viewVersion;
     private List<Movie> displayedMovies = new();
@@ -612,12 +570,18 @@ else
 
     private void ResetFilters() => Change(filters.Clear);
 
-    private void SetSort(MovieSortChange change) => Change(() =>
+    // The toolbar edits the filters and sort in place; only the cached view needs to be told.
+    private void OnFiltersChanged() => viewStale = true;
+
+    private MovieFilterChoices FilterChoices => new()
     {
-        filters.SortField = change.Field;
-        filters.SortDescending = change.Descending;
-        if (change.RandomSortSeed.HasValue) filters.RandomSortSeed = change.RandomSortSeed.Value;
-    });
+        LibraryNames = libraryNames,
+        Codecs = availableCodecs,
+        Studios = availableStudios,
+        Genres = availableGenres,
+        Counts = countOptions,
+        Ranges = rangeOptions,
+    };
 
     private async Task RefreshMetadata()
     {

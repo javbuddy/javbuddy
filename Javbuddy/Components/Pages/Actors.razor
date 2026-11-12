@@ -49,59 +49,17 @@ else
                                 ShowMenu="showFilterDropdown"
                                 OnToggle="ToggleFilterDropdown"
                                 OnClose="CloseDropdowns">
-                <button type="button" class="sort-dropdown-item @(filter.Movies != ActorMovieFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CycleMovies)">
-                    <span>@filter.MovieFilterLabel</span>
-                    @if (filter.Movies != ActorMovieFilter.All)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
-                <button type="button" class="sort-dropdown-item @(filter.Photo != ActorPhotoFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CyclePhoto)">
-                    <span>@filter.PhotoFilterLabel</span>
-                    @if (filter.Photo != ActorPhotoFilter.All)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
-                <button type="button" class="sort-dropdown-item @(filter.Images != ActorImageFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CycleImages)">
-                    <span>@filter.ImageFilterLabel</span>
-                    @if (filter.Images != ActorImageFilter.All)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
-                <button type="button" class="sort-dropdown-item @(filter.Transgender != ActorTransgenderFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CycleTransgender)">
-                    <span>@filter.TransgenderFilterLabel</span>
-                    @if (filter.Transgender != ActorTransgenderFilter.All)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
+                <DropdownToggleItem Label="@filter.MovieFilterLabel" Active="@(filter.Movies != ActorMovieFilter.All)" OnClick="() => ApplyFilterAsync(filter.CycleMovies)" />
+                <DropdownToggleItem Label="@filter.PhotoFilterLabel" Active="@(filter.Photo != ActorPhotoFilter.All)" OnClick="() => ApplyFilterAsync(filter.CyclePhoto)" />
+                <DropdownToggleItem Label="@filter.ImageFilterLabel" Active="@(filter.Images != ActorImageFilter.All)" OnClick="() => ApplyFilterAsync(filter.CycleImages)" />
+                <DropdownToggleItem Label="@filter.TransgenderFilterLabel" Active="@(filter.Transgender != ActorTransgenderFilter.All)" OnClick="() => ApplyFilterAsync(filter.CycleTransgender)" />
                 <div class="sort-dropdown-divider"></div>
                 @if (jellyfinEnabled)
                 {
-                    <button type="button" class="sort-dropdown-item @(filter.JellyfinLinkedOnly ? "active" : "")" @onclick="() => ApplyFilterAsync(() => filter.JellyfinLinkedOnly = !filter.JellyfinLinkedOnly)">
-                        <span>Linked to Jellyfin</span>
-                        @if (filter.JellyfinLinkedOnly)
-                        {
-                            <span class="ms-2">✓</span>
-                        }
-                    </button>
+                    <DropdownToggleItem Label="Linked to Jellyfin" Active="@(filter.JellyfinLinkedOnly)" OnClick="() => ApplyFilterAsync(() => filter.JellyfinLinkedOnly = !filter.JellyfinLinkedOnly)" />
                 }
-                <button type="button" class="sort-dropdown-item @(filter.FavoritesOnly ? "active" : "")" @onclick="() => ApplyFilterAsync(() => filter.FavoritesOnly = !filter.FavoritesOnly)">
-                    <span>Favorites only</span>
-                    @if (filter.FavoritesOnly)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
-                <button type="button" class="sort-dropdown-item @(filter.Status != ActorStatusFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CycleStatus)">
-                    <span>@filter.StatusFilterLabel</span>
-                    @if (filter.Status != ActorStatusFilter.All)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
+                <DropdownToggleItem Label="Favorites only" Active="@(filter.FavoritesOnly)" OnClick="() => ApplyFilterAsync(() => filter.FavoritesOnly = !filter.FavoritesOnly)" />
+                <DropdownToggleItem Label="@filter.StatusFilterLabel" Active="@(filter.Status != ActorStatusFilter.All)" OnClick="() => ApplyFilterAsync(filter.CycleStatus)" />
                 <div class="sort-dropdown-divider"></div>
                 <MultiSelectFilterGroup GroupLabel="Content Type" Options="@ContentTypeFilterOptions" Excludable="true" />
                 <ChipMultiSelectGroup GroupLabel="Cup Size" Options="@CupSizeFilterOptions" OnSelectAll="() => ApplyFilterAsync(() => filter.CupSizes.UnionWith(availableCupSizes))" OnSelectNone="() => ApplyFilterAsync(filter.CupSizes.Clear)" />
@@ -148,13 +106,7 @@ else
                         @foreach (var column in ActorCardText.TableColumns.Where(c => c.Optional))
                         {
                             var shown = IsColumnVisible(column);
-                            <button type="button" class="sort-dropdown-item @(shown ? "active" : "")" @onclick="() => ToggleColumn(column.Key)">
-                                <span>@column.Label</span>
-                                @if (shown)
-                                {
-                                    <span class="ms-2">✓</span>
-                                }
-                            </button>
+                            <DropdownToggleItem Label="@column.Label" Active="@(shown)" OnClick="() => ToggleColumn(column.Key)" />
                         }
                     </DropdownMenuButton>
                 </div>

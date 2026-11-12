@@ -1,0 +1,25 @@
+@typeparam TSelection
+
+@foreach (var row in Rows)
+{
+    @if (row.Bounds is { } bounds)
+    {
+        <RangeFilter @key="row.Label" Label="@row.Label" Unit="@row.Unit"
+                     BoundsMin="bounds.Min" BoundsMax="bounds.Max"
+                     SelectedMin="@(row.Selected.Min ?? bounds.Min)" SelectedMax="@(row.Selected.Max ?? bounds.Max)"
+                     OnRangeCommitted="r => CommitAsync(row, r)" />
+    }
+}
+
+@code {
+    /// <summary>A <see cref="RangeFilter"/> per row that has bounds, committing an edit as a modified copy of
+    /// <see cref="Selection"/> through <see cref="SelectionChanged"/>. The base of <c>MovieRangeFilters</c>,
+    /// <c>MovieCountFilters</c> and <c>ActorAttributeFilters</c>, which only say which rows they have. The rows are keyed
+    /// by label so a slider stays expanded across re-renders.</summary>
+    [Parameter, EditorRequired] public IEnumerable<RangeRow<TSelection>> Rows { get; set; } = [];
+    [Parameter, EditorRequired] public TSelection Selection { get; set; } = default!;
+    [Parameter] public EventCallback<TSelection> SelectionChanged { get; set; }
+
+    private Task CommitAsync(RangeRow<TSelection> row, (int Min, int Max) range) =>
+        SelectionChanged.InvokeAsync(row.With(Selection, RangeCommit.ToIntRange(range, row.Bounds!)));
+}

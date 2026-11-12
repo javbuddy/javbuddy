@@ -94,55 +94,13 @@ else
 
                 <div class="sort-dropdown-wrapper">
                     <DropdownMenuButton Label="@($"Filter{(ActiveFilterCount > 0 ? $" ({ActiveFilterCount})" : "")}")" Active="ActiveFilterCount > 0" ShowMenu="showFilterDropdown" MenuMinWidth="280px" OnToggle="ToggleFilterDropdown" OnClose="CloseDropdowns">
-                            <button type="button" class="sort-dropdown-item @(hidePreviouslyDeleted ? "active" : "")" aria-pressed="@(hidePreviouslyDeleted ? "true" : "false")" @onclick="ToggleHidePreviouslyDeleted">
-                                <span>Hide previously deleted</span>
-                                @if (hidePreviouslyDeleted)
-                                {
-                                    <span class="ms-2">✓</span>
-                                }
-                            </button>
-                            <button type="button" class="sort-dropdown-item @(hideDuplicates ? "active" : "")" @onclick="ToggleHideDuplicates">
-                                <span>Hide duplicates</span>
-                                @if (hideDuplicates)
-                                {
-                                    <span class="ms-2">✓</span>
-                                }
-                            </button>
-                            <button type="button" class="sort-dropdown-item @(hideDistributorReleases ? "active" : "")" @onclick="ToggleHideDistributorReleases">
-                                <span>Hide distributor releases</span>
-                                @if (hideDistributorReleases)
-                                {
-                                    <span class="ms-2">✓</span>
-                                }
-                            </button>
-                            <button type="button" class="sort-dropdown-item @(hideCompilations ? "active" : "")" @onclick="ToggleHideCompilations">
-                                <span>Hide compilations / box sets</span>
-                                @if (hideCompilations)
-                                {
-                                    <span class="ms-2">✓</span>
-                                }
-                            </button>
-                            <button type="button" class="sort-dropdown-item @(soloOnly ? "active" : "")" @onclick="ToggleSoloOnly">
-                                <span>Solo works only</span>
-                                @if (soloOnly)
-                                {
-                                    <span class="ms-2">✓</span>
-                                }
-                            </button>
-                            <button type="button" class="sort-dropdown-item @(hideVr ? "active" : "")" @onclick="ToggleHideVr">
-                                <span>Hide VR releases</span>
-                                @if (hideVr)
-                                {
-                                    <span class="ms-2">✓</span>
-                                }
-                            </button>
-                            <button type="button" class="sort-dropdown-item @(onlyWithPosters ? "active" : "")" @onclick="ToggleOnlyWithPosters">
-                                <span>Only with posters</span>
-                                @if (onlyWithPosters)
-                                {
-                                    <span class="ms-2">✓</span>
-                                }
-                            </button>
+                            <DropdownToggleItem Label="Hide previously deleted" Active="@(hidePreviouslyDeleted)" Pressed="@(hidePreviouslyDeleted)" OnClick="ToggleHidePreviouslyDeleted" />
+                            <DropdownToggleItem Label="Hide duplicates" Active="@(hideDuplicates)" OnClick="ToggleHideDuplicates" />
+                            <DropdownToggleItem Label="Hide distributor releases" Active="@(hideDistributorReleases)" OnClick="ToggleHideDistributorReleases" />
+                            <DropdownToggleItem Label="Hide compilations / box sets" Active="@(hideCompilations)" OnClick="ToggleHideCompilations" />
+                            <DropdownToggleItem Label="Solo works only" Active="@(soloOnly)" OnClick="ToggleSoloOnly" />
+                            <DropdownToggleItem Label="Hide VR releases" Active="@(hideVr)" OnClick="ToggleHideVr" />
+                            <DropdownToggleItem Label="Only with posters" Active="@(onlyWithPosters)" OnClick="ToggleOnlyWithPosters" />
 
                             @if (availableMakers.Count > 0 || availableYears.Count > 0)
                             {

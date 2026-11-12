@@ -44,56 +44,20 @@ else
                                 ShowMenu="showFilterDropdown"
                                 OnToggle="ToggleFilterDropdown"
                                 OnClose="CloseDropdowns">
-                <button type="button" class="sort-dropdown-item @(selectedActorId is null ? "active" : "")" @onclick="() => SetActorFilter(null)">
-                    <span>All Actors</span>
-                    @if (selectedActorId is null)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
+                <DropdownToggleItem Label="All Actors" Active="@(selectedActorId is null)" OnClick="() => SetActorFilter(null)" />
                 @if (actorsWithPhotos is not null)
                 {
                     @foreach (var actor in actorsWithPhotos)
                     {
-                        <button type="button" class="sort-dropdown-item @(selectedActorId == actor.Id ? "active" : "")" @onclick="() => SetActorFilter(actor.Id)">
-                            <span>@actor.DisplayName (@actor.PhotoCount)</span>
-                            @if (selectedActorId == actor.Id)
-                            {
-                                <span class="ms-2">✓</span>
-                            }
-                        </button>
+                        <DropdownToggleItem Label="@($"{actor.DisplayName} ({actor.PhotoCount})")" Active="@(selectedActorId == actor.Id)" OnClick="() => SetActorFilter(actor.Id)" />
                     }
                 }
                 <div class="sort-dropdown-divider"></div>
-                <button type="button" class="sort-dropdown-item @(albumFilter == AlbumFilterOption.All ? "active" : "")" @onclick="() => SetAlbumFilter(AlbumFilterOption.All)">
-                    <span>All Albums</span>
-                    @if (albumFilter == AlbumFilterOption.All)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
-                <button type="button" class="sort-dropdown-item @(albumFilter == AlbumFilterOption.InAlbum ? "active" : "")" @onclick="() => SetAlbumFilter(AlbumFilterOption.InAlbum)">
-                    <span>In an Album</span>
-                    @if (albumFilter == AlbumFilterOption.InAlbum)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
-                <button type="button" class="sort-dropdown-item @(albumFilter == AlbumFilterOption.Uncategorized ? "active" : "")" @onclick="() => SetAlbumFilter(AlbumFilterOption.Uncategorized)">
-                    <span>Uncategorized</span>
-                    @if (albumFilter == AlbumFilterOption.Uncategorized)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
+                <DropdownToggleItem Label="All Albums" Active="@(albumFilter == AlbumFilterOption.All)" OnClick="() => SetAlbumFilter(AlbumFilterOption.All)" />
+                <DropdownToggleItem Label="In an Album" Active="@(albumFilter == AlbumFilterOption.InAlbum)" OnClick="() => SetAlbumFilter(AlbumFilterOption.InAlbum)" />
+                <DropdownToggleItem Label="Uncategorized" Active="@(albumFilter == AlbumFilterOption.Uncategorized)" OnClick="() => SetAlbumFilter(AlbumFilterOption.Uncategorized)" />
                 <div class="sort-dropdown-divider"></div>
-                <button type="button" class="sort-dropdown-item @(favoritesOnly ? "active" : "")" @onclick="ToggleFavoritesOnly">
-                    <span>Favorites only</span>
-                    @if (favoritesOnly)
-                    {
-                        <span class="ms-2">✓</span>
-                    }
-                </button>
+                <DropdownToggleItem Label="Favorites only" Active="@(favoritesOnly)" OnClick="ToggleFavoritesOnly" />
             </DropdownMenuButton>
         </div>
 
@@ -105,10 +69,7 @@ else
                 @foreach (var option in Enum.GetValues<PhotoDensity>())
                 {
                     var current = option;
-                    <button type="button" class="sort-dropdown-item @(density == current ? "active" : "")" @onclick="() => SetDensity(current)">
-                        <span>@current</span>
-                        @if (density == current) { <span class="ms-2">✓</span> }
-                    </button>
+                    <DropdownToggleItem Label="@current.ToString()" Active="@(density == current)" OnClick="() => SetDensity(current)" />
                 }
             </DropdownMenuButton>
         </div>
@@ -119,22 +80,10 @@ else
                                 ShowMenu="showSortDropdown"
                                 OnToggle="ToggleSortDropdown"
                                 OnClose="CloseDropdowns">
-                <button type="button" class="sort-dropdown-item @(sort == "newest" ? "active" : "")" @onclick="@(() => SetSort("newest"))">
-                    <span>Newest</span>
-                    @if (sort == "newest") { <span class="ms-2">✓</span> }
-                </button>
-                <button type="button" class="sort-dropdown-item @(sort == "oldest" ? "active" : "")" @onclick="@(() => SetSort("oldest"))">
-                    <span>Oldest</span>
-                    @if (sort == "oldest") { <span class="ms-2">✓</span> }
-                </button>
-                <button type="button" class="sort-dropdown-item @(sort == "actor" ? "active" : "")" @onclick="@(() => SetSort("actor"))">
-                    <span>Actor Name</span>
-                    @if (sort == "actor") { <span class="ms-2">✓</span> }
-                </button>
-                <button type="button" class="sort-dropdown-item @(sort == "random" ? "active" : "")" @onclick="@(() => SetSort("random"))">
-                    <span>Random</span>
-                    @if (sort == "random") { <span class="ms-2">✓</span> }
-                </button>
+                <DropdownToggleItem Label="Newest" Active="@(sort == "newest")" OnClick="@(() => SetSort("newest"))" />
+                <DropdownToggleItem Label="Oldest" Active="@(sort == "oldest")" OnClick="@(() => SetSort("oldest"))" />
+                <DropdownToggleItem Label="Actor Name" Active="@(sort == "actor")" OnClick="@(() => SetSort("actor"))" />
+                <DropdownToggleItem Label="Random" Active="@(sort == "random")" OnClick="@(() => SetSort("random"))" />
             </DropdownMenuButton>
         </div>
     </div>

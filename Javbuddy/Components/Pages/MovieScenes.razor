@@ -119,14 +119,7 @@
                     @if (!ApexesView)
                     {
                         <FilterSection Label="Apex" ActiveCount="@(AppliedApexTags.Count + (apexOnly ? 1 : 0))">
-                            <button type="button" class="sort-dropdown-item @(apexOnly ? "active" : "")" aria-pressed="@(apexOnly ? "true" : "false")"
-                                    title="Only @Noun(2) containing an apex" @onclick="ToggleApexOnlyAsync">
-                                <span>Contains an apex</span>
-                                @if (apexOnly)
-                                {
-                                    <span class="ms-2">✓</span>
-                                }
-                            </button>
+                            <DropdownToggleItem Label="Contains an apex" Active="@(apexOnly)" Pressed="@(apexOnly)" Title="@($"Only {Noun(2)} containing an apex")" OnClick="ToggleApexOnlyAsync" />
                             @if (options.ApexTags.Count > 0)
                             {
                                 <MultiSelectFilterGroup GroupLabel="Apex tag" Options="@ApexTagOptions" Searchable="true"
@@ -136,23 +129,11 @@
                             }
                         </FilterSection>
                     }
-                    <button type="button" class="sort-dropdown-item @(favoritesOnly ? "active" : "")" aria-pressed="@(favoritesOnly ? "true" : "false")" @onclick="ToggleFavoritesOnlyAsync">
-                        <span>Favorites only</span>
-                        @if (favoritesOnly)
-                        {
-                            <span class="ms-2">✓</span>
-                        }
-                    </button>
+                    <DropdownToggleItem Label="Favorites only" Active="@(favoritesOnly)" Pressed="@(favoritesOnly)" OnClick="ToggleFavoritesOnlyAsync" />
                     @* Hiding a scene never hides a highlight or an apex. *@
                     @if (CurrentView == WallView.Scenes)
                     {
-                        <button type="button" class="sort-dropdown-item @(showHidden ? "active" : "")" aria-pressed="@(showHidden ? "true" : "false")" title="Also show scenes hidden from the overview, e.g. intros and outros" @onclick="ToggleShowHiddenAsync">
-                            <span>Show hidden scenes</span>
-                            @if (showHidden)
-                            {
-                                <span class="ms-2">✓</span>
-                            }
-                        </button>
+                        <DropdownToggleItem Label="Show hidden scenes" Active="@(showHidden)" Pressed="@(showHidden)" Title="Also show scenes hidden from the overview, e.g. intros and outros" OnClick="ToggleShowHiddenAsync" />
                     }
                 </DropdownMenuButton>
             </div>
