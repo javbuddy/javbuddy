@@ -375,8 +375,9 @@ public class ClipEditorApexTests : ClipEditorTestBase
         var inheriting = Assert.Single(await apexService.GetApexesAsync(movieId));
         Assert.Empty(inheriting.Actors);
         Assert.Equal(["Aika"], inheriting.EffectiveActors.Actors.Select(a => a.Name));
-        var chip = cut.Find(".apex-editor-row .implicit-chip");
-        Assert.Equal(("Aika", "From scene 1"), (chip.TextContent, chip.GetAttribute("title")));
+        // The inherited actor opens the actor-tag hover popover, naming where it comes from, as in scene rows.
+        Assert.Equal("Aika", cut.Find(".apex-editor-row .implicit-chip").TextContent);
+        Assert.Equal("From scene 1", cut.Find(".apex-editor-row .actor-hover-popover").TextContent.Trim());
     }
 
     [Fact]

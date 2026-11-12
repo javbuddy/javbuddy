@@ -13,11 +13,8 @@
         {
             <span class="highlight-editor-continues">continues into @(Node.ContinuesIntoScenePositions.Count == 1 ? "scene" : "scenes") @string.Join(", ", Node.ContinuesIntoScenePositions)</span>
         }
-        @if (Highlight.Actors.Count > 0)
-        {
-            <span class="highlight-editor-actors">@string.Join(", ", Highlight.Actors.Select(a => a.Name))</span>
-        }
-        <ImplicitChips Items="@ImplicitChip.ForActors(Node.Actors)" />
+        <ClipActorNames Class="highlight-editor-actors" Actors="Highlight.Actors" Tags="ActorTags" Library="ActorTagLibrary" />
+        <ImplicitChips Items="@ImplicitChip.ForActors(Node.Actors)" ActorTags="ActorTags" Library="ActorTagLibrary" />
         @foreach (var tag in Highlight.Tags)
         {
             <span class="highlight-editor-tag">@ImplicitChip.TagLabel(tag)</span>
@@ -32,6 +29,11 @@
     [Parameter, EditorRequired] public HighlightNode Node { get; set; } = null!;
 
     [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The highlight's actor tags (ClipActorTags), shown in each actor's hover popover.</summary>
+    [Parameter] public IReadOnlyList<EffectiveActorTag> ActorTags { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<ActorTagListItem> ActorTagLibrary { get; set; } = [];
 
     [Parameter] public EventCallback OnSeek { get; set; }
 

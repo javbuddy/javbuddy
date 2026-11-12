@@ -5,11 +5,8 @@
 <button type="button" class="apex-editor-row" @onclick="OnSeek" title="@SeekTitle">
     <span class="apex-editor-pos">@Apex.Position</span>
     <span class="apex-editor-time">@SceneTimeFormat.Format(Apex.Seconds)</span>
-    @if (Apex.Actors.Count > 0)
-    {
-        <span class="apex-editor-actors">@string.Join(", ", Apex.Actors.Select(a => a.Name))</span>
-    }
-    <ImplicitChips Items="@ImplicitChip.ForActors(Node.Actors)" />
+    <ClipActorNames Class="apex-editor-actors" Actors="Apex.Actors" Tags="ActorTags" Library="ActorTagLibrary" />
+    <ImplicitChips Items="@ImplicitChip.ForActors(Node.Actors)" ActorTags="ActorTags" Library="ActorTagLibrary" />
     @if (Apex.Tags.Count > 0)
     {
         <span class="apex-editor-tags">
@@ -27,6 +24,11 @@
     [Parameter, EditorRequired] public ApexNode Node { get; set; } = null!;
 
     [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The apex's actor tags (ClipActorTags), shown in each actor's hover popover.</summary>
+    [Parameter] public IReadOnlyList<EffectiveActorTag> ActorTags { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<ActorTagListItem> ActorTagLibrary { get; set; } = [];
 
     [Parameter] public EventCallback OnSeek { get; set; }
 

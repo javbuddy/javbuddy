@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
+- **Highlight and apex rows in the clip editor show actor names like scene rows do.** Hovering or focusing an actor's name, own or inherited, opens the popover with where the actor comes from and their actor tags; before, only scene rows had it and highlight and apex rows showed plain text.
 - **Actor Detail's delete confirmation matches the other delete dialogs.** It now uses the shared dialog, so it is a little narrower, with a smaller heading and buttons; the wording, Cancel, Esc and clicking outside behave as before.
 - **Every page loads about 14 KB less HTML.** The scripts that set the theme, sidebar and poster blur-up used to be pasted into every page response; they are now one cached file, so the page itself is smaller (a page was about 92 KB before compression, now about 78 KB) and the browser fetches the script once. Nothing looks or behaves differently, and the theme is still applied before the page first paints.
 - **Editing a movie on Movie Detail is lighter on the server.** A tag, cast or status change, marking a movie Got or Missing, or removing it from the Cleanup blacklist used to read the whole page again: the poster, scenes, highlights, apexes, Jellyfin link, cast, actor tags and the extrafanart folder on disk. Each edit now reads only what it can have changed (a tag or status edit just the movie itself); rescans, metadata refreshes, .nfo conflict resolutions, video repairs and version switches still reload everything.
