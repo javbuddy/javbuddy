@@ -120,6 +120,44 @@ public class SortPosterCropModalTests : BunitContext
     }
 
     [Fact]
+    public void Save_BeforeThePosterIsLaidOut_SavesNothing()
+    {
+        var module = JSInterop.SetupModule("./Components/Shared/MovieCoverCropModal.razor.js");
+        module.Mode = JSRuntimeMode.Loose;
+        // The cropper session returns null until the poster has loaded and has a crop box; the old
+        // full-image fallback used to be saved as the crop.
+        module.Setup<SortPosterCropModal.CropRectDto>("getCropRect").SetResult(null!);
+        var svc = Substitute.For<ITorrentSortService>();
+        svc.GetPosterCropSourceAsync(7, "ABC-123", Arg.Any<CancellationToken>())
+            .Returns((new PosterCropSource([1, 2], "image/jpeg", 800, 538), (string?)null));
+        Services.AddSingleton(svc);
+
+        var cut = Render<SortPosterCropModal>(p => p.Add(x => x.Show, true).Add(x => x.TorrentDownloadId, 7).Add(x => x.ResultId, "res-1").Add(x => x.MovieId, "ABC-123"));
+        cut.WaitForAssertion(() => Assert.False(cut.Find(".spc-save").HasAttribute("disabled")));
+        cut.Find(".spc-save").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("still loading", cut.Markup));
+        svc.DidNotReceiveWithAnyArgs().CropPosterAsync(default, default!, default!, default, default, default);
+    }
+
+    [Fact]
+    public void Save_IsDisabledUntilTheCropperStarts()
+    {
+        // The image never finishes streaming to the browser, so the cropper never starts.
+        var svc = Substitute.For<ITorrentSortService>();
+        svc.GetPosterCropSourceAsync(7, "ABC-123", Arg.Any<CancellationToken>())
+            .Returns((new PosterCropSource([1, 2], "image/jpeg", 800, 538), (string?)null));
+        Services.AddSingleton(svc);
+        var module = JSInterop.SetupModule("./Components/Shared/MovieCoverCropModal.razor.js");
+        var pending = module.SetupVoid("setImageSource", _ => true);
+
+        var cut = Render<SortPosterCropModal>(p => p.Add(x => x.Show, true).Add(x => x.TorrentDownloadId, 7).Add(x => x.ResultId, "res-1").Add(x => x.MovieId, "ABC-123"));
+
+        cut.WaitForAssertion(() => Assert.Single(pending.Invocations));
+        cut.WaitForAssertion(() => Assert.True(cut.Find(".spc-save").HasAttribute("disabled")));
+    }
+
+    [Fact]
     public void CroppedPosterFallback_SaysWhy()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;

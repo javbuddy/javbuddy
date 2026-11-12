@@ -421,6 +421,11 @@ export class ImageCropper {
         this.resizeHandle = null;
     }
 
+    /** Whether the image has loaded and been laid out, so the crop box is the user's, not a placeholder. */
+    hasLayout() {
+        return !!(this.img.naturalWidth && this.imgPos.width && this.imgPos.height);
+    }
+
     getCropRect() {
         if (!this.imgPos.width || !this.imgPos.height) {
             return { x: 0, y: 0, width: 1, height: 1 };
@@ -487,7 +492,9 @@ export function createCropperSession(createCropper) {
         setZoom: (zoom) => activeCropper?.applyZoom(zoom),
         setRotation: (degrees) => activeCropper?.setRotation(degrees),
         resetCrop: () => activeCropper?.resetCrop(),
-        getCropRect: () => activeCropper?.getCropRect() ?? { x: 0, y: 0, width: 1, height: 1 },
+        // Null until the image has loaded and been laid out: before that there's no crop box, and the
+        // class's own full-image fallback would save the whole image as if the user had cropped it.
+        getCropRect: () => activeCropper?.hasLayout() ? activeCropper.getCropRect() : null,
         destroyCropper() {
             destroyActiveCropper();
             revokeImageSource();

@@ -419,7 +419,12 @@
 
         try
         {
-            var dto = await jsModule.InvokeAsync<CropRectDto>("getCropRect");
+            var dto = await jsModule.InvokeAsync<CropRectDto?>("getCropRect");
+            if (dto is null)
+            {
+                errorMessage = "The image is still loading. Try again in a moment.";
+                return;
+            }
             var cropRect = new NormalizedCropRect(dto.x, dto.y, dto.width, dto.height);
             await ActorImageCacheService.SaveCustomImageAsync(ActorId, selectedImageBytes, cropRect);
             await OnPhotoChanged.InvokeAsync();

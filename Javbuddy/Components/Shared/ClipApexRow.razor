@@ -3,7 +3,7 @@
 @* An apex's row in ClipEditor's tree, moved from ApexEditor: its time, its own actors
    or the ones it inherits (grayed, with where from), and its tags. Pure display; ClipEditor acts on the
    callbacks. *@
-<button type="button" class="apex-editor-row" @onclick="OnSeek" title="Jump to 5 s before this apex">
+<button type="button" class="apex-editor-row" @onclick="OnSeek" title="@SeekTitle">
     <span class="apex-editor-pos">@Apex.Position</span>
     <span class="apex-editor-time">@SceneTimeFormat.Format(Apex.Seconds)</span>
     @if (Apex.Actors.Count > 0)
@@ -30,6 +30,11 @@
     [Parameter] public bool Busy { get; set; }
 
     [Parameter] public EventCallback OnSeek { get; set; }
+
+    // The seek lands at the apex's effective lead-in (its own, else the configured default), not a fixed 5 s.
+    private string SeekTitle => Node.Apex.Window.LeadInSeconds > 0
+        ? $"Jump to {ApexWindowText.Format(Node.Apex.Window.LeadInSeconds)} s before this apex"
+        : "Jump to this apex";
 
     [Parameter] public EventCallback OnToggleFavorite { get; set; }
 
