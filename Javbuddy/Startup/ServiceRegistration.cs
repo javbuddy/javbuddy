@@ -191,6 +191,7 @@ public static class ServiceRegistration
     public static IServiceCollection AddMetadataServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddScoped<IR18DevSettingsService, R18DevSettingsService>();
+        services.AddScoped<IR18DevDumpService, R18DevDumpService>();
         services.AddScoped<IMediaInfoSettingsService, MediaInfoSettingsService>();
         services.AddScoped<IMinnanoAvClient, MinnanoAvClient>();
         services.AddScoped<IMinnanoAvSettingsService, MinnanoAvSettingsService>();

@@ -13,7 +13,7 @@
 @inject IDiscoverySettingsService DiscoverySettingsService
 @inject IMediaInfoSettingsService MediaInfoSettingsService
 @inject IConnectionStatusService ConnectionStatusService
-@inject IR18DevDumpStore DumpStore
+@inject IR18DevDumpService R18DevDumpService
 @inject IConfiguration Configuration
 @inject IMinnanoAvSettingsService MinnanoAvSettingsService
 @inject ITrickplaySettingsService TrickplaySettingsService
@@ -116,7 +116,7 @@ else
                 <button class="btn btn-outline-secondary" type="button" @onclick="ImportNow" disabled="@importing">
                     @(importing ? "Importing…" : "Import now")
                 </button>
-                <button class="btn btn-outline-danger" type="button" @onclick="DeleteDumpNow" disabled="@(!DumpStore.IsAvailable())">
+                <button class="btn btn-outline-danger" type="button" @onclick="DeleteDumpNow" disabled="@(!R18DevDumpService.IsDumpAvailable())">
                     Delete dump
                 </button>
             </div>
@@ -348,15 +348,7 @@ else
     {
         if (settings is null) return;
 
-        if (wasEnabledOnOpen && !settings.Enabled)
-        {
-            DumpStore.DeleteDump();
-            settings.LastImportedAt = null;
-            settings.LastImportSourceDate = null;
-            settings.LastImportSummary = null;
-        }
-
-        await R18DevSettingsService.SaveAsync(settings);
+        await R18DevDumpService.SaveAsync(settings, wasEnabledOnOpen);
         wasEnabledOnOpen = settings.Enabled;
         saved = true;
     }
@@ -365,11 +357,9 @@ else
     {
         if (settings is null) return;
 
-        DumpStore.DeleteDump();
-        settings.LastImportedAt = null;
-        settings.LastImportSourceDate = null;
-        settings.LastImportSummary = null;
-        await Save();
+        await R18DevDumpService.DeleteDumpAsync(settings);
+        wasEnabledOnOpen = settings.Enabled;
+        saved = true;
     }
 
     private async Task ImportNow()
