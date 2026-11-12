@@ -129,7 +129,7 @@
                         <tbody>
                             @foreach (var tag in tags)
                             {
-                                <tr>
+                                <tr @key="tag.Id">
                                     <td>
                                         <input type="checkbox" class="form-check-input" aria-label="Select @tag.Name"
                                                checked="@selectedTagIds.Contains(tag.Id)"
@@ -262,7 +262,7 @@
                         <tbody>
                             @foreach (var tag in VisibleActorTags)
                             {
-                                <tr>
+                                <tr @key="tag.Id">
                                     <td>
                                         @if (renamingTagId == tag.Id)
                                         {
@@ -385,7 +385,7 @@
                         <tbody>
                             @foreach (var rule in rules)
                             {
-                                <tr>
+                                <tr @key="rule.Id">
                                     <td>@rule.SourceValue</td>
                                     <td>@(rule.MatchMode == TagMatchMode.Exact ? "Exact" : "Case-insensitive")</td>
                                     <td>@rule.TargetTagName</td>
@@ -453,7 +453,7 @@
                         <tbody>
                             @foreach (var ignored in ignoredTags)
                             {
-                                <tr>
+                                <tr @key="ignored.Id">
                                     <td>@ignored.Value</td>
                                     <td>@(ignored.MatchMode == TagMatchMode.Exact ? "Exact" : "Case-insensitive")</td>
                                     <td><button type="button" class="btn btn-sm btn-outline-danger" @onclick="() => RemoveIgnoredTagAsync(ignored.Id)">Delete</button></td>

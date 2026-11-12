@@ -197,12 +197,15 @@ else
         }
     }
 
+    // Resolved once per render, not once per row.
+    var visibleTableColumns = ActorCardText.TableColumns.Where(IsColumnVisible).ToList();
+    var tableTemplate = TableTemplateFor(visibleTableColumns);
     @if (viewMode == ActorViewMode.Table)
     {
-        <div class="actor-row actor-table-header" role="row" style="grid-template-columns: @TableTemplate">
+        <div class="actor-row actor-table-header" role="row" style="grid-template-columns: @tableTemplate">
             <span></span>
             <button type="button" class="actor-table-sort @(filter.SortField == "name" ? "active" : "")" @onclick='() => SetSort("name")'>Name@(SortArrow("name"))</button>
-            @foreach (var column in VisibleTableColumns)
+            @foreach (var column in visibleTableColumns)
             {
                 @if (column.SortField is string field)
                 {
@@ -236,7 +239,7 @@ else
                     {
                         @* Distinct key from the grid card's (actor.Id): when the view mode flips, Blazor must not reuse a card's
                              element for a row, since the two live at different points in the render tree. *@
-                        <div class="actor-row" role="row" @key="@($"row-{actor.Id}")" style="grid-template-columns: @TableTemplate">
+                        <div class="actor-row" role="row" @key="@($"row-{actor.Id}")" style="grid-template-columns: @tableTemplate">
                             <button type="button"
                                     class="actor-row-favorite @(actor.IsFavorite ? "active" : "")"
                                     @onclick="() => ToggleFavorite(actor)"
@@ -253,7 +256,7 @@ else
                                 }
                                 <span class="actor-name-text">@actor.DisplayName</span>
                             </a>
-                            @foreach (var column in VisibleTableColumns)
+                            @foreach (var column in visibleTableColumns)
                             {
                                 @if (column.Key == "state")
                                 {
@@ -662,9 +665,7 @@ else
     private bool IsColumnVisible(ActorTableColumn column) =>
         extraColumns.Contains(column.Key) || (column.SortField is not null && column.SortField == filter.SortField);
 
-    private IEnumerable<ActorTableColumn> VisibleTableColumns => ActorCardText.TableColumns.Where(IsColumnVisible);
-
-    private string TableTemplate => "32px minmax(180px, 2fr) " + string.Join(' ', VisibleTableColumns.Select(c => c.Width));
+    private static string TableTemplateFor(IEnumerable<ActorTableColumn> columns) => "32px minmax(180px, 2fr) " + string.Join(' ', columns.Select(c => c.Width));
 
     private MarkupString SortArrow(string field) =>
         filter.SortField == field ? new MarkupString(filter.SortDescending ? " ▼" : " ▲") : new MarkupString("");

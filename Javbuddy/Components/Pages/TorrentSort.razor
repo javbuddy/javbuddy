@@ -181,7 +181,7 @@ else
                         {
                             var path = f.Path ?? "";
                             var isSelected = State.Scan.SelectedFilePaths.Contains(path);
-                            <div class="sort-file-row @(isSelected ? "" : "sort-file-row-unselected")">
+                            <div class="sort-file-row @(isSelected ? "" : "sort-file-row-unselected")" @key="f">
                                 <span>
                                     <input type="checkbox" checked="@isSelected" @onchange="e => State.Scan.ToggleFileSelection(path, (bool)e.Value!)" />
                                 </span>
@@ -305,7 +305,7 @@ else
                         var movie = result.Movie;
                         var isMatched = movie is not null && result.Status != JavinizerJobStatus.Failed;
 
-                        <div class="sort-movie-card mb-4">
+                        <div class="sort-movie-card mb-4" @key="result">
                             <div class="sort-movie-header">
                                 <div class="sort-movie-header-info">
                                     <span class="sort-badge @TorrentSortWizardState.StatusBadgeClass(result.Status)">@result.Status</span>
@@ -460,7 +460,7 @@ else
                             <div class="sort-excluded-list mt-2">
                                 @foreach (var ex in excludedResults)
                                 {
-                                    <div class="sort-excluded-row">
+                                    <div class="sort-excluded-row" @key="ex">
                                         <span class="text-muted small text-break">@ex.FilePath</span>
                                         <span class="sort-badge sort-badge-unmatched">Excluded</span>
                                     </div>
@@ -499,7 +499,7 @@ else
                 var result = State.JobData?.Results?.Values.FirstOrDefault(r => r.ResultId == resultId);
                 var movie = result?.Movie;
 
-                <div class="sort-preview-card mb-3">
+                <div class="sort-preview-card mb-3" @key="resultId">
                     <div class="d-flex gap-3 align-items-start">
                         @if (!string.IsNullOrWhiteSpace(movie?.PosterUrl))
                         {
