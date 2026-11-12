@@ -1,0 +1,84 @@
+@* The control row under a cropper (ActorImageUploadModal, MovieCoverCropModal): aspect-ratio buttons plus
+   Free, an optional 90° rotate pair and Straighten slider, the Zoom slider and Reset. The sliders have no
+   .NET handlers: the dialog hands ZoomInput/ZoomReadout (and the Straighten pair) to the cropper script's
+   bindControls, which drives them in the browser. The dialog owns the ratio, rotate and reset behaviour
+   and reacts through the callbacks. *@
+
+<div class="cropper-toolbar">
+    <div class="ratio-group">
+        @foreach (var preset in Ratios)
+        {
+            var ratio = preset.Ratio;
+            <button type="button" class="btn-tool @(IsActive(ratio) ? "active" : "")" @onclick="() => RatioSelected.InvokeAsync(ratio)" title="@preset.Title">@preset.Label</button>
+        }
+        <button type="button" class="btn-tool @(CurrentRatio == null ? "active" : "")" @onclick="() => RatioSelected.InvokeAsync(null)" title="Free-form unconstrained crop">Free</button>
+    </div>
+
+    @if (Straightenable)
+    {
+        <div class="rotate-controls">
+            <button type="button" class="btn-tool btn-icon rotate-left-btn" @onclick="() => OnRotate.InvokeAsync(false)" disabled="@Disabled" title="Rotate the image 90° counter-clockwise" aria-label="Rotate left">
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6V2.5M3 6h3.5"/><path d="M3.4 6A5.5 5.5 0 1 1 2.6 9.5"/></svg>
+            </button>
+            <button type="button" class="btn-tool btn-icon rotate-right-btn" @onclick="() => OnRotate.InvokeAsync(true)" disabled="@Disabled" title="Rotate the image 90° clockwise" aria-label="Rotate right">
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 6V2.5M13 6H9.5"/><path d="M12.6 6A5.5 5.5 0 1 0 13.4 9.5"/></svg>
+            </button>
+        </div>
+
+        <div class="straighten-controls">
+            <label class="slider-label" for="@StraightenInputId">Straighten</label>
+            <input id="@StraightenInputId" type="range" class="form-range straighten-slider" min="-45" max="45" step="0.1"
+                   value="0"
+                   @ref="StraightenInput" disabled="@Disabled" />
+            <span class="slider-value" @ref="StraightenReadout">0.0°</span>
+        </div>
+    }
+
+    <div class="zoom-controls">
+        <label class="slider-label" for="@ZoomInputId">Zoom</label>
+        <input id="@ZoomInputId" type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="1" @ref="ZoomInput" />
+        <span class="slider-value" @ref="ZoomReadout">1.0×</span>
+    </div>
+
+    <button type="button" class="btn-tool" @onclick="OnReset" disabled="@Disabled" title="@ResetTitle">Reset</button>
+</div>
+
+@code {
+    /// <summary>A preset aspect-ratio button.</summary>
+    public sealed record RatioPreset(string Label, double Ratio, string Title);
+
+    /// <summary>The preset buttons, in order; a "Free" (unconstrained) button always follows them.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<RatioPreset> Ratios { get; set; } = [];
+
+    /// <summary>The active ratio; null means Free.</summary>
+    [Parameter] public double? CurrentRatio { get; set; }
+
+    /// <summary>Raised with the clicked preset's ratio, or null for Free.</summary>
+    [Parameter] public EventCallback<double?> RatioSelected { get; set; }
+
+    /// <summary>Shows the 90° rotate buttons and the Straighten slider (the cover crop only).</summary>
+    [Parameter] public bool Straightenable { get; set; }
+
+    /// <summary>Raised with true for a clockwise turn, false for counter-clockwise.</summary>
+    [Parameter] public EventCallback<bool> OnRotate { get; set; }
+
+    [Parameter, EditorRequired] public string ZoomInputId { get; set; } = string.Empty;
+
+    [Parameter] public string StraightenInputId { get; set; } = "straighten";
+
+    [Parameter] public EventCallback OnReset { get; set; }
+
+    [Parameter] public string ResetTitle { get; set; } = "Reset the crop box and zoom";
+
+    /// <summary>Locks the rotate buttons, Straighten slider and Reset while the dialog is busy; the ratio
+    /// buttons and the Zoom slider stay usable.</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    public ElementReference ZoomInput { get; private set; }
+    public ElementReference ZoomReadout { get; private set; }
+    public ElementReference StraightenInput { get; private set; }
+    public ElementReference StraightenReadout { get; private set; }
+
+    private bool IsActive(double target) =>
+        CurrentRatio.HasValue && Math.Abs(CurrentRatio.Value - target) < 0.01;
+}

@@ -21,41 +21,12 @@
 
             @if (selectedImageBytes is null)
             {
-                <div class="upload-dropzone">
-                    <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
-                    <div class="upload-icon">
-                        <svg viewBox="0 0 16 16" width="36" height="36" fill="currentColor" aria-hidden="true">
-                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
-                            <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
-                        </svg>
-                    </div>
-                    <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
-                    <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
-                </div>
-
-                <div class="upload-divider">
-                    <span>OR</span>
-                </div>
-
-                <div class="upload-url-section">
-                    <label class="form-label text-light small mb-1" for="actor-image-url-input">Import from URL</label>
-                    <div class="input-group">
-                        <input id="actor-image-url-input"
-                               type="url"
-                               class="form-control form-control-sm url-input"
-                               placeholder="https://example.com/photo.jpg"
-                               @bind="imageUrlInput"
-                               @bind:event="oninput"
-                               @onkeydown="HandleUrlKeyDown"
-                               disabled="@fetchingUrl" />
-                        <button type="button"
-                                class="btn btn-primary btn-sm fetch-btn"
-                                @onclick="FetchFromUrlAsync"
-                                disabled="@(fetchingUrl || string.IsNullOrWhiteSpace(imageUrlInput))">
-                            @(fetchingUrl ? "Fetching…" : "Fetch")
-                        </button>
-                    </div>
-                </div>
+                <ImageSourcePicker UrlInputId="actor-image-url-input"
+                                   UrlPlaceholder="https://example.com/photo.jpg"
+                                   FetchAsync="FetchFromUrlAsync"
+                                   OnPicked="OnImagePicked"
+                                   OnError="SetError"
+                                   OnFetchingChanged="SetFetching" />
 
                 @if (hasCustomImage)
                 {
@@ -94,22 +65,12 @@
                     </div>
                 </div>
 
-                <div class="cropper-toolbar">
-                    <div class="ratio-group">
-                        <button type="button" class="btn-tool @(currentAspectRatio == 1.0 ? "active" : "")" @onclick="() => SetAspectRatio(1.0)" title="Square crop (1:1)">1:1</button>
-                        <button type="button" class="btn-tool @(Math.Abs((currentAspectRatio ?? 0) - (2.0/3.0)) < 0.01 ? "active" : "")" @onclick="() => SetAspectRatio(2.0/3.0)" title="Portrait crop (2:3)">2:3</button>
-                        <button type="button" class="btn-tool @(currentAspectRatio == null ? "active" : "")" @onclick="() => SetAspectRatio(null)" title="Free-form unconstrained crop">Free</button>
-                    </div>
-
-                    <div class="zoom-controls">
-                        <label class="slider-label" for="actor-zoom">Zoom</label>
-                        <input id="actor-zoom" type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="1" @ref="zoomInputRef" />
-                        @* The slider and this readout are driven by the cropper script in the browser (bindControls). *@
-                        <span class="slider-value" @ref="zoomReadoutRef">1.0×</span>
-                    </div>
-
-                    <button type="button" class="btn-tool" @onclick="ResetCrop" title="Reset the crop box and zoom">Reset</button>
-                </div>
+                <CropToolbar @ref="toolbar"
+                             Ratios="ratios"
+                             CurrentRatio="currentAspectRatio"
+                             RatioSelected="SetAspectRatio"
+                             ZoomInputId="actor-zoom"
+                             OnReset="ResetCrop" />
             }
         </ChildContent>
         <FooterContent>
@@ -180,15 +141,13 @@
     private bool cropperReady;
     // The browser couldn't decode the image: stop the spinner, but keep Save Photo disabled.
     private bool imageFailed;
-    private string imageUrlInput = string.Empty;
     private bool fetchingUrl;
     private InitialImageSource? loadedInitialImage;
 
     private CropperViewport? viewport;
     private ElementReference circleCanvasRef;
     private ElementReference squareCanvasRef;
-    private ElementReference zoomInputRef;
-    private ElementReference zoomReadoutRef;
+    private CropToolbar? toolbar;
 
     private IJSObjectReference? jsModule;
     private DotNetObjectReference<ActorImageUploadModal>? selfRef;
@@ -226,7 +185,7 @@
                 selfRef ??= DotNetObjectReference.Create(this);
                 await jsModule.InvokeVoidAsync("setHost", selfRef);
                 await jsModule.InvokeVoidAsync("initCropper", viewport!.Container, viewport.Image, circleCanvasRef, squareCanvasRef);
-                await jsModule.InvokeVoidAsync("bindControls", zoomInputRef, zoomReadoutRef, null, null);
+                await jsModule.InvokeVoidAsync("bindControls", toolbar!.ZoomInput, toolbar.ZoomReadout, null, null);
                 if (currentAspectRatio.HasValue)
                 {
                     await jsModule.InvokeVoidAsync("setAspectRatio", currentAspectRatio.Value);
@@ -254,38 +213,17 @@
         StateHasChanged();
     });
 
-    private async Task HandleFileSelected(InputFileChangeEventArgs e)
-    {
-        errorMessage = null;
-        var file = e.File;
-        if (file is null) return;
+    private static readonly CropToolbar.RatioPreset[] ratios =
+    [
+        new("1:1", 1.0, "Square crop (1:1)"),
+        new("2:3", 2.0 / 3.0, "Portrait crop (2:3)"),
+    ];
 
-        if (file.Size > UploadSettings.MaxSizeBytes)
-        {
-            errorMessage = $"Image size exceeds {UploadSettings.MaxSizeMb} MB limit.";
-            return;
-        }
+    private void OnImagePicked(ImageSourcePicker.PickedImage image) => LoadSelectedImage(image.Bytes, image.ContentType);
 
-        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
-        if (ext is not (".jpg" or ".jpeg" or ".png" or ".webp"))
-        {
-            errorMessage = "Unsupported image format. Please select a JPEG, PNG, or WebP image.";
-            return;
-        }
+    private void SetError(string? message) => errorMessage = message;
 
-        try
-        {
-            using var stream = file.OpenReadStream(UploadSettings.MaxSizeBytes);
-            using var ms = new MemoryStream();
-            await stream.CopyToAsync(ms);
-            var contentType = string.IsNullOrWhiteSpace(file.ContentType) ? "image/jpeg" : file.ContentType;
-            LoadSelectedImage(ms.ToArray(), contentType);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error loading image: {ex.Message}";
-        }
-    }
+    private void SetFetching(bool fetching) => fetchingUrl = fetching;
 
     private void LoadSelectedImage(byte[] bytes, string contentType)
     {
@@ -341,45 +279,13 @@
         cropperReady = false;
         imageFailed = false;
         currentAspectRatio = 1.0;
-        imageUrlInput = string.Empty;
         fetchingUrl = false;
     }
 
-    private async Task HandleUrlKeyDown(KeyboardEventArgs e)
+    private async Task<ImageSourcePicker.FetchResult> FetchFromUrlAsync(string url)
     {
-        if (e.Key == "Enter" && !fetchingUrl && !string.IsNullOrWhiteSpace(imageUrlInput))
-        {
-            await FetchFromUrlAsync();
-        }
-    }
-
-    private async Task FetchFromUrlAsync()
-    {
-        if (string.IsNullOrWhiteSpace(imageUrlInput) || fetchingUrl) return;
-
-        fetchingUrl = true;
-        errorMessage = null;
-
-        try
-        {
-            var result = await ActorImageCacheService.DownloadImageFromUrlAsync(imageUrlInput);
-            if (!result.Success || result.Bytes is null)
-            {
-                errorMessage = result.ErrorMessage ?? "Failed to download image.";
-                return;
-            }
-
-            var contentType = string.IsNullOrWhiteSpace(result.ContentType) ? "image/jpeg" : result.ContentType;
-            LoadSelectedImage(result.Bytes, contentType);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = $"Error downloading image: {ex.Message}";
-        }
-        finally
-        {
-            fetchingUrl = false;
-        }
+        var result = await ActorImageCacheService.DownloadImageFromUrlAsync(url);
+        return new(result.Success ? result.Bytes : null, result.ContentType, result.ErrorMessage);
     }
 
     private record CropRectDto(double x, double y, double width, double height);
