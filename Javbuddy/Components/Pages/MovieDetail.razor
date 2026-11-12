@@ -174,10 +174,10 @@ else
             <h1 class="movie-detail-title" title="@movie.DisplayName">@MovieDetailText.Truncate(movie.DisplayName, 70)</h1>
             <div class="movie-detail-badges">
                 <span class="movie-detail-badge movie-detail-badge-status-@(movie.Status == MovieStatus.Got ? "got" : "missing")" title="@MovieDetailText.MetaFetchedTooltip(movie)">@movie.Status</span>
-                <button type="button" class="movie-detail-badge movie-detail-badge-content-type" @onclick="() => FilterByContentType(movie.ContentType)" title="Content type: show all @MovieFilterOptions.ContentTypeLabel(movie.ContentType) movies">@MovieFilterOptions.ContentTypeLabel(movie.ContentType)</button>
+                <button type="button" class="movie-detail-badge movie-detail-badge-content-type" @onclick="() => FilterByContentType(movie.ContentType)" disabled="@(!interactive)" title="Content type: show all @MovieFilterOptions.ContentTypeLabel(movie.ContentType) movies">@MovieFilterOptions.ContentTypeLabel(movie.ContentType)</button>
                 @if (movie.NfoDriftKind != NfoDriftKind.None && movie.Status != MovieStatus.Missing)
                 {
-                    <button type="button" class="movie-detail-badge movie-detail-badge-warning" @onclick="OpenConflictReview" title="@MovieDetailText.NfoDriftTooltip(movie)">
+                    <button type="button" class="movie-detail-badge movie-detail-badge-warning" @onclick="OpenConflictReview" disabled="@(!interactive)" title="@MovieDetailText.NfoDriftTooltip(movie)">
                         <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
                             <path d="M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.15.15 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.2.2 0 0 1-.054.06.18.18 0 0 1-.066.018H1.146a.18.18 0 0 1-.066-.018.2.2 0 0 1-.054-.06c-.033-.059-.034-.123.002-.183L7.884 2.073a.15.15 0 0 1 .054-.057zm-1.044-.45a1.13 1.13 0 0 0-1.96 0L.18 13.233c-.457.778.091 1.767.98 1.767h13.679c.89 0 1.438-.99.98-1.767L8.982 1.566z" />
                             <path d="M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.553.553 0 0 1-1.1 0z" />
@@ -187,7 +187,7 @@ else
                 }
                 @if (movie.CleanupBlacklisted)
                 {
-                    <button type="button" class="movie-detail-badge movie-detail-badge-warning" @onclick="RemoveFromCleanupBlacklist" title="Excluded from the Cleanup review queue — click to remove">
+                    <button type="button" class="movie-detail-badge movie-detail-badge-warning" @onclick="RemoveFromCleanupBlacklist" disabled="@(!interactive)" title="Excluded from the Cleanup review queue — click to remove">
                         Blacklisted from Cleanup
                     </button>
                 }
