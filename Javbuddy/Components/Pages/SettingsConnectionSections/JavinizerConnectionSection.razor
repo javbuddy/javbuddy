@@ -91,8 +91,18 @@
     {
         testing = true;
         testResult = null;
-        await Save();
-        testResult = await JavinizerClient.TestConnectionAsync();
-        testing = false;
+        try
+        {
+            // Env-configured settings aren't editable and must not be written to the database.
+            if (!envConfigured)
+            {
+                await Save();
+            }
+            testResult = await JavinizerClient.TestConnectionAsync();
+        }
+        finally
+        {
+            testing = false;
+        }
     }
 }

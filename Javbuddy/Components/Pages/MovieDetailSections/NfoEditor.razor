@@ -9,11 +9,11 @@
 
 @if (showRawNfo)
 {
-    <div class="nfo-modal-backdrop" tabindex="0" @onclick="Close">
+    <div class="nfo-modal-backdrop" tabindex="0" @onclick="CloseUnlessBusy">
         <div class="nfo-modal-panel" @onclick:stopPropagation="true">
             <div class="nfo-modal-header">
                 <h5 class="nfo-modal-title">@(isConflictReview ? "Resolve .nfo Conflict" : showHistory ? ".nfo History" : "Edit .nfo")</h5>
-                <button class="nfo-modal-close-btn" @onclick="Close" aria-label="Close">
+                <button class="nfo-modal-close-btn" @onclick="CloseUnlessBusy" aria-label="Close" disabled="@(savingNfo || restoring)">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
                 </button>
             </div>
@@ -316,6 +316,13 @@
         {
             return false;
         }
+    }
+
+    // The user-facing close (backdrop click, ×): ignored while a save/restore runs, like the Close button.
+    private async Task CloseUnlessBusy()
+    {
+        if (savingNfo || restoring) return;
+        await Close();
     }
 
     private async Task Close()

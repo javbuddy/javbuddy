@@ -90,8 +90,18 @@
     {
         testing = true;
         testResult = null;
-        await Save();
-        testResult = await ProwlarrClient.TestConnectionAsync();
-        testing = false;
+        try
+        {
+            // Env-configured settings aren't editable and must not be written to the database.
+            if (!envConfigured)
+            {
+                await Save();
+            }
+            testResult = await ProwlarrClient.TestConnectionAsync();
+        }
+        finally
+        {
+            testing = false;
+        }
     }
 }

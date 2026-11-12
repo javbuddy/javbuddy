@@ -7,7 +7,7 @@
 
 @if (Show)
 {
-    <ModalShell MaxWidth="880px" OnClose="CloseAsync" Busy="@rotating">
+    <ModalShell MaxWidth="880px" OnClose="CloseAsync" Busy="@(saving || rotating)">
         <TitleContent>Crop Cover — @(string.IsNullOrWhiteSpace(Title) ? Code : Title)</TitleContent>
         <HeaderActions>
             @if (selectedImageBytes is not null)
