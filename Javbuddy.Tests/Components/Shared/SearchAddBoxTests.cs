@@ -83,9 +83,9 @@ public class SearchAddBoxTests : BunitContext
 
         cut.FindAll(".thing-search-candidate")[1].Click();
 
-        Assert.Equal(["b"], added);
         cut.WaitForAssertion(() =>
         {
+            Assert.Equal(["b"], added);
             Assert.Empty(cut.FindAll(".thing-search-candidate"));
             Assert.Equal("", cut.Find("input").GetAttribute("value") ?? "");
         });
@@ -100,12 +100,16 @@ public class SearchAddBoxTests : BunitContext
 
         cut.Find("input").KeyDown(new KeyboardEventArgs { Key = "Enter" });
 
-        Assert.Equal(["Brand New"], typed);
-        Assert.Equal("", cut.Find("input").GetAttribute("value") ?? "");
+        // A pending debounced search resumes on the thread pool, so an event can be dispatched after it returns.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["Brand New"], typed);
+            Assert.Equal("", cut.Find("input").GetAttribute("value") ?? "");
+        });
 
         var plain = RenderBox((_, _) => Results());
         plain.Find("input").Input("Brand New");
         plain.Find("input").KeyDown(new KeyboardEventArgs { Key = "Enter" });
-        Assert.Equal("Brand New", plain.Find("input").GetAttribute("value"));
+        plain.WaitForAssertion(() => Assert.Equal("Brand New", plain.Find("input").GetAttribute("value")));
     }
 }

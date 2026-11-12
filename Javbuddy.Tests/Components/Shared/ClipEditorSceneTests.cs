@@ -386,7 +386,7 @@ public class ClipEditorSceneTests : ClipEditorTestBase
         await cut.FindAll(".scene-editor-actor-chip")[1].ClickAsync();
         Assert.Equal([aikaId], Assert.Single(await sceneService.GetScenesAsync(movieId)).Actors.Select(a => a.ActorId));
 
-        cut.Find(".scene-editor-chip-remove").Click();
+        await cut.Find(".scene-editor-chip-remove").ClickAsync();
         Assert.Empty(Assert.Single(await sceneService.GetScenesAsync(movieId)).Tags);
         // Still editing: link changes don't close the form or touch the times/title.
         Assert.Single(cut.FindAll(".scene-editor-form"));

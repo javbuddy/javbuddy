@@ -88,8 +88,10 @@ public class ClipEditorHighlightTests : ClipEditorTestBase
         cut.Find(".highlight-editor-end-input").Input("2:00");
         cut.Find(".highlight-editor-form").Submit();
 
+        // Saving awaits the service; wait for the form to close and the media to be queued before checking.
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".highlight-editor-form")));
+        cut.WaitForAssertion(() => _ = highlightMedia.Received(1).EnsureQueuedAsync(movieId, Arg.Any<CancellationToken>()));
         Assert.Single(await StoredAsync());
-        await highlightMedia.Received(1).EnsureQueuedAsync(movieId, Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -82,8 +82,9 @@ public class ClipTagChipsTests : BunitContext
         cut.Find(".apex-editor-chip-remove").Click();
         AddByTyping(cut);
 
+        // The debounced search's handler finishes on the thread pool, so the click can be dispatched after it returns.
+        cut.WaitForAssertion(() => Assert.Equal([3], added));
         Assert.Equal([Alpha], removed);
-        Assert.Equal([3], added);
         Assert.Single(cut.FindAll(".apex-editor-chip"));
         _ = tagService.DidNotReceive().GetByIdAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
