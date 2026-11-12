@@ -42,6 +42,52 @@ public class ActorsPageTests(E2EFixture fixture)
         await Expect(item).ToHaveCSSAsync("justify-content", "space-between");
     }
 
+    /// <summary>The Columns, Filter and Sort dropdowns share one dismissal: opening another closes the open one
+    /// in one click (Columns used to stay open beside Filter), a click outside closes it, and so does Escape, which returns
+    /// focus to the toggle.</summary>
+    [Fact]
+    public async Task Dropdowns_CloseWhenAnotherOpens_OnOutsideClick_AndOnEscape()
+    {
+        await DbSeeding.SeedActorAsync(fixture.DbFactory, "E2E Dropdown Close Actress");
+        var page = await fixture.NewPageAsync();
+        await page.GotoInteractiveAsync("/actors");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Table", Exact = true }).ClickAsync();
+
+        var columns = page.Locator(".sort-dropdown-wrapper button", new() { HasText = "Columns" });
+        var filter = page.Locator(".sort-dropdown-wrapper button", new() { HasText = "Filter" }).First;
+        var sort = page.Locator(".sort-dropdown-wrapper button", new() { HasText = "Sort:" });
+        var menu = page.Locator(".sort-dropdown-menu");
+
+        // Opening Filter while Columns is open leaves only Filter's menu.
+        await columns.ClickAsync();
+        await Expect(menu).ToHaveCountAsync(1);
+        await filter.ClickAsync();
+        await Expect(columns).ToHaveAttributeAsync("aria-expanded", "false");
+        await Expect(filter).ToHaveAttributeAsync("aria-expanded", "true");
+        await Expect(menu).ToHaveCountAsync(1);
+
+        // Opening Sort while Filter is open does the same.
+        await sort.ClickAsync();
+        await Expect(filter).ToHaveAttributeAsync("aria-expanded", "false");
+        await Expect(sort).ToHaveAttributeAsync("aria-expanded", "true");
+        await Expect(menu).ToHaveCountAsync(1);
+
+        // A click outside closes it, without acting on what was clicked (the page heading here).
+        var url = page.Url;
+        var headingBox = await page.GetByRole(AriaRole.Heading, new() { Name = "Actors", Exact = true }).BoundingBoxAsync();
+        Assert.NotNull(headingBox);
+        await page.Mouse.ClickAsync(headingBox.X + 2, headingBox.Y + 2);
+        await Expect(menu).ToHaveCountAsync(0);
+        Assert.Equal(url, page.Url);
+
+        // Escape closes it, and focus goes back to the toggle.
+        await columns.ClickAsync();
+        await Expect(menu).ToHaveCountAsync(1);
+        await page.Keyboard.PressAsync("Escape");
+        await Expect(menu).ToHaveCountAsync(0);
+        await Expect(columns).ToBeFocusedAsync();
+    }
+
     /// <summary>Regression test: changing the sort, then navigating to an actor's
     /// detail page and back (a real browser/SignalR circuit needed to catch this — bUnit's
     /// in-process JSInterop mock resolves everything synchronously, so it can't reproduce it), used

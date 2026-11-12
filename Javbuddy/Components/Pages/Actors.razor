@@ -35,9 +35,9 @@ else
                value="@filter.Text"
                @oninput="OnTextFilterInput" />
 
-        @if (showFilterDropdown)
+        @if (showFilterDropdown || showSortDropdown || showColumnsDropdown)
         {
-            <div class="dropdown-backdrop" @onclick="CloseFilterDropdown"></div>
+            <div class="dropdown-backdrop" @onclick="CloseDropdowns"></div>
         }
         <div class="sort-dropdown-wrapper">
             <DropdownMenuButton Label="@($"Filter{(filter.ActiveFilterCount > 0 ? $" ({filter.ActiveFilterCount})" : "")}")"
@@ -47,7 +47,8 @@ else
                                 ClearTitle="Reset all filters"
                                 ClearAriaLabel="Reset all filters"
                                 ShowMenu="showFilterDropdown"
-                                OnToggle="ToggleFilterDropdown">
+                                OnToggle="ToggleFilterDropdown"
+                                OnClose="CloseDropdowns">
                 <button type="button" class="sort-dropdown-item @(filter.Movies != ActorMovieFilter.All ? "active" : "")" @onclick="() => ApplyFilterAsync(filter.CycleMovies)">
                     <span>@filter.MovieFilterLabel</span>
                     @if (filter.Movies != ActorMovieFilter.All)
@@ -113,11 +114,12 @@ else
             </DropdownMenuButton>
         </div>
 
-        <div class="sort-dropdown-wrapper" @onfocusout="OnSortFocusOut" tabindex="-1">
+        <div class="sort-dropdown-wrapper">
             <DropdownMenuButton Label="@($"Sort: {ActorCardText.SortFieldLabel(filter.SortField)}")"
                                 Arrow="@(filter.SortDescending ? "▼" : "▲")"
                                 ShowMenu="showSortDropdown"
-                                OnToggle="ToggleSortDropdown">
+                                OnToggle="ToggleSortDropdown"
+                                OnClose="CloseDropdowns">
                 @foreach (var field in ActorListFilter.SortFields)
                 {
                     <button type="button" class="sort-dropdown-item @(filter.SortField == field ? "active" : "")" @onclick="() => SetSort(field)">
@@ -141,7 +143,8 @@ else
                 <div class="sort-dropdown-wrapper">
                     <DropdownMenuButton Label="Columns"
                                         ShowMenu="showColumnsDropdown"
-                                        OnToggle="ToggleColumnsDropdown">
+                                        OnToggle="ToggleColumnsDropdown"
+                                        OnClose="CloseDropdowns">
                         @foreach (var column in ActorCardText.TableColumns.Where(c => c.Optional))
                         {
                             var shown = IsColumnVisible(column);
@@ -548,9 +551,15 @@ else
     {
         showFilterDropdown = !showFilterDropdown;
         showSortDropdown = false;
+        showColumnsDropdown = false;
     }
 
-    private void CloseFilterDropdown() => showFilterDropdown = false;
+    private void CloseDropdowns()
+    {
+        showFilterDropdown = false;
+        showSortDropdown = false;
+        showColumnsDropdown = false;
+    }
 
     // Debounced (unlike an eager field update): every committed text filter change re-filters the
     // whole actor list and reloads the grid's window, so committing the field on every keystroke
@@ -577,12 +586,6 @@ else
         showColumnsDropdown = !showColumnsDropdown;
         showSortDropdown = false;
         showFilterDropdown = false;
-    }
-
-    private async Task OnSortFocusOut()
-    {
-        await Task.Delay(150);
-        showSortDropdown = false;
     }
 
     private async Task SetSort(string field)

@@ -93,7 +93,7 @@ else
                 }
 
                 <div class="sort-dropdown-wrapper">
-                    <DropdownMenuButton Label="@($"Filter{(ActiveFilterCount > 0 ? $" ({ActiveFilterCount})" : "")}")" Active="ActiveFilterCount > 0" ShowMenu="showFilterDropdown" MenuMinWidth="280px" OnToggle="ToggleFilterDropdown">
+                    <DropdownMenuButton Label="@($"Filter{(ActiveFilterCount > 0 ? $" ({ActiveFilterCount})" : "")}")" Active="ActiveFilterCount > 0" ShowMenu="showFilterDropdown" MenuMinWidth="280px" OnToggle="ToggleFilterDropdown" OnClose="CloseDropdowns">
                             <button type="button" class="sort-dropdown-item @(hidePreviouslyDeleted ? "active" : "")" aria-pressed="@(hidePreviouslyDeleted ? "true" : "false")" @onclick="ToggleHidePreviouslyDeleted">
                                 <span>Hide previously deleted</span>
                                 @if (hidePreviouslyDeleted)
@@ -162,7 +162,7 @@ else
                 </div>
 
                 <div class="sort-dropdown-wrapper">
-                    <DropdownMenuButton Label="@($"Sort: {SortFieldLabel(sortField)}")" Arrow="@(sortDescending ? "▼" : "▲")" ShowMenu="showSortDropdown" OnToggle="ToggleSortDropdown">
+                    <DropdownMenuButton Label="@($"Sort: {SortFieldLabel(sortField)}")" Arrow="@(sortDescending ? "▼" : "▲")" ShowMenu="showSortDropdown" OnToggle="ToggleSortDropdown" OnClose="CloseDropdowns">
                         @foreach (var field in SortFields)
                         {
                             <button type="button" class="sort-dropdown-item @(sortField == field ? "active" : "")" @onclick="() => SetSort(field)">
