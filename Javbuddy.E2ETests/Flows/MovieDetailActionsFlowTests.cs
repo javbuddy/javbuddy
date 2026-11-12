@@ -256,6 +256,9 @@ public class MovieDetailActionsFlowTests
 
             var modalBackdrop = page.Locator(".video-player-modal-backdrop");
             await Expect(modalBackdrop).ToBeVisibleAsync();
+            // Esc is handled by a listener the shell binds in the browser a moment after the player opens; one
+            // pressed before that is lost, which a slow runner reached.
+            await page.WaitForSelectorAsync(".video-player-modal-backdrop[data-keys-bound]", new() { State = Microsoft.Playwright.WaitForSelectorState.Attached });
             // The ScrubBar's JS module sizes the trickplay thumb once it has bound its keys.
             await page.WaitForFunctionAsync("() => document.querySelector('.scrub-bar-thumb')?.style.width !== ''");
 
