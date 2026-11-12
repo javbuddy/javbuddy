@@ -55,12 +55,6 @@
     cursor: default;
 }
 
-.scene-editor-save-btn {
-    background-color: var(--jb-accent);
-    border-color: var(--jb-accent);
-    color: #fff;
-}
-
 .scene-editor-icon-btn {
     appearance: none;
     flex: none;
@@ -167,26 +161,6 @@
     color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
-.scene-editor-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-    padding: 0.5rem;
-    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
-    border-radius: 6px;
-    background-color: var(--scene-editor-form-bg, rgba(255, 255, 255, 0.03));
-}
-
-.scene-editor-times {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-}
-
-.scene-editor-times .scene-editor-field {
-    flex: 1 1 8rem;
-}
-
 .scene-editor-field {
     display: flex;
     flex-direction: column;
@@ -202,23 +176,6 @@
 
 .scene-editor-hint {
     font-weight: 400;
-}
-
-.scene-editor-input {
-    width: 100%;
-    min-width: 0;
-    padding: 0.25rem 0.4rem;
-    font-size: 0.8rem;
-    color: var(--scene-editor-fg, #e2e8f0);
-    background-color: var(--scene-editor-input-bg, rgba(255, 255, 255, 0.06));
-    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
-    border-radius: 4px;
-    box-sizing: border-box;
-}
-
-.scene-editor-form-actions {
-    display: flex;
-    gap: 0.35rem;
 }
 
 /* Actors and tags of a scene: a second line in the row, chips while editing. */
