@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-12
+
 ### Added
 
 - **Play highlights and apexes from Movie Detail's Play menu.** When a movie has highlights or apexes, the **Play** badge has a caret beside it. Its menu offers **Play movie** with the movie's length, and a row each for the highlights and the apexes showing their clip count and total running time. Clicking a row plays every clip of that kind one after another in the clip player, and its **Shuffle** pill plays them in random order.
