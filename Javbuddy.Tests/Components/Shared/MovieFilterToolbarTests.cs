@@ -1,9 +1,11 @@
+using AngleSharp.Dom;
 using Bunit;
 using Javbuddy.Components.Pages.MoviesSections;
 using Javbuddy.Components.Shared;
 using Javbuddy.Models;
 using Javbuddy.Services.Movies;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Javbuddy.Tests.Components.Shared;
@@ -329,6 +331,32 @@ public class MovieFilterToolbarTests : BunitContext
         var cut = RenderToolbar(null, p => p.Add(x => x.HidePreviouslyDeleted, true));
         OpenFilterMenu(cut);
         Assert.DoesNotContain("Hide previously deleted", cut.Markup);
+    }
+
+    [Fact]
+    public void FilterAndSortMenus_CloseOnTheSharedBackdrop_OnEscape_AndWhenTheOtherOpens()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose; // Escape hands focus back to the toggle.
+        var cut = RenderToolbar();
+        IElement SortToggle() => cut.FindAll("button[aria-haspopup]").First(b => b.TextContent.TrimStart().StartsWith("Sort:"));
+        IElement FilterToggle() => cut.FindAll("button[aria-haspopup]").First(b => b.TextContent.TrimStart().StartsWith("Filter"));
+        bool SortOpen() => SortToggle().GetAttribute("aria-expanded") == "true";
+        bool FilterOpen() => FilterToggle().GetAttribute("aria-expanded") == "true";
+
+        SortToggle().Click();
+        Assert.True(SortOpen());
+        cut.Find(".dropdown-backdrop").Click();
+        Assert.False(SortOpen());
+        Assert.Empty(cut.FindAll(".dropdown-backdrop"));
+
+        SortToggle().Click();
+        OpenFilterMenu(cut);
+        Assert.True(FilterOpen());
+        Assert.False(SortOpen());
+
+        FilterToggle().KeyDown(new KeyboardEventArgs { Key = "Escape" });
+        Assert.False(FilterOpen());
+        Assert.Empty(cut.FindAll(".dropdown-backdrop"));
     }
 
     private static void OpenFilterMenu(IRenderedComponent<MovieFilterToolbar> cut) =>

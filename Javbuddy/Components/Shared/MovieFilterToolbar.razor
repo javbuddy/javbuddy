@@ -16,9 +16,10 @@
            value="@localTextFilter"
            @oninput="HandleTextInput" />
 
-    @if (showFilterDropdown)
+    @* One backdrop for both menus, before their wrappers (see the dropdown convention in docs/ui-guidelines.md). *@
+    @if (showFilterDropdown || showSortDropdown)
     {
-        <div class="dropdown-backdrop" @onclick="CloseFilterDropdown"></div>
+        <div class="dropdown-backdrop" @onclick="CloseDropdowns"></div>
     }
     <div class="sort-dropdown-wrapper">
         <DropdownMenuButton Label="@($"Filter{(ActiveFilterCount > 0 ? $" ({ActiveFilterCount})" : "")}")"
@@ -28,7 +29,8 @@
                             ClearTitle="Reset all filters"
                             ClearAriaLabel="Reset all filters"
                             ShowMenu="showFilterDropdown"
-                            OnToggle="ToggleFilterDropdown">
+                            OnToggle="ToggleFilterDropdown"
+                            OnClose="CloseDropdowns">
             @if (!ReleasesBrowseMode)
             {
                 @if (Choices.LibraryNames.Count > 0)
@@ -111,11 +113,12 @@
 
     @if (!ReleasesBrowseMode)
     {
-        <div class="sort-dropdown-wrapper" @onfocusout="OnSortFocusOut" tabindex="-1">
+        <div class="sort-dropdown-wrapper">
             <DropdownMenuButton Label="@($"Sort: {MovieFilterOptions.SortFieldLabel(State.SortField)}")"
                                 Arrow="@(State.SortField == "random" ? "" : (State.SortDescending ? "▼" : "▲"))"
                                 ShowMenu="showSortDropdown"
-                                OnToggle="ToggleSortDropdown">
+                                OnToggle="ToggleSortDropdown"
+                                OnClose="CloseDropdowns">
                 @foreach (var field in MovieFilterOptions.SortFields)
                 {
                     <button type="button" class="sort-dropdown-item @(State.SortField == field ? "active" : "")" @onclick="() => SelectSort(field)">
@@ -284,18 +287,16 @@
         showSortDropdown = false;
     }
 
-    private void CloseFilterDropdown() => showFilterDropdown = false;
+    private void CloseDropdowns()
+    {
+        showFilterDropdown = false;
+        showSortDropdown = false;
+    }
 
     private void ToggleSortDropdown()
     {
         showSortDropdown = !showSortDropdown;
         showFilterDropdown = false;
-    }
-
-    private async Task OnSortFocusOut()
-    {
-        await Task.Delay(150);
-        showSortDropdown = false;
     }
 
     private Task SelectSort(string field)
