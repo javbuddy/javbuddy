@@ -74,6 +74,17 @@ public class ActorPhotoUploadFlowTests
             await Expect(modal.GetByRole(AriaRole.Button, new() { Name = "2:3", Exact = true })).ToBeVisibleAsync();
             await Expect(modal.Locator(".preview-canvas").First).ToBeVisibleAsync();
 
+            // 4b. The zoom slider and wheel zoom drive the cropper and readout in the browser.
+            var zoomSlider = modal.Locator(".zoom-slider");
+            var zoomReadout = modal.Locator(".zoom-controls .slider-value");
+            await Expect(zoomReadout).ToHaveTextAsync("1.0×");
+            await zoomSlider.FillAsync("2.5");
+            await Expect(zoomReadout).ToHaveTextAsync("2.5×");
+            await modal.Locator(".cropper-viewport").HoverAsync();
+            await page.Mouse.WheelAsync(0, 100);
+            await Expect(zoomReadout).ToHaveTextAsync("2.4×");
+            Assert.Equal(2.4, double.Parse(await zoomSlider.InputValueAsync(), System.Globalization.CultureInfo.InvariantCulture), 2);
+
             // 5. Save photo
             var saveBtn = modal.GetByRole(AriaRole.Button, new() { Name = "Save Photo" });
             await saveBtn.ClickAsync();

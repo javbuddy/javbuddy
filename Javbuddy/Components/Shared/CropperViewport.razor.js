@@ -457,6 +457,39 @@ export function createCropperSession(createCropper) {
     let activeCropper = null;
     let activeObjectUrl = null;
     let host = null;
+    // The zoom / straighten sliders and their readouts are driven here, in the browser, so dragging one
+    // (or wheel-zooming) never round-trips through .NET. .NET only asks for the final values.
+    let controls = null;
+
+    const formatZoom = (zoom) => `${zoom.toFixed(1)}×`;
+    const formatDegrees = (degrees) => `${degrees.toFixed(1)}°`;
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+    /** The straighten angle in degrees, rounded to the slider's 0.1 step. */
+    function currentDegrees() {
+        return activeCropper ? Math.round(activeCropper.rotation * 180 / Math.PI * 10) / 10 : 0;
+    }
+
+    function syncZoomControls() {
+        if (!controls?.zoomInput || !activeCropper) return;
+        const zoom = Math.round(clamp(activeCropper.zoom, 1.0, 3.0) * 100) / 100;
+        controls.zoomInput.value = zoom.toFixed(2);
+        if (controls.zoomReadout) controls.zoomReadout.textContent = formatZoom(zoom);
+    }
+
+    function syncRotationControls() {
+        if (!controls?.rotationInput || !activeCropper) return;
+        const degrees = currentDegrees();
+        controls.rotationInput.value = degrees.toFixed(1);
+        if (controls.rotationReadout) controls.rotationReadout.textContent = formatDegrees(degrees);
+    }
+
+    function unbindControls() {
+        if (!controls) return;
+        controls.zoomInput?.removeEventListener('input', controls.onZoomInput);
+        controls.rotationInput?.removeEventListener('input', controls.onRotationInput);
+        controls = null;
+    }
 
     function revokeImageSource() {
         if (activeObjectUrl) {
@@ -466,6 +499,7 @@ export function createCropperSession(createCropper) {
     }
 
     function destroyActiveCropper() {
+        unbindControls();
         activeCropper?.destroy();
         activeCropper = null;
     }
@@ -481,16 +515,51 @@ export function createCropperSession(createCropper) {
         initCropper(container, img, ...previewCanvases) {
             destroyActiveCropper();
             activeCropper = createCropper(container, img, ...previewCanvases);
-            // Wheel zoom and load failures happen in JS only; tell the .NET host (OnZoomChanged / OnImageError).
-            activeCropper.onZoomChanged = (zoom) => host?.invokeMethodAsync('OnZoomChanged', zoom).catch(() => {});
+            // Wheel zoom moves the slider and readout right here; only a load failure is reported to the .NET host.
+            activeCropper.onZoomChanged = syncZoomControls;
             activeCropper.onImageError = () => host?.invokeMethodAsync('OnImageError').catch(() => {});
             activeCropper.init();
             return true;
         },
         setHost(dotNetRef) { host = dotNetRef; },
         setAspectRatio: (ratio) => activeCropper?.setAspectRatio(ratio),
-        setZoom: (zoom) => activeCropper?.applyZoom(zoom),
-        setRotation: (degrees) => activeCropper?.setRotation(degrees),
+        /**
+         * Wires the dialog's sliders and readouts to the current cropper (call after initCropper) and shows its
+         * zoom and straighten angle. Any argument may be null: Actor photos have no straighten slider.
+         */
+        bindControls(zoomInput, zoomReadout, rotationInput, rotationReadout) {
+            unbindControls();
+            if (!activeCropper) return;
+            const onZoomInput = () => {
+                const zoom = parseFloat(zoomInput.value);
+                if (Number.isFinite(zoom)) {
+                    activeCropper?.applyZoom(zoom);
+                    syncZoomControls();
+                }
+            };
+            const onRotationInput = () => {
+                const degrees = parseFloat(rotationInput.value);
+                if (Number.isFinite(degrees)) {
+                    activeCropper?.setRotation(clamp(Math.round(degrees * 10) / 10, -45, 45));
+                    syncRotationControls();
+                }
+            };
+            controls = { zoomInput, zoomReadout, rotationInput, rotationReadout, onZoomInput, onRotationInput };
+            zoomInput?.addEventListener('input', onZoomInput);
+            rotationInput?.addEventListener('input', onRotationInput);
+            syncZoomControls();
+            syncRotationControls();
+        },
+        setZoom(zoom) {
+            activeCropper?.applyZoom(zoom);
+            syncZoomControls();
+        },
+        setRotation(degrees) {
+            activeCropper?.setRotation(degrees);
+            syncRotationControls();
+        },
+        /** The straighten angle (degrees) the user has set; .NET reads it when saving or reloading the image. */
+        getRotation: () => currentDegrees(),
         resetCrop: () => activeCropper?.resetCrop(),
         // Null until the image has loaded and been laid out: before that there's no crop box, and the
         // class's own full-image fallback would save the whole image as if the user had cropped it.

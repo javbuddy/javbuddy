@@ -346,16 +346,19 @@ public class ActorImageUploadModalTests : BunitContext
     }
 
     [Fact]
-    public async Task ActorImageUploadModal_WheelZoomFromJs_MovesTheSliderAndReadout()
+    public async Task ActorImageUploadModal_BindsTheZoomSliderAndReadoutToTheCropperInTheBrowser()
     {
         var module = JSInterop.SetupModule("./Components/Shared/ActorImageUploadModal.razor.js");
         module.Mode = JSRuntimeMode.Loose;
         var cut = await RenderWithImageAsync(module);
 
-        await cut.InvokeAsync(() => cut.Instance.OnZoomChanged(1.7000000000000002));
-
-        Assert.Equal("1.7×", cut.Find(".zoom-controls .slider-value").TextContent);
-        Assert.Equal("1.70", cut.Find(".zoom-slider").GetAttribute("value"));
+        // A drag or wheel zoom never reaches .NET: the script drives the slider and readout itself.
+        cut.WaitForAssertion(() => module.VerifyInvoke("bindControls"));
+        var args = module.Invocations.Single(i => i.Identifier == "bindControls").Arguments;
+        Assert.Equal(4, args.Count);
+        Assert.Null(args[2]);
+        Assert.Null(args[3]);
+        Assert.Equal("1.0×", cut.Find(".zoom-controls .slider-value").TextContent);
     }
 
     [Fact]
