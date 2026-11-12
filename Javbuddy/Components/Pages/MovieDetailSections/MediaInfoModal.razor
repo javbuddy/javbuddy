@@ -65,15 +65,22 @@
     private MovieFile? activeFile;
     private string? fullReport;
 
-    private IReadOnlyList<MovieFile> Files => Movie.MovieFiles
+    private IReadOnlyList<MovieFile>? sortedFiles;
+
+    // Sorted once per Movie value and only while the modal is open (the closed modal renders nothing),
+    // not on every render; a new parameter set drops the cache.
+    private IReadOnlyList<MovieFile> Files => sortedFiles ??= Movie.MovieFiles
         .OrderByDescending(f => f.IsPrimary)
         .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
         .ToList();
+
+    protected override void OnParametersSet() => sortedFiles = null;
 
     private string? ActiveScanError => activeFile is not null ? activeFile.MediaScanError : Movie.MediaScanError;
 
     public Task OpenAsync()
     {
+        sortedFiles = null;
         activeFile = Files.FirstOrDefault(f => f.IsPrimary) ?? Files.FirstOrDefault();
         UpdateReport();
         show = true;

@@ -118,4 +118,21 @@ public class MediaInfoModalTests : BunitContext
         Assert.Null(tabs[1].QuerySelector(".version-badge-vr"));
         Assert.Empty(cut.FindAll("select"));
     }
+
+    [Fact]
+    public async Task Tabs_ListPrimaryFirstThenByFileName_AndPickUpFilesAddedByAParentRerender()
+    {
+        var movie = new Movie { Code = "ABC-123" };
+        movie.MovieFiles.Add(new MovieFile { FileName = "b.mp4", VersionTag = "B", MediaScannedAt = DateTime.UtcNow });
+        movie.MovieFiles.Add(new MovieFile { FileName = "a.mp4", VersionTag = "A", MediaScannedAt = DateTime.UtcNow });
+        movie.MovieFiles.Add(new MovieFile { FileName = "z.mp4", VersionTag = "Z", IsPrimary = true, MediaScannedAt = DateTime.UtcNow });
+        var cut = Render<MediaInfoModal>(p => p.Add(x => x.Movie, movie));
+
+        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        Assert.Equal(["Z", "A", "B"], cut.FindAll(".version-tag").Select(e => e.TextContent));
+
+        movie.MovieFiles.Add(new MovieFile { FileName = "c.mp4", VersionTag = "C", MediaScannedAt = DateTime.UtcNow });
+        cut.Render(p => p.Add(x => x.Movie, movie));
+        Assert.Equal(["Z", "A", "B", "C"], cut.FindAll(".version-tag").Select(e => e.TextContent));
+    }
 }

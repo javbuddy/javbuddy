@@ -1095,4 +1095,19 @@ public class ActorsTests : BunitContext
         slider.Change("1");
         Assert.Equal(baseline + 1, CookieWrites());
     }
+
+    [Fact]
+    public void TableView_HeaderAndEveryRowShareTheColumnTemplate()
+    {
+        actorService.GetActorCardsAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<ActorCardModel> { new(1, "Mikami Yua", 5, true), new(2, "Remu", 0, false) });
+        var cut = Render<Actors>();
+
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Table").Click();
+
+        var templates = cut.FindAll(".actor-row").Select(r => r.GetAttribute("style")).Distinct().ToList();
+        Assert.Equal(2, cut.FindAll(".actor-row:not(.actor-table-header)").Count);
+        var template = Assert.Single(templates);
+        Assert.Equal("grid-template-columns: 32px minmax(180px, 2fr) 75px 80px 75px 110px minmax(160px, 1.5fr)", template);
+    }
 }
