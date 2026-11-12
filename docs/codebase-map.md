@@ -80,6 +80,7 @@ One row per product area.
 | `UptimeClock.razor` (+ `.razor.js`) | Ticking elapsed-time readout (System > Status) | `UptimeClockTests.cs` |
 | `BirthdayIndicator.razor` | 🎉 "birthday today" marker next to an actor's name | `BirthdayIndicatorTests.cs` |
 | `FavoriteHeartIcon.razor` / `ShuffleIcon.razor` / `SparkleIcon.razor` / `ApexIcon.razor` | Small inline-SVG icons (heart, shuffle, highlight sparkle, apex diamond) | — |
+| `JellyfinIcon.razor` | The Jellyfin logo ("Open in Jellyfin" badges) | — |
 | `MoviePosterGrid.razor` / `PosterGridSkeleton.razor` | The movie poster grid under the shared poster options (Movies, Actor Detail) and its loading placeholder | `MoviePosterGridTests.cs`, `PosterGridSkeletonTests.cs` |
 | `MovieFilterToolbar.razor` | The Movies filter row (search, status, filter dropdown, sort); also Actor Detail's Movies section and a DeoVR group's filter | `MovieFilterToolbarTests.cs` |
 | `FilterSection.razor` / `RangeFilter.razor` / `ChipMultiSelectGroup.razor` / `MatchAllCheck.razor` | Expandable pieces of the filter dropdown: collapsible section, min/max range, chip multi-select, "Match all" checkbox | `FilterSectionTests.cs`, `RangeFilterTests.cs`, `ChipMultiSelectGroupTests.cs` |
