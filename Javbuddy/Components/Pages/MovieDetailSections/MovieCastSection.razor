@@ -3,6 +3,8 @@
 @using Javbuddy.Models
 @inject IMovieService MovieService
 @inject IActorTagService ActorTagService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <DetailSection Title="Cast" ActionText="@(editingCast ? "Done" : "Edit Cast")" ActionClass="movie-detail-edit-cast-btn" OnAction="ToggleCastEdit">
     @if (castEditError is not null)
@@ -43,7 +45,8 @@
                             <span class="movie-detail-cast-age">Age @cast.Age</span>
                         }
                         <ActorTagPills MovieId="Movie.Id" ActorId="cast.ActorId!.Value" ActorName="@cast.Name" Library="actorTagLibrary"
-                                       Tags="@actorTags.Where(t => t.ActorId == cast.ActorId).ToList()" Editing="editingCast" OnChanged="ActorTagsChangedAsync" />
+                                       Tags="@actorTags.Where(t => t.ActorId == cast.ActorId).ToList()" Editing="editingCast" Adding="addingActorId == cast.ActorId"
+                                       OnToggleAdding="() => ToggleAdding(cast.ActorId!.Value)" OnChanged="ActorTagsChangedAsync" />
                     }
                     else
                     {
@@ -87,6 +90,12 @@
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private bool editingCast;
+    // The one cast member whose add-tag search is open, if any.
+    private int? addingActorId;
+    private IJSObjectReference? module;
+    private IJSObjectReference? dismissBinding;
+    private DotNetObjectReference<MovieCastSection>? selfRef;
+    private bool disposed;
     private string? castEditError;
     private IReadOnlyList<EffectiveActorTag> actorTags = [];
     private IReadOnlyList<ActorTagListItem> actorTagLibrary = [];
@@ -109,7 +118,61 @@
     private void ToggleCastEdit()
     {
         editingCast = !editingCast;
+        addingActorId = null;
         castEditError = null;
+    }
+
+    private void ToggleAdding(int actorId) => addingActorId = addingActorId == actorId ? null : actorId;
+
+    /// <summary>A click outside the open add-tag popover, or Escape.</summary>
+    [JSInvokable]
+    public void CloseAdding()
+    {
+        addingActorId = null;
+        StateHasChanged();
+    }
+
+    // Listens for a click outside the open popover, and Escape, only while one is open.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (disposed) return;
+        try
+        {
+            if (addingActorId is not null && dismissBinding is null)
+            {
+                module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/MovieDetailSections/MovieCastSection.razor.js");
+                selfRef ??= DotNetObjectReference.Create(this);
+                dismissBinding = await module.InvokeAsync<IJSObjectReference>("bindDismiss", selfRef);
+            }
+            else if (addingActorId is null && dismissBinding is not null)
+            {
+                var binding = dismissBinding;
+                dismissBinding = null;
+                await binding.InvokeVoidAsync("unbind");
+                await binding.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        disposed = true;
+        selfRef?.Dispose();
+        try
+        {
+            if (dismissBinding is not null)
+            {
+                await dismissBinding.InvokeVoidAsync("unbind");
+                await dismissBinding.DisposeAsync();
+            }
+            if (module is not null) await module.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
     }
 
     private Task AddCastActorAsync(int actorId) =>

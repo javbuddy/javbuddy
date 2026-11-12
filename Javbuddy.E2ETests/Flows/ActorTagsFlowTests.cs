@@ -58,6 +58,43 @@ public class ActorTagsFlowTests
     }
 
     [Fact]
+    public async Task AddTagPopovers_OnlyOneIsOpenAtATime_AndEscapeOrAClickOutsideClosesIt()
+    {
+        var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-ATAG-4", MovieStatus.Got);
+        var mei = await DbSeeding.SeedActorAsync(fixture.DbFactory, "Mei One");
+        var rio = await DbSeeding.SeedActorAsync(fixture.DbFactory, "Rio Two");
+        await using (var db = await fixture.DbFactory.CreateDbContextAsync())
+        {
+            (await db.Movies.FindAsync(movie.Id))!.MetaActresses = "Mei One, Rio Two";
+            db.MovieActors.AddRange(new MovieActor { MovieId = movie.Id, ActorId = mei.Id }, new MovieActor { MovieId = movie.Id, ActorId = rio.Id });
+            await db.SaveChangesAsync();
+        }
+
+        var page = await fixture.NewPageAsync();
+        await page.GotoInteractiveAsync($"/movies/{movie.Code}");
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Edit Cast" }).ClickAsync();
+
+        var meiAdd = page.Locator("[aria-label='Add an actor tag to Mei One']");
+        var rioAdd = page.Locator("[aria-label='Add an actor tag to Rio Two']");
+        var searches = page.Locator("input.tag-search-input");
+
+        await meiAdd.ClickAsync();
+        await Expect(meiAdd).ToHaveAttributeAsync("aria-expanded", "true");
+        await rioAdd.ClickAsync();
+        await Expect(rioAdd).ToHaveAttributeAsync("aria-expanded", "true");
+        await Expect(meiAdd).ToHaveAttributeAsync("aria-expanded", "false");
+        await Expect(searches).ToHaveCountAsync(1);
+
+        await page.Keyboard.PressAsync("Escape");
+        await Expect(searches).ToHaveCountAsync(0);
+
+        await meiAdd.ClickAsync();
+        await Expect(searches).ToHaveCountAsync(1);
+        await page.Locator("h1, h2").First.ClickAsync();
+        await Expect(searches).ToHaveCountAsync(0);
+    }
+
+    [Fact]
     public async Task ActorTags_AreNotOfferedAsPlainMovieTags()
     {
         var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-ATAG-2", MovieStatus.Got);

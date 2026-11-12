@@ -9,7 +9,7 @@
     var own = Tags.Where(t => !t.IsRolledUp).ToList();
     var clipTags = Tags.Where(t => t.IsRolledUp).ToList();
     var hidden = Math.Max(0, own.Count - VisibleCount) + clipTags.Count;
-    <div class="actor-pills @(adding ? "actor-pills-open" : null)" tabindex="0" role="group" aria-label="Actor tags of @ActorName">
+    <div class="actor-pills @(Adding ? "actor-pills-open" : null)" tabindex="0" role="group" aria-label="Actor tags of @ActorName">
         <div class="actor-pills-row">
             @foreach (var tag in own.Take(VisibleCount))
             {
@@ -21,8 +21,8 @@
             }
             @if (Editing)
             {
-                <button type="button" class="actor-pill actor-pill-add" disabled="@Busy" aria-label="Add an actor tag to @ActorName" aria-expanded="@(adding ? "true" : "false")"
-                        @onclick="() => adding = !adding">+ tag</button>
+                <button type="button" class="actor-pill actor-pill-add" disabled="@Busy" aria-label="Add an actor tag to @ActorName" aria-expanded="@(Adding ? "true" : "false")"
+                        @onclick="() => OnToggleAdding.InvokeAsync()">+ tag</button>
             }
         </div>
         @if (own.Count > VisibleCount || clipTags.Count > 0 || Editing)
@@ -46,7 +46,7 @@
                         <span class="actor-pill actor-pill-clip">@LabelOf(tag.TagId)</span>
                     }
                 }
-                @if (Editing && adding)
+                @if (Editing && Adding)
                 {
                     <TagSearchAdd Search="SearchAsync" ExcludedTagIds="@own.Select(t => t.TagId).ToHashSet()"
                                   OnAdd="tagId => SetAsync(own.Select(t => t.TagId).Append(tagId))" />
@@ -63,7 +63,6 @@
 @code {
     private const int VisibleCount = 2;
 
-    private bool adding;
     private bool busy;
     private string? error;
 
@@ -82,13 +81,14 @@
     /// <summary>Edit Cast is on: tags can be added and removed.</summary>
     [Parameter] public bool Editing { get; set; }
 
+    /// <summary>This actor's add-tag search is open. The host owns it, so that at most one cast member's is open at a time.</summary>
+    [Parameter] public bool Adding { get; set; }
+
+    /// <summary>The "+ tag" pill was clicked: the host opens this actor's search, or closes it if it is the open one.</summary>
+    [Parameter] public EventCallback OnToggleAdding { get; set; }
+
     /// <summary>Raised after a change was saved; the host re-reads the tags.</summary>
     [Parameter] public EventCallback<ActorTagResult> OnChanged { get; set; }
-
-    protected override void OnParametersSet()
-    {
-        if (!Editing) adding = false;
-    }
 
     private bool Busy => busy;
 

@@ -30,6 +30,9 @@ public class ActorTagPillsTests : BunitContext
     }
 
     private IRenderedComponent<ActorTagPills> RenderPills(bool editing, params EffectiveActorTag[] tags) =>
+        RenderPills(editing, false, tags);
+
+    private IRenderedComponent<ActorTagPills> RenderPills(bool editing, bool adding, params EffectiveActorTag[] tags) =>
         Render<ActorTagPills>(p => p
             .Add(x => x.MovieId, 5)
             .Add(x => x.ActorId, Mei)
@@ -37,6 +40,7 @@ public class ActorTagPillsTests : BunitContext
             .Add(x => x.Library, Library)
             .Add(x => x.Tags, tags)
             .Add(x => x.Editing, editing)
+            .Add(x => x.Adding, adding)
             .Add(x => x.OnChanged, EventCallback.Factory.Create<ActorTagResult>(this, changes.Add)));
 
     private static EffectiveActorTag Own(int tagId) => new(Mei, tagId, false, null);
@@ -75,9 +79,8 @@ public class ActorTagPillsTests : BunitContext
     [Fact]
     public void Editing_OffersAddAndRemove_AndSavesTheNewSet()
     {
-        var cut = RenderPills(true, Own(Blonde));
+        var cut = RenderPills(true, true, Own(Blonde));
 
-        cut.Find(".actor-pill-add").Click();
         cut.Find("input.tag-search-input").Input("tat");
         cut.WaitForElements(".tag-search-candidate");
         cut.FindAll(".tag-search-candidate").Single(c => c.TextContent.Trim() == "Tattoo").Click();

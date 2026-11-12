@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
+- **Only one actor-tag popover is open at a time on Movie Detail.** With Edit Cast on, clicking **+ tag** on another cast member now closes the open popover and opens theirs, instead of leaving several overlapping. Clicking outside the popover or pressing Escape closes it too.
 - **Highlight and apex rows in the clip editor show actor names like scene rows do.** Hovering or focusing an actor's name, own or inherited, opens the popover with where the actor comes from and their actor tags; before, only scene rows had it and highlight and apex rows showed plain text.
 - **Actor Detail's delete confirmation matches the other delete dialogs.** It now uses the shared dialog, so it is a little narrower, with a smaller heading and buttons; the wording, Cancel, Esc and clicking outside behave as before.
 - **Every page loads about 14 KB less HTML.** The scripts that set the theme, sidebar and poster blur-up used to be pasted into every page response; they are now one cached file, so the page itself is smaller (a page was about 92 KB before compression, now about 78 KB) and the browser fetches the script once. Nothing looks or behaves differently, and the theme is still applied before the page first paints.
