@@ -71,6 +71,10 @@
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
     [Parameter] public EventCallback OnChanged { get; set; }
 
+    /// <summary>Raised instead of <see cref="OnChanged"/>, when it is bound, after a tag was also removed from the
+    /// movie's scenes, highlights and apexes, which the host then reads again too.</summary>
+    [Parameter] public EventCallback OnClipsChanged { get; set; }
+
     private bool editingTags;
     private string? tagEditError;
 
@@ -144,6 +148,6 @@
             removing = false;
             pendingImplied = null;
         }
-        await OnChanged.InvokeAsync();
+        await (OnClipsChanged.HasDelegate ? OnClipsChanged : OnChanged).InvokeAsync();
     }
 }
