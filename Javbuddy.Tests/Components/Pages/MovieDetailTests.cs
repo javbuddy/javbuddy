@@ -1956,7 +1956,7 @@ public class MovieDetailTests : BunitContext
         await cut.Find(".movie-image-delete-btn").ClickAsync(new());
         await cut.Find(".delete-confirm-confirm-btn").ClickAsync(new());
 
-        cut.WaitForAssertion(() => Assert.Contains("access denied", cut.Find(".movie-detail-section .alert-danger").TextContent));
+        cut.WaitForAssertion(() => Assert.Contains("access denied", cut.Find(".detail-section .alert-danger").TextContent));
     }
 
     [Fact]

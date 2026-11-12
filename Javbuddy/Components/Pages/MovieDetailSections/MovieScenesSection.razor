@@ -26,14 +26,9 @@
    Hovering an apex marker instead pops up its own clip, tags and time. The popovers are all drawn,
    hidden, and shown by CSS; ClipCard.razor.js's bindHoverPreviews starts the hovered apex's (and a
    hovered card's) preview video in the browser, so hovering costs no server round trip. *@
-<div class="movie-detail-section movie-scenes" @ref="sectionRef">
-    <div class="movie-scenes-header">
-        <h2>Scenes@(Scenes.Count > 0 ? $" ({Scenes.Count})" : null)</h2>
-        @if (CanPlay)
-        {
-            <button type="button" class="movie-scenes-edit-btn" @onclick="() => OnEdit.InvokeAsync((null, null))" title="Open the player with the scene editor">Edit scenes</button>
-        }
-    </div>
+<DetailSection @ref="section" Class="movie-scenes" Title="@($"Scenes{(Scenes.Count > 0 ? $" ({Scenes.Count})" : null)}")"
+               ActionText="@(CanPlay ? "Edit scenes" : null)" ActionClass="movie-scenes-edit-btn"
+               ActionTitle="Open the player with the scene editor" OnAction="() => OnEdit.InvokeAsync((null, null))">
 
     @if (TimelineShown && DurationSeconds is > 0 and var duration)
     {
@@ -234,7 +229,7 @@
             </div>
         }
     }
-</div>
+</DetailSection>
 
 <ClipPlayerModal Clip="playingClip"
                  Position="@(playlist is null ? null : playlistIndex + 1)"
@@ -319,7 +314,7 @@
     // What the actor tags were last loaded for. Any change to the clips, the cast or an actor tag reaches here as new
     // lists from the page (the editor reloads them after each save); a render with the same ones needn't query again.
     private (int MovieId, object Cast, object Scenes, object Highlights, object Apexes)? actorTagsLoadedFor;
-    private ElementReference sectionRef;
+    private DetailSection section = null!;
     private IJSObjectReference? clipCardModule;
     private IJSObjectReference? hoverPreviews;
     private PlayerClip? playingClip;
@@ -438,7 +433,7 @@
         try
         {
             clipCardModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipCard.razor.js");
-            hoverPreviews = await clipCardModule.InvokeAsync<IJSObjectReference>("bindHoverPreviews", sectionRef,
+            hoverPreviews = await clipCardModule.InvokeAsync<IJSObjectReference>("bindHoverPreviews", section.Element,
                 ".movie-scenes-card, .movie-scenes-timeline-apex-host");
         }
         catch (JSDisconnectedException)

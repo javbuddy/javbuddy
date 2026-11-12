@@ -5,11 +5,7 @@
 @inject MovieFilterNavigationState FilterNavigationState
 @inject NavigationManager Nav
 
-<div class="movie-detail-section">
-    <div class="movie-detail-section-header">
-        <h2>Genres</h2>
-        <button type="button" class="movie-detail-edit-tags-btn" @onclick="ToggleTagEdit">@(editingTags ? "Done" : "Edit Tags")</button>
-    </div>
+<DetailSection Title="Genres" ActionText="@(editingTags ? "Done" : "Edit Tags")" ActionClass="movie-detail-edit-tags-btn" OnAction="ToggleTagEdit">
     @if (tagEditError is not null)
     {
         <p class="movie-detail-tag-error">@tagEditError</p>
@@ -58,7 +54,7 @@
     {
         <TagSearchAdd ExcludedTagIds="@TagChips.Select(t => t.Id).ToHashSet()" OnAdd="AddTagAsync" />
     }
-</div>
+</DetailSection>
 
 @if (pendingImplied is { } pending)
 {

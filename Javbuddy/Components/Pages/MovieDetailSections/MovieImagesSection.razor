@@ -7,14 +7,7 @@
 
 @if (ExtraFanartThumbUrls.Count > 0 || hasLocalFolder)
 {
-    <div class="movie-detail-section">
-        <div class="movie-detail-section-header">
-            <h2>Images</h2>
-            @if (hasLocalFolder && ExtraFanartThumbUrls.Count > 0)
-            {
-                <button type="button" class="movie-detail-edit-tags-btn" @onclick="OpenImageUploadModal">Add Images</button>
-            }
-        </div>
+    <DetailSection Title="Images" ActionText="@(hasLocalFolder && ExtraFanartThumbUrls.Count > 0 ? "Add Images" : null)" ActionClass="movie-detail-add-images-btn" OnAction="OpenImageUploadModal">
         @if (imagesError is not null)
         {
             <div class="alert alert-danger py-2">@imagesError</div>
@@ -33,7 +26,7 @@
                 <span class="text-muted small">Add images to this movie's extrafanart folder</span>
             </button>
         }
-    </div>
+    </DetailSection>
 }
 
 <MovieImageUploadModal Show="@showImageUploadModal"
