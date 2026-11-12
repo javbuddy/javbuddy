@@ -200,50 +200,26 @@
     border-radius: 3px;
 }
 
-.actor-delete-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1050;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    background: rgba(0, 0, 0, 0.55);
+/* The delete dialog is the shared DeleteConfirmDialog, themed light here (it is dark by default) through
+   custom properties on a wrapper: display: contents keeps the fixed dialog out of the layout. */
+.actor-delete-theme {
+    display: contents;
+    --scene-editor-dialog-bg: #ffffff;
+    --scene-editor-border: #ced4da;
+    --scene-editor-fg: #212529;
+    --scene-editor-muted: #495057;
+    --scene-editor-btn-bg: #ffffff;
+    --scene-editor-accent: #6c757d;
 }
 
-.actor-delete-modal-panel {
-    width: min(100%, 30rem);
-    padding: 1.5rem;
-    background: #ffffff;
-    border-radius: 4px;
-    box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.3);
+:root[data-theme="dark"] .actor-delete-theme {
+    --scene-editor-dialog-bg: var(--jb-dark-surface);
+    --scene-editor-border: var(--jb-dark-border-strong);
+    --scene-editor-fg: #e3e5e8;
+    --scene-editor-muted: #b4b8c1;
+    --scene-editor-btn-bg: transparent;
+    --scene-editor-accent: #b4b8c1;
 }
-
-    .actor-delete-modal-panel h2 {
-        margin: 0 0 0.75rem;
-        font-size: 1.25rem;
-    }
-
-    .actor-delete-modal-panel p {
-        margin: 0;
-        color: #495057;
-    }
-
-.actor-delete-modal-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-top: 1.5rem;
-}
-
-:root[data-theme="dark"] .actor-delete-modal-panel {
-    background: var(--jb-dark-surface);
-    color: #e3e5e8;
-}
-
-    :root[data-theme="dark"] .actor-delete-modal-panel p {
-        color: #b4b8c1;
-    }
 
 /* The Movies section's card, like ActorPhotoGallery's and ActorClipsSection's (CSS isolation keeps
    their rules there, so these are copies). */

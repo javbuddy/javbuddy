@@ -78,4 +78,15 @@ public class DeleteConfirmDialogTests : BunitContext
 
         Assert.Equal(0, cancelled);
     }
+
+    [Fact]
+    public void TitleAndConfirmText_ReplaceTheDefaults()
+    {
+        var cut = Render<DeleteConfirmDialog>(p => p
+            .Add(x => x.Title, "Delete Remu?")
+            .Add(x => x.ConfirmText, "Delete Actor"));
+
+        Assert.Equal("Delete Remu?", cut.Find("h2").TextContent);
+        Assert.Equal("Delete Actor", cut.Find(".delete-confirm-confirm-btn").TextContent);
+    }
 }

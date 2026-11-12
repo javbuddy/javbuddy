@@ -6,7 +6,7 @@
 <div class="delete-confirm-backdrop" data-backdrop-dismiss role="presentation" @onclick="CancelAsync" @onclick:stopPropagation="true"
      @onkeydown="HandleKeyDownAsync" @onkeydown:stopPropagation="true">
     <div class="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="@titleId" @onclick:stopPropagation="true">
-        <h2 id="@titleId">Delete "@ItemName"?</h2>
+        <h2 id="@titleId">@(Title ?? $"Delete \"{ItemName}\"?")</h2>
         @if (Message is not null)
         {
             <p>@Message</p>
@@ -14,14 +14,20 @@
         @ChildContent
         <div class="delete-confirm-actions">
             <button type="button" class="delete-confirm-btn delete-confirm-cancel-btn" @ref="cancelButton" @onclick="CancelAsync" disabled="@Busy">Cancel</button>
-            <button type="button" class="delete-confirm-btn delete-confirm-confirm-btn" @onclick="OnConfirm" disabled="@Busy">Delete</button>
+            <button type="button" class="delete-confirm-btn delete-confirm-confirm-btn" @onclick="OnConfirm" disabled="@Busy">@ConfirmText</button>
         </div>
     </div>
 </div>
 
 @code {
     /// <summary>What's being deleted, shown as <c>Delete "ItemName"?</c></summary>
-    [Parameter, EditorRequired] public string ItemName { get; set; } = default!;
+    [Parameter] public string? ItemName { get; set; }
+
+    /// <summary>The whole title, in place of <c>Delete "ItemName"?</c>.</summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>The confirm button's label.</summary>
+    [Parameter] public string ConfirmText { get; set; } = "Delete";
 
     /// <summary>Optional line under the title, e.g. what else gets deleted.</summary>
     [Parameter] public string? Message { get; set; }
