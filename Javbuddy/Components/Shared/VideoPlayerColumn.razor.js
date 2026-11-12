@@ -9,6 +9,8 @@
 // it happens (Next, N, a version switch, closing, Review mode's next movie), however quickly renders
 // follow each other, without a round trip per video.
 
+import { releaseVideo } from './ScrubBar.razor.js';
+
 const PLAYER_VIDEO = 'video.video-player-media';
 
 let observer = null;
@@ -32,7 +34,5 @@ export function watch() {
 function release(video) {
     // Back in the page by now means it was moved rather than removed.
     if (video.isConnected || !video.hasAttribute('src')) return;
-    video.pause();
-    video.removeAttribute('src');
-    video.load();
+    releaseVideo(video);
 }

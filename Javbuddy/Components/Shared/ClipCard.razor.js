@@ -1,3 +1,5 @@
+import { releaseVideo } from './ScrubBar.razor.js';
+
 // A plain left-click on a clip card opens the clip player instead of following the card's
 // link to Movie Detail; ctrl/meta/shift/alt- and middle-clicks keep the browser's own behavior.
 // Blazor's link interception skips a click whose default is already prevented. The host binds it to
@@ -33,9 +35,7 @@ export function bindHoverPreviews(container, cardSelector = '.scene-wall-card') 
         clearTimeout(timer);
         timer = 0;
         if (!video) return;
-        video.pause();
-        video.removeAttribute('src');
-        video.load();
+        releaseVideo(video);
         video.remove();
         video = null;
     };
