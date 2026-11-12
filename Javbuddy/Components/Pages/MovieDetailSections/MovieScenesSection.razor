@@ -232,8 +232,8 @@
 </DetailSection>
 
 <ClipPlayerModal Clip="playingClip"
-                 Position="@(playlist is null ? null : playlistIndex + 1)"
-                 Count="playlist?.Length"
+                 Position="playlist?.Position"
+                 Count="playlist?.Count"
                  OnEnded="NextClip"
                  OnNext="EventCallback.Factory.Create(this, NextClip)"
                  OnPrevious="EventCallback.Factory.Create(this, PreviousClip)"
@@ -318,8 +318,7 @@
     private IJSObjectReference? clipCardModule;
     private IJSObjectReference? hoverPreviews;
     private PlayerClip? playingClip;
-    private PlayerClip[]? playlist;
-    private int playlistIndex;
+    private Playlist<PlayerClip>? playlist;
     private bool disposed;
 
     protected override void OnInitialized()
@@ -534,22 +533,19 @@
     private void PlayScene(SceneItem scene)
     {
         if (!CanPlay) return;
-        playlist = Scenes.Select(SceneClip).ToArray();
-        PlayAt(Scenes.ToList().FindIndex(s => s.Id == scene.Id));
+        StartPlaylist(Scenes.Select(SceneClip).ToArray(), Scenes.ToList().FindIndex(s => s.Id == scene.Id));
     }
 
     private void PlayHighlight(HighlightItem highlight)
     {
         if (!CanPlay) return;
-        playlist = Highlights.Select(HighlightClip).ToArray();
-        PlayAt(Highlights.ToList().FindIndex(h => h.Id == highlight.Id));
+        StartPlaylist(Highlights.Select(HighlightClip).ToArray(), Highlights.ToList().FindIndex(h => h.Id == highlight.Id));
     }
 
     private void PlayApex(ApexItem apex)
     {
         if (!CanPlay) return;
-        playlist = Apexes.Select(ApexClip).ToArray();
-        PlayAt(Apexes.ToList().FindIndex(a => a.Id == apex.Id));
+        StartPlaylist(Apexes.Select(ApexClip).ToArray(), Apexes.ToList().FindIndex(a => a.Id == apex.Id));
     }
 
     /// <summary>Plays every highlight of the movie one after another in the clip player, in timeline order or
@@ -564,22 +560,21 @@
     {
         if (!CanPlay || clips.Length == 0) return;
         if (shuffle) Random.Shared.Shuffle(clips);
-        playlist = clips;
-        PlayAt(0);
+        StartPlaylist(clips, 0);
         StateHasChanged();
     }
 
-    private void PlayAt(int index)
+    private void StartPlaylist(PlayerClip[] clips, int startIndex)
     {
-        playlistIndex = Math.Max(index, 0);
-        playingClip = playlist![playlistIndex];
+        playlist = new Playlist<PlayerClip>(clips, startIndex);
+        playingClip = playlist.Current;
     }
 
     private void NextClip()
     {
-        if (playlist is not null && playlistIndex + 1 < playlist.Length)
+        if (playlist?.TryNext() == true)
         {
-            PlayAt(playlistIndex + 1);
+            playingClip = playlist.Current;
         }
         else
         {
@@ -589,7 +584,7 @@
 
     private void PreviousClip()
     {
-        if (playlist is not null && playlistIndex > 0) PlayAt(playlistIndex - 1);
+        if (playlist?.TryPrevious() == true) playingClip = playlist.Current;
     }
 
     private void ClosePlayer()

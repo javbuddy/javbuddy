@@ -151,7 +151,7 @@ else
                           Scenes="playerScenes"
                           Highlights="playerHighlights"
                           Apexes="playerApexes"
-                          CanPrevious="@(playlistIndex > 0)"
+                          CanPrevious="@(playlist!.CanGoPrevious)"
                           OnNext="NextMovie"
                           OnPrevious="PreviousMovie"
                           OnClose="ClosePlayer" />
@@ -280,9 +280,8 @@ else
     private bool showOptionsModal;
     // Play all / Shuffle: the playable movies the filters match, fixed when the player opens (like the
     // Scenes wall's playlist), and which one is on screen.
-    private Movie[]? playlist;
-    private int playlistIndex;
-    private Movie? playingMovie => playlist is null ? null : playlist[playlistIndex];
+    private Playlist<Movie>? playlist;
+    private Movie? playingMovie => playlist?.Current;
 
     // Nothing to play when no movie matches, or when only Missing ones can (the Missing status filter).
     private bool PlayDisabled => playlistLoading || BrowseActive || window.FilteredCount == 0 || filters.Status == MovieStatus.Missing;
@@ -299,8 +298,7 @@ else
             var movies = (await GridQueries.GetWithFilesAsync(filters.ToFilter(), filters.ToSort())).ToArray();
             if (movies.Length == 0) return;
             if (shuffle) Random.Shared.Shuffle(movies);
-            playlist = movies;
-            playlistIndex = 0;
+            playlist = new Playlist<Movie>(movies);
             _ = LoadPlayerMarkersAsync();
         }
         finally
@@ -342,8 +340,8 @@ else
     // Next, or closing after the last movie.
     private void NextMovie()
     {
-        if (playlist is not null && playlistIndex + 1 < playlist.Length) {
-            playlistIndex++;
+        if (playlist?.TryNext() == true)
+        {
             _ = LoadPlayerMarkersAsync();
         }
         else ClosePlayer();
@@ -351,9 +349,8 @@ else
 
     private void PreviousMovie()
     {
-        if (playlistIndex > 0)
+        if (playlist?.TryPrevious() == true)
         {
-            playlistIndex--;
             _ = LoadPlayerMarkersAsync();
         }
     }

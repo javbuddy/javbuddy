@@ -82,6 +82,7 @@ One row per product area.
 | `FavoriteHeartIcon.razor` / `ShuffleIcon.razor` / `SparkleIcon.razor` / `ApexIcon.razor` | Small inline-SVG icons (heart, shuffle, highlight sparkle, apex diamond) | — |
 | `JellyfinIcon.razor` | The Jellyfin logo ("Open in Jellyfin" badges) | — |
 | `MoviePosterGrid.razor` / `PosterGridSkeleton.razor` | The movie poster grid under the shared poster options (Movies, Actor Detail) and its loading placeholder | `MoviePosterGridTests.cs`, `PosterGridSkeletonTests.cs` |
+| `Playlist.cs` | Cursor over the player's playlist (Play all / Shuffle, a scene's siblings): current entry, next, previous | `PlaylistTests.cs` |
 | `MovieFilterToolbar.razor` | The Movies filter row (search, status, filter dropdown, sort); also Actor Detail's Movies section and a DeoVR group's filter | `MovieFilterToolbarTests.cs` |
 | `FilterSection.razor` / `RangeFilter.razor` / `ChipMultiSelectGroup.razor` / `MatchAllCheck.razor` | Expandable pieces of the filter dropdown: collapsible section, min/max range, chip multi-select, "Match all" checkbox | `FilterSectionTests.cs`, `RangeFilterTests.cs`, `ChipMultiSelectGroupTests.cs` |
 | `MovieRangeFilters.razor` / `MovieCountFilters.razor` / `ActorAttributeFilters.razor` | `RangeFilter` rows for a movie's ranges and counts, and the actor-attribute filters | `MovieCountFiltersTests.cs`, `ActorAttributeFiltersTests.cs` |

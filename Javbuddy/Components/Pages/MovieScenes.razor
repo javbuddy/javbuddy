@@ -223,8 +223,8 @@
 </div>
 
 <ClipPlayerModal Clip="playingClip"
-                 Position="@(playlist is null ? null : playlistIndex + 1)"
-                 Count="playlist?.Length"
+                 Position="@(playlist?.Position)"
+                 Count="playlist?.Count"
                  OnEnded="NextClip"
                  OnNext="@(playlist is null ? default : EventCallback.Factory.Create(this, NextClip))"
                  OnPrevious="@(playlist is null ? default : EventCallback.Factory.Create(this, PreviousClip))"
@@ -288,8 +288,7 @@
     private ElementReference wallRef;
     private PlayerClip? playingClip;
     // Play all / Shuffle's clips, fixed when started; null for a single card.
-    private PlayerClip[]? playlist;
-    private int playlistIndex;
+    private Playlist<PlayerClip>? playlist;
 
     /// <summary>What the page remembers between visits, like the Movies page's
     /// javbuddy-movies-view cookie. The random order's seed isn't kept, so a new visit reshuffles.</summary>
@@ -858,22 +857,16 @@
             .ToArray();
         if (clips.Length == 0) return;
         if (shuffle) Random.Shared.Shuffle(clips);
-        playlist = clips;
-        PlayAt(0);
-    }
-
-    private void PlayAt(int index)
-    {
-        playlistIndex = index;
-        playingClip = playlist![index];
+        playlist = new Playlist<PlayerClip>(clips);
+        playingClip = playlist.Current;
     }
 
     // A clip's end or Next: the playlist's next clip, or closing after the last (or a single clip).
     private void NextClip()
     {
-        if (playlist is not null && playlistIndex + 1 < playlist.Length)
+        if (playlist?.TryNext() == true)
         {
-            PlayAt(playlistIndex + 1);
+            playingClip = playlist.Current;
         }
         else
         {
@@ -884,7 +877,7 @@
     // The clip controls restart the first clip themselves; this only goes back one.
     private void PreviousClip()
     {
-        if (playlist is not null && playlistIndex > 0) PlayAt(playlistIndex - 1);
+        if (playlist?.TryPrevious() == true) playingClip = playlist.Current;
     }
 
     private void ClosePlayer()
