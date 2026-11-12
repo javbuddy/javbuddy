@@ -1,5 +1,4 @@
-/* A highlight's add/edit form, moved from HighlightEditor.razor.css (CSS isolation
-   doesn't share it); reads the same --scene-editor-* custom properties. */
+/* A highlight's add/edit form; reads the editor's --scene-editor-* custom properties. */
 
 .highlight-editor-btn {
     appearance: none;

@@ -127,9 +127,9 @@ function restoreScrollPosition(state) {
 }
 
 export function scrollToTop(id) {
-    // Explicitly instant: the app sets `scroll-behavior: smooth` on <html>, which would otherwise
-    // animate this all the way up from wherever the user was — pulling a window fetch along at
-    // every position it passes through on the way.
+    // Explicitly instant, so this can never animate all the way up from wherever the user was
+    // (pulling a window fetch along at every position it passes through) even if a `scroll-behavior:
+    // smooth` rule ever returns; app.css currently sets `auto` on <html>.
     window.scrollTo({ top: 0, behavior: 'instant' });
     const state = grids.get(id);
     if (state) schedule(state);

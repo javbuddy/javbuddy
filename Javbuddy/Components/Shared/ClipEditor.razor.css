@@ -383,7 +383,7 @@
     color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
-/* Highlight and apex list items (moved from HighlightEditor.razor.css / ApexEditor.razor.css). */
+/* Highlight and apex list items (the former HighlightEditor and ApexEditor lists). */
 .highlight-editor-item {
     display: flex;
     align-items: center;

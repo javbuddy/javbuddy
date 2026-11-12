@@ -16,9 +16,8 @@
 @* One movie's scenes, highlights and apexes as a tree: each scene expands to the highlights
    starting in it and the apexes in it, each highlight to its apexes, and what no scene holds goes under
    "Outside scenes" (ClipTree). Tags roll up and show grayed on the scenes and highlights above them; actors
-   flow down and show grayed on the highlights and apexes inheriting them. Replaces the stacked SceneEditor,
-   HighlightEditor and ApexEditor, whose rows and forms live on in ClipHighlightRow,
-   ClipHighlightForm, ClipApexRow and ClipApexForm. Shared by Review mode's card and the player modal's side
+   flow down and show grayed on the highlights and apexes inheriting them. Its highlight and apex rows and
+   forms are ClipHighlightRow, ClipHighlightForm, ClipApexRow and ClipApexForm. Shared by Review mode's card and the player modal's side
    panel; talks to the host's <video> through ClipEditor.razor.js (current time, seek, play-clip, and — when
    EnableShortcuts — the m / Shift+M, h / Shift+H and a keys) and reports every (re)load through the three
    On…Changed callbacks so the host can draw its timeline. *@

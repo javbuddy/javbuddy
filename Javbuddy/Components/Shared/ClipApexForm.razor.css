@@ -1,5 +1,4 @@
-/* An apex's add/edit form, moved from ApexEditor.razor.css (CSS isolation doesn't
-   share it); reads the same --scene-editor-* custom properties. */
+/* An apex's add/edit form; reads the editor's --scene-editor-* custom properties. */
 
 .apex-editor-btn {
     appearance: none;
