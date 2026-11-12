@@ -379,7 +379,7 @@ else
 
     @if (showDeleteConfirmation)
     {
-        <div class="actor-delete-modal-backdrop" tabindex="-1" role="presentation" @onclick="CloseDeleteConfirmation" @onkeydown="HandleDeleteConfirmationKeyDown">
+        <div class="actor-delete-modal-backdrop" data-backdrop-dismiss tabindex="-1" role="presentation" @onclick="CloseDeleteConfirmation" @onkeydown="HandleDeleteConfirmationKeyDown">
             <div class="actor-delete-modal-panel" role="dialog" aria-modal="true" aria-labelledby="actor-delete-modal-title" @onclick:stopPropagation="true">
                 <h2 id="actor-delete-modal-title">Delete @actor!.DisplayName?</h2>
                 <p>This will unlink the actor from linked movies, delete custom aliases, and remove cached portraits.</p>

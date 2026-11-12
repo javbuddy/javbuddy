@@ -1,6 +1,6 @@
 @if (Show)
 {
-    <div class="slide-over-drawer-overlay" tabindex="0" @ref="overlayRef" @onkeydown="OnKeyDown" @onclick="Close">
+    <div class="slide-over-drawer-overlay" data-backdrop-dismiss tabindex="0" @ref="overlayRef" @onkeydown="OnKeyDown" @onclick="Close">
         <div class="slide-over-drawer-panel @(Wide ? "slide-over-drawer-panel-wide" : null)" @onclick:stopPropagation="true">
             <div class="slide-over-drawer-head">
                 <h2>@Title</h2>

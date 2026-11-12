@@ -3,7 +3,7 @@
    here, so they don't also close a player modal around it; Cancel is focused on open so Esc works
    without a click first. The Review shortcut and seek-key guards look for .delete-confirm-backdrop.
    Themed by the --scene-editor-* custom properties. *@
-<div class="delete-confirm-backdrop" role="presentation" @onclick="CancelAsync" @onclick:stopPropagation="true"
+<div class="delete-confirm-backdrop" data-backdrop-dismiss role="presentation" @onclick="CancelAsync" @onclick:stopPropagation="true"
      @onkeydown="HandleKeyDownAsync" @onkeydown:stopPropagation="true">
     <div class="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="@titleId" @onclick:stopPropagation="true">
         <h2 id="@titleId">Delete "@ItemName"?</h2>

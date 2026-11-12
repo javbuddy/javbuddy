@@ -13,7 +13,7 @@
    HeaderActions and replaces the native controls and scrub bar with its own clip Controls. *@
 @if (Show)
 {
-    <div class="video-player-modal-backdrop" tabindex="0" @ref="backdropRef" @onclick="CloseAsync">
+    <div class="video-player-modal-backdrop" data-backdrop-dismiss tabindex="0" @ref="backdropRef" @onclick="CloseAsync">
         <InertBackground Root="backdropRef" />
         <div class="video-player-modal-panel" @ref="panelRef" @onclick:stopPropagation="true">
             <div class="video-player-modal-header">
