@@ -8,6 +8,7 @@
 @inject IQBittorrentClient QBittorrentClient
 @inject TorrentChangeNotifier ChangeNotifier
 @inject IServiceScopeFactory ScopeFactory
+@inject TimeProvider TimeProvider
 @rendermode InteractiveServer
 
 <PageTitle>Queue · Javbuddy</PageTitle>
@@ -125,13 +126,24 @@ else
         StateHasChanged();
     });
 
+    private static readonly TimeSpan LivePollInterval = TimeSpan.FromSeconds(4);
+
+    /// <summary>True when at least one loaded row is still being downloaded (Queued/Downloading, with a
+    /// client hash, and not already at 100% on the last poll): only then is a qBittorrent call worth
+    /// making. A Seeding/Completed row never changes its progress, speed or ETA; the timer keeps
+    /// ticking, so a grab (OnChangedElsewhere reloads the rows) resumes polling on the next tick.</summary>
+    public static bool NeedsLivePoll(IEnumerable<TorrentDownload> rows) => rows.Any(r =>
+        r.Hash is not null
+        && r.Status is TorrentDownloadStatus.Queued or TorrentDownloadStatus.Downloading
+        && r.Progress is not >= 1);
+
     /// <summary>Polls qBittorrent directly every few seconds while this page is open, for live
     /// progress/speed/ETA — separate from QBittorrentSyncTask, which is the durable ~1-minute
     /// background reconciliation that keeps History accurate even with no one watching. Only
     /// updates the in-memory rows already loaded; never writes to the database.</summary>
     private async Task LivePollLoopAsync(CancellationToken ct)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
+        using var timer = new PeriodicTimer(LivePollInterval, TimeProvider);
         try
         {
             while (await timer.WaitForNextTickAsync(ct))
@@ -146,8 +158,7 @@ else
 
     private async Task RefreshLiveProgressAsync(CancellationToken ct)
     {
-        if (rows is not { Count: > 0 }) return;
-        if (!rows.Any(r => r.Hash is not null)) return;
+        if (rows is null || !NeedsLivePoll(rows)) return;
 
         var live = await QBittorrentClient.GetTorrentsAsync(ct);
         var byHash = live
