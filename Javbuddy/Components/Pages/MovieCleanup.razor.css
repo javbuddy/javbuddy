@@ -125,19 +125,13 @@
     padding: 1rem;
     box-sizing: border-box;
     overflow: hidden;
-    /* Restyles the shared CastSearchAdd (dark by default) for this light card. */
-    --cast-search-fg: #212529;
-    --cast-search-input-bg: #ffffff;
-    --cast-search-input-border: #ced4da;
-    --cast-search-results-bg: #ffffff;
-    --cast-search-results-border: #ced4da;
-    --cast-search-hover-bg: #f1f3f5;
-    --tag-search-fg: #212529;
-    --tag-search-input-bg: #ffffff;
-    --tag-search-input-border: #ced4da;
-    --tag-search-results-bg: #ffffff;
-    --tag-search-results-border: #ced4da;
-    --tag-search-hover-bg: #f1f3f5;
+    /* Restyles the shared search boxes (CastSearchAdd, TagSearchAdd; dark by default) for this light card. */
+    --search-add-fg: #212529;
+    --search-add-input-bg: #ffffff;
+    --search-add-input-border: #ced4da;
+    --search-add-results-bg: #ffffff;
+    --search-add-results-border: #ced4da;
+    --search-add-hover-bg: #f1f3f5;
     --scene-editor-fg: #212529;
     --scene-editor-muted: var(--jb-muted);
     --scene-editor-accent: #0d6efd;
@@ -623,18 +617,12 @@
 :root[data-theme="dark"] .cleanup-card {
     background-color: var(--jb-dark-surface);
     border-color: var(--jb-dark-border);
-    --cast-search-fg: var(--jb-dark-text);
-    --cast-search-input-bg: rgba(255, 255, 255, 0.06);
-    --cast-search-input-border: rgba(255, 255, 255, 0.14);
-    --cast-search-results-bg: #1a1c23;
-    --cast-search-results-border: var(--jb-dark-border-strong);
-    --cast-search-hover-bg: #252a36;
-    --tag-search-fg: var(--jb-dark-text);
-    --tag-search-input-bg: rgba(255, 255, 255, 0.06);
-    --tag-search-input-border: rgba(255, 255, 255, 0.14);
-    --tag-search-results-bg: #1a1c23;
-    --tag-search-results-border: var(--jb-dark-border-strong);
-    --tag-search-hover-bg: #252a36;
+    --search-add-fg: var(--jb-dark-text);
+    --search-add-input-bg: rgba(255, 255, 255, 0.06);
+    --search-add-input-border: rgba(255, 255, 255, 0.14);
+    --search-add-results-bg: #1a1c23;
+    --search-add-results-border: var(--jb-dark-border-strong);
+    --search-add-hover-bg: #252a36;
     --scene-editor-fg: var(--jb-dark-text);
     --scene-editor-muted: #9aa1b2;
     --scene-editor-accent: #6ea8fe;

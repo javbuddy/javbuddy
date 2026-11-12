@@ -1,20 +1,11 @@
-@implements IDisposable
 @inject ITagService TagService
 
-<div class="tag-search">
-    <input type="text" class="tag-search-input" placeholder="Search tags to add…" value="@query" @oninput="OnInputAsync" @onkeydown="OnKeyDownAsync" />
-    @if (results.Count > 0)
-    {
-        <div class="tag-search-results">
-            @foreach (var candidate in results)
-            {
-                <div class="tag-search-candidate" @onclick="() => AddAsync(candidate)">
-                    @(candidate.ParentTagName != null ? $"{candidate.ParentTagName} › {candidate.Name}" : candidate.Name)
-                </div>
-            }
-        </div>
-    }
-</div>
+<SearchAddBox TItem="TagListItem" ClassPrefix="tag-search" Compact="true" Placeholder="Search tags to add…"
+              Search="SearchAsync" OnAdd="AddAsync" OnAddFreeText="OnAddFreeText">
+    <ItemTemplate Context="candidate">
+        @(candidate.ParentTagName != null ? $"{candidate.ParentTagName} › {candidate.Name}" : candidate.Name)
+    </ItemTemplate>
+</SearchAddBox>
 
 @code {
     /// <summary>Tags already on the movie, hidden from the results.</summary>
@@ -33,51 +24,17 @@
     /// <summary>Looks the tags up in place of the tag library's search, e.g. for actor tags (ActorTagsEditor).</summary>
     [Parameter] public Func<string, Task<IReadOnlyList<TagListItem>>>? Search { get; set; }
 
-    private string query = "";
-    private IReadOnlyList<TagListItem> results = [];
-
-    private readonly Debouncer debouncer = new();
-
-    private async Task OnInputAsync(ChangeEventArgs e)
+    private async Task<IReadOnlyList<TagListItem>> SearchAsync(string term, CancellationToken ct)
     {
-        query = e.Value?.ToString() ?? "";
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            debouncer.Cancel();
-            results = [];
-            return;
-        }
+        var matches = Search is not null ? await Search(term) : await TagService.GetTagsAsync(term, ct: ct);
 
-        // Debounced, so a lookup doesn't run per keystroke.
-        var term = query;
-        await debouncer.RunAsync(async ct =>
-        {
-            var matches = Search is not null ? await Search(term) : await TagService.GetTagsAsync(term, ct: ct);
-            if (ct.IsCancellationRequested) return;
-
-            // Only approved tags can be added to a movie by hand (unapproved ones go through the Tags
-            // page's review flow first).
-            results = matches.Where(t => !ExcludedTagIds.Contains(t.Id) && !t.NeedsReview).Take(10).ToList();
-        });
+        // Only approved tags can be added to a movie by hand (unapproved ones go through the Tags
+        // page's review flow first).
+        return matches.Where(t => !ExcludedTagIds.Contains(t.Id) && !t.NeedsReview).Take(10).ToList();
     }
-
-    private async Task OnKeyDownAsync(KeyboardEventArgs e)
-    {
-        if (e.Key != "Enter" || !OnAddFreeText.HasDelegate || string.IsNullOrWhiteSpace(query)) return;
-        var text = query.Trim();
-        debouncer.Cancel();
-        query = "";
-        results = [];
-        await OnAddFreeText.InvokeAsync(text);
-    }
-
-    public void Dispose() => debouncer.Dispose();
 
     private async Task AddAsync(TagListItem candidate)
     {
-        debouncer.Cancel();
-        query = "";
-        results = [];
         await OnAdd.InvokeAsync(candidate.Id);
         await OnAddItem.InvokeAsync(candidate);
     }

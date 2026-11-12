@@ -39,6 +39,7 @@ One row per product area.
 | `LoadingIndicator.razor` | Spinner/placeholder shown while data loads | `LoadingIndicatorTests.cs` |
 | `CastSearchAdd.razor` | Actor search box + results list for adding a tracked actor to a movie's cast; restylable via `--cast-search-*` CSS custom properties | `CastSearchAddTests.cs` |
 | `TagSearchAdd.razor` | Tag-library search box + results list for adding an approved tag to a movie; restylable via `--tag-search-*` CSS custom properties | `TagSearchAddTests.cs` |
+| `SearchAddBox.razor` | Generic debounced search box + results dropdown (the base of `CastSearchAdd` and `TagSearchAdd`) | `SearchAddBoxTests.cs` |
 | `MovieGallery.razor` | Thumbnail gallery for extrafanart/preview images, opening `GalleryLightbox` | `MovieGalleryTests.cs` |
 | `GalleryLightbox.razor` | Full-screen, navigable image viewer (progress bar, prev/next, keys, swipe, Original toggle, zoom) shared by `MovieGallery`, `ActorPhotos` and `ActorPhotoGallery` | `GalleryLightboxTests.cs`; real-browser coverage in `GalleryLightboxNavZoneFlowTests.cs` and `GalleryLightboxZoomFlowTests.cs` |
 | `ImageZoomControls.razor` | Lightbox zoom buttons plus wheel/double-click/drag/pinch zoom and pan (`.razor.js`), used by `GalleryLightbox` and `ImageLightboxModal` | `ImageZoomControlsTests.cs`; real-browser coverage in `GalleryLightboxZoomFlowTests.cs` |

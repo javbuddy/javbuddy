@@ -1,17 +1,11 @@
 .sme {
-    /* Restyles the shared CastSearchAdd/TagSearchAdd (dark by default) for the light drawer. */
-    --cast-search-fg: #212529;
-    --cast-search-input-bg: #ffffff;
-    --cast-search-input-border: #ced4da;
-    --cast-search-results-bg: #ffffff;
-    --cast-search-results-border: #ced4da;
-    --cast-search-hover-bg: #f1f3f5;
-    --tag-search-fg: #212529;
-    --tag-search-input-bg: #ffffff;
-    --tag-search-input-border: #ced4da;
-    --tag-search-results-bg: #ffffff;
-    --tag-search-results-border: #ced4da;
-    --tag-search-hover-bg: #f1f3f5;
+    /* Restyles the shared search boxes (CastSearchAdd, TagSearchAdd; dark by default) for the light drawer. */
+    --search-add-fg: #212529;
+    --search-add-input-bg: #ffffff;
+    --search-add-input-border: #ced4da;
+    --search-add-results-bg: #ffffff;
+    --search-add-results-border: #ced4da;
+    --search-add-hover-bg: #f1f3f5;
 }
 
 .sme-field-warning {
@@ -345,18 +339,12 @@
 }
 
 :root[data-theme="dark"] .sme {
-    --cast-search-fg: #e6e8ec;
-    --cast-search-input-bg: rgba(255, 255, 255, 0.06);
-    --cast-search-input-border: rgba(255, 255, 255, 0.14);
-    --cast-search-results-bg: #1a1c23;
-    --cast-search-results-border: var(--jb-dark-border-strong);
-    --cast-search-hover-bg: #252a36;
-    --tag-search-fg: #e6e8ec;
-    --tag-search-input-bg: rgba(255, 255, 255, 0.06);
-    --tag-search-input-border: rgba(255, 255, 255, 0.14);
-    --tag-search-results-bg: #1a1c23;
-    --tag-search-results-border: var(--jb-dark-border-strong);
-    --tag-search-hover-bg: #252a36;
+    --search-add-fg: #e6e8ec;
+    --search-add-input-bg: rgba(255, 255, 255, 0.06);
+    --search-add-input-border: rgba(255, 255, 255, 0.14);
+    --search-add-results-bg: #1a1c23;
+    --search-add-results-border: var(--jb-dark-border-strong);
+    --search-add-hover-bg: #252a36;
 }
 
 :root[data-theme="dark"] .sme-cast-chip {
