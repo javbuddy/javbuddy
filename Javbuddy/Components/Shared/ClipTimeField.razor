@@ -1,0 +1,39 @@
+@* A time text box with its "Now" button, shared by ClipEditor's scene form, ClipHighlightForm and
+   ClipApexForm. The caller owns the label around it; extra controls (the scene end's clear button) go
+   in ChildContent, which keeps the caller's CSS scope. ClassPrefix plus InputClass / NowClass keep each
+   form's own class names on the elements, which tests and the E2E suite select on. *@
+<span class="clip-time-row @ClassPrefix-time-row @(Fill ? "clip-time-row-fill" : null)">
+    <input class="clip-time-input @ClassPrefix-input @InputClass" type="text" inputmode="decimal" placeholder="@Placeholder" aria-label="@AriaLabel"
+           @bind:get="Value" @bind:set="ValueChanged.InvokeAsync" @bind:event="oninput" />
+    <button type="button" class="clip-time-now-btn @ClassPrefix-btn @NowClass" @onclick="OnNow" title="@NowTitle">Now</button>
+    @ChildContent
+</span>
+
+@code {
+    [Parameter] public string Value { get; set; } = string.Empty;
+
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter] public string? Placeholder { get; set; } = "m:ss";
+
+    /// <summary>The input's accessible name, when no label wraps it.</summary>
+    [Parameter] public string? AriaLabel { get; set; }
+
+    [Parameter] public string? NowTitle { get; set; }
+
+    [Parameter] public EventCallback OnNow { get; set; }
+
+    /// <summary>The host's class prefix ("scene-editor"), for its <c>-time-row</c>, <c>-input</c> and <c>-btn</c> hooks.</summary>
+    [Parameter, EditorRequired] public string ClassPrefix { get; set; } = string.Empty;
+
+    /// <summary>The input's own hook class, e.g. "scene-editor-start-input".</summary>
+    [Parameter] public string? InputClass { get; set; }
+
+    /// <summary>The Now button's hook classes, e.g. "scene-editor-now-btn scene-editor-start-now-btn".</summary>
+    [Parameter] public string? NowClass { get; set; }
+
+    /// <summary>Share a flex row equally with a sibling (the apex form's lead-in and tail).</summary>
+    [Parameter] public bool Fill { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

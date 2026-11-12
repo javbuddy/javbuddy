@@ -62,12 +62,6 @@
     font-weight: 400;
 }
 
-.highlight-editor-time-row {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-
 .highlight-editor-input {
     width: 100%;
     min-width: 0;
@@ -80,44 +74,7 @@
     box-sizing: border-box;
 }
 
-.highlight-editor-time-row .highlight-editor-input {
-    flex: 1 1 auto;
-    font-variant-numeric: tabular-nums;
-}
-
 .highlight-editor-form-actions {
     display: flex;
     gap: 0.35rem;
-}
-
-/* Favorite toggle, red like the scene and movie favorite hearts. */
-
-/* Actor and tag pickers, copied from ApexEditor.razor.css (CSS isolation doesn't share it). */
-.highlight-editor-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-}
-
-.highlight-editor-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.1rem 0.5rem;
-    font-size: 0.75rem;
-    color: var(--scene-editor-fg, #e2e8f0);
-    background-color: rgba(47, 143, 214, 0.18);
-    border: 1px solid var(--jb-accent);
-    border-radius: 999px;
-}
-
-.highlight-editor-chip-remove {
-    appearance: none;
-    padding: 0;
-    background: transparent;
-    border: none;
-    color: inherit;
-    cursor: pointer;
-    font-size: 0.85rem;
-    line-height: 1;
 }

@@ -1,6 +1,5 @@
 @using Javbuddy.Services
 @using Javbuddy.Services.Scenes
-@inject ITagService TagService
 
 @* A highlight's add/edit form in ClipEditor, moved from HighlightEditor. The end
    is required and there's no overlap check: highlights are free-form clips on top of the scenes. Actors
@@ -16,17 +15,13 @@
         <div class="highlight-editor-times">
             <label class="highlight-editor-field">
                 <span class="highlight-editor-label">Start</span>
-                <span class="highlight-editor-time-row">
-                    <input class="highlight-editor-input highlight-editor-start-input" type="text" inputmode="decimal" placeholder="m:ss" @bind="Model.Start" @bind:event="oninput" />
-                    <button type="button" class="highlight-editor-btn highlight-editor-now-btn highlight-editor-start-now-btn" @onclick="() => OnNow.InvokeAsync(false)" title="Mark in at the player's current time">Now</button>
-                </span>
+                <ClipTimeField @bind-Value="Model.Start" ClassPrefix="highlight-editor" InputClass="highlight-editor-start-input" NowClass="highlight-editor-now-btn highlight-editor-start-now-btn"
+                               OnNow="() => OnNow.InvokeAsync(false)" NowTitle="Mark in at the player's current time" />
             </label>
             <label class="highlight-editor-field">
                 <span class="highlight-editor-label">End</span>
-                <span class="highlight-editor-time-row">
-                    <input class="highlight-editor-input highlight-editor-end-input" type="text" inputmode="decimal" placeholder="m:ss" @bind="Model.End" @bind:event="oninput" />
-                    <button type="button" class="highlight-editor-btn highlight-editor-now-btn highlight-editor-end-now-btn" @onclick="() => OnNow.InvokeAsync(true)" title="Mark out at the player's current time">Now</button>
-                </span>
+                <ClipTimeField @bind-Value="Model.End" ClassPrefix="highlight-editor" InputClass="highlight-editor-end-input" NowClass="highlight-editor-now-btn highlight-editor-end-now-btn"
+                               OnNow="() => OnNow.InvokeAsync(true)" NowTitle="Mark out at the player's current time" />
             </label>
         </div>
         <div class="highlight-editor-field">
@@ -35,27 +30,8 @@
         </div>
         <div class="highlight-editor-field">
             <span class="highlight-editor-label">Tags</span>
-            @{
-                var rolledUp = RolledUpChips();
-            }
-            @if (Model.Tags.Count > 0 || rolledUp.Count > 0)
-            {
-                <div class="highlight-editor-chips">
-                    @foreach (var tag in Model.Tags)
-                    {
-                        <span class="highlight-editor-chip">
-                            @ImplicitChip.TagLabel(tag)
-                            @if (RolledUpTags.FirstOrDefault(r => r.Tag.TagId == tag.TagId) is { } carried)
-                            {
-                                <RedundantMark Tooltip="@ImplicitChip.RedundantTagTooltip(carried.Sources)" />
-                            }
-                            <button type="button" class="highlight-editor-chip-remove" disabled="@Busy" aria-label="Remove @tag.Name" @onclick="() => Model.Tags.Remove(tag)">×</button>
-                        </span>
-                    }
-                    <ImplicitChips Items="rolledUp" />
-                </div>
-            }
-            <TagSearchAdd ExcludedTagIds="@Model.Tags.Select(t => t.TagId).ToHashSet()" OnAdd="AddTagAsync" />
+            <ClipTagChips FormTags="Model.Tags" ClassPrefix="highlight-editor" Busy="Busy" OnChanged="Rerender"
+                          RedundantTags="RolledUpTags" RolledUp="RolledUpChips()" />
         </div>
         <div class="highlight-editor-form-actions">
             <button type="submit" class="highlight-editor-btn highlight-editor-save-btn" disabled="@Busy">@(Model.HighlightId is null ? "Add" : "Save")</button>
@@ -102,13 +78,6 @@
     // A rolled-up tag the form holds is its own (and marked redundant), so only the rest show grayed.
     private IReadOnlyList<ImplicitChip> RolledUpChips() =>
         ImplicitChip.ForTags(RolledUpTags.Where(t => Model.Tags.All(own => own.TagId != t.Tag.TagId)));
-
-    private async Task AddTagAsync(int tagId)
-    {
-        if (Model.Tags.Any(t => t.TagId == tagId)) return;
-        if (await TagService.GetByIdAsync(tagId) is not { } tag) return;
-        Model.Tags.Add(new SceneTagItem(tag.Id, tag.Name, tag.ParentTag?.Name));
-    }
 
     /// <summary>What an untitled highlight will be called: its own or inherited actors (none in a
     /// solo movie), then its tags.</summary>

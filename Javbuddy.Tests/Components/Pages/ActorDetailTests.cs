@@ -1466,6 +1466,49 @@ public class ActorDetailTests : BunitContext
         Assert.Equal(new[] { "AAA-001" }, renderedCodes);
     }
 
+    // The filter state is the Movies page's, so a second click on a content type excludes it there and here.
+    [Fact]
+    public async Task ActorDetail_ClickingAContentTypeAgain_ExcludesIt_AndResetFiltersClearsTheExclusion()
+    {
+        using var factory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(actor);
+        Services.AddSingleton(actorService);
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>());
+        Services.AddSingleton(Substitute.For<INfoSyncService>());
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Actors.Add(new Actor { Id = actor.Id, FirstName = actor.FirstName, LastName = actor.LastName });
+            foreach (var (code, type) in new[] { ("CEN-001", MovieContentType.Censored), ("UNC-001", MovieContentType.Uncensored), ("UNC-002", MovieContentType.Uncensored) })
+            {
+                var movie = new Movie { Code = code, Status = MovieStatus.Got, ContentType = type };
+                movie.MovieActors.Add(new MovieActor { ActorId = actor.Id });
+                db.Movies.Add(movie);
+            }
+            await db.SaveChangesAsync();
+        }
+
+        var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
+        cut.WaitForAssertion(() => Assert.Equal(3, cut.FindAll(".poster-title").Count));
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
+        cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("Content Type")).Click();
+        AngleSharp.Dom.IElement Uncensored() => cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Trim().StartsWith("Uncensored"));
+
+        Uncensored().Click();
+        Assert.Equal(new[] { "UNC-001", "UNC-002" }, cut.FindAll(".poster-title").Select(t => t.TextContent.Trim()).Order());
+
+        Uncensored().Click();
+        Assert.Equal(new[] { "CEN-001" }, cut.FindAll(".poster-title").Select(t => t.TextContent.Trim()));
+        Assert.Contains("multiselect-excluded", Uncensored().ClassList);
+
+        cut.Find("button[title='Reset all filters']").Click();
+        Assert.Equal(3, cut.FindAll(".poster-title").Count);
+    }
+
     [Fact]
     public async Task ActorDetail_GenreFacetsAndFilter_TagNameContainingAComma_ResolvesAsOneGenreNotTwo()
     {

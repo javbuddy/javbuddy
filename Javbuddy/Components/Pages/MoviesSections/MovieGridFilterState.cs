@@ -131,6 +131,22 @@ public sealed class MovieGridFilterState
         Genres.Clear();
     }
 
+    /// <summary>Select All on an include/exclude group: includes the values, taking them out of the
+    /// excluded set.</summary>
+    public static void SelectAll<T>(HashSet<T> included, HashSet<T> excluded, IEnumerable<T> values)
+    {
+        var list = values.ToList();
+        included.UnionWith(list);
+        excluded.ExceptWith(list);
+    }
+
+    /// <summary>Select None on an include/exclude group: clears both sets.</summary>
+    public static void SelectNone<T>(HashSet<T> included, HashSet<T> excluded)
+    {
+        included.Clear();
+        excluded.Clear();
+    }
+
     /// <summary>Turns match-all off for a selection of fewer than two, where its checkbox is hidden, so
     /// it isn't left on unseen to apply again once a second value is picked.</summary>
     public void DropLoneMatchAll()

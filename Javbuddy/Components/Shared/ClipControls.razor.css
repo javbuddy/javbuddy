@@ -33,21 +33,21 @@
     background-color: rgba(255, 255, 255, 0.1);
 }
 
-.clip-controls-icon-pause,
-.clip-controls-icon-muted,
-.clip-controls-fs-icon-exit {
+.clip-controls ::deep .clip-controls-icon-pause,
+.clip-controls ::deep .clip-controls-icon-muted,
+.clip-controls ::deep .clip-controls-fs-icon-exit {
     display: none;
 }
 
-.clip-controls-playing .clip-controls-icon-play,
-.clip-controls-muted .clip-controls-icon-sound,
-.clip-controls-is-fullscreen .clip-controls-fs-icon-enter {
+.clip-controls-playing ::deep .clip-controls-icon-play,
+.clip-controls-muted ::deep .clip-controls-icon-sound,
+.clip-controls-is-fullscreen ::deep .clip-controls-fs-icon-enter {
     display: none;
 }
 
-.clip-controls-playing .clip-controls-icon-pause,
-.clip-controls-muted .clip-controls-icon-muted,
-.clip-controls-is-fullscreen .clip-controls-fs-icon-exit {
+.clip-controls-playing ::deep .clip-controls-icon-pause,
+.clip-controls-muted ::deep .clip-controls-icon-muted,
+.clip-controls-is-fullscreen ::deep .clip-controls-fs-icon-exit {
     display: block;
 }
 

@@ -52,12 +52,6 @@
     font-weight: 400;
 }
 
-.apex-editor-time-row {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-}
-
 .apex-editor-input {
     width: 100%;
     min-width: 0;
@@ -75,53 +69,9 @@
     gap: 0.25rem;
 }
 
-.apex-editor-window-row > .apex-editor-time-row {
-    flex: 1 1 0;
-    min-width: 0;
-}
-
-.apex-editor-time-row .apex-editor-input {
-    flex: 1 1 auto;
-    font-variant-numeric: tabular-nums;
-}
-
 .apex-editor-form-actions {
     display: flex;
     gap: 0.35rem;
-}
-
-.apex-editor-chip {
-    padding: 0 0.35rem;
-    font-size: 0.75rem;
-    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
-    border-radius: 999px;
-}
-
-.apex-editor-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-}
-
-.apex-editor-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.1rem 0.5rem;
-    color: var(--scene-editor-fg, #e2e8f0);
-    background-color: rgba(47, 143, 214, 0.18);
-    border-color: var(--jb-accent);
-}
-
-.apex-editor-chip-remove {
-    appearance: none;
-    padding: 0;
-    background: transparent;
-    border: none;
-    color: inherit;
-    cursor: pointer;
-    font-size: 0.85rem;
-    line-height: 1;
 }
 
 /* The previous apex's tags offered when adding one, dashed "+ Tag" chips like Sort

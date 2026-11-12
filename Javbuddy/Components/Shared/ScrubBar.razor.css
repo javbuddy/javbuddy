@@ -54,18 +54,18 @@
     cursor: default;
 }
 
-.scrub-bar-icon-pause,
-.scrub-bar-icon-muted {
+.scrub-bar ::deep .scrub-bar-icon-pause,
+.scrub-bar ::deep .scrub-bar-icon-muted {
     display: none;
 }
 
-.scrub-bar-playing .scrub-bar-icon-play,
-.scrub-bar-muted .scrub-bar-icon-sound {
+.scrub-bar-playing ::deep .scrub-bar-icon-play,
+.scrub-bar-muted ::deep .scrub-bar-icon-sound {
     display: none;
 }
 
-.scrub-bar-playing .scrub-bar-icon-pause,
-.scrub-bar-muted .scrub-bar-icon-muted {
+.scrub-bar-playing ::deep .scrub-bar-icon-pause,
+.scrub-bar-muted ::deep .scrub-bar-icon-muted {
     display: block;
 }
 
@@ -143,7 +143,7 @@
     background-color: rgba(255, 255, 255, 0.1);
 }
 
-.scrub-bar-fullscreen .scrub-bar-fs-icon-exit {
+.scrub-bar-fullscreen ::deep .scrub-bar-fs-icon-exit {
     display: none;
 }
 
@@ -152,11 +152,11 @@
     background-color: #000;
 }
 
-.scrub-bar-is-fullscreen .scrub-bar-fullscreen .scrub-bar-fs-icon-enter {
+.scrub-bar-is-fullscreen .scrub-bar-fullscreen ::deep .scrub-bar-fs-icon-enter {
     display: none;
 }
 
-.scrub-bar-is-fullscreen .scrub-bar-fullscreen .scrub-bar-fs-icon-exit {
+.scrub-bar-is-fullscreen .scrub-bar-fullscreen ::deep .scrub-bar-fs-icon-exit {
     display: block;
 }
 

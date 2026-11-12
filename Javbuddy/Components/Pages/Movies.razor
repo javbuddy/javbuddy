@@ -62,8 +62,8 @@ else
                         AvailableStudios="@availableStudios"
                         StudioFilter="@filters.Studios"
                         OnToggleStudio="studio => ApplyFilterAsync(() => ToggleStudio(studio))"
-                        OnSelectAllStudios="studios => ApplyFilterAsync(() => SelectAll(filters.Studios, filters.ExcludedStudios, studios))"
-                        OnSelectNoneStudios="() => ApplyFilterAsync(() => SelectNone(filters.Studios, filters.ExcludedStudios))"
+                        OnSelectAllStudios="studios => ApplyFilterAsync(() => MovieGridFilterState.SelectAll(filters.Studios, filters.ExcludedStudios, studios))"
+                        OnSelectNoneStudios="() => ApplyFilterAsync(() => MovieGridFilterState.SelectNone(filters.Studios, filters.ExcludedStudios))"
                         Excludable="true"
                         ExcludedStudioFilter="@filters.ExcludedStudios"
                         ExcludedGenreFilter="@filters.ExcludedGenres"
@@ -72,8 +72,8 @@ else
                         AvailableGenres="@availableGenres"
                         GenreFilter="@filters.Genres"
                         OnToggleGenre="genre => ApplyFilterAsync(() => filters.Genres.CycleInclusion(filters.ExcludedGenres, genre))"
-                        OnSelectAllGenres="genres => ApplyFilterAsync(() => SelectAll(filters.Genres, filters.ExcludedGenres, genres))"
-                        OnSelectNoneGenres="() => ApplyFilterAsync(() => SelectNone(filters.Genres, filters.ExcludedGenres))"
+                        OnSelectAllGenres="genres => ApplyFilterAsync(() => MovieGridFilterState.SelectAll(filters.Genres, filters.ExcludedGenres, genres))"
+                        OnSelectNoneGenres="() => ApplyFilterAsync(() => MovieGridFilterState.SelectNone(filters.Genres, filters.ExcludedGenres))"
                         MatchAllGenres="@filters.MatchAllGenres"
                         OnMatchAllGenresChanged="matchAll => ApplyFilterAsync(() => filters.MatchAllGenres = matchAll)"
                         MatchAllActorTags="@filters.MatchAllActorTags"
@@ -89,13 +89,13 @@ else
                         AvailableActors="@availableActors"
                         ActorFilter="@filters.ActorIds"
                         OnToggleActor="actorId => ApplyFilterAsync(() => filters.ActorIds.CycleInclusion(filters.ExcludedActorIds, actorId))"
-                        OnSelectAllActors="actorIds => ApplyFilterAsync(() => SelectAll(filters.ActorIds, filters.ExcludedActorIds, actorIds))"
-                        OnSelectNoneActors="() => ApplyFilterAsync(() => SelectNone(filters.ActorIds, filters.ExcludedActorIds))"
+                        OnSelectAllActors="actorIds => ApplyFilterAsync(() => MovieGridFilterState.SelectAll(filters.ActorIds, filters.ExcludedActorIds, actorIds))"
+                        OnSelectNoneActors="() => ApplyFilterAsync(() => MovieGridFilterState.SelectNone(filters.ActorIds, filters.ExcludedActorIds))"
                         AvailableActorTags="@availableActorTags"
                         ActorTagFilter="@filters.ActorTagIds"
                         OnToggleActorTag="tagId => ApplyFilterAsync(() => filters.ActorTagIds.CycleInclusion(filters.ExcludedActorTagIds, tagId))"
-                        OnSelectAllActorTags="tagIds => ApplyFilterAsync(() => SelectAll(filters.ActorTagIds, filters.ExcludedActorTagIds, tagIds))"
-                        OnSelectNoneActorTags="() => ApplyFilterAsync(() => SelectNone(filters.ActorTagIds, filters.ExcludedActorTagIds))"
+                        OnSelectAllActorTags="tagIds => ApplyFilterAsync(() => MovieGridFilterState.SelectAll(filters.ActorTagIds, filters.ExcludedActorTagIds, tagIds))"
+                        OnSelectNoneActorTags="() => ApplyFilterAsync(() => MovieGridFilterState.SelectNone(filters.ActorTagIds, filters.ExcludedActorTagIds))"
                         ShowActorAttributes="true"
                         ActorAttributeOptions="@actorAttributeOptions"
                         ActorAttributeSelection="@filters.ActorAttributes"
@@ -883,20 +883,6 @@ else
             filters.Studios.Toggle(studio);
         }
         else filters.Studios.CycleInclusion(filters.ExcludedStudios, studio);
-    }
-
-    // Select All includes what's visible, taking it out of the excluded set; None clears both.
-    private static void SelectAll<T>(HashSet<T> included, HashSet<T> excluded, IEnumerable<T> values)
-    {
-        var list = values.ToList();
-        included.UnionWith(list);
-        excluded.ExceptWith(list);
-    }
-
-    private static void SelectNone<T>(HashSet<T> included, HashSet<T> excluded)
-    {
-        included.Clear();
-        excluded.Clear();
     }
 
     private Task ApplyFilterAsync(Action change)
