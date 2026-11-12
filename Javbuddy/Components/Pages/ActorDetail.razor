@@ -100,7 +100,7 @@ else
         }
         else
         {
-            <div class="actor-hero-avatar actor-hero-avatar-clickable" @onclick="OpenPhotoUploadModal" title="Click to upload photo">@Initials(actor.DisplayName)</div>
+            <div class="actor-hero-avatar actor-hero-avatar-clickable" @onclick="OpenPhotoUploadModal" title="Click to upload photo">@ActorMatching.Initials(actor.DisplayName)</div>
         }
         <div class="actor-hero-info">
             <h1 class="actor-hero-title">
@@ -862,17 +862,5 @@ else
             {
             }
         }
-    }
-
-    private static string Initials(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "?";
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length switch
-        {
-            0 => "?",
-            1 => parts[0][..1].ToUpperInvariant(),
-            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant()
-        };
     }
 }

@@ -87,7 +87,7 @@
                         }
                         else
                         {
-                            <span class="search-result-avatar">@Initials(actor.DisplayName)</span>
+                            <span class="search-result-avatar">@ActorMatching.Initials(actor.DisplayName)</span>
                         }
                         <span class="search-result-text">
                             <span class="search-result-code">@actor.DisplayName</span>
@@ -223,18 +223,6 @@
 
 
     private static string ActorThumbUrl(int actorId) => $"/actor-image/{actorId}/thumb";
-
-    private static string Initials(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return "?";
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length switch
-        {
-            0 => "?",
-            1 => parts[0][..1].ToUpperInvariant(),
-            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant()
-        };
-    }
 
     public void Dispose()
     {
