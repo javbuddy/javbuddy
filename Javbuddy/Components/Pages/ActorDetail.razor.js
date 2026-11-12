@@ -104,7 +104,7 @@ function restoreScrollPosition(storageKey, tracking) {
     function attempt() {
         if (scrollTracking !== tracking) return;
         const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-        // Explicitly instant: the app sets `scroll-behavior: smooth` on <html>.
+        // Explicitly instant, so the restore never animates even if a `scroll-behavior: smooth` rule returns (app.css sets `auto` on <html>).
         window.scrollTo({ top: Math.min(saved, maxScroll), behavior: 'instant' });
         if (maxScroll < saved && performance.now() < deadline) {
             tracking.restoreFrame = requestAnimationFrame(attempt);

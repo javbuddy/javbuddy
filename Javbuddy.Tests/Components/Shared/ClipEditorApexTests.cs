@@ -8,7 +8,7 @@ using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Shared;
 
-/// <summary>ClipEditor's apexes, ported from ApexEditorTests.</summary>
+/// <summary>ClipEditor's apexes.</summary>
 public class ClipEditorApexTests : ClipEditorTestBase
 {
     private readonly int tagId;

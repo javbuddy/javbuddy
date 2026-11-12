@@ -1,9 +1,7 @@
-@using Javbuddy.Services
 
 @* Highlight track drawn above a timeline's scene bar: a span per highlight, with
-   overlapping highlights stacked in lanes (HighlightItem.Lane). With OnHighlightClick set each span
-   is a button; otherwise they're plain spans whose data-* attributes ScrubBar.razor.js reads for its
-   hover preview and click-to-seek. *@
+   overlapping highlights stacked in lanes (HighlightItem.Lane). Each is a plain span whose data-*
+   attributes ScrubBar.razor.js and ClipControls.razor.js read for the hover preview and click-to-seek. *@
 @if (DurationSeconds is > 0 && Highlights is { Count: > 0 })
 {
     <div class="highlight-segments" style="@FormattableString.Invariant($"height:{(Highlights.Max(h => h.Lane) + 1) * LanePx - 1}px")">
@@ -14,14 +12,7 @@
             var label = $"{highlight.DisplayTitle} ({SceneTimeFormat.Format(highlight.StartSeconds)}–{SceneTimeFormat.Format(highlight.EndSeconds)})";
             var style = FormattableString.Invariant($"left:{left:0.###}%;width:{width:0.###}%;top:{highlight.Lane * LanePx}px");
             var dataStart = highlight.StartSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            @if (OnHighlightClick.HasDelegate)
-            {
-                <button type="button" class="highlight-segment" style="@style" data-start="@dataStart" data-highlight-name="@highlight.DisplayTitle" title="@label" aria-label="Jump to @label" @onclick="() => OnHighlightClick.InvokeAsync(highlight)"></button>
-            }
-            else
-            {
-                <span class="highlight-segment" style="@style" data-start="@dataStart" data-highlight-name="@highlight.DisplayTitle" title="@label"></span>
-            }
+            <span class="highlight-segment" style="@style" data-start="@dataStart" data-highlight-name="@highlight.DisplayTitle" title="@label"></span>
         }
     </div>
 }
@@ -34,8 +25,6 @@
 
     /// <summary>The timeline's full length; nothing renders while it's unknown.</summary>
     [Parameter] public double? DurationSeconds { get; set; }
-
-    [Parameter] public EventCallback<HighlightItem> OnHighlightClick { get; set; }
 
     private double Percent(double seconds) => Math.Clamp(seconds / DurationSeconds!.Value * 100, 0, 100);
 }

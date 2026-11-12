@@ -21,15 +21,6 @@
     background-color: rgba(250, 82, 82, 0.55);
 }
 
-.scene-segments-clickable .scene-segment {
-    pointer-events: auto;
-    cursor: pointer;
-}
-
-.scene-segments-clickable .scene-segment:hover {
-    filter: brightness(1.25);
-}
-
 .scene-suggestion-tick {
     position: absolute;
     top: 0;

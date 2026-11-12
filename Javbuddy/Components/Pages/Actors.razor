@@ -1,9 +1,6 @@
-@using Javbuddy.Services.Common
 @page "/actors"
 @using Javbuddy.Components.Pages.ActorsSections
-@using Javbuddy.Components.Shared
 @using Javbuddy.Models
-@using Javbuddy.Services
 @using Javbuddy.Services.Infrastructure
 @using Microsoft.AspNetCore.Http
 @using System.Text.Json
@@ -561,11 +558,11 @@ else
 
     private void CloseFilterDropdown() => showFilterDropdown = false;
 
-    // Debounced (unlike an eager field update): with no windowing, the actor grid re-renders its
-    // full filtered set on every text filter change, so committing the field on every keystroke
-    // forces a full-list re-render per keystroke. Delaying the field update itself — not just some
-    // downstream fetch — means the browser's own native input echo shows what's typed in the
-    // meantime, and only the settled value ever triggers a re-render.
+    // Debounced (unlike an eager field update): every committed text filter change re-filters the
+    // whole actor list and reloads the grid's window, so committing the field on every keystroke
+    // would do that per keystroke. Delaying the field update itself — not just some downstream
+    // fetch — means the browser's own native input echo shows what's typed in the meantime, and
+    // only the settled value ever triggers a reload.
     private async Task OnTextFilterInput(ChangeEventArgs e)
     {
         var value = e.Value?.ToString() ?? "";

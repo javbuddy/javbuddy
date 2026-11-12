@@ -50,20 +50,6 @@ public class SceneSegmentsTests : BunitContext
     }
 
     [Fact]
-    public void WithClickHandler_SegmentsAreButtonsThatReportTheScene()
-    {
-        SceneItem? clicked = null;
-        var cut = Render<SceneSegments>(p => p
-            .Add(x => x.Scenes, Scenes)
-            .Add(x => x.DurationSeconds, 180d)
-            .Add(x => x.OnSegmentClick, (SceneItem s) => clicked = s));
-
-        cut.FindAll("button.scene-segment")[1].Click();
-
-        Assert.Equal(2, clicked!.Id);
-    }
-
-    [Fact]
     public void ScrubBar_DrawsScenesOnItsTrack()
     {
         JSInterop.SetupModule("./Components/Shared/ScrubBar.razor.js").Mode = JSRuntimeMode.Loose;

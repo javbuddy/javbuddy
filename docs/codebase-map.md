@@ -70,6 +70,30 @@ One row per product area.
 | `ProwlarrSearchModal.razor` | Modal for searching/grabbing Prowlarr torrent results, with a warning per disabled/blocked indexer | `ProwlarrSearchModalTests.cs` |
 | `StatusFilterButtonGroup.razor` (+ `FilterButtonOption.cs`) | Toggle-button group for status filters (All/Missing/Got) | `StatusFilterButtonGroupTests.cs` |
 | `PosterImageLoading.cs` | Enum: lazy vs. eager poster image loading strategy | — |
+| `ImageLightboxModal.razor` | Full-screen single-image viewer (Actor Detail's avatar, Movie Detail's poster) | `ImageLightboxModalTests.cs` |
+| `OptionsModal.razor` | Display-options dialog behind a toolbar's **Options** button (Movies, Actors) | `OptionsModalTests.cs` |
+| `ToolbarMenuButton.razor` / `ToolbarMenuItem.razor` | A page-toolbar button that opens a menu of actions (Movie Detail's Refresh / Tools) | `ToolbarMenuButtonTests.cs` |
+| `BarList.razor` | Horizontal bar list over `StatRow`s (System > Statistics) | `BarListTests.cs` |
+| `StatusTile.razor` / `SlideOverDrawer.razor` | Settings' clickable status tile and the slide-over drawer it opens | `StatusTileTests.cs`, `SlideOverDrawerTests.cs` |
+| `UptimeClock.razor` (+ `.razor.js`) | Ticking elapsed-time readout (System > Status) | `UptimeClockTests.cs` |
+| `BirthdayIndicator.razor` | 🎉 "birthday today" marker next to an actor's name | `BirthdayIndicatorTests.cs` |
+| `FavoriteHeartIcon.razor` / `ShuffleIcon.razor` / `SparkleIcon.razor` / `ApexIcon.razor` | Small inline-SVG icons (heart, shuffle, highlight sparkle, apex diamond) | — |
+| `MoviePosterGrid.razor` / `PosterGridSkeleton.razor` | The movie poster grid under the shared poster options (Movies, Actor Detail) and its loading placeholder | `MoviePosterGridTests.cs`, `PosterGridSkeletonTests.cs` |
+| `MovieFilterToolbar.razor` | The Movies filter row (search, status, filter dropdown, sort); also Actor Detail's Movies section and a DeoVR group's filter | `MovieFilterToolbarTests.cs` |
+| `FilterSection.razor` / `RangeFilter.razor` / `ChipMultiSelectGroup.razor` / `MatchAllCheck.razor` | Expandable pieces of the filter dropdown: collapsible section, min/max range, chip multi-select, "Match all" checkbox | `FilterSectionTests.cs`, `RangeFilterTests.cs`, `ChipMultiSelectGroupTests.cs` |
+| `MovieRangeFilters.razor` / `MovieCountFilters.razor` / `ActorAttributeFilters.razor` | `RangeFilter` rows for a movie's ranges and counts, and the actor-attribute filters | `MovieCountFiltersTests.cs`, `ActorAttributeFiltersTests.cs` |
+| `ActorAliasModal.razor` / `ActorMergeModal.razor` / `ActorNfoSyncModal.razor` / `MinnanoAvMetadataSearchModal.razor` | Actor dialogs (aliases, merge, .nfo sync, minnano-av import) on `ModalShell` | `ActorAliasModalTests.cs`, `ActorMergeModalTests.cs`, `ActorNfoSyncModalTests.cs`, `MinnanoAvMetadataSearchModalTests.cs` |
+| `ActorImageUploadModal.razor` / `MovieCoverCropModal.razor` | Actor portrait upload and movie cover crop dialogs on `CropperViewport` | `ActorImageUploadModalTests.cs`, `MovieCoverCropModalTests.cs` |
+| `MovieMetadataRefreshModal.razor` | Movie Detail's "Refresh with Javinizer" field picker | `MovieMetadataRefreshModalTests.cs` |
+| `TagCreateModal.razor` / `TagMergeModal.razor` / `TagParentModal.razor` | Tag dialogs (create, merge, set parent) on the Tags page | `TagCreateModalTests.cs`, `TagMergeModalTests.cs`, `TagParentModalTests.cs` |
+| `ScrubBar.razor` (+ `.razor.js`) | Timeline under a `<video>`: trickplay hover, click to seek, scene / highlight / apex tracks, optional controls | `ScrubBarTests.cs` |
+| `ClipControls.razor` (+ `.razor.js`) | The clip player's own controls (track, readout, Loop, Previous / Next) | `ClipControlsTests.cs` |
+| `VideoPlayerShell.razor` / `VideoPlayerModal.razor` / `ClipPlayerModal.razor` | The shared full-screen player chrome, the movie player (with the clip editor when editing) and the Scenes wall's single-clip player | `VideoPlayerShellTests.cs`, `VideoPlayerModalTests.cs`, `ClipPlayerModalTests.cs` |
+| `PlayerIdleChrome.razor` / `VideoSeekKeys.razor` / `ApexCountdown.razor` / `InertBackground.razor` | Markup-less player behaviours: idle chrome fade, arrow-key seeking, countdown to the next apex, inert page behind a modal | `PlayerIdleChromeTests.cs`, `VideoSeekKeysTests.cs`, `ApexCountdownTests.cs`, `InertBackgroundTests.cs` |
+| `SceneSegments.razor` / `ApexPreviewPopover.razor` / `ScenePreviewMedia.razor` / `ScenePreviewPlaceholder.razor` / `TrickplayGeneratingPreview.razor` | Timeline scene bands and hover-preview pieces | `SceneSegmentsTests.cs`, `ApexPreviewPopoverTests.cs`, `ScenePreviewMediaTests.cs` |
+| `SceneChapterWriter.razor` / `SceneDetector.razor` | `ClipEditor` sub-panels: write scenes into the file as chapters, suggest boundaries from fades to black | `SceneChapterWriterTests.cs`, `SceneDetectorTests.cs` |
+| `ShortcutsInfo.razor` / `SectionInfo.razor` | Info-icon hover popovers: keyboard shortcuts list, and an editor section's explanation | `ShortcutsInfoTests.cs`, `SectionInfoTests.cs` |
+| `MovieActorsEditor.razor` / `MovieTagsEditor.razor` | The movie's cast and movie-level tags as collapsed sections of the `ClipEditor` panel | `MovieActorsEditorTests.cs`, `MovieTagsEditorTests.cs` |
 
 ## Services (`Javbuddy/Services/`)
 

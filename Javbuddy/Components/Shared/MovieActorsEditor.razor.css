@@ -1,4 +1,4 @@
-/* Colors come from the host's --scene-editor-* custom properties (the SceneEditor's pattern);
+/* Colors come from the host's --scene-editor-* custom properties (ClipEditor's pattern);
    the fallbacks are the player modal's dark look. */
 .movie-actors-editor {
     display: flex;

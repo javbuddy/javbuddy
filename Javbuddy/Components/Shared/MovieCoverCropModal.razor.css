@@ -109,7 +109,7 @@
     position: relative;
 }
 
-.upload-dropzone:hover, .upload-dropzone.dragover {
+.upload-dropzone:hover {
     border-color: var(--jb-accent);
     background-color: #1e2430;
 }

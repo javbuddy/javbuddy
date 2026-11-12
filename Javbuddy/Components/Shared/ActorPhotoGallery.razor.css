@@ -9,7 +9,6 @@
 .actor-photo-album-pill.active { color: #fff; background: var(--jb-accent); border-color: var(--jb-accent); }
 .actor-photo-album-editor { display: grid; gap: 0.65rem; padding: 0.75rem; margin-bottom: 1rem; background: #f5f6f8; border: 1px solid #dfe3e8; border-radius: 4px; }
 .actor-photo-selected-album-actions { display: flex; gap: 0.5rem; }
-.actor-photo-move-select { width: auto; max-width: 8rem; }
 .actor-photo-lightbox-move { width: auto; max-width: 10rem; color: #fff; background: rgba(0, 0, 0, 0.35); border-color: rgba(255, 255, 255, 0.5); }
 .actor-photo-grid-preview { container-type: inline-size; }
 .actor-photo-gallery-expand { display: block; margin: 1rem auto 0; }

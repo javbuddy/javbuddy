@@ -63,14 +63,6 @@
         color: #ffffff;
     }
 
-.activity-sorted-badge {
-    text-decoration: none;
-}
-
-    .activity-sorted-badge:hover {
-        opacity: 0.85;
-    }
-
 .activity-status {
     display: flex;
     flex-direction: column;

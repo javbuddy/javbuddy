@@ -9,7 +9,7 @@ using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Shared;
 
-/// <summary>ClipEditor's highlights, ported from HighlightEditorTests.</summary>
+/// <summary>ClipEditor's highlights.</summary>
 public class ClipEditorHighlightTests : ClipEditorTestBase
 {
     private readonly int tagId;

@@ -30,20 +30,6 @@ public class HighlightSegmentsTests : BunitContext
     }
 
     [Fact]
-    public void WithClickHandler_SegmentsAreButtons()
-    {
-        HighlightItem? clicked = null;
-        var cut = Render<HighlightSegments>(p => p
-            .Add(x => x.Highlights, Highlights)
-            .Add(x => x.DurationSeconds, 180d)
-            .Add(x => x.OnHighlightClick, h => clicked = h));
-
-        cut.FindAll("button.highlight-segment")[1].Click();
-
-        Assert.Equal(2, clicked!.Id);
-    }
-
-    [Fact]
     public void RendersNothing_WithoutDurationOrHighlights()
     {
         Assert.Empty(Render<HighlightSegments>(p => p.Add(x => x.Highlights, Highlights)).FindAll(".highlight-segments"));

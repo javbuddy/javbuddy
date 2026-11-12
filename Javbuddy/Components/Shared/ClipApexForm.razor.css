@@ -1,5 +1,4 @@
-/* An apex's add/edit form, moved from ApexEditor.razor.css (CSS isolation doesn't
-   share it); reads the same --scene-editor-* custom properties. */
+/* An apex's add/edit form; reads the editor's --scene-editor-* custom properties. */
 
 .apex-editor-btn {
     appearance: none;
@@ -50,18 +49,6 @@
 
 .apex-editor-hint {
     font-weight: 400;
-}
-
-.apex-editor-input {
-    width: 100%;
-    min-width: 0;
-    padding: 0.25rem 0.4rem;
-    font-size: 0.8rem;
-    color: var(--scene-editor-fg, #e2e8f0);
-    background-color: var(--scene-editor-input-bg, rgba(255, 255, 255, 0.06));
-    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
-    border-radius: 4px;
-    box-sizing: border-box;
 }
 
 .apex-editor-window-row {

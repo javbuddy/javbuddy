@@ -71,11 +71,6 @@
     opacity: 0.6;
 }
 
-.actor-hero-notes {
-    color: #d8dae0;
-    margin-bottom: 0.4rem;
-}
-
 .actor-hero-meta {
     font-size: 0.9rem;
     color: var(--jb-dark-muted);
