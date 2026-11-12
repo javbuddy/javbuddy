@@ -3,6 +3,7 @@ using Javbuddy.Components.Shared;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Tests.TestSupport;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -190,5 +191,45 @@ public class ActorMergeModalTests : BunitContext
 
         await actorService.Received(1).MergeAsync(1, 2, false, Arg.Any<CancellationToken>());
     }
-}
 
+    [Fact]
+    public async Task TypingQuickly_SearchesOnceWithTheFinalText()
+    {
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetMergeCandidatesAsync(1, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<ActorMergeCandidate> { new(2, "Mikami Yua", null, null, 5, false, false) });
+        Services.AddSingleton(actorService);
+
+        var cut = Render<ActorMergeModal>(p => p.Add(x => x.Show, true).Add(x => x.SourceActor, new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" }));
+        var input = cut.Find("input[type=text]");
+
+        await Task.WhenAll(input.InputAsync(new ChangeEventArgs { Value = "m" }),
+            input.InputAsync(new ChangeEventArgs { Value = "mi" }),
+            input.InputAsync(new ChangeEventArgs { Value = "mik" }));
+
+        await actorService.Received(1).GetMergeCandidatesAsync(1, "mik", Arg.Any<CancellationToken>());
+        await actorService.DidNotReceive().GetMergeCandidatesAsync(1, "m", Arg.Any<CancellationToken>());
+        await actorService.DidNotReceive().GetMergeCandidatesAsync(1, "mi", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SlowOlderResponse_DoesNotOverwriteANewerSearch()
+    {
+        var actorService = Substitute.For<IActorService>();
+        var initial = new TaskCompletionSource<IReadOnlyList<ActorMergeCandidate>>();
+        actorService.GetMergeCandidatesAsync(1, "", Arg.Any<CancellationToken>()).Returns(initial.Task);
+        actorService.GetMergeCandidatesAsync(1, "new", Arg.Any<CancellationToken>())
+            .Returns(new List<ActorMergeCandidate> { new(3, "Newer Result", null, null, 1, false, false) });
+        Services.AddSingleton(actorService);
+
+        var cut = Render<ActorMergeModal>(p => p.Add(x => x.Show, true).Add(x => x.SourceActor, new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" }));
+        await cut.Find("input[type=text]").InputAsync(new ChangeEventArgs { Value = "new" });
+        Assert.Contains("Newer Result", cut.Find(".candidate-list").TextContent);
+
+        initial.SetResult(new List<ActorMergeCandidate> { new(2, "Older Result", null, null, 1, false, false) });
+        await cut.InvokeAsync(() => { });
+
+        Assert.Contains("Newer Result", cut.Find(".candidate-list").TextContent);
+        Assert.DoesNotContain("Older Result", cut.Find(".candidate-list").TextContent);
+    }
+}

@@ -62,6 +62,10 @@ export function init(id, dotNetRef, gridWrapper, leadingSpacer, trailingSpacer, 
         velocity: 0,
         roundTrip: 120,
         onViewportChanged: null,
+        onPageHide: null,
+        // What evaluate() last saw worth persisting, and the timer that writes it; see schedulePersist.
+        persist: null,
+        persistTimer: 0,
         resizeObserver: null,
         windowObserver: null,
     };
@@ -70,6 +74,8 @@ export function init(id, dotNetRef, gridWrapper, leadingSpacer, trailingSpacer, 
 
     window.addEventListener('scroll', state.onViewportChanged, { passive: true });
     window.addEventListener('resize', state.onViewportChanged, { passive: true });
+    state.onPageHide = () => flushPersist(state);
+    window.addEventListener('pagehide', state.onPageHide);
 
     // The card height (and so the row height) is driven by the grid's own width — a sidebar
     // collapsing or a window resize changes both the column count and the row height, and the
@@ -134,8 +140,14 @@ export function dispose(id) {
     if (!state) return;
     grids.delete(id);
 
+    // Last position out before the listeners go: a throttled write may still be waiting, and enhanced
+    // navigation has usually already moved window.scrollY on to the next page, so the remembered
+    // values are the only correct ones.
+    flushPersist(state);
+
     window.removeEventListener('scroll', state.onViewportChanged);
     window.removeEventListener('resize', state.onViewportChanged);
+    window.removeEventListener('pagehide', state.onPageHide);
     if (state.resizeObserver) state.resizeObserver.disconnect();
     if (state.windowObserver) state.windowObserver.disconnect();
     if (state.frame) cancelAnimationFrame(state.frame);
@@ -214,6 +226,39 @@ function resizeSpacers(state) {
     return geometry;
 }
 
+const PERSIST_INTERVAL_MS = 250;
+
+// Scrolling runs evaluate() every frame, but a sessionStorage write, a JSON.stringify and a cookie
+// write per frame are wasted work: only the value at rest matters. A trailing timer writes the latest
+// remembered values at most every PERSIST_INTERVAL_MS; dispose() and 'pagehide' flush the rest so the
+// last position is never lost.
+function schedulePersist(state) {
+    if (state.persistTimer) return;
+    state.persistTimer = setTimeout(() => flushPersist(state), PERSIST_INTERVAL_MS);
+}
+
+function flushPersist(state) {
+    if (state.persistTimer) {
+        clearTimeout(state.persistTimer);
+        state.persistTimer = 0;
+    }
+    const persist = state.persist;
+    if (!persist) return;
+    state.persist = null;
+
+    const { scrollStorageKey, windowStartCookie } = state.options;
+    try {
+        if (scrollStorageKey) sessionStorage.setItem(scrollStorageKey, String(persist.scrollY));
+        if (windowStartCookie) document.cookie = `${windowStartCookie}=${persist.windowStart};path=/;samesite=lax`;
+        if (scrollStorageKey && persist.spacers) {
+            sessionStorage.setItem(`${scrollStorageKey}:spacers`, JSON.stringify(persist.spacers));
+        }
+    } catch {
+        // Storage disabled/full — restoreScrollPosition() and App.razor's early restore just find
+        // nothing next time, same as a first-ever visit.
+    }
+}
+
 function evaluate(state) {
     // Enhanced navigation patches the DOM to the destination page well before the page's async
     // DisposeAsync detaches the listeners above, so a 'scroll'/'resize' event for the *new* page can
@@ -232,32 +277,24 @@ function evaluate(state) {
     // Recorded unconditionally (whenever we ARE still on this page), not just when the window
     // changes — this is what makes the value read by restoreScrollPosition() reflect wherever the
     // user actually left the grid, including a plain scroll within an already-loaded window that
-    // never touches the server.
-    const { scrollStorageKey, windowStartCookie } = state.options;
-    try {
-        if (scrollStorageKey) sessionStorage.setItem(scrollStorageKey, String(window.scrollY));
-        if (windowStartCookie) document.cookie = `${windowStartCookie}=${state.windowStart};path=/;samesite=lax`;
-    } catch {
-        // Storage disabled/full — restoreScrollPosition() just finds nothing next time, same as
-        // a first-ever visit.
-    }
+    // never touches the server. Remembered here every frame (cheap), written to storage and the
+    // cookie by schedulePersist at most every PERSIST_INTERVAL_MS.
+    state.persist = { ...state.persist, scrollY: window.scrollY, windowStart: state.windowStart };
 
     const geometry = resizeSpacers(state);
-    if (!geometry) return;
+    if (!geometry) {
+        schedulePersist(state);
+        return;
+    }
 
     // What App.razor's enhancedload script needs to size the spacers (and so make the document tall
     // enough to scroll) the moment a back-navigation's markup lands, before this module has loaded.
-    try {
-        if (scrollStorageKey) {
-            sessionStorage.setItem(`${scrollStorageKey}:spacers`, JSON.stringify({
-                windowStart: state.windowStart,
-                leading: state.leadingSpacer.style.height,
-                trailing: state.trailingSpacer.style.height,
-            }));
-        }
-    } catch {
-        // Same as above: the early restore just doesn't happen.
-    }
+    state.persist.spacers = {
+        windowStart: state.windowStart,
+        leading: state.leadingSpacer.style.height,
+        trailing: state.trailingSpacer.style.height,
+    };
+    schedulePersist(state);
 
     const { columns, rowHeight } = geometry;
     if (state.totalCount <= 0) return;

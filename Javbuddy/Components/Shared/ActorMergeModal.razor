@@ -1,5 +1,7 @@
 @using Javbuddy.Models
 @using Javbuddy.Services
+@using Javbuddy.Services.Common
+@implements IDisposable
 @inject IActorService ActorService
 
 @if (Show && SourceActor is not null)
@@ -200,6 +202,8 @@
     private IReadOnlyList<ActorMergeCandidate> candidates = [];
     private ActorMergeCandidate? selectedTarget;
     private bool isSearching;
+    private int loadVersion;
+    private readonly Debouncer searchDebouncer = new();
     private bool isMerging;
     private string? errorMessage;
     private int? loadedForActorId;
@@ -211,6 +215,7 @@
         if (Show && SourceActor is not null && loadedForActorId != SourceActor.Id)
         {
             loadedForActorId = SourceActor.Id;
+            searchDebouncer.Cancel();
             searchQuery = "";
             selectedTarget = null;
             errorMessage = null;
@@ -237,11 +242,15 @@
         }
     }
 
-    private async Task LoadCandidatesAsync()
+    private async Task LoadCandidatesAsync(CancellationToken ct = default)
     {
         if (SourceActor is null) return;
+        // A slower, older response must not overwrite a newer one: only the latest load applies its result.
+        var version = ++loadVersion;
         isSearching = true;
-        candidates = await ActorService.GetMergeCandidatesAsync(SourceActor.Id, searchQuery);
+        var loaded = await ActorService.GetMergeCandidatesAsync(SourceActor.Id, searchQuery, ct);
+        if (version != loadVersion) return;
+        candidates = loaded;
         if (selectedTarget is null && candidates.Count > 0 && candidates[0].IsSuggested)
         {
             selectedTarget = candidates[0];
@@ -252,8 +261,11 @@
     private async Task OnSearchInput(ChangeEventArgs e)
     {
         searchQuery = e.Value?.ToString() ?? "";
-        await LoadCandidatesAsync();
+        // Debounced, so a lookup doesn't run per keystroke.
+        await searchDebouncer.RunAsync(LoadCandidatesAsync);
     }
+
+    public void Dispose() => searchDebouncer.Dispose();
 
     private void SelectTarget(ActorMergeCandidate candidate)
     {

@@ -1072,4 +1072,27 @@ public class ActorsTests : BunitContext
         cut.FindAll("button").Single(b => b.TextContent == "Table").Click();
         Assert.DoesNotContain(cut.FindAll("button"), b => b.TextContent == "Options");
     }
+
+    [Fact]
+    public void CardSizeSlider_WritesTheViewStateCookieOnlyWhenCommitted()
+    {
+        actorService.GetActorCardsAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<ActorCardModel> { new(1, "Mikami Yua", 1, true) });
+
+        var cut = Render<Actors>();
+        cut.FindAll("button").Single(b => b.TextContent == "Options").Click();
+        var slider = cut.Find("#actor-card-size");
+
+        int CookieWrites() => JSInterop.Invocations.Count(inv =>
+            inv.Identifier == "lsJsonCookie.set" && inv.Arguments.Any(a => a?.ToString() == "javbuddy-actors-view"));
+        var baseline = CookieWrites();
+
+        slider.Input("0");
+        slider.Input("1");
+        Assert.Contains("size-1", cut.Find(".actor-grid").ClassList);
+        Assert.Equal(baseline, CookieWrites());
+
+        slider.Change("1");
+        Assert.Equal(baseline + 1, CookieWrites());
+    }
 }

@@ -156,4 +156,34 @@ public class ActorMissingTests : BunitContext
         tcs.SetResult(new R18DevFilmographyResult(false, []));
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".missing-loading-state")));
     }
+
+    [Fact]
+    public void ShowingDuplicateReleases_RendersEveryCard_WithoutKeyCollisions()
+    {
+        // Two dump rows for the same release share a canonical key; with "Hide duplicates" off both
+        // are shown, and the cards' @key must stay unique among siblings or Blazor throws.
+        var dumpStore = Substitute.For<IR18DevDumpStore>();
+        dumpStore.GetFilmographyForActorAsync(Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new R18DevFilmographyResult(true,
+            [
+                new R18DevFilmographyEntry("ABC-123", "First Edition", null, new DateOnly(2024, 1, 1), null),
+                new R18DevFilmographyEntry("ABC-123", "Second Edition", null, new DateOnly(2024, 1, 2), null),
+                new R18DevFilmographyEntry("XYZ-001", "Other", null, new DateOnly(2024, 2, 1), null),
+            ]));
+        using var factory = SetUpServices(dumpStore);
+        using (var db = factory.CreateDbContext())
+        {
+            db.Actors.Add(new Actor { FirstName = "Hatano", LastName = "Yui" });
+            db.R18DevSettings.Add(new R18DevSettings { Enabled = true });
+            db.SaveChanges();
+        }
+
+        var cut = Render<ActorMissing>(p => p.Add(x => x.RouteName, "Yui Hatano"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".missing-poster-card").Count));
+
+        cut.FindAll("button").Single(b => b.TextContent.Contains("Filter")).Click();
+        cut.FindAll("button.sort-dropdown-item").Single(b => b.TextContent.Contains("Hide duplicates")).Click();
+
+        Assert.Equal(3, cut.FindAll(".missing-poster-card").Count);
+    }
 }

@@ -173,7 +173,7 @@ else
                 <label class="options-label" for="actor-card-size">Card Size</label>
                 <div class="actor-size-control">
                     <span class="text-muted small">Small</span>
-                    <input type="range" id="actor-card-size" min="0" max="@ActorsViewState.MaxSizeStep" step="1" value="@sizeStep" @oninput="OnSizeChanged" />
+                    <input type="range" id="actor-card-size" min="0" max="@ActorsViewState.MaxSizeStep" step="1" value="@sizeStep" @oninput="OnSizeInput" @onchange="OnSizeCommitted" />
                     <span class="text-muted small">Large</span>
                 </div>
             </div>
@@ -638,10 +638,19 @@ else
         await ResetWindow();
     }
 
-    private async Task OnSizeChanged(ChangeEventArgs e)
+    // The grid resizes live as the slider moves (input); the cookie is written once, when the drag
+    // or key press is committed (change), not on every step passed on the way.
+    private void OnSizeInput(ChangeEventArgs e)
     {
-        if (!int.TryParse(e.Value?.ToString(), out var step)) return;
-        sizeStep = Math.Clamp(step, 0, ActorsViewState.MaxSizeStep);
+        if (int.TryParse(e.Value?.ToString(), out var step))
+        {
+            sizeStep = Math.Clamp(step, 0, ActorsViewState.MaxSizeStep);
+        }
+    }
+
+    private async Task OnSizeCommitted(ChangeEventArgs e)
+    {
+        OnSizeInput(e);
         await SaveViewStateAsync();
     }
 
