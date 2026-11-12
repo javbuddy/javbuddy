@@ -251,4 +251,29 @@ public class MovieStillsGenerateModalTests : BunitContext
         release.SetResult(new ExtraFanartStillsPreviewResult(Preview()));
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".stills-shimmer")));
     }
+
+    [Fact]
+    public void PreviewImages_AreDataUrls_StableAcrossRenders_AndRefreshedByRegenerating()
+    {
+        static ExtraFanartStillsPreview PreviewOf(byte[] bytes)
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "javbuddy-stills-test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            return new ExtraFanartStillsPreview(dir, [new(1, 90, bytes)]);
+        }
+        service.PreviewAsync(7, 10, ExtraFanartStillsMode.Append, false, Arg.Any<Action<ExtraFanartStill>?>(), Arg.Any<CancellationToken>())
+            .Returns(new ExtraFanartStillsPreviewResult(PreviewOf([1, 2, 3])), new ExtraFanartStillsPreviewResult(PreviewOf([4, 5, 6])));
+        var cut = RenderModal();
+
+        cut.FindAll("button").First(b => b.TextContent.Contains("Generate previews")).Click();
+        Assert.Equal("data:image/webp;base64,AQID", cut.Find(".stills-tile img").GetAttribute("src"));
+
+        // A re-render (ticking the box) leaves the image as it was.
+        cut.Find(".stills-tile input").Change(false);
+        Assert.Equal("data:image/webp;base64,AQID", cut.Find(".stills-tile img").GetAttribute("src"));
+
+        // Ids restart with every generation, so a stale cached URL must not survive a regenerate.
+        cut.FindAll("button").First(b => b.TextContent.Contains("Regenerate")).Click();
+        Assert.Equal("data:image/webp;base64,BAUG", cut.Find(".stills-tile img").GetAttribute("src"));
+    }
 }

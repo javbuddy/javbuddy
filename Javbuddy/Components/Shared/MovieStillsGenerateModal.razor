@@ -51,7 +51,7 @@
                     {
                         var id = still.Id;
                         <label class="stills-tile @(selected.Contains(id) ? "stills-tile-selected" : "")">
-                            <img src="data:image/webp;base64,@Convert.ToBase64String(still.PreviewWebp)" alt="Still at @FormatTime(still.Seconds)" />
+                            <img src="@PreviewUrl(still)" alt="Still at @FormatTime(still.Seconds)" />
                             <span class="stills-tile-caption">
                                 <input type="checkbox" checked="@selected.Contains(id)" @onchange="e => Toggle(id, (bool)e.Value!)" disabled="@Busy" />
                                 @FormatTime(still.Seconds)
@@ -144,12 +144,33 @@
         if (on) selected.Add(id); else selected.Remove(id);
     }
 
+    // Each preview's data URL, encoded once on first render: base64-encoding up to 20 frames on every
+    // render (a checkbox tick, the shimmer count) is pure repeated work. Cleared with `arrived`, as ids
+    // restart with every generation.
+    private readonly Dictionary<int, string> previewUrls = [];
+
+    private string PreviewUrl(ExtraFanartStill still)
+    {
+        if (!previewUrls.TryGetValue(still.Id, out var url))
+        {
+            url = "data:image/webp;base64," + Convert.ToBase64String(still.PreviewWebp);
+            previewUrls[still.Id] = url;
+        }
+        return url;
+    }
+
+    private void ClearArrived()
+    {
+        arrived.Clear();
+        previewUrls.Clear();
+    }
+
     private void DiscardPreview()
     {
         preview?.Dispose();
         preview = null;
         selected.Clear();
-        arrived.Clear();
+        ClearArrived();
     }
 
     private async Task GenerateAsync()
@@ -184,7 +205,7 @@
             if (!result.Success)
             {
                 errorMessage = result.ErrorMessage;
-                arrived.Clear();
+                ClearArrived();
                 selected.Clear();
                 return;
             }
@@ -203,7 +224,7 @@
         catch (OperationCanceledException) when (runCts.IsCancellationRequested)
         {
             // Stopped by the user: back to idle, nothing half-built kept (the service removed its scratch frames).
-            arrived.Clear();
+            ClearArrived();
             selected.Clear();
         }
         finally
