@@ -237,10 +237,9 @@ else
 
         // Queued on application-owned background execution so the run keeps going (and gets
         // recorded) even after this click handler returns — a full sync can take minutes.
-        _ = TaskLauncher.Queue(taskName);
+        await TaskLauncher.QueueAndWaitUntilRecordedAsync(taskName);
 
-        // Give the runner a moment to write the "queued" row, then refresh the queue view.
-        await Task.Delay(500);
+        // The "queued" row exists now, so the refresh finds it.
         runningTasks.Remove(taskName);
         await LoadAsync();
         StartPollingIfNeeded();

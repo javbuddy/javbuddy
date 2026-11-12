@@ -89,4 +89,58 @@ public class ScheduledTaskLauncherTests
         Assert.Equal("Task was cancelled.", run.ErrorMessage);
         Assert.NotNull(run.EndedAt);
     }
+
+    [Fact]
+    public async Task QueueAndWaitUntilRecorded_ReturnsOnceTheQueuedRowExists_WhileTheTaskKeepsRunning()
+    {
+        using var factory = new TestDbContextFactory();
+        var release = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (launcher, runner) = CreateLauncher(factory, new FakeTask("Library Rescan", _ => release.Task));
+
+        await launcher.QueueAndWaitUntilRecordedAsync("Library Rescan").WaitAsync(TimeSpan.FromSeconds(30));
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var run = await db.ScheduledTaskRuns.SingleAsync();
+            Assert.Equal("Library Rescan", run.TaskName);
+            Assert.Null(run.EndedAt);
+        }
+
+        release.SetResult("done");
+        await runner.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task QueueAndWaitUntilRecorded_UnknownTaskName_ReturnsWithoutHanging()
+    {
+        using var factory = new TestDbContextFactory();
+        var (launcher, _) = CreateLauncher(factory);
+
+        await launcher.QueueAndWaitUntilRecordedAsync("Nope").WaitAsync(TimeSpan.FromSeconds(30));
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(db.ScheduledTaskRuns);
+    }
+
+    private sealed class NoHistoryTask(Func<CancellationToken, Task<string?>> run) : IScheduledTask
+    {
+        public string Name => "Quiet";
+        public string Description => "";
+        public bool RecordRunHistory => false;
+        public TimeSpan GetInterval() => TimeSpan.FromHours(1);
+        public Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress) => run(ct);
+    }
+
+    [Fact]
+    public async Task QueueAndWaitUntilRecorded_TaskWithoutHistory_ReturnsImmediatelyInsteadOfWaitingForTheRun()
+    {
+        using var factory = new TestDbContextFactory();
+        var release = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (launcher, runner) = CreateLauncher(factory, new NoHistoryTask(_ => release.Task));
+
+        await launcher.QueueAndWaitUntilRecordedAsync("Quiet").WaitAsync(TimeSpan.FromSeconds(30));
+
+        release.SetResult(null);
+        await runner.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+    }
 }
