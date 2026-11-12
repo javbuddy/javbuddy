@@ -51,7 +51,7 @@ public class CoverCropStraightenFlowTests
             var image = modal.Locator(".cropper-viewport img");
             await Expect(image).ToHaveJSPropertyAsync("complete", true);
 
-            // Straighten by 20° (the Blazor oninput handler lays the cropper out again).
+            // Straighten by 20° (the slider drives the cropper directly in the browser).
             await slider.FillAsync("20");
             await Expect(modal.Locator(".straighten-controls .slider-value")).ToContainTextAsync("20.0");
             await Expect(image).ToHaveCSSAsync("transform", new System.Text.RegularExpressions.Regex("^matrix\\("));
@@ -78,6 +78,86 @@ public class CoverCropStraightenFlowTests
             // Reset restores the unrotated layout.
             await modal.Locator(".cropper-toolbar > .btn-tool", new() { HasTextString = "Reset" }).ClickAsync();
             await Expect(image).ToHaveCSSAsync("transform", "none");
+            await Expect(page.Locator("#blazor-error-ui")).ToBeHiddenAsync();
+        }
+        finally
+        {
+            File.Delete(tempImagePath);
+            await page.CloseAsync();
+        }
+    }
+
+    [Fact]
+    public async Task ZoomAndStraightenSliders_DriveTheCropperInTheBrowser_AndSaveStillWorks()
+    {
+        var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-SLIDERS-1", MovieStatus.Missing);
+
+        var tempImagePath = Path.Combine(Path.GetTempPath(), $"test-cover-{Guid.NewGuid():N}.png");
+        var page = await fixture.NewPageAsync();
+        try
+        {
+            using (var bmp = new SKBitmap(800, 500))
+            {
+                using (var canvas = new SKCanvas(bmp)) canvas.Clear(SKColors.SteelBlue);
+                using var img = SKImage.FromBitmap(bmp);
+                await File.WriteAllBytesAsync(tempImagePath, img.Encode(SKEncodedImageFormat.Png, 100).ToArray());
+            }
+
+            await page.GotoInteractiveAsync($"/movies/{movie.Code}");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Tools" }).ClickAsync();
+            await page.GetByRole(AriaRole.Menuitem, new() { Name = "Crop Cover" }).ClickAsync();
+
+            var modal = page.Locator(".modal-shell-panel");
+            await Expect(modal).ToBeVisibleAsync();
+            await modal.GetByRole(AriaRole.Button, new() { Name = "Upload" }).ClickAsync();
+            await modal.Locator("input[type='file']").SetInputFilesAsync(tempImagePath);
+
+            var straighten = modal.Locator(".straighten-slider");
+            var zoom = modal.Locator(".zoom-slider");
+            var straightenReadout = modal.Locator(".straighten-controls .slider-value");
+            var zoomReadout = modal.Locator(".zoom-controls .slider-value");
+            var image = modal.Locator(".cropper-viewport img");
+            await Expect(image).ToHaveJSPropertyAsync("complete", true);
+            await Expect(straightenReadout).ToHaveTextAsync("0.0°");
+            await Expect(zoomReadout).ToHaveTextAsync("1.0×");
+
+            // Zoom slider: the readout and the cropper's image size follow the slider.
+            var widthBefore = await image.EvaluateAsync<double>("e => parseFloat(e.style.width)");
+            await zoom.FillAsync("2");
+            await Expect(zoomReadout).ToHaveTextAsync("2.0×");
+            var widthAfter = await image.EvaluateAsync<double>("e => parseFloat(e.style.width)");
+            Assert.True(widthAfter > widthBefore * 1.9, $"zoom 2 should about double the image width ({widthBefore} -> {widthAfter})");
+
+            // Keyboard operation of the native sliders still works (and reaches the readout).
+            await zoom.FocusAsync();
+            await zoom.PressAsync("ArrowRight");
+            await zoom.PressAsync("ArrowRight");
+            await Expect(zoomReadout).ToHaveTextAsync("2.1×");
+
+            // Wheel zoom moves the slider and the readout.
+            await modal.Locator(".cropper-viewport").HoverAsync();
+            await page.Mouse.WheelAsync(0, -100);
+            await Expect(zoomReadout).ToHaveTextAsync("2.2×");
+            Assert.Equal(2.2, double.Parse(await zoom.InputValueAsync(), System.Globalization.CultureInfo.InvariantCulture), 2);
+
+            // Straighten slider: the readout follows, the rotation is applied, the zoom is kept.
+            await straighten.FillAsync("-7.5");
+            await Expect(straightenReadout).ToHaveTextAsync("-7.5°");
+            await Expect(zoomReadout).ToHaveTextAsync("2.2×");
+            await Expect(image).ToHaveCSSAsync("transform", new System.Text.RegularExpressions.Regex("^matrix\\("));
+
+            // Reset puts both sliders and readouts back.
+            await modal.Locator(".cropper-toolbar > .btn-tool", new() { HasTextString = "Reset" }).ClickAsync();
+            await Expect(straightenReadout).ToHaveTextAsync("0.0°");
+            await Expect(zoomReadout).ToHaveTextAsync("1.0×");
+            Assert.Equal(0.0, double.Parse(await straighten.InputValueAsync(), System.Globalization.CultureInfo.InvariantCulture), 2);
+            Assert.Equal(1.0, double.Parse(await zoom.InputValueAsync(), System.Globalization.CultureInfo.InvariantCulture), 2);
+
+            // Saving still gets the angle (read from the browser) and closes the dialog without an error.
+            await straighten.FillAsync("4.5");
+            await zoom.FillAsync("1.5");
+            await modal.Locator(".crop-save-btn").ClickAsync();
+            await Expect(modal).Not.ToBeVisibleAsync();
             await Expect(page.Locator("#blazor-error-ui")).ToBeHiddenAsync();
         }
         finally

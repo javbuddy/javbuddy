@@ -195,9 +195,6 @@
         StateHasChanged();
     });
 
-    /// <summary>Called from JS on wheel zoom; this dialog has no zoom slider to follow it.</summary>
-    [JSInvokable]
-    public Task OnZoomChanged(double zoom) => Task.CompletedTask;
 
     private async Task OnKeyDownAsync(KeyboardEventArgs e)
     {

@@ -44,5 +44,5 @@ class ActorCropper extends ImageCropper {
     }
 }
 
-export const { setImageSource, setHost, initCropper, setAspectRatio, setZoom, resetCrop, getCropRect, destroyCropper } =
+export const { setImageSource, setHost, initCropper, bindControls, setAspectRatio, setZoom, resetCrop, getCropRect, destroyCropper } =
     createCropperSession((container, img, circleCanvas, squareCanvas) => new ActorCropper(container, img, circleCanvas, squareCanvas));

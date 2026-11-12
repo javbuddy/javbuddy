@@ -103,8 +103,9 @@
 
                     <div class="zoom-controls">
                         <label class="slider-label" for="actor-zoom">Zoom</label>
-                        <input id="actor-zoom" type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" @oninput="HandleZoomInput" />
-                        <span class="slider-value">@currentZoom.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)×</span>
+                        <input id="actor-zoom" type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="1" @ref="zoomInputRef" />
+                        @* The slider and this readout are driven by the cropper script in the browser (bindControls). *@
+                        <span class="slider-value" @ref="zoomReadoutRef">1.0×</span>
                     </div>
 
                     <button type="button" class="btn-tool" @onclick="ResetCrop" title="Reset the crop box and zoom">Reset</button>
@@ -170,7 +171,6 @@
     private string? selectedImageContentType;
     private byte[]? selectedImageBytes;
     private double? currentAspectRatio = 1.0;
-    private double currentZoom = 1.0;
     private bool saving;
     private bool deleting;
     private string? errorMessage;
@@ -187,6 +187,8 @@
     private CropperViewport? viewport;
     private ElementReference circleCanvasRef;
     private ElementReference squareCanvasRef;
+    private ElementReference zoomInputRef;
+    private ElementReference zoomReadoutRef;
 
     private IJSObjectReference? jsModule;
     private DotNetObjectReference<ActorImageUploadModal>? selfRef;
@@ -224,6 +226,7 @@
                 selfRef ??= DotNetObjectReference.Create(this);
                 await jsModule.InvokeVoidAsync("setHost", selfRef);
                 await jsModule.InvokeVoidAsync("initCropper", viewport!.Container, viewport.Image, circleCanvasRef, squareCanvasRef);
+                await jsModule.InvokeVoidAsync("bindControls", zoomInputRef, zoomReadoutRef, null, null);
                 if (currentAspectRatio.HasValue)
                 {
                     await jsModule.InvokeVoidAsync("setAspectRatio", currentAspectRatio.Value);
@@ -241,14 +244,6 @@
             }
         }
     }
-
-    /// <summary>Called from JS when the mouse wheel zooms the image, so the slider and readout follow.</summary>
-    [JSInvokable]
-    public Task OnZoomChanged(double zoom) => InvokeAsync(() =>
-    {
-        currentZoom = Math.Round(Math.Clamp(zoom, 1.0, 3.0), 2);
-        StateHasChanged();
-    });
 
     /// <summary>Called from JS when the browser can't decode the loaded image.</summary>
     [JSInvokable]
@@ -296,7 +291,6 @@
     {
         selectedImageBytes = bytes;
         selectedImageContentType = contentType;
-        currentZoom = 1.0;
         currentAspectRatio = 1.0;
         shouldInitCropper = true;
         cropperReady = false;
@@ -324,26 +318,8 @@
         }
     }
 
-    private async Task HandleZoomInput(ChangeEventArgs e)
-    {
-        if (double.TryParse(e.Value?.ToString(), out var z))
-        {
-            currentZoom = Math.Clamp(z, 1.0, 3.0);
-            if (jsModule is not null)
-            {
-                try
-                {
-                    await jsModule.InvokeVoidAsync("setZoom", currentZoom);
-                }
-                catch (JSDisconnectedException) { }
-                catch (InvalidOperationException) { }
-            }
-        }
-    }
-
     private async Task ResetCrop()
     {
-        currentZoom = 1.0;
         if (jsModule is not null)
         {
             try
@@ -364,7 +340,6 @@
         shouldInitCropper = false;
         cropperReady = false;
         imageFailed = false;
-        currentZoom = 1.0;
         currentAspectRatio = 1.0;
         imageUrlInput = string.Empty;
         fetchingUrl = false;

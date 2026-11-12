@@ -146,15 +146,16 @@
                     <div class="straighten-controls">
                         <label class="slider-label" for="cover-straighten">Straighten</label>
                         <input id="cover-straighten" type="range" class="form-range straighten-slider" min="-45" max="45" step="0.1"
-                               value="@straightenDegrees.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)"
-                               @oninput="HandleStraightenInput" disabled="@IsBusy" />
-                        <span class="slider-value">@straightenDegrees.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)°</span>
+                               value="0"
+                               @ref="straightenInputRef" disabled="@IsBusy" />
+                        @* The sliders and their readouts are driven by the cropper script in the browser (bindControls). *@
+                        <span class="slider-value" @ref="straightenReadoutRef">0.0°</span>
                     </div>
 
                     <div class="zoom-controls">
                         <label class="slider-label" for="cover-zoom">Zoom</label>
-                        <input id="cover-zoom" type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="@currentZoom.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)" @oninput="HandleZoomInput" />
-                        <span class="slider-value">@currentZoom.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)×</span>
+                        <input id="cover-zoom" type="range" class="form-range zoom-slider" min="1.0" max="3.0" step="0.05" value="1" @ref="zoomInputRef" />
+                        <span class="slider-value" @ref="zoomReadoutRef">1.0×</span>
                     </div>
 
                     <button type="button" class="btn-tool" @onclick="ResetAll" disabled="@IsBusy" title="Reset the crop box, zoom and straighten">Reset</button>
@@ -202,11 +203,12 @@
     private byte[]? originalImageBytes;
     private string? originalImageContentType;
     private double? currentAspectRatio = 1.0 / 1.42;
-    private double currentZoom = 1.0;
     private bool saving;
     private bool rotating;
     // True from loading new bytes into the cropper until it has been set up on them.
     private bool preparingImage;
+    // The angle .NET applies to the next cropper (0 for a new source). The slider itself is driven in the browser;
+    // the live value is read back with getRotation when saving or turning the image.
     private double straightenDegrees;
     private string? errorMessage;
     private bool hasLocalFolder;
@@ -224,6 +226,10 @@
 
     private CropperViewport? viewport;
     private ElementReference previewPosterCanvasRef;
+    private ElementReference zoomInputRef;
+    private ElementReference zoomReadoutRef;
+    private ElementReference straightenInputRef;
+    private ElementReference straightenReadoutRef;
 
     private IJSObjectReference? jsModule;
     private DotNetObjectReference<MovieCoverCropModal>? selfRef;
@@ -259,6 +265,7 @@
                 selfRef ??= DotNetObjectReference.Create(this);
                 await jsModule.InvokeVoidAsync("setHost", selfRef);
                 await jsModule.InvokeVoidAsync("initCropper", viewport!.Container, viewport.Image, previewPosterCanvasRef);
+                await jsModule.InvokeVoidAsync("bindControls", zoomInputRef, zoomReadoutRef, straightenInputRef, straightenReadoutRef);
                 if (straightenDegrees != 0)
                 {
                     await jsModule.InvokeVoidAsync("setRotation", straightenDegrees);
@@ -283,14 +290,6 @@
             }
         }
     }
-
-    /// <summary>Called from JS when the mouse wheel zooms the image, so the slider and readout follow.</summary>
-    [JSInvokable]
-    public Task OnZoomChanged(double zoom) => InvokeAsync(() =>
-    {
-        currentZoom = Math.Round(Math.Clamp(zoom, 1.0, 3.0), 2);
-        StateHasChanged();
-    });
 
     /// <summary>Called from JS when the browser can't decode the loaded image.</summary>
     [JSInvokable]
@@ -419,7 +418,6 @@
         selectedImageContentType = contentType;
         preparingImage = true;
         straightenDegrees = 0;
-        currentZoom = 1.0;
         currentAspectRatio = 1.0 / 1.42;
         shouldInitCropper = true;
     }
@@ -448,23 +446,6 @@
         }
     }
 
-    private async Task HandleZoomInput(ChangeEventArgs e)
-    {
-        if (double.TryParse(e.Value?.ToString(), out var z))
-        {
-            currentZoom = Math.Clamp(z, 1.0, 3.0);
-            if (jsModule is not null)
-            {
-                try
-                {
-                    await jsModule.InvokeVoidAsync("setZoom", currentZoom);
-                }
-                catch (JSDisconnectedException) { }
-                catch (InvalidOperationException) { }
-            }
-        }
-    }
-
     private async Task RotateAsync(bool clockwise)
     {
         if (selectedImageBytes is null || rotating) return;
@@ -482,7 +463,8 @@
             {
                 // Reloads the cropper on the rotated image, which resets the crop box and zoom.
                 var ratio = currentAspectRatio;
-                var straighten = straightenDegrees;
+                // The angle lives in the browser's slider; carry it over to the cropper that reloads on the turned image.
+                var straighten = await ReadStraightenAsync();
                 LoadSelectedImage(rotated, "image/png", isOriginal: false);
                 currentAspectRatio = ratio;
                 straightenDegrees = straighten;
@@ -498,26 +480,17 @@
         }
     }
 
-    private async Task HandleStraightenInput(ChangeEventArgs e)
+    // The straighten slider is driven in the browser, so .NET asks for the angle only when it needs it (saving, or
+    // carrying it across a 90° turn). Without a live cropper the last value .NET applied is still the right one.
+    private async Task<double> ReadStraightenAsync()
     {
-        if (!double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var degrees)) return;
-
-        await SetStraightenAsync(Math.Clamp(Math.Round(degrees, 1), -45, 45));
-    }
-
-    // The cropper lays the rotated image out again, which resets its crop box but keeps the zoom.
-    private async Task SetStraightenAsync(double degrees)
-    {
-        straightenDegrees = degrees;
-        if (jsModule is not null)
+        if (jsModule is null) return straightenDegrees;
+        try
         {
-            try
-            {
-                await jsModule.InvokeVoidAsync("setRotation", degrees);
-            }
-            catch (JSDisconnectedException) { }
-            catch (InvalidOperationException) { }
+            return await jsModule.InvokeAsync<double>("getRotation");
         }
+        catch (JSDisconnectedException) { return straightenDegrees; }
+        catch (InvalidOperationException) { return straightenDegrees; }
     }
 
     private static string SourceCaption(MovieCropSource src) =>
@@ -537,7 +510,6 @@
             return;
         }
 
-        currentZoom = 1.0;
         straightenDegrees = 0;
         if (jsModule is not null)
         {
@@ -562,7 +534,6 @@
         straightenDegrees = 0;
         errorMessage = null;
         shouldInitCropper = false;
-        currentZoom = 1.0;
         currentAspectRatio = 1.0 / 1.42;
         imageUrlInput = string.Empty;
         fetchingUrl = false;
@@ -622,7 +593,8 @@
                 return;
             }
             var cropRect = new NormalizedCropRect(dto.x, dto.y, dto.width, dto.height);
-            var result = await CoverCropService.SaveCroppedCoverAsync(Code, selectedImageBytes, cropRect, straightenDegrees);
+            var straighten = await ReadStraightenAsync();
+            var result = await CoverCropService.SaveCroppedCoverAsync(Code, selectedImageBytes, cropRect, straighten);
             if (!result.Success)
             {
                 errorMessage = result.ErrorMessage ?? "Failed to save cropped cover.";

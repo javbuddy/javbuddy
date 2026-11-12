@@ -313,10 +313,11 @@ public class MovieCoverCropModalTests : BunitContext
     }
 
     [Fact]
-    public void MovieCoverCropModal_StraightenSlider_RotatesTheCropperAndResetButtonClearsIt()
+    public void MovieCoverCropModal_Rotate_KeepsTheAngleReadFromTheBrowser_AndResetClearsIt()
     {
         var module = JSInterop.SetupModule("./Components/Shared/MovieCoverCropModal.razor.js");
         module.Mode = JSRuntimeMode.Loose;
+        module.Setup<double>("getRotation").SetResult(-3.5);
         var cropService = Substitute.For<IMovieCoverCropService>();
         cropService.GetCropSourcesAsync("IPX-535", Arg.Any<CancellationToken>()).Returns(new MovieCropSources(
             "IPX-535",
@@ -331,39 +332,33 @@ public class MovieCoverCropModalTests : BunitContext
             .Add(m => m.Code, "IPX-535"));
         cut.WaitForAssertion(() => module.VerifyInvoke("initCropper"));
 
-        cut.Find(".straighten-slider").Input("-3.5");
-
-        Assert.Equal("-3.5°", StraightenValue(cut));
-        Assert.Equal(-3.5, module.Invocations.Last(i => i.Identifier == "setRotation").Arguments[0]);
-
-        // A 90° turn reloads the cropper but keeps the fine angle, applied again after init.
+        // The straighten slider is driven in the browser; the angle set there is read back when the image turns.
+        // A 90° turn reloads the cropper but keeps that angle, applied again after init.
         cut.Find(".rotate-right-btn").Click();
         cut.WaitForAssertion(() => module.VerifyInvoke("initCropper", 2));
-        cut.WaitForAssertion(() => Assert.Equal(2, module.Invocations.Count(i => i.Identifier == "setRotation")));
+        cut.WaitForAssertion(() => Assert.Equal(1, module.Invocations.Count(i => i.Identifier == "setRotation")));
         Assert.Equal(-3.5, module.Invocations.Last(i => i.Identifier == "setRotation").Arguments[0]);
+        Assert.Equal(2, module.Invocations.Count(i => i.Identifier == "bindControls"));
 
         cut.FindAll(".cropper-toolbar > .btn-tool").Single(b => b.TextContent == "Reset").Click();
 
         // After the 90° turn, Reset reloads the original image, so the fine angle is cleared without a further setRotation.
         cut.WaitForAssertion(() => module.VerifyInvoke("initCropper", 3));
-        Assert.Equal("0.0°", StraightenValue(cut));
-        Assert.Equal(2, module.Invocations.Count(i => i.Identifier == "setRotation"));
+        Assert.Equal(1, module.Invocations.Count(i => i.Identifier == "setRotation"));
     }
 
     [Fact]
-    public void MovieCoverCropModal_StraightenSlider_KeepsTheZoomLevel()
+    public void MovieCoverCropModal_BindsTheSlidersAndReadoutsToTheCropperInTheBrowser()
     {
         var module = JSInterop.SetupModule("./Components/Shared/MovieCoverCropModal.razor.js");
         module.Mode = JSRuntimeMode.Loose;
         var cut = RenderWithLoadedImage(module);
 
-        cut.Find(".zoom-slider").Input("2.0");
-        cut.Find(".straighten-slider").Input("5");
-
-        Assert.Equal("2.0×", cut.Find(".zoom-controls .slider-value").TextContent);
-        Assert.Equal(2.0, double.Parse(cut.Find(".zoom-slider").GetAttribute("value")!, System.Globalization.CultureInfo.InvariantCulture));
-        // The zoom is not re-sent to the cropper by the modal: the cropper keeps it itself when it lays out again.
-        Assert.DoesNotContain(module.Invocations.Where(i => i.Identifier == "setZoom").Skip(1), i => (double)i.Arguments[0]! == 1.0);
+        // The sliders have no server-side input handler (a drag never reaches .NET): the script gets the
+        // zoom and straighten inputs plus their readouts, and fills them in itself.
+        cut.WaitForAssertion(() => module.VerifyInvoke("bindControls"));
+        Assert.Equal(4, module.Invocations.Single(i => i.Identifier == "bindControls").Arguments.Count);
+        Assert.DoesNotContain(module.Invocations, i => i.Identifier is "setZoom" or "setRotation");
     }
 
     [Fact]
@@ -416,14 +411,14 @@ public class MovieCoverCropModalTests : BunitContext
         var module = JSInterop.SetupModule("./Components/Shared/MovieCoverCropModal.razor.js");
         module.Mode = JSRuntimeMode.Loose;
         var cut = RenderWithLoadedImage(module);
-        cut.Find(".straighten-slider").Input("4");
 
         cut.FindAll(".cropper-toolbar > .btn-tool").Single(b => b.TextContent == "Reset").Click();
 
+        // The script resets the angle, zoom and crop box, and moves the sliders and readouts with them.
+        Assert.Equal(0.0, module.Invocations.Single(i => i.Identifier == "setRotation").Arguments[0]);
+        Assert.Equal(1.0, module.Invocations.Single(i => i.Identifier == "setZoom").Arguments[0]);
         module.VerifyInvoke("resetCrop");
         Assert.Equal(1, module.Invocations.Count(i => i.Identifier == "initCropper"));
-        Assert.Equal("0.0°", StraightenValue(cut));
-        Assert.Equal("1.0×", cut.Find(".zoom-controls .slider-value").TextContent);
     }
 
     [Fact]
@@ -475,19 +470,6 @@ public class MovieCoverCropModalTests : BunitContext
         Assert.Equal("true", cut.Find("button[aria-label='Upload']").GetAttribute("aria-pressed"));
         Assert.Equal("false", cut.Find(".source-thumb").GetAttribute("aria-pressed"));
         module.VerifyInvoke("destroyCropper");
-    }
-
-    [Fact]
-    public async Task MovieCoverCropModal_WheelZoomFromJs_MovesTheSliderAndReadout()
-    {
-        var module = JSInterop.SetupModule("./Components/Shared/MovieCoverCropModal.razor.js");
-        module.Mode = JSRuntimeMode.Loose;
-        var cut = RenderWithLoadedImage(module);
-
-        await cut.InvokeAsync(() => cut.Instance.OnZoomChanged(2.5000000000000004));
-
-        Assert.Equal("2.5×", cut.Find(".zoom-controls .slider-value").TextContent);
-        Assert.Equal("2.50", cut.Find(".zoom-slider").GetAttribute("value"));
     }
 
     [Fact]
@@ -558,16 +540,16 @@ public class MovieCoverCropModalTests : BunitContext
         return cut;
     }
 
-    private static string StraightenValue(IRenderedComponent<MovieCoverCropModal> cut) =>
-        cut.Find(".straighten-controls .slider-value").TextContent;
-
     [Fact]
     public void MovieCoverCropModal_Save_PassesTheStraightenAngle_AndANewSourceResetsIt()
     {
         var module = JSInterop.SetupModule("./Components/Shared/MovieCoverCropModal.razor.js");
         module.Mode = JSRuntimeMode.Loose;
         module.Setup<MovieCoverCropModal.CropRectDto>("getCropRect").SetResult(new MovieCoverCropModal.CropRectDto(0.1, 0.2, 0.3, 0.4));
+        // The angle the user set on the slider, which lives in the browser.
+        module.Setup<double>("getRotation").SetResult(-12.3);
         var cropService = Substitute.For<IMovieCoverCropService>();
+        cropService.RotateImageAsync(Arg.Any<byte[]>(), true, Arg.Any<CancellationToken>()).Returns(new byte[] { 9, 9 });
         cropService.GetCropSourcesAsync("IPX-535", Arg.Any<CancellationToken>()).Returns(new MovieCropSources(
             "IPX-535",
             "backdrop",
@@ -586,12 +568,18 @@ public class MovieCoverCropModalTests : BunitContext
             .Add(m => m.Code, "IPX-535"));
         cut.WaitForAssertion(() => module.VerifyInvoke("initCropper"));
 
-        // Switching source reloads the image and clears the fine angle.
-        cut.Find(".straighten-slider").Input("7.5");
-        cut.FindAll(".source-thumb").First(b => b.GetAttribute("title") == "Current Poster").Click();
-        cut.WaitForAssertion(() => Assert.Equal("0.0°", StraightenValue(cut)));
+        // A 90° turn carries the angle read from the browser onto the reloaded cropper...
+        cut.Find(".rotate-right-btn").Click();
+        cut.WaitForAssertion(() => Assert.Equal(1, module.Invocations.Count(i => i.Identifier == "setRotation")));
+        Assert.Equal(-12.3, module.Invocations.Last(i => i.Identifier == "setRotation").Arguments[0]);
 
-        cut.Find(".straighten-slider").Input("-12.3");
+        // ...but switching source reloads the image and clears the fine angle (no setRotation for the new cropper).
+        cut.FindAll(".source-thumb").First(b => b.GetAttribute("title") == "Current Poster").Click();
+        cut.WaitForAssertion(() => module.VerifyInvoke("initCropper", 3));
+        cut.WaitForAssertion(() => Assert.Equal(3, module.Invocations.Count(i => i.Identifier == "bindControls")));
+        Assert.Equal(1, module.Invocations.Count(i => i.Identifier == "setRotation"));
+
+        // Save asks the browser for the angle.
         cut.Find(".crop-save-btn").Click();
 
         cut.WaitForAssertion(() => cropService.Received(1).SaveCroppedCoverAsync(

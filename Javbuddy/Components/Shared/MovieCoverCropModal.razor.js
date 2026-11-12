@@ -54,5 +54,5 @@ class MovieCoverCropper extends ImageCropper {
     }
 }
 
-export const { setImageSource, setHost, initCropper, setAspectRatio, setZoom, setRotation, resetCrop, getCropRect, destroyCropper } =
+export const { setImageSource, setHost, initCropper, bindControls, setAspectRatio, setZoom, setRotation, getRotation, resetCrop, getCropRect, destroyCropper } =
     createCropperSession((container, img, previewPosterCanvas) => new MovieCoverCropper(container, img, previewPosterCanvas));
