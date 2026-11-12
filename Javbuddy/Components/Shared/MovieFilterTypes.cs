@@ -53,7 +53,37 @@ public enum MovieFeatureFilterOption
     MetadataIncomplete,
 }
 
-public readonly record struct MovieSortChange(string Field, bool Descending, int? RandomSortSeed = null);
+/// <summary>What <see cref="MovieFilterToolbar"/> offers to pick from: the library's names, codecs, studios, genres, the
+/// actors and actor tags to filter by, and the bounds of the count, range and actress-attribute sliders. A group or
+/// slider with nothing offered is hidden.</summary>
+public sealed record MovieFilterChoices
+{
+    public static readonly MovieFilterChoices None = new();
+
+    public IReadOnlyList<string> LibraryNames { get; init; } = [];
+    public IReadOnlyList<string> Codecs { get; init; } = [];
+    public IReadOnlyList<string> Studios { get; init; } = [];
+    public IReadOnlyList<string> Genres { get; init; } = [];
+    public IReadOnlyList<MovieActorOption> Actors { get; init; } = [];
+    public IReadOnlyList<MovieActorOption> ActorTags { get; init; } = [];
+    public MovieCountOptions Counts { get; init; } = MovieCountOptions.None;
+    public MovieRangeOptions Ranges { get; init; } = MovieRangeOptions.None;
+    public ActorAttributeOptions ActorAttributes { get; init; } = ActorAttributeOptions.None;
+
+    /// <summary>The library's own options, as the grid query service reports them.</summary>
+    public static MovieFilterChoices From(MovieLibraryOptions options) => new()
+    {
+        LibraryNames = options.LibraryNames,
+        Codecs = options.Codecs,
+        Studios = options.Studios,
+        Genres = options.Genres,
+        Actors = options.Actors,
+        ActorTags = options.ActorTags,
+        Counts = options.Counts,
+        Ranges = options.Ranges,
+        ActorAttributes = options.ActorAttributes,
+    };
+}
 
 public static class MovieFilterOptions
 {

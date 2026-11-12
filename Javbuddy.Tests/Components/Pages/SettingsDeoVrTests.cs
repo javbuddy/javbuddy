@@ -1,5 +1,6 @@
 using Bunit;
 using Javbuddy.Components.Pages;
+using Javbuddy.Components.Shared;
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.DeoVr;
@@ -105,6 +106,57 @@ public class SettingsDeoVrTests : BunitContext
         Assert.Equal(("Amy", null), (group.Name, group.Filter.Status));
         Assert.Equal([amyId], group.Filter.ActorIds!);
         Assert.Empty(cut.FindAll(".deovr-editor"));
+    }
+
+    [Fact]
+    public async Task EditingAGroupAndSavingWithoutChanges_KeepsItsSavedFilterAndSort()
+    {
+        var filter = new MovieGridFilter(
+            Library: "/lib/a",
+            Resolutions: [MovieResolutionFilterOption.FourK],
+            ContentTypes: [MovieContentType.Uncensored],
+            Codecs: ["HEVC"],
+            Studios: ["Moodyz"],
+            Genres: ["Drama"],
+            Features: [MovieFeatureFilterOption.HasSubtitles],
+            Text: "abc",
+            NfoDriftKinds: [NfoDriftKind.Unreadable],
+            ActorAttributes: new ActorAttributeSelection { CupSizes = ["E"], Height = new IntRange(150, null) },
+            ActorIds: [7],
+            Counts: new MovieCountSelection { Scenes = new IntRange(1, null) },
+            Ranges: new MovieRangeSelection { RuntimeMinutes = new IntRange(90, 150) },
+            ExcludedStudios: ["Idea Pocket"],
+            ExcludedGenres: ["Solo"],
+            ExcludedActorIds: [9]);
+        var groups = new DeoVrGroupService(dbFactory);
+        var id = await groups.SaveAsync(0, "Rich", filter, "title", false);
+        var cut = RenderPage();
+
+        cut.FindAll(".deovr-group").Single(g => g.TextContent.Contains("Rich", StringComparison.Ordinal))
+            .QuerySelectorAll("button").Single(b => b.TextContent == "Edit").Click();
+        cut.WaitForElement(".deovr-editor");
+        cut.FindAll("button").Single(b => b.TextContent == "Save group").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".deovr-editor")));
+        var saved = (await groups.ListAsync()).Single(g => g.Id == id);
+        Assert.Equal(("title", false), (saved.Sort.Field, saved.Sort.Descending));
+        Assert.Equal(filter.Library, saved.Filter.Library);
+        Assert.Equal(filter.Text, saved.Filter.Text);
+        Assert.Equal(filter.Resolutions, saved.Filter.Resolutions);
+        Assert.Equal(filter.ContentTypes, saved.Filter.ContentTypes);
+        Assert.Equal(filter.Codecs, saved.Filter.Codecs);
+        Assert.Equal(filter.Studios, saved.Filter.Studios);
+        Assert.Equal(filter.Genres, saved.Filter.Genres);
+        Assert.Equal(filter.Features, saved.Filter.Features);
+        Assert.Equal(filter.NfoDriftKinds, saved.Filter.NfoDriftKinds);
+        Assert.Equal(filter.ActorIds, saved.Filter.ActorIds);
+        Assert.Equal(filter.ExcludedStudios, saved.Filter.ExcludedStudios);
+        Assert.Equal(filter.ExcludedGenres, saved.Filter.ExcludedGenres);
+        Assert.Equal(filter.ExcludedActorIds, saved.Filter.ExcludedActorIds);
+        Assert.Equal(filter.Counts, saved.Filter.Counts);
+        Assert.Equal(filter.Ranges, saved.Filter.Ranges);
+        Assert.Equal(["E"], saved.Filter.ActorAttributes!.CupSizes);
+        Assert.Equal(new IntRange(150, null), saved.Filter.ActorAttributes.Height);
     }
 
     [Fact]

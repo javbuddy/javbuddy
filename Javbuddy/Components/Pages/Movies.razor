@@ -36,73 +36,13 @@
 }
 else
 {
-    <MovieFilterToolbar TotalCount="@totalCount"
-                        MissingCount="@missingCount"
-                        GotCount="@gotCount"
-                        StatusFilter="@filters.Status"
-                        OnStatusFilterChanged="status => ApplyFilterAsync(() => filters.Status = status)"
-                        LibraryNames="@libraryNames"
-                        LibraryFilter="@filters.Library"
-                        OnLibraryFilterChanged="library => ApplyFilterAsync(() => filters.Library = library)"
-                        TextFilter="@filters.Text"
-                        OnTextFilterChanged="OnTextFilterChanged"
-                        ResolutionFilter="@filters.Resolutions"
-                        OnToggleResolution="bucket => ApplyFilterAsync(() => filters.Resolutions.Toggle(bucket))"
-                        ScanTypeFilter="@filters.ScanTypes"
-                        OnToggleScanType="scanType => ApplyFilterAsync(() => filters.ScanTypes.Toggle(scanType))"
-                        ContentTypeFilter="@filters.ContentTypes"
-                        ExcludedContentTypeFilter="@filters.ExcludedContentTypes"
-                        OnToggleContentType="type => ApplyFilterAsync(() => filters.ContentTypes.CycleInclusion(filters.ExcludedContentTypes, type))"
-                        NfoDriftFilter="@filters.NfoDriftKinds"
-                        OnToggleNfoDrift="kind => ApplyFilterAsync(() => filters.NfoDriftKinds.Toggle(kind))"
-                        AvailableCodecs="@availableCodecs"
-                        CodecFilter="@filters.Codecs"
-                        OnToggleCodec="codec => ApplyFilterAsync(() => filters.Codecs.Toggle(codec))"
-                        AvailableStudios="@availableStudios"
-                        StudioFilter="@filters.Studios"
-                        OnToggleStudio="studio => ApplyFilterAsync(() => ToggleStudio(studio))"
-                        OnSelectAllStudios="studios => ApplyFilterAsync(() => MovieGridFilterState.SelectAll(filters.Studios, filters.ExcludedStudios, studios))"
-                        OnSelectNoneStudios="() => ApplyFilterAsync(() => MovieGridFilterState.SelectNone(filters.Studios, filters.ExcludedStudios))"
+    <MovieFilterToolbar State="filters"
+                        OnChanged="OnFiltersChanged"
+                        Choices="FilterChoices"
+                        StatusCounts="@(new MovieStatusCounts(totalCount, missingCount, gotCount))"
                         Excludable="true"
-                        ExcludedStudioFilter="@filters.ExcludedStudios"
-                        ExcludedGenreFilter="@filters.ExcludedGenres"
-                        ExcludedActorFilter="@filters.ExcludedActorIds"
-                        ExcludedActorTagFilter="@filters.ExcludedActorTagIds"
-                        AvailableGenres="@availableGenres"
-                        GenreFilter="@filters.Genres"
-                        OnToggleGenre="genre => ApplyFilterAsync(() => filters.Genres.CycleInclusion(filters.ExcludedGenres, genre))"
-                        OnSelectAllGenres="genres => ApplyFilterAsync(() => MovieGridFilterState.SelectAll(filters.Genres, filters.ExcludedGenres, genres))"
-                        OnSelectNoneGenres="() => ApplyFilterAsync(() => MovieGridFilterState.SelectNone(filters.Genres, filters.ExcludedGenres))"
-                        MatchAllGenres="@filters.MatchAllGenres"
-                        OnMatchAllGenresChanged="matchAll => ApplyFilterAsync(() => filters.MatchAllGenres = matchAll)"
-                        MatchAllActorTags="@filters.MatchAllActorTags"
-                        OnMatchAllActorTagsChanged="matchAll => ApplyFilterAsync(() => filters.MatchAllActorTags = matchAll)"
-                        FeatureFilter="@filters.Features"
-                        OnToggleFeature="feature => ApplyFilterAsync(() => filters.Features.Toggle(feature))"
-                        CountOptions="@countOptions"
-                        CountSelection="@filters.Counts"
-                        OnCountsChanged="edited => ApplyFilterAsync(() => filters.Counts = MovieFilterOptions.MergeCounts(filters.Counts, edited, countOptions))"
-                        RangeOptions="@rangeOptions"
-                        RangeSelection="@filters.Ranges"
-                        OnRangesChanged="edited => ApplyFilterAsync(() => filters.Ranges = MovieFilterOptions.MergeRanges(filters.Ranges, edited, rangeOptions))"
-                        AvailableActors="@availableActors"
-                        ActorFilter="@filters.ActorIds"
-                        OnToggleActor="actorId => ApplyFilterAsync(() => filters.ActorIds.CycleInclusion(filters.ExcludedActorIds, actorId))"
-                        OnSelectAllActors="actorIds => ApplyFilterAsync(() => MovieGridFilterState.SelectAll(filters.ActorIds, filters.ExcludedActorIds, actorIds))"
-                        OnSelectNoneActors="() => ApplyFilterAsync(() => MovieGridFilterState.SelectNone(filters.ActorIds, filters.ExcludedActorIds))"
-                        AvailableActorTags="@availableActorTags"
-                        ActorTagFilter="@filters.ActorTagIds"
-                        OnToggleActorTag="tagId => ApplyFilterAsync(() => filters.ActorTagIds.CycleInclusion(filters.ExcludedActorTagIds, tagId))"
-                        OnSelectAllActorTags="tagIds => ApplyFilterAsync(() => MovieGridFilterState.SelectAll(filters.ActorTagIds, filters.ExcludedActorTagIds, tagIds))"
-                        OnSelectNoneActorTags="() => ApplyFilterAsync(() => MovieGridFilterState.SelectNone(filters.ActorTagIds, filters.ExcludedActorTagIds))"
+                        ShowMatchAll="true"
                         ShowActorAttributes="true"
-                        ActorAttributeOptions="@actorAttributeOptions"
-                        ActorAttributeSelection="@filters.ActorAttributes"
-                        OnActorAttributesChanged="edited => ApplyFilterAsync(() => filters.ActorAttributes = MovieFilterOptions.MergeActorAttributes(filters.ActorAttributes, edited, actorAttributeOptions))"
-                        SortField="@filters.SortField"
-                        SortDescending="@filters.SortDescending"
-                        OnSortChanged="OnSortChanged"
-                        HasActiveFilters="@(filters.HasActiveFilters || (BrowseActive && catalogFilter.ActiveCount > 0))"
                         ReleasesBrowseMode="@BrowseActive"
                         ReleasesActiveFilterCount="@catalogFilter.ActiveCount"
                         HidePreviouslyDeleted="@catalogFilter.HidePreviouslyDeleted"
@@ -869,24 +809,21 @@ else
         }
     }
 
-    // The r18.dev catalog can't exclude a studio, so there a click only includes or clears it — and
-    // clears an exclusion it hides, so a studio is never both included and excluded back in the library.
-    private void ToggleStudio(string studio)
-    {
-        if (BrowseActive)
-        {
-            filters.ExcludedStudios.Remove(studio);
-            filters.Studios.Toggle(studio);
-        }
-        else filters.Studios.CycleInclusion(filters.ExcludedStudios, studio);
-    }
+    // Every filter edit, made by the toolbar in place on the state, ends up here: back to the top and reload.
+    private Task OnFiltersChanged() => ResetAndLoadAsync();
 
-    private Task ApplyFilterAsync(Action change)
+    private MovieFilterChoices FilterChoices => new()
     {
-        change();
-        filters.DropLoneMatchAll();
-        return ResetAndLoadAsync();
-    }
+        LibraryNames = libraryNames,
+        Codecs = availableCodecs,
+        Studios = availableStudios,
+        Genres = availableGenres,
+        Actors = availableActors,
+        ActorTags = availableActorTags,
+        Counts = countOptions,
+        Ranges = rangeOptions,
+        ActorAttributes = actorAttributeOptions,
+    };
 
     // "All releases (r18.dev)" browse: swaps the local grid for the r18.dev catalog, narrowed by the
     // search box / studio filter / prefix and its own filters. Saved in the view-state cookie with
@@ -976,25 +913,6 @@ else
             Nav.NavigateTo("/", replace: true);
         }
     }
-
-    private Task OnTextFilterChanged(string text) => ApplyFilterAsync(() =>
-    {
-        filters.Text = text;
-        // A prefix badge is a one-shot navigation aid. Once the user edits the search box, return
-        // to its advertised code-or-title search behavior instead of retaining the hidden
-        // code-only predicate from that navigation.
-        filters.CodePrefix = null;
-    });
-
-    private Task OnSortChanged(MovieSortChange sort) => ApplyFilterAsync(() =>
-    {
-        filters.SortField = sort.Field;
-        filters.SortDescending = sort.Descending;
-        if (sort.RandomSortSeed.HasValue)
-        {
-            filters.RandomSortSeed = sort.RandomSortSeed.Value;
-        }
-    });
 
     public async ValueTask DisposeAsync()
     {

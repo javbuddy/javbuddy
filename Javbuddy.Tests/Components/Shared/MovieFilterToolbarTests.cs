@@ -1,4 +1,5 @@
 using Bunit;
+using Javbuddy.Components.Pages.MoviesSections;
 using Javbuddy.Components.Shared;
 using Javbuddy.Models;
 using Javbuddy.Services.Movies;
@@ -14,22 +15,25 @@ public class MovieFilterToolbarTests : BunitContext
         Services.AddSingleton(TimeProvider.System);
     }
 
-    [Fact]
-    public void RendersStatusCounts_AndInvokesCallback()
-    {
-        MovieStatus? selectedStatus = null;
-        var callbackFired = false;
+    private int changes;
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.TotalCount, 12)
-            .Add(x => x.MissingCount, 5)
-            .Add(x => x.GotCount, 7)
-            .Add(x => x.StatusFilter, null)
-            .Add(x => x.OnStatusFilterChanged, EventCallback.Factory.Create<MovieStatus?>(this, s =>
-            {
-                selectedStatus = s;
-                callbackFired = true;
-            })));
+    // The toolbar edits the state it is given and then raises OnChanged; every test renders through here so it has both.
+    private IRenderedComponent<MovieFilterToolbar> RenderToolbar(
+        MovieGridFilterState? state = null,
+        Action<ComponentParameterCollectionBuilder<MovieFilterToolbar>>? configure = null) =>
+        Render<MovieFilterToolbar>(p =>
+        {
+            p.Add(x => x.State, state ?? new MovieGridFilterState())
+                .Add(x => x.OnChanged, EventCallback.Factory.Create(this, () => changes++));
+            configure?.Invoke(p);
+        });
+
+    [Fact]
+    public void RendersStatusCounts_AndSetsTheStatusOnTheState()
+    {
+        var state = new MovieGridFilterState();
+
+        var cut = RenderToolbar(state, p => p.Add(x => x.StatusCounts, new MovieStatusCounts(12, 5, 7)));
 
         Assert.Contains("All (12)", cut.Markup);
         Assert.Contains("Missing (5)", cut.Markup);
@@ -38,19 +42,16 @@ public class MovieFilterToolbarTests : BunitContext
         var missingBtn = cut.FindAll("button").First(b => b.TextContent.Contains("Missing (5)"));
         missingBtn.Click();
 
-        Assert.True(callbackFired);
-        Assert.Equal(MovieStatus.Missing, selectedStatus);
+        Assert.Equal(1, changes);
+        Assert.Equal(MovieStatus.Missing, state.Status);
     }
 
     [Fact]
     public void LibraryFilter_IsAGroupInTheFilterDropdown_NotAToolbarSelect()
     {
-        string? selectedLibrary = "unset";
+        var state = new MovieGridFilterState();
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.LibraryNames, new[] { "Library A", "Library B" })
-            .Add(x => x.LibraryFilter, null)
-            .Add(x => x.OnLibraryFilterChanged, EventCallback.Factory.Create<string?>(this, l => selectedLibrary = l)));
+        var cut = RenderToolbar(state, p => p.Add(x => x.Choices, new MovieFilterChoices { LibraryNames = ["Library A", "Library B"] }));
 
         Assert.Empty(cut.FindAll("select"));
 
@@ -60,18 +61,16 @@ public class MovieFilterToolbarTests : BunitContext
         Assert.Equal(new[] { "Library A", "Library B" }, options);
 
         cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Trim() == "Library A").Click();
-        Assert.Equal("Library A", selectedLibrary);
+        Assert.Equal("Library A", state.Library);
+        Assert.Equal(1, changes);
     }
 
     [Fact]
     public void LibraryFilter_SelectingAnotherReplacesIt_AndSelectingTheActiveOneClearsIt()
     {
-        string? selectedLibrary = "unset";
+        var state = new MovieGridFilterState { Library = "Library A" };
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.LibraryNames, new[] { "Library A", "Library B" })
-            .Add(x => x.LibraryFilter, "Library A")
-            .Add(x => x.OnLibraryFilterChanged, EventCallback.Factory.Create<string?>(this, l => selectedLibrary = l)));
+        var cut = RenderToolbar(state, p => p.Add(x => x.Choices, new MovieFilterChoices { LibraryNames = ["Library A", "Library B"] }));
 
         OpenFilterMenu(cut);
         Assert.Contains("Filter (1)", cut.Markup);
@@ -79,16 +78,16 @@ public class MovieFilterToolbarTests : BunitContext
         Assert.Equal(["Library A"], cut.FindAll("button.sort-dropdown-subitem.active").Select(b => b.TextContent.Replace("✓", "").Trim()));
 
         cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Trim() == "Library B").Click();
-        Assert.Equal("Library B", selectedLibrary);
+        Assert.Equal("Library B", state.Library);
 
-        cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Contains("Library A")).Click();
-        Assert.Null(selectedLibrary);
+        cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Contains("Library B")).Click();
+        Assert.Null(state.Library);
     }
 
     [Fact]
     public void LibraryFilter_GroupIsHiddenWhenNoLibrariesAreOffered()
     {
-        var cut = Render<MovieFilterToolbar>();
+        var cut = RenderToolbar();
 
         OpenFilterMenu(cut);
 
@@ -96,36 +95,33 @@ public class MovieFilterToolbarTests : BunitContext
     }
 
     [Fact]
-    public void TextInput_DebouncesAndInvokesCallback()
+    public void TextInput_DebouncesThenSetsTheTextAndDropsTheCodePrefix()
     {
-        var textValues = new List<string>();
+        var state = new MovieGridFilterState { CodePrefix = "ABC" };
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.TextFilter, "")
-            .Add(x => x.OnTextFilterChanged, EventCallback.Factory.Create<string>(this, s => textValues.Add(s))));
+        var cut = RenderToolbar(state);
 
         var input = cut.Find("input[type=search]");
         input.Input("IPX");
 
-        Assert.Empty(textValues);
+        Assert.Equal("", state.Text);
+        Assert.Equal(0, changes);
 
         cut.WaitForAssertion(() =>
         {
-            Assert.Single(textValues);
-            Assert.Equal("IPX", textValues[0]);
+            Assert.Equal(1, changes);
+            Assert.Equal("IPX", state.Text);
         }, TimeSpan.FromSeconds(2));
+        // Typing in the search box replaces a code-prefix navigation target.
+        Assert.Null(state.CodePrefix);
     }
 
     [Fact]
-    public void FilterDropdown_RendersGroupsAndTogglesOption()
+    public void FilterDropdown_RendersGroupsAndTogglesOptionOnTheState()
     {
-        MovieResolutionFilterOption? toggledResolution = null;
+        var state = new MovieGridFilterState();
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.AvailableCodecs, new[] { "AVC", "HEVC" })
-            .Add(x => x.AvailableStudios, new[] { "IdeaPocket" })
-            .Add(x => x.AvailableGenres, new[] { "Drama" })
-            .Add(x => x.OnToggleResolution, EventCallback.Factory.Create<MovieResolutionFilterOption>(this, r => toggledResolution = r)));
+        var cut = RenderToolbar(state, p => p.Add(x => x.Choices, new MovieFilterChoices { Codecs = ["AVC", "HEVC"], Studios = ["IdeaPocket"], Genres = ["Drama"] }));
 
         // Open filter dropdown
         var filterBtn = cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter"));
@@ -139,38 +135,47 @@ public class MovieFilterToolbarTests : BunitContext
         var sdBtn = cut.FindAll("button").First(b => b.TextContent.Trim() == "SD");
         sdBtn.Click();
 
-        Assert.Equal(MovieResolutionFilterOption.Sd, toggledResolution);
+        Assert.Equal([MovieResolutionFilterOption.Sd], state.Resolutions);
+        Assert.Equal(1, changes);
+
+        cut.FindAll("button").First(b => b.TextContent.Trim().StartsWith("SD")).Click();
+        Assert.Empty(state.Resolutions);
     }
 
     [Fact]
-    public void MatchAllGenres_CheckboxShowsOnlyWithTwoGenres_AndReportsTheChange()
+    public void MatchAllGenres_CheckboxShowsOnlyWithTwoGenres_AndSetsTheFlag()
     {
-        bool? changed = null;
-        Action<ComponentParameterCollectionBuilder<MovieFilterToolbar>> build(params string[] selected) => p => p
-            .Add(x => x.AvailableGenres, new[] { "Drama", "Solo" })
-            .Add(x => x.GenreFilter, selected.ToHashSet())
-            .Add(x => x.OnMatchAllGenresChanged, EventCallback.Factory.Create<bool>(this, v => changed = v));
+        IRenderedComponent<MovieFilterToolbar> Build(MovieGridFilterState state, bool showMatchAll = true) => RenderToolbar(state, p => p
+            .Add(x => x.Choices, new MovieFilterChoices { Genres = ["Drama", "Solo"] })
+            .Add(x => x.ShowMatchAll, showMatchAll));
 
-        var one = Render<MovieFilterToolbar>(build("Drama"));
+        var one = Build(new MovieGridFilterState { Genres = new(["Drama"], StringComparer.OrdinalIgnoreCase) });
         OpenFilterMenu(one);
         OpenGenreGroup(one);
         Assert.Empty(one.FindAll("label.match-all-check"));
 
-        var two = Render<MovieFilterToolbar>(build("Drama", "Solo"));
+        var twoState = new MovieGridFilterState { Genres = new(["Drama", "Solo"], StringComparer.OrdinalIgnoreCase) };
+        var two = Build(twoState);
         OpenFilterMenu(two);
         OpenGenreGroup(two);
         two.Find(".multiselect-actions-row label.match-all-check input").Change(true);
-        Assert.True(changed);
+        Assert.True(twoState.MatchAllGenres);
+        Assert.Equal(1, changes);
+
+        // A host that doesn't offer match-all never shows the checkbox.
+        var off = Build(new MovieGridFilterState { Genres = new(["Drama", "Solo"], StringComparer.OrdinalIgnoreCase) }, showMatchAll: false);
+        OpenFilterMenu(off);
+        OpenGenreGroup(off);
+        Assert.Empty(off.FindAll("label.match-all-check"));
     }
 
     [Fact]
     public void FilterDropdown_HasAnNfoDriftGroupUnderFeatures_WithEveryDirection_AndTogglesOne()
     {
-        NfoDriftKind? toggled = null;
+        var state = new MovieGridFilterState();
+        state.NfoDriftKinds.Add(NfoDriftKind.Unreadable);
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.NfoDriftFilter, new HashSet<NfoDriftKind> { NfoDriftKind.Unreadable })
-            .Add(x => x.OnToggleNfoDrift, EventCallback.Factory.Create<NfoDriftKind>(this, k => toggled = k)));
+        var cut = RenderToolbar(state);
 
         cut.FindAll("button").First(b => b.TextContent.StartsWith("Filter")).Click();
         Assert.Contains("Filter (1)", cut.Markup);
@@ -186,7 +191,7 @@ public class MovieFilterToolbarTests : BunitContext
 
         cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Trim() == "External edit").Click();
 
-        Assert.Equal(NfoDriftKind.ExternalEdit, toggled);
+        Assert.True(state.NfoDriftKinds.SetEquals([NfoDriftKind.Unreadable, NfoDriftKind.ExternalEdit]));
 
         // None of it is offered as a Features option any more, and the Features options show without a header of their own.
         Assert.Single(cut.FindAll("button"), b => b.TextContent.StartsWith("Features"));
@@ -199,8 +204,7 @@ public class MovieFilterToolbarTests : BunitContext
     {
         var resetCalled = false;
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.HasActiveFilters, true)
+        var cut = RenderToolbar(new MovieGridFilterState { Status = MovieStatus.Got }, p => p
             .Add(x => x.OnResetFilters, EventCallback.Factory.Create(this, () => resetCalled = true)));
 
         var clearBtn = cut.Find(".dropdown-clear-btn");
@@ -212,12 +216,9 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void SortDropdown_SelectsDifferentField_UsesDefaultDirection()
     {
-        MovieSortChange? lastSort = null;
+        var state = new MovieGridFilterState { SortField = "added", SortDescending = true };
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.SortField, "added")
-            .Add(x => x.SortDescending, true)
-            .Add(x => x.OnSortChanged, EventCallback.Factory.Create<MovieSortChange>(this, s => lastSort = s)));
+        var cut = RenderToolbar(state);
 
         // Open sort dropdown
         var sortBtn = cut.FindAll("button").First(b => b.TextContent.StartsWith("Sort:"));
@@ -227,20 +228,17 @@ public class MovieFilterToolbarTests : BunitContext
         var titleBtn = cut.FindAll(".sort-dropdown-item").First(b => b.TextContent.Contains("Title"));
         titleBtn.Click();
 
-        Assert.NotNull(lastSort);
-        Assert.Equal("title", lastSort.Value.Field);
-        Assert.False(lastSort.Value.Descending); // Title defaults to ascending
+        Assert.Equal(1, changes);
+        Assert.Equal("title", state.SortField);
+        Assert.False(state.SortDescending); // Title defaults to ascending
     }
 
     [Fact]
     public void SortDropdown_SelectingAlreadySelectedField_TogglesDirection()
     {
-        MovieSortChange? lastSort = null;
+        var state = new MovieGridFilterState { SortField = "title", SortDescending = false };
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.SortField, "title")
-            .Add(x => x.SortDescending, false)
-            .Add(x => x.OnSortChanged, EventCallback.Factory.Create<MovieSortChange>(this, s => lastSort = s)));
+        var cut = RenderToolbar(state);
 
         var sortBtn = cut.FindAll("button").First(b => b.TextContent.StartsWith("Sort:"));
         sortBtn.Click();
@@ -248,20 +246,17 @@ public class MovieFilterToolbarTests : BunitContext
         var titleBtn = cut.FindAll(".sort-dropdown-item").First(b => b.TextContent.Contains("Title"));
         titleBtn.Click();
 
-        Assert.NotNull(lastSort);
-        Assert.Equal("title", lastSort.Value.Field);
-        Assert.True(lastSort.Value.Descending);
+        Assert.Equal("title", state.SortField);
+        Assert.True(state.SortDescending);
     }
 
     [Fact]
-    public void SortDropdown_SelectingRandom_ProvidesSeed()
+    public void SortDropdown_SelectingRandom_DrawsANewSeed()
     {
-        MovieSortChange? lastSort = null;
+        var state = new MovieGridFilterState { SortField = "added", SortDescending = true };
+        var before = state.RandomSortSeed;
 
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.SortField, "added")
-            .Add(x => x.SortDescending, true)
-            .Add(x => x.OnSortChanged, EventCallback.Factory.Create<MovieSortChange>(this, s => lastSort = s)));
+        var cut = RenderToolbar(state);
 
         var sortBtn = cut.FindAll("button").First(b => b.TextContent.StartsWith("Sort:"));
         sortBtn.Click();
@@ -269,16 +264,16 @@ public class MovieFilterToolbarTests : BunitContext
         var randomBtn = cut.FindAll(".sort-dropdown-item").First(b => b.TextContent.Contains("Random"));
         randomBtn.Click();
 
-        Assert.NotNull(lastSort);
-        Assert.Equal("random", lastSort.Value.Field);
-        Assert.NotNull(lastSort.Value.RandomSortSeed);
-        Assert.True(lastSort.Value.RandomSortSeed > 0);
+        Assert.Equal("random", state.SortField);
+        Assert.True(state.SortDescending);
+        Assert.True(state.RandomSortSeed > 0);
+        Assert.NotEqual(before, state.RandomSortSeed);
     }
 
     [Fact]
     public void RendersChildContent()
     {
-        var cut = Render<MovieFilterToolbar>(p => p
+        var cut = RenderToolbar(null, p => p
             .AddChildContent("<button id=\"custom-extra-btn\">Extra</button>"));
 
         Assert.NotNull(cut.Find("#custom-extra-btn"));
@@ -288,10 +283,9 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void ReleasesBrowseMode_HidesTheLocalOnlyControlsButKeepsSearchAndStudio()
     {
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.TotalCount, 12)
-            .Add(x => x.LibraryNames, new[] { "Library A" })
-            .Add(x => x.AvailableStudios, new[] { "Studio A" })
+        var cut = RenderToolbar(null, p => p
+            .Add(x => x.StatusCounts, new MovieStatusCounts(12, 0, 0))
+            .Add(x => x.Choices, new MovieFilterChoices { LibraryNames = ["Library A"], Studios = ["Studio A"] })
             .Add(x => x.ReleasesBrowseMode, true));
 
         Assert.Empty(cut.FindAll(".btn-group"));
@@ -312,7 +306,7 @@ public class MovieFilterToolbarTests : BunitContext
     public void ReleasesBrowseMode_HidePreviouslyDeletedIsAFilterMenuToggle()
     {
         var toggles = 0;
-        var cut = Render<MovieFilterToolbar>(p => p
+        var cut = RenderToolbar(null, p => p
             .Add(x => x.ReleasesBrowseMode, true)
             .Add(x => x.HidePreviouslyDeleted, true)
             .Add(x => x.OnToggleHidePreviouslyDeleted, () => toggles++));
@@ -332,7 +326,7 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void LibraryMode_HasNoHidePreviouslyDeletedToggle()
     {
-        var cut = Render<MovieFilterToolbar>(p => p.Add(x => x.HidePreviouslyDeleted, true));
+        var cut = RenderToolbar(null, p => p.Add(x => x.HidePreviouslyDeleted, true));
         OpenFilterMenu(cut);
         Assert.DoesNotContain("Hide previously deleted", cut.Markup);
     }
@@ -356,7 +350,7 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void ActorAttributes_HiddenUnlessEnabled()
     {
-        var cut = Render<MovieFilterToolbar>(p => p.Add(x => x.ActorAttributeOptions, AttributeOptions()));
+        var cut = RenderToolbar(null, p => p.Add(x => x.Choices, new MovieFilterChoices { ActorAttributes = AttributeOptions() }));
 
         OpenFilterMenu(cut);
 
@@ -367,10 +361,9 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void ActorAttributes_ShowsGroupsAndCountsEachInTheBadge()
     {
-        var cut = Render<MovieFilterToolbar>(p => p
+        var cut = RenderToolbar(new MovieGridFilterState { ActorAttributes = new ActorAttributeSelection { CupSizes = ["E"], Bust = new IntRange(85, 95) } }, p => p
             .Add(x => x.ShowActorAttributes, true)
-            .Add(x => x.ActorAttributeOptions, AttributeOptions())
-            .Add(x => x.ActorAttributeSelection, new ActorAttributeSelection { CupSizes = ["E"], Bust = new IntRange(85, 95) }));
+            .Add(x => x.Choices, new MovieFilterChoices { ActorAttributes = AttributeOptions() }));
 
         OpenFilterMenu(cut);
         OpenActorSection(cut);
@@ -384,7 +377,7 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void ActorAttributes_NothingOffered_ShowsNothing()
     {
-        var cut = Render<MovieFilterToolbar>(p => p.Add(x => x.ShowActorAttributes, true));
+        var cut = RenderToolbar(null, p => p.Add(x => x.ShowActorAttributes, true));
 
         OpenFilterMenu(cut);
 
@@ -393,29 +386,28 @@ public class MovieFilterToolbarTests : BunitContext
     }
 
     [Fact]
-    public void ActorAttributes_ChipClickRaisesTheEditedSelection()
+    public void ActorAttributes_ChipClickEditsTheStatesSelection()
     {
-        ActorAttributeSelection? changed = null;
-        var cut = Render<MovieFilterToolbar>(p => p
+        var state = new MovieGridFilterState();
+        var cut = RenderToolbar(state, p => p
             .Add(x => x.ShowActorAttributes, true)
-            .Add(x => x.ActorAttributeOptions, AttributeOptions())
-            .Add(x => x.OnActorAttributesChanged, EventCallback.Factory.Create<ActorAttributeSelection>(this, s => changed = s)));
+            .Add(x => x.Choices, new MovieFilterChoices { ActorAttributes = AttributeOptions() }));
 
         OpenFilterMenu(cut);
         OpenActorSection(cut);
         cut.FindAll("button").First(b => b.TextContent.StartsWith("Cup Size")).Click();
         cut.FindAll("button").First(b => b.TextContent.Trim() == "E").Click();
 
-        Assert.Equal(["E"], changed!.CupSizes);
+        Assert.Equal(["E"], state.ActorAttributes.CupSizes);
+        Assert.Equal(1, changes);
     }
 
     [Fact]
     public void ActorAttributes_AreNestedUnderACollapsedActorSection_WhoseHeaderCountsThem()
     {
-        var cut = Render<MovieFilterToolbar>(p => p
+        var cut = RenderToolbar(new MovieGridFilterState { ActorAttributes = new ActorAttributeSelection { CupSizes = ["E"], Bust = new IntRange(85, 95) } }, p => p
             .Add(x => x.ShowActorAttributes, true)
-            .Add(x => x.ActorAttributeOptions, AttributeOptions())
-            .Add(x => x.ActorAttributeSelection, new ActorAttributeSelection { CupSizes = ["E"], Bust = new IntRange(85, 95) }));
+            .Add(x => x.Choices, new MovieFilterChoices { ActorAttributes = AttributeOptions() }));
 
         OpenFilterMenu(cut);
 
@@ -430,7 +422,7 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void ActorSection_IsHiddenWhenNothingIsOffered()
     {
-        var cut = Render<MovieFilterToolbar>(p => p.Add(x => x.ShowActorAttributes, true));
+        var cut = RenderToolbar(null, p => p.Add(x => x.ShowActorAttributes, true));
 
         OpenFilterMenu(cut);
 
@@ -439,11 +431,12 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void ExcludedGenres_ShowStruckThroughWithACross_AndCountInTheBadges()
     {
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.AvailableGenres, new[] { "Drama", "Comedy", "Horror" })
-            .Add(x => x.GenreFilter, new HashSet<string> { "Drama" })
-            .Add(x => x.Excludable, true)
-            .Add(x => x.ExcludedGenreFilter, new HashSet<string> { "Horror" }));
+        var state = new MovieGridFilterState();
+        state.Genres.Add("Drama");
+        state.ExcludedGenres.Add("Horror");
+        var cut = RenderToolbar(state, p => p
+            .Add(x => x.Choices, new MovieFilterChoices { Genres = ["Drama", "Comedy", "Horror"] })
+            .Add(x => x.Excludable, true));
 
         Assert.Contains("Filter (2)", cut.Markup);
         OpenFilterMenu(cut);
@@ -462,10 +455,10 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void ExcludedContentTypes_ShowStruckThroughWithACross_AndCountInTheBadges()
     {
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.Excludable, true)
-            .Add(x => x.ContentTypeFilter, new HashSet<MovieContentType> { MovieContentType.Censored })
-            .Add(x => x.ExcludedContentTypeFilter, new HashSet<MovieContentType> { MovieContentType.Uncensored }));
+        var state = new MovieGridFilterState();
+        state.ContentTypes.Add(MovieContentType.Censored);
+        state.ExcludedContentTypes.Add(MovieContentType.Uncensored);
+        var cut = RenderToolbar(state, p => p.Add(x => x.Excludable, true));
 
         Assert.Contains("Filter (2)", cut.Markup);
         OpenFilterMenu(cut);
@@ -481,11 +474,12 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void ReleasesBrowseMode_DoesNotShowExcludedStudios()
     {
-        var cut = Render<MovieFilterToolbar>(p => p
+        var state = new MovieGridFilterState();
+        state.ExcludedStudios.Add("S1");
+        var cut = RenderToolbar(state, p => p
             .Add(x => x.ReleasesBrowseMode, true)
-            .Add(x => x.AvailableStudios, new[] { "S1" })
-            .Add(x => x.Excludable, true)
-            .Add(x => x.ExcludedStudioFilter, new HashSet<string> { "S1" }));
+            .Add(x => x.Choices, new MovieFilterChoices { Studios = ["S1"] })
+            .Add(x => x.Excludable, true));
 
         OpenFilterMenu(cut);
         cut.FindAll("button").First(b => b.TextContent.StartsWith("Studio")).Click();
@@ -497,11 +491,9 @@ public class MovieFilterToolbarTests : BunitContext
     [Fact]
     public void Ranges_AreTopLevelFilters_AndCastSizeSitsUnderActor()
     {
-        MovieRangeSelection? emitted = null;
-        var cut = Render<MovieFilterToolbar>(p => p
-            .Add(x => x.RangeOptions, new MovieRangeOptions { ReleaseYear = new RangeBounds(2010, 2024), RuntimeMinutes = new RangeBounds(60, 240), CastSize = new RangeBounds(0, 4) })
-            .Add(x => x.RangeSelection, new MovieRangeSelection { RuntimeMinutes = new IntRange(90, null), CastSize = new IntRange(1, 1) })
-            .Add(x => x.OnRangesChanged, EventCallback.Factory.Create<MovieRangeSelection>(this, r => emitted = r)));
+        var state = new MovieGridFilterState { Ranges = new MovieRangeSelection { RuntimeMinutes = new IntRange(90, null), CastSize = new IntRange(1, 1) } };
+        var cut = RenderToolbar(state, p => p
+            .Add(x => x.Choices, new MovieFilterChoices { Ranges = new MovieRangeOptions { ReleaseYear = new RangeBounds(2010, 2024), RuntimeMinutes = new RangeBounds(60, 240), CastSize = new RangeBounds(0, 4) } }));
 
         Assert.Contains("Filter (2)", cut.Markup);
         OpenFilterMenu(cut);
@@ -515,14 +507,128 @@ public class MovieFilterToolbarTests : BunitContext
 
         cut.FindAll("button").First(b => b.TextContent.StartsWith("Release year")).Click();
         cut.FindAll(".range-thumb-input")[0].Change("2015");
-        Assert.Equal(new IntRange(2015, null), emitted!.ReleaseYear);
-        Assert.Equal(new IntRange(90, null), emitted.RuntimeMinutes);
+        Assert.Equal(new IntRange(2015, null), state.Ranges.ReleaseYear);
+        Assert.Equal(new IntRange(90, null), state.Ranges.RuntimeMinutes);
+        Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public void ExcludableGroups_StepAValueThroughIncludedAndExcluded_ButAPlainGroupJustToggles()
+    {
+        var state = new MovieGridFilterState();
+        var cut = RenderToolbar(state, p => p
+            .Add(x => x.Choices, new MovieFilterChoices { Genres = ["Drama"] })
+            .Add(x => x.Excludable, true));
+        OpenFilterMenu(cut);
+        OpenGenreGroup(cut);
+
+        void Click() => cut.FindAll("button.sort-dropdown-subitem").Single(b => b.TextContent.Contains("Drama")).Click();
+        Click();
+        Assert.Contains("Drama", state.Genres);
+        Click();
+        Assert.Empty(state.Genres);
+        Assert.Contains("Drama", state.ExcludedGenres);
+        Click();
+        Assert.Empty(state.ExcludedGenres);
+
+        var plainState = new MovieGridFilterState();
+        var plain = RenderToolbar(plainState, p => p.Add(x => x.Choices, new MovieFilterChoices { Genres = ["Drama"] }));
+        OpenFilterMenu(plain);
+        OpenGenreGroup(plain);
+        plain.FindAll("button.sort-dropdown-subitem").Single().Click();
+        plain.FindAll("button.sort-dropdown-subitem").Single().Click();
+        Assert.Empty(plainState.Genres);
+        Assert.Empty(plainState.ExcludedGenres);
+    }
+
+    [Fact]
+    public void ContentTypes_StayIncludeOnly_WhenTheHostSaysTheyCantBeExcluded()
+    {
+        var state = new MovieGridFilterState();
+        var cut = RenderToolbar(state, p => p
+            .Add(x => x.Excludable, true)
+            .Add(x => x.ExcludableContentTypes, false));
+        OpenFilterMenu(cut);
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Content Type")).Click();
+
+        var item = cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Contains("Uncensored"));
+        Assert.Null(item.GetAttribute("title"));
+        item.Click();
+        Assert.Equal([MovieContentType.Uncensored], state.ContentTypes);
+        cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Contains("Uncensored")).Click();
+        Assert.Empty(state.ContentTypes);
+        Assert.Empty(state.ExcludedContentTypes);
+    }
+
+    [Fact]
+    public void StudioInReleasesBrowseMode_OnlyIncludesOrClears_AndDropsAnExclusion()
+    {
+        var state = new MovieGridFilterState();
+        state.ExcludedStudios.Add("S1");
+        var cut = RenderToolbar(state, p => p
+            .Add(x => x.ReleasesBrowseMode, true)
+            .Add(x => x.Excludable, true)
+            .Add(x => x.Choices, new MovieFilterChoices { Studios = ["S1"] }));
+        OpenFilterMenu(cut);
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Studio")).Click();
+
+        cut.FindAll("button.sort-dropdown-subitem").Single().Click();
+
+        Assert.Equal(["S1"], state.Studios);
+        Assert.Empty(state.ExcludedStudios);
+        cut.FindAll("button.sort-dropdown-subitem").Single().Click();
+        Assert.Empty(state.Studios);
+        Assert.Empty(state.ExcludedStudios);
+    }
+
+    [Fact]
+    public void ActorSelectAll_IncludesEveryActorWithAVisibleName_AndNoneClearsBothSets()
+    {
+        var state = new MovieGridFilterState();
+        state.ExcludedActorIds.Add(3);
+        var cut = RenderToolbar(state, p => p
+            .Add(x => x.Excludable, true)
+            .Add(x => x.Choices, new MovieFilterChoices { Actors = [new(1, "Amy"), new(2, "Amy"), new(3, "Bea")] }));
+        OpenFilterMenu(cut);
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Actor")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Name")).Click();
+
+        cut.Find(".multiselect-search-input").Input("Am");
+        cut.FindAll("button.multiselect-action-link").First(b => b.TextContent == "Select All").Click();
+        Assert.Equal([1, 2], state.ActorIds.OrderBy(i => i));
+        Assert.Equal([3], state.ExcludedActorIds);
+
+        cut.FindAll("button.multiselect-action-link").First(b => b.TextContent == "None").Click();
+        Assert.Empty(state.ActorIds);
+        Assert.Empty(state.ExcludedActorIds);
+    }
+
+    [Fact]
+    public void CountSliders_EditTheStatesCounts_AndHostsCanReset()
+    {
+        var state = new MovieGridFilterState();
+        var reset = false;
+        var cut = RenderToolbar(state, p => p
+            .Add(x => x.Choices, new MovieFilterChoices { Counts = MovieCountOptions.FromMaximums(5, 0, 0) })
+            .Add(x => x.OnResetFilters, EventCallback.Factory.Create(this, () => reset = true)));
+        OpenFilterMenu(cut);
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Clips")).Click();
+        cut.FindAll("button").First(b => b.TextContent.StartsWith("Scenes")).Click();
+
+        cut.FindAll(".range-thumb-input")[0].Change("2");
+
+        Assert.Equal(new IntRange(2, null), state.Counts.Scenes);
+        Assert.Equal(1, changes);
+        Assert.Contains("Filter (1)", cut.Markup);
+
+        cut.Find(".dropdown-clear-btn").Click();
+        Assert.True(reset);
     }
 
     [Fact]
     public void SortDropdown_OffersTheNewSorts_AndLabelsFavoritesAsDateFavorited()
     {
-        var cut = Render<MovieFilterToolbar>();
+        var cut = RenderToolbar();
         cut.FindAll("button").First(b => b.TextContent.StartsWith("Sort:")).Click();
 
         var labels = cut.FindAll("button.sort-dropdown-item").Select(b => b.TextContent.Trim()).ToList();
