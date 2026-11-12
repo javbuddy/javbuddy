@@ -1,67 +1,3 @@
-.videorepair-modal-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 1050;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: rgba(0, 0, 0, 0.55);
-    outline: none;
-    padding: 1.5rem;
-}
-
-.videorepair-modal-panel {
-    width: 100%;
-    max-width: 600px;
-    max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-    background-color: #ffffff;
-    border-radius: 6px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-    overflow: hidden;
-}
-
-.videorepair-modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid #dee2e6;
-    flex-shrink: 0;
-}
-
-.videorepair-modal-title {
-    margin: 0;
-    font-size: 1.1rem;
-    font-weight: 500;
-}
-
-.videorepair-modal-close-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    border-radius: 50%;
-    color: #6c757d;
-}
-
-    .videorepair-modal-close-btn:hover {
-        background-color: #eef0f2;
-        color: #212529;
-    }
-
-.videorepair-modal-body {
-    padding: 1.25rem;
-    overflow-y: auto;
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
 .videorepair-intro {
     margin-bottom: 1rem;
 }
@@ -183,15 +119,4 @@
     font-weight: 600;
     color: #0a58ca;
     margin-bottom: 0.4rem;
-}
-
-.videorepair-modal-footer {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    padding: 0.85rem 1.25rem;
-    border-top: 1px solid #dee2e6;
-    background-color: #f8f9fa;
-    flex-shrink: 0;
 }

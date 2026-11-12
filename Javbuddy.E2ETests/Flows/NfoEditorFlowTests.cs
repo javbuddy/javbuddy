@@ -58,7 +58,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
         await page.GotoInteractiveAsync($"/movies/{movie.Code}");
         await OpenNfoEditorAsync(page);
 
-        var modal = page.Locator(".nfo-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
         await Expect(modal).ToContainTextAsync("E2E NFO Fixture Movie");
 
         var saveButton = modal.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true });
@@ -93,7 +93,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
 
         // History shows that pre-edit version diffed against the file, and restores it.
         await modal.GetByRole(AriaRole.Button, new() { Name = "History" }).ClickAsync();
-        await Expect(modal.Locator(".nfo-modal-title")).ToHaveTextAsync(".nfo History");
+        await Expect(modal.Locator(".modal-shell-title")).ToHaveTextAsync(".nfo History");
         await Expect(modal.Locator("select.nfo-history-select option")).ToHaveCountAsync(1);
         await Expect(modal.Locator("select.nfo-history-select option")).ToContainTextAsync("replaced by manual edit");
         await Expect(modal.Locator(".monaco-diff-editor")).ToBeVisibleAsync();
@@ -101,7 +101,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
 
         await modal.GetByRole(AriaRole.Button, new() { Name = "Restore this version" }).ClickAsync();
         await Expect(modal.Locator(".alert-success")).ToBeVisibleAsync();
-        await Expect(modal.Locator(".nfo-modal-title")).ToHaveTextAsync("Edit .nfo");
+        await Expect(modal.Locator(".modal-shell-title")).ToHaveTextAsync("Edit .nfo");
         Assert.DoesNotContain("e2e-edit-marker", await File.ReadAllTextAsync(nfoPath));
         Assert.False(File.Exists(nfoPath + ".bak"));
         await using var verify = await fixture.DbFactory.CreateDbContextAsync();
@@ -120,7 +120,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
         await page.GotoInteractiveAsync($"/movies/{movie.Code}");
         await OpenNfoEditorAsync(page);
 
-        var modal = page.Locator(".nfo-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
         await Expect(modal).ToContainTextAsync("E2E NFO Fixture Movie 2");
 
         // Anything after the closing root tag is a "multiple root elements" parse error —
@@ -158,7 +158,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
         await page.Locator($"a[href='/movies/{movie.Code}']").ClickAsync();
 
         await OpenNfoEditorAsync(page);
-        var modal = page.Locator(".nfo-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
         await Expect(modal).ToContainTextAsync("E2E NFO Fixture Movie 3");
 
         Assert.True(await page.Locator("head link[href*='editor.main.css']").CountAsync() >= 1);
@@ -223,9 +223,9 @@ public class NfoEditorFlowTests : IAsyncLifetime
         // Clicking the badge opens the Monaco "Resolve .nfo Conflict" diff review.
         await badge.ClickAsync();
 
-        var modal = page.Locator(".nfo-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
         await Expect(modal).ToBeVisibleAsync();
-        await Expect(modal.Locator(".nfo-modal-title")).ToContainTextAsync("Resolve .nfo Conflict");
+        await Expect(modal.Locator(".modal-shell-title")).ToContainTextAsync("Resolve .nfo Conflict");
         await Expect(modal.Locator(".nfo-diff-pane-labels")).ToBeVisibleAsync();
         await Expect(modal).ToContainTextAsync("On-disk .nfo");
         await Expect(modal).ToContainTextAsync("Stored / Proposed .nfo");
@@ -295,8 +295,8 @@ public class NfoEditorFlowTests : IAsyncLifetime
         await Expect(badge).ToBeVisibleAsync();
         await badge.ClickAsync();
 
-        var modal = page.Locator(".nfo-modal-panel");
-        await Expect(modal.Locator(".nfo-modal-title")).ToContainTextAsync("Resolve .nfo Conflict");
+        var modal = page.Locator(".modal-shell-panel");
+        await Expect(modal.Locator(".modal-shell-title")).ToContainTextAsync("Resolve .nfo Conflict");
         await modal.GetByRole(AriaRole.Button, new() { Name = "Import from .nfo" }).ClickAsync();
 
         await Expect(modal).ToBeHiddenAsync();
@@ -389,7 +389,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
         await page.GotoInteractiveAsync($"/movies/{movieA.Code}");
 
         var conflictBadge = page.Locator(".movie-detail-badge-warning");
-        var modal = page.Locator(".nfo-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
 
         await conflictBadge.ClickAsync();
         await Expect(modal).ToBeVisibleAsync();
@@ -482,7 +482,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
         Assert.Equal(0, await page.Locator("link[href*='editor.main.css'], script[src*='BlazorMonaco']").CountAsync());
         const int baseline = 0;
 
-        var modal = page.Locator(".nfo-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
 
         for (var i = 0; i < 3; i++)
         {
@@ -510,7 +510,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
             await Expect(modal.Locator(".nfo-diff-pane-labels")).ToBeHiddenAsync();
             await Expect(modal).Not.ToContainTextAsync(marker);
 
-            await modal.Locator(".nfo-modal-close-btn").ClickAsync();
+            await modal.Locator(".modal-shell-close-btn").ClickAsync();
             await Expect(modal).ToBeHiddenAsync();
             await ExpectMonacoModelCountAsync(page, baseline);
         }
@@ -636,7 +636,7 @@ public class NfoEditorFlowTests : IAsyncLifetime
         await Expect(page.Locator(".dropdown-backdrop")).ToHaveCountAsync(0);
 
         await pushButton.ClickAsync();
-        var modal = page.Locator(".nfo-push-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
         await Expect(modal).ToContainTextAsync("Javbuddy changed (1)");
         await modal.GetByRole(AriaRole.Button, new() { Name = "Write 1 .nfo file(s)" }).ClickAsync();
         await Expect(modal).ToBeHiddenAsync();

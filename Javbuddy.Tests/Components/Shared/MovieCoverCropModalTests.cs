@@ -2,6 +2,7 @@ using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Movies;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -9,6 +10,8 @@ namespace Javbuddy.Tests.Components.Shared;
 
 public class MovieCoverCropModalTests : BunitContext
 {
+    public MovieCoverCropModalTests() => JSInterop.AllowModalShell();
+
     [Fact]
     public void MovieCoverCropModal_RendersHidden_WhenShowIsFalse()
     {

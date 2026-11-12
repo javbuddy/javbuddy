@@ -1,8 +1,12 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
 @* The chrome shared by the dark dialog modals: a dimmed backdrop (click outside or Esc closes),
    a panel with a header (title + close button), a scrolling body and an optional footer.
-   The host renders it only while open and supplies the body (and footer) as child content. *@
-<div class="modal-shell-backdrop @(Themed ? "modal-shell-themed" : "")" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
-    <div class="modal-shell-panel" role="dialog" aria-modal="true" aria-labelledby="@titleId" style="max-width: @MaxWidth" @onclick:stopPropagation="true">
+   The host renders it only while open and supplies the body (and footer) as child content. It focuses
+   itself when it opens so Escape works at once (unless a control inside already has focus). *@
+<div @ref="backdrop" class="modal-shell-backdrop @(Themed ? "modal-shell-themed" : "")" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+    <div class="modal-shell-panel" role="dialog" aria-modal="true" aria-labelledby="@titleId" style="max-width: @MaxWidth;@(Height is null ? "" : $" --modal-shell-height: {Height};")" @onclick:stopPropagation="true">
         <div class="modal-shell-header">
             <h5 id="@titleId" class="modal-shell-title">@(TitleContent ?? (builder => builder.AddContent(0, Title)))</h5>
             <div class="modal-shell-header-actions">
@@ -57,7 +61,42 @@
     /// <summary>Light/dark-theme-following chrome (white panel in the light theme) instead of the always-dark default.</summary>
     [Parameter] public bool Themed { get; set; }
 
+    /// <summary>A fixed panel height as a CSS length (e.g. "85vh") for content that needs a sized box, like an editor;
+    /// by default the panel fits its content. Full-screen on a phone regardless.</summary>
+    [Parameter] public string? Height { get; set; }
+
     private readonly string titleId = "modal-shell-title-" + Guid.NewGuid().ToString("N");
+
+    private ElementReference backdrop;
+    private IJSObjectReference? jsModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The host renders the shell only while open, so its first render is the opening.
+        if (!firstRender) return;
+
+        try
+        {
+            jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ModalShell.razor.js");
+            await jsModule.InvokeVoidAsync("focusUnlessInside", backdrop);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is null) return;
+
+        try
+        {
+            await jsModule.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
 
     private async Task CloseAsync()
     {

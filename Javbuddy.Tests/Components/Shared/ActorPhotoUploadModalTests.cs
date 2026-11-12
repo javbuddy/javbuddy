@@ -2,6 +2,7 @@ using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Images;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -9,6 +10,8 @@ namespace Javbuddy.Tests.Components.Shared;
 
 public class ActorPhotoUploadModalTests : BunitContext
 {
+    public ActorPhotoUploadModalTests() => JSInterop.AllowModalShell();
+
     [Fact]
     public void ActorPhotoUploadModal_RendersHidden_WhenShowIsFalse()
     {

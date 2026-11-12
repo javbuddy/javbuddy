@@ -7,6 +7,14 @@ namespace Javbuddy.Tests.Components.Shared;
 
 public class ModalShellTests : BunitContext
 {
+    private readonly BunitJSModuleInterop module;
+
+    public ModalShellTests()
+    {
+        module = JSInterop.SetupModule("./Components/Shared/ModalShell.razor.js");
+        module.SetupVoid("focusUnlessInside", _ => true);
+    }
+
     private IRenderedComponent<ModalShell> RenderShell(
         Action? onClose = null,
         bool busy = false,
@@ -129,5 +137,30 @@ public class ModalShellTests : BunitContext
             .Add(x => x.FooterContent, (RenderFragment)(b => b.AddMarkupContent(0, "<button>OK</button>"))));
 
         Assert.Single(cut.FindAll(".modal-shell-footer.modal-shell-footer-spread"));
+    }
+
+    [Fact]
+    public void FocusesItsBackdropOnOpen_AndOnlyThen()
+    {
+        var cut = RenderShell();
+
+        var focus = Assert.Single(module.Invocations, i => i.Identifier == "focusUnlessInside");
+        Assert.Single(focus.Arguments);
+
+        // A re-render (the host's state changing while it's open) must not pull focus back.
+        cut.Render(p => p.Add(x => x.Title, "Another title"));
+        cut.Render(p => p.Add(x => x.Busy, true));
+
+        Assert.Single(module.Invocations, i => i.Identifier == "focusUnlessInside");
+    }
+
+    [Fact]
+    public void Height_SetsThePanelHeightVariable_OnlyWhenGiven()
+    {
+        Assert.DoesNotContain("--modal-shell-height", RenderShell().Find(".modal-shell-panel").GetAttribute("style"));
+
+        var cut = Render<ModalShell>(p => p.Add(x => x.Title, "t").Add(x => x.Height, "85vh"));
+
+        Assert.Contains("--modal-shell-height: 85vh", cut.Find(".modal-shell-panel").GetAttribute("style"));
     }
 }

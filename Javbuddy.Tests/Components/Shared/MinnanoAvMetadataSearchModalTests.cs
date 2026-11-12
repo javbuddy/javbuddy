@@ -3,6 +3,7 @@ using Javbuddy.Components.Shared;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.MinnanoAv;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -10,6 +11,8 @@ namespace Javbuddy.Tests.Components.Shared;
 
 public class MinnanoAvMetadataSearchModalTests : BunitContext
 {
+    public MinnanoAvMetadataSearchModalTests() => JSInterop.AllowModalShell();
+
     [Fact]
     public void Modal_WhenShowFalse_RendersNothing()
     {

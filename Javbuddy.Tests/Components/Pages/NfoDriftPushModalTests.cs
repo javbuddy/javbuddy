@@ -7,6 +7,7 @@ using Javbuddy.Services.Monitoring;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Tasks;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -27,6 +28,7 @@ public class NfoDriftPushModalTests : BunitContext
 
     public NfoDriftPushModalTests()
     {
+        JSInterop.AllowModalShell();
         grid.GetNfoDriftCountsAsync(Filter, Arg.Any<CancellationToken>()).Returns(new Dictionary<NfoDriftKind, int>
         {
             [NfoDriftKind.JavbuddyChanged] = 5,

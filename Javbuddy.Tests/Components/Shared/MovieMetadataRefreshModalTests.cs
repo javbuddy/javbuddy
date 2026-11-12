@@ -4,6 +4,7 @@ using Javbuddy.Models;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Movies;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -11,6 +12,8 @@ namespace Javbuddy.Tests.Components.Shared;
 
 public class MovieMetadataRefreshModalTests : BunitContext
 {
+    public MovieMetadataRefreshModalTests() => JSInterop.AllowModalShell();
+
     private static MovieViewDto CreateScrapedMovie() => new()
     {
         Title = "New Title",

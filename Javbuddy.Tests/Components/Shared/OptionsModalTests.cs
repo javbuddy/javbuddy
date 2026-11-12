@@ -1,10 +1,13 @@
 using Bunit;
 using Javbuddy.Components.Shared;
+using Javbuddy.Tests.TestSupport;
 
 namespace Javbuddy.Tests.Components.Shared;
 
 public class OptionsModalTests : BunitContext
 {
+    public OptionsModalTests() => JSInterop.AllowModalShell();
+
     private int closed;
 
     private IRenderedComponent<OptionsModal> RenderModal() =>
@@ -18,10 +21,10 @@ public class OptionsModalTests : BunitContext
     {
         var cut = RenderModal();
 
-        var title = cut.Find(".options-modal-title");
+        var title = cut.Find(".modal-shell-title");
         Assert.Equal("Actor Options", title.TextContent);
         Assert.Equal(title.Id, cut.Find("[role=dialog]").GetAttribute("aria-labelledby"));
-        Assert.Equal("Card Size", cut.Find(".options-modal-body .options-row .options-label").TextContent);
+        Assert.Equal("Card Size", cut.Find(".modal-shell-body .options-row .options-label").TextContent);
     }
 
     [Fact]
@@ -29,9 +32,9 @@ public class OptionsModalTests : BunitContext
     {
         var cut = RenderModal();
 
-        cut.Find(".options-modal-close-btn").Click();
-        cut.Find(".options-modal-footer button").Click();
-        cut.Find(".options-modal-backdrop").Click();
+        cut.Find(".modal-shell-close-btn").Click();
+        cut.Find(".modal-shell-footer button").Click();
+        cut.Find(".modal-shell-backdrop").Click();
         Assert.Equal(3, closed);
     }
 }

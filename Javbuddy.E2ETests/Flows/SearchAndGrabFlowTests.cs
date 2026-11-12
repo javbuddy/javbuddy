@@ -29,7 +29,7 @@ public class SearchAndGrabFlowTests
         await page.GotoInteractiveAsync($"/movies/{movie.Code}");
         await page.GetByRole(AriaRole.Button, new() { Name = "Search Prowlarr" }).ClickAsync();
 
-        var modal = page.Locator(".prowlarr-modal-panel");
+        var modal = page.Locator(".modal-shell-panel");
         await Expect(modal.GetByText("Test Release 1080p")).ToBeVisibleAsync();
 
         await modal.GetByRole(AriaRole.Button, new() { Name = "Grab" }).ClickAsync();

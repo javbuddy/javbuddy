@@ -6,15 +6,9 @@
 @* The Movies page's "Write Javbuddy metadata to .nfo" confirmation: per-direction counts
    for the current filter, Javbuddy-changed movies selected by default and outside edits opt-in,
    then the push itself runs as a background job (NfoDriftPushLauncher). *@
-<div class="nfo-push-modal-backdrop" tabindex="0" @onclick="Close">
-    <div class="nfo-push-modal-panel" @onclick:stopPropagation="true">
-        <div class="nfo-push-modal-header">
-            <h5 class="nfo-push-modal-title">Write Javbuddy metadata to .nfo</h5>
-            <button class="nfo-push-modal-close-btn" @onclick="Close" aria-label="Close">
-                <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
-            </button>
-        </div>
-        <div class="nfo-push-modal-body">
+<ModalShell Themed="true" Title="Write Javbuddy metadata to .nfo" OnClose="OnClose" MaxWidth="520px">
+    <ChildContent>
+        <div class="nfo-push-modal-content">
             @if (counts is null)
             {
                 <LoadingIndicator />
@@ -50,14 +44,14 @@
                 }
             }
         </div>
-        <div class="nfo-push-modal-footer">
-            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="Close">Cancel</button>
-            <button type="button" class="btn btn-primary btn-sm" disabled="@(counts is null || SelectedCount == 0 || queueing)" @onclick="ConfirmAsync">
-                Write @SelectedCount .nfo file(s)
-            </button>
-        </div>
-    </div>
-</div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="Close">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" disabled="@(counts is null || SelectedCount == 0 || queueing)" @onclick="ConfirmAsync">
+            Write @SelectedCount .nfo file(s)
+        </button>
+    </FooterContent>
+</ModalShell>
 
 @code {
     [Parameter, EditorRequired] public MovieGridFilter Filter { get; set; } = new();

@@ -12,3 +12,12 @@ internal static class BunitDefaults
     [ModuleInitializer]
     internal static void Initialize() => BunitContext.DefaultWaitTimeout = TimeSpan.FromSeconds(10);
 }
+
+internal static class BunitJSInteropExtensions
+{
+    /// <summary>ModalShell imports its focus-on-open module whenever a dialog opens; bUnit's default Strict
+    /// JSInterop throws on that unconfigured import, so a test that renders any ModalShell host allows it here
+    /// (a test of the focus call itself sets the module up explicitly instead).</summary>
+    internal static void AllowModalShell(this BunitJSInterop jsInterop) =>
+        jsInterop.SetupModule("./Components/Shared/ModalShell.razor.js").Mode = JSRuntimeMode.Loose;
+}

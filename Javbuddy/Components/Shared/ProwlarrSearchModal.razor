@@ -7,84 +7,76 @@
 
 @if (Show && !string.IsNullOrWhiteSpace(SearchCode))
 {
-    <div class="prowlarr-modal-backdrop" tabindex="0" @ref="backdropRef" @onkeydown="OnKeyDown" @onclick="Close">
-        <div class="prowlarr-modal-panel" @onclick:stopPropagation="true">
-            <div class="prowlarr-modal-header">
-                <h5 class="prowlarr-modal-title">Search results — @SearchCode</h5>
-                <button class="prowlarr-modal-close-btn" @onclick="Close" aria-label="Close">
-                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
-                </button>
-            </div>
-            <div class="prowlarr-modal-body">
-                @foreach (var indexer in disabledIndexers)
-                {
-                    <div class="alert alert-warning py-2 mb-2 disabled-indexer-warning">Indexer @indexer.Name is @indexer.Reason and was not searched.</div>
-                }
-                @if (searching)
-                {
-                    <p class="text-muted mb-0">Searching…</p>
-                }
-                else if (searchError is not null)
-                {
-                    <div class="alert alert-danger mb-0">@searchError</div>
-                }
-                else if (results is not null && results.Count == 0)
-                {
-                    <p class="text-muted mb-0">No releases found.</p>
-                }
-                else if (results is not null)
-                {
-                    <table class="table table-sm align-middle mb-0">
-                        <thead>
+    <ModalShell Themed="true" MaxWidth="900px" Title="@($"Search results — {SearchCode}")" OnClose="OnClose">
+        <ChildContent>
+            @foreach (var indexer in disabledIndexers)
+            {
+                <div class="alert alert-warning py-2 mb-2 disabled-indexer-warning">Indexer @indexer.Name is @indexer.Reason and was not searched.</div>
+            }
+            @if (searching)
+            {
+                <p class="text-muted mb-0">Searching…</p>
+            }
+            else if (searchError is not null)
+            {
+                <div class="alert alert-danger mb-0">@searchError</div>
+            }
+            else if (results is not null && results.Count == 0)
+            {
+                <p class="text-muted mb-0">No releases found.</p>
+            }
+            else if (results is not null)
+            {
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Indexer</th>
+                            <th>Size</th>
+                            <th>Seeds/Peers</th>
+                            <th>Age</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var release in results)
+                        {
                             <tr>
-                                <th>Title</th>
-                                <th>Indexer</th>
-                                <th>Size</th>
-                                <th>Seeds/Peers</th>
-                                <th>Age</th>
-                                <th></th>
+                                <td class="text-break">@release.Title</td>
+                                <td>@release.Indexer</td>
+                                <td>@ByteSizeFormatter.Format(release.Size)</td>
+                                <td><span class="seeds-badge @SeedsBadgeClass(release.Seeders)">@(release.Seeders?.ToString() ?? "—") / @(release.Leechers?.ToString() ?? "—")</span></td>
+                                <td>@(release.Age)d</td>
+                                <td class="text-end">
+                                    @if (Movie is not null)
+                                    {
+                                        <button class="btn btn-sm btn-primary" @onclick="() => Grab(release)" disabled="@IsGrabbing(release)">
+                                            @(IsGrabbing(release) ? "Grabbing…" : "Grab")
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-sm btn-primary" @onclick="() => AddAndGrab(release)" disabled="@IsGrabbing(release)">
+                                            @(IsGrabbing(release) ? "Adding…" : "Add & Download")
+                                        </button>
+                                    }
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var release in results)
-                            {
-                                <tr>
-                                    <td class="text-break">@release.Title</td>
-                                    <td>@release.Indexer</td>
-                                    <td>@ByteSizeFormatter.Format(release.Size)</td>
-                                    <td><span class="seeds-badge @SeedsBadgeClass(release.Seeders)">@(release.Seeders?.ToString() ?? "—") / @(release.Leechers?.ToString() ?? "—")</span></td>
-                                    <td>@(release.Age)d</td>
-                                    <td class="text-end">
-                                        @if (Movie is not null)
-                                        {
-                                            <button class="btn btn-sm btn-primary" @onclick="() => Grab(release)" disabled="@IsGrabbing(release)">
-                                                @(IsGrabbing(release) ? "Grabbing…" : "Grab")
-                                            </button>
-                                        }
-                                        else
-                                        {
-                                            <button class="btn btn-sm btn-primary" @onclick="() => AddAndGrab(release)" disabled="@IsGrabbing(release)">
-                                                @(IsGrabbing(release) ? "Adding…" : "Add & Download")
-                                            </button>
-                                        }
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                }
+                        }
+                    </tbody>
+                </table>
+            }
 
-                @if (grabError is not null)
-                {
-                    <div class="alert alert-danger mt-3 mb-0">@grabError</div>
-                }
-                @if (grabSuccessMessage is not null)
-                {
-                    <div class="alert alert-success mt-3 mb-0">@grabSuccessMessage</div>
-                }
-            </div>
-        </div>
-    </div>
+            @if (grabError is not null)
+            {
+                <div class="alert alert-danger mt-3 mb-0">@grabError</div>
+            }
+            @if (grabSuccessMessage is not null)
+            {
+                <div class="alert alert-success mt-3 mb-0">@grabSuccessMessage</div>
+            }
+        </ChildContent>
+    </ModalShell>
 }
 
 @code {
@@ -99,8 +91,6 @@
     /// parent showing this modal over an untracked/preview movie can update without a full reload.</summary>
     [Parameter] public EventCallback<Movie> OnMovieAdded { get; set; }
 
-    private ElementReference backdropRef;
-    private bool shouldFocusBackdrop;
     private string? searchedCode;
     private bool searching;
     private string? searchError;
@@ -126,22 +116,12 @@
 
         if (Show && SearchCode is { } code && !string.Equals(searchedCode, code, StringComparison.OrdinalIgnoreCase))
         {
-            shouldFocusBackdrop = true;
             await Search();
         }
         else if (!Show)
         {
             // Reset so reopening the same movie searches again rather than showing stale results.
             searchedCode = null;
-        }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (shouldFocusBackdrop)
-        {
-            shouldFocusBackdrop = false;
-            await backdropRef.FocusAsync();
         }
     }
 
@@ -241,12 +221,5 @@
         }
 
         grabbingKeys.Remove(key);
-    }
-
-    private async Task Close() => await OnClose.InvokeAsync();
-
-    private async Task OnKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") await Close();
     }
 }

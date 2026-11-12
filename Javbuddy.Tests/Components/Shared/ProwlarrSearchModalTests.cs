@@ -5,6 +5,7 @@ using Javbuddy.Services.Common;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Prowlarr;
 using Javbuddy.Services.Torrents;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -12,6 +13,8 @@ namespace Javbuddy.Tests.Components.Shared;
 
 public class ProwlarrSearchModalTests : BunitContext
 {
+    public ProwlarrSearchModalTests() => JSInterop.AllowModalShell();
+
     [Fact]
     public async Task UntrackedCode_ShowsAddAndDownloadButton()
     {

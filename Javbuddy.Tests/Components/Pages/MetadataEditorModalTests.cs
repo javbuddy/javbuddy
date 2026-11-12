@@ -3,6 +3,7 @@ using Javbuddy.Components.Pages.MovieDetailSections;
 using Javbuddy.Models;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Movies;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -10,6 +11,8 @@ namespace Javbuddy.Tests.Components.Pages;
 
 public class MetadataEditorModalTests : BunitContext
 {
+    public MetadataEditorModalTests() => JSInterop.AllowModalShell();
+
     private IMovieService SetUpMovieService()
     {
         var movieService = Substitute.For<IMovieService>();
@@ -25,7 +28,7 @@ public class MetadataEditorModalTests : BunitContext
 
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
 
-        Assert.Empty(cut.FindAll(".metadata-editor-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -44,7 +47,7 @@ public class MetadataEditorModalTests : BunitContext
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
         await cut.InvokeAsync(() => cut.Instance.OpenAsync());
 
-        Assert.NotEmpty(cut.FindAll(".metadata-editor-modal-backdrop"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
         Assert.Equal("Display Title", cut.Find("#metadata-meta-title").GetAttribute("value"));
         Assert.Equal("Studio Name", cut.Find("#metadata-studio").GetAttribute("value"));
         Assert.Empty(cut.FindAll("#metadata-runtime"));
@@ -75,7 +78,7 @@ public class MetadataEditorModalTests : BunitContext
         var cancelBtn = cut.FindAll("button").First(b => b.TextContent.Trim() == "Cancel");
         await cut.InvokeAsync(() => cancelBtn.Click());
 
-        Assert.Empty(cut.FindAll(".metadata-editor-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
         await movieService.DidNotReceive().UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>());
     }
 
@@ -101,7 +104,7 @@ public class MetadataEditorModalTests : BunitContext
             Arg.Is<MovieMetadataUpdate>(u => u.MetaTitle == "Updated Title"),
             Arg.Any<CancellationToken>());
         Assert.True(saved);
-        Assert.Empty(cut.FindAll(".metadata-editor-modal-backdrop"));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
@@ -142,7 +145,7 @@ public class MetadataEditorModalTests : BunitContext
         await cut.InvokeAsync(() => cut.Find("form").Submit());
 
         Assert.Contains("Your changes were saved, but the .nfo wasn't created: the folder isn't writable", cut.Find(".alert-warning").TextContent);
-        Assert.NotEmpty(cut.FindAll(".metadata-editor-modal-backdrop"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
         Assert.Equal(1, saved);
     }
 
@@ -159,7 +162,7 @@ public class MetadataEditorModalTests : BunitContext
 
         await cut.InvokeAsync(() => cut.Find("form").Submit());
 
-        Assert.NotEmpty(cut.FindAll(".metadata-editor-modal-backdrop"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
         Assert.Contains("Save failed.", cut.Markup);
     }
 
@@ -273,11 +276,11 @@ public class MetadataEditorModalTests : BunitContext
         await cut.InvokeAsync(() => cut.Instance.OpenAsync());
         await cut.InvokeAsync(() => cut.Find("form").Submit());
 
-        cut.Find(".metadata-editor-modal-backdrop").Click();
-        Assert.True(cut.Find(".metadata-editor-modal-close-btn").HasAttribute("disabled"));
-        Assert.NotEmpty(cut.FindAll(".metadata-editor-modal-backdrop"));
+        cut.Find(".modal-shell-backdrop").Click();
+        Assert.True(cut.Find(".modal-shell-close-btn").HasAttribute("disabled"));
+        Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
 
         pending.SetResult(OperationResult.Ok());
-        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".metadata-editor-modal-backdrop")));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".modal-shell-backdrop")));
     }
 }

@@ -2,6 +2,7 @@ using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -9,6 +10,8 @@ namespace Javbuddy.Tests.Components.Shared;
 
 public class ActorMergeModalTests : BunitContext
 {
+    public ActorMergeModalTests() => JSInterop.AllowModalShell();
+
     [Fact]
     public void Modal_WhenShowFalse_RendersNothing()
     {
