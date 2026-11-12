@@ -243,6 +243,9 @@
         ["a"] = nameof(StartApexAtAsync)
     };
     private bool disposed;
+    private bool mediaReloading;
+    private bool mediaReloadAgain;
+    private int loadSequence;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -294,6 +297,7 @@
     // All three lists every time: a change to one alters what the others roll up or inherit.
     private async Task ReloadAsync()
     {
+        loadSequence++;
         scenes = await SceneService.GetScenesAsync(MovieId);
         highlights = await HighlightService.GetHighlightsAsync(MovieId);
         apexes = await ApexService.GetApexesAsync(MovieId);
@@ -336,16 +340,61 @@
         }
     }
 
-    // Raised on the queue's worker thread when a scene's screenshot/preview was written.
+    // Raised on the queue's worker thread when a scene's, highlight's or apex's screenshot/preview was written.
     private void OnMediaGenerated(int movieId)
     {
         if (disposed || movieId != MovieId) return;
-        _ = InvokeAsync(async () =>
+        _ = InvokeAsync(ReloadMediaAsync);
+    }
+
+    // A finished media job only changes the media versions the three lists carry, so just those are re-read
+    // (concurrently, each on its own DbContext): the cast, actor tags, default window and chapter probe are
+    // untouched and the queue already holds whatever media is still missing. A burst of notifications (many
+    // jobs finishing together) piles up behind the reload in flight and is answered by one more.
+    private async Task ReloadMediaAsync()
+    {
+        if (disposed) return;
+        if (mediaReloading)
         {
-            if (disposed || movieId != MovieId) return;
-            await ReloadAsync();
-            StateHasChanged();
-        });
+            mediaReloadAgain = true;
+            return;
+        }
+
+        mediaReloading = true;
+        try
+        {
+            do
+            {
+                mediaReloadAgain = false;
+                var movie = MovieId;
+                var reloads = loadSequence;
+                var scenesTask = SceneService.GetScenesAsync(movie);
+                var highlightsTask = HighlightService.GetHighlightsAsync(movie);
+                var apexesTask = ApexService.GetApexesAsync(movie);
+                await Task.WhenAll(scenesTask, highlightsTask, apexesTask);
+
+                // A full reload (a save, another movie) ran meanwhile and is newer than this one.
+                if (disposed || movie != MovieId || reloads != loadSequence) continue;
+
+                scenes = scenesTask.Result;
+                highlights = highlightsTask.Result;
+                apexes = apexesTask.Result;
+                tree = ClipTree.Build(cast, scenes, highlights, apexes);
+                await OnScenesChanged.InvokeAsync(scenes);
+                await OnHighlightsChanged.InvokeAsync(highlights);
+                await OnApexesChanged.InvokeAsync(apexes);
+                StateHasChanged();
+            }
+            while (mediaReloadAgain && !disposed);
+        }
+        catch (Exception)
+        {
+            // Thumbnails are a convenience; the next change or notification reads them again.
+        }
+        finally
+        {
+            mediaReloading = false;
+        }
     }
 
     private static string Count(int count, string singular, string? plural = null) =>
