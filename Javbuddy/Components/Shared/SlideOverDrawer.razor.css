@@ -13,7 +13,7 @@
     width: 480px;
     max-width: 92vw;
     background: #fff;
-    border-left: 1px solid #dee2e6;
+    border-left: 1px solid var(--jb-border);
     padding: 1.5rem;
     overflow-y: auto;
     box-shadow: -8px 0 24px rgba(0, 0, 0, 0.15);
@@ -45,7 +45,7 @@
     background: none;
     border: none;
     border-radius: 50%;
-    color: #6c757d;
+    color: var(--jb-muted);
 }
 
     .slide-over-drawer-close-btn:hover {
@@ -71,13 +71,13 @@
     }
 
 :root[data-theme="dark"] .slide-over-drawer-panel {
-    background-color: #242833;
-    border-left-color: #363c4a;
-    color: #dfe2e8;
+    background-color: var(--jb-dark-surface);
+    border-left-color: var(--jb-dark-border);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .slide-over-drawer-close-btn {
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
 }
 
     :root[data-theme="dark"] .slide-over-drawer-close-btn:hover {

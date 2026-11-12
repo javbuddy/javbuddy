@@ -9,7 +9,7 @@
 .tag-candidate-list {
     max-height: 260px;
     overflow-y: auto;
-    border: 1px solid #3d4354;
+    border: 1px solid var(--jb-dark-border-strong);
     border-radius: 4px;
     background-color: #1a1c23;
 }
@@ -35,7 +35,7 @@
 
 .tag-candidate-item.selected {
     background-color: #2b3a4a;
-    border-left: 3px solid #2f8fd6;
+    border-left: 3px solid var(--jb-accent);
 }
 
 .tag-candidate-name {

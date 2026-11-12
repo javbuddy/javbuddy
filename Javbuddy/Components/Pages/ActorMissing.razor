@@ -23,8 +23,8 @@ else if (actor is null)
 }
 else
 {
-    <div class="actor-toolbar">
-        <BackButton Href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}")" CssClass="actor-toolbar-btn">@actor.DisplayName</BackButton>
+    <div class="page-toolbar actor-toolbar">
+        <BackButton Href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}")" CssClass="page-toolbar-btn">@actor.DisplayName</BackButton>
     </div>
 
     <h1 class="missing-title">Missing</h1>

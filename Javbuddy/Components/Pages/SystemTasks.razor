@@ -13,7 +13,7 @@
 
 <PageTitle>Tasks · Javbuddy</PageTitle>
 
-<h1 class="tasks-section-title">Scheduled</h1>
+<h1 class="data-page-title tasks-section-title">Scheduled</h1>
 
 @if (scheduledRows is null)
 {
@@ -22,7 +22,7 @@
 else
 {
     <div class="tasks-table">
-        <div class="tasks-row tasks-header tasks-row-scheduled">
+        <div class="data-table-row data-table-header tasks-row tasks-header tasks-row-scheduled">
             <span>Name</span>
             <span>Interval</span>
             <span>Last Execution</span>
@@ -32,7 +32,7 @@ else
         </div>
         @foreach (var row in scheduledRows)
         {
-            <div class="tasks-row tasks-row-scheduled">
+            <div class="data-table-row tasks-row tasks-row-scheduled">
                 <span class="tasks-name-cell">
                     @row.Name
                     <span class="tasks-info-icon" title="@row.Description" aria-label="@row.Description"></span>
@@ -59,7 +59,7 @@ else
     <div class="alert alert-info" style="max-width: 640px;">@justQueued queued.</div>
 }
 
-<h1 class="tasks-section-title">Queue</h1>
+<h1 class="data-page-title tasks-section-title">Queue</h1>
 
 @if (history is null)
 {
@@ -72,7 +72,7 @@ else if (history.Count == 0)
 else
 {
     <div class="tasks-table">
-        <div class="tasks-row tasks-header tasks-row-queue">
+        <div class="data-table-row data-table-header tasks-row tasks-header tasks-row-queue">
             <span>Name</span>
             <span>Queued</span>
             <span>Started</span>
@@ -83,9 +83,9 @@ else
         </div>
         @foreach (var run in history)
         {
-            <div class="tasks-row tasks-row-queue">
+            <div class="data-table-row tasks-row tasks-row-queue">
                 <span class="tasks-queue-name">
-                    <span class="tasks-icon @(run.EndedAt is null ? "tasks-icon-running" : run.Success ? "tasks-icon-ok" : "tasks-icon-warning")" aria-hidden="true"></span>
+                    <span class="status-icon @(run.EndedAt is null ? "tasks-icon-running" : run.Success ? "status-icon-ok" : "status-icon-warning")" aria-hidden="true"></span>
                     @run.TaskName
                 </span>
                 <span>@FormatRelative(run.QueuedAt, future: false)</span>

@@ -85,7 +85,7 @@
 .scene-wall-movie,
 .scene-wall-actors {
     height: 1.125rem;
-    color: #6c757d;
+    color: var(--jb-muted);
     font-size: 0.75rem;
     line-height: 1.125rem;
     overflow: hidden;
@@ -95,7 +95,7 @@
 
 .scene-wall-code {
     font-weight: 600;
-    color: #2f8fd6;
+    color: var(--jb-accent);
 }
 
 /* The tag row keeps its one line in the card while, hovered, it grows upward over it. */
@@ -156,7 +156,7 @@
     max-height: 10rem;
     overflow: hidden auto;
     padding: 0.45rem 0.6rem 0.6rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--jb-border);
     background-color: var(--scene-wall-card-bg, #fff);
     box-shadow: 0 -6px 12px rgba(0, 0, 0, 0.15);
 }
@@ -174,7 +174,7 @@
     white-space: nowrap;
     padding: 0 0.4rem;
     line-height: 1rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--jb-border);
     border-radius: 999px;
     font-size: 0.7rem;
     color: #495057;
@@ -190,13 +190,13 @@
 }
 
 :root[data-theme="dark"] .scene-wall-card {
-    --scene-wall-card-bg: #242833;
-    color: #dfe2e8;
+    --scene-wall-card-bg: var(--jb-dark-surface);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .scene-wall-tag {
-    border-color: #3d4354;
-    color: #b9bfd1;
+    border-color: var(--jb-dark-border-strong);
+    color: var(--jb-dark-text-dim);
 }
 
 :root[data-theme="dark"] .scene-wall-tag-implicit {
@@ -206,11 +206,11 @@
 :root[data-theme="dark"] .scene-wall-tags-more {
     border-color: #5c6378;
     background-color: #313645;
-    color: #dfe2e8;
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .scene-wall-tags[data-overflow][data-open] {
-    border-top-color: #3d4354;
+    border-top-color: var(--jb-dark-border-strong);
     box-shadow: 0 -6px 12px rgba(0, 0, 0, 0.45);
 }
 

@@ -39,7 +39,7 @@ public class ActorEditFlowTests
         await Expect(page.Locator("h1.actor-hero-title")).ToContainTextAsync(initialDisplayName);
 
         // Click Edit in toolbar
-        await page.Locator(".actor-toolbar").GetByRole(AriaRole.Link, new() { Name = "Edit" }).ClickAsync();
+        await page.Locator(".page-toolbar").GetByRole(AriaRole.Link, new() { Name = "Edit" }).ClickAsync();
         await Expect(page).ToHaveURLAsync(new Regex($"/actors/{Regex.Escape(Uri.EscapeDataString(initialDisplayName))}/edit$"));
 
         // Update fields

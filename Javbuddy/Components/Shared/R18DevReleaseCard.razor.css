@@ -29,8 +29,8 @@
 }
 
     .missing-poster-action:hover:not(:disabled) {
-        background: #2f8fd6;
-        border-color: #2f8fd6;
+        background: var(--jb-accent);
+        border-color: var(--jb-accent);
     }
 
     .missing-poster-action:disabled {

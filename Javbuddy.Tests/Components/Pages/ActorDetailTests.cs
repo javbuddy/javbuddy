@@ -94,17 +94,17 @@ public class ActorDetailTests : BunitContext
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
 
         // Change Photo button present in toolbar
-        var changePhotoBtn = cut.FindAll("button.actor-toolbar-btn")
+        var changePhotoBtn = cut.FindAll("button.page-toolbar-btn")
             .FirstOrDefault(b => b.TextContent.Contains("Change Photo"));
         Assert.NotNull(changePhotoBtn);
 
         // "Search" (minnano-av.com) button present in toolbar
-        var searchBtn = cut.FindAll("button.actor-toolbar-btn")
+        var searchBtn = cut.FindAll("button.page-toolbar-btn")
             .FirstOrDefault(b => b.TextContent.Contains("Search"));
         Assert.NotNull(searchBtn);
 
         // Merge button present in toolbar
-        var mergeBtn = cut.FindAll("button.actor-toolbar-btn")
+        var mergeBtn = cut.FindAll("button.page-toolbar-btn")
             .FirstOrDefault(b => b.TextContent.Contains("Merge..."));
         Assert.NotNull(mergeBtn);
 
@@ -408,7 +408,7 @@ public class ActorDetailTests : BunitContext
         cut.FindAll("button.sort-dropdown-subitem").First(b => b.TextContent.Trim() == "Has favorite actor").Click();
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".poster-title")));
 
-        await cut.InvokeAsync(() => cut.FindAll("button.actor-toolbar-btn").First(b => b.TextContent.Contains("Favorite")).Click());
+        await cut.InvokeAsync(() => cut.FindAll("button.page-toolbar-btn").First(b => b.TextContent.Contains("Favorite")).Click());
 
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".poster-title")));
     }
@@ -523,7 +523,7 @@ public class ActorDetailTests : BunitContext
 
         Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
 
-        var mergeBtn = cut.FindAll("button.actor-toolbar-btn")
+        var mergeBtn = cut.FindAll("button.page-toolbar-btn")
             .First(b => b.TextContent.Contains("Merge..."));
         await cut.InvokeAsync(() => mergeBtn.Click());
 
@@ -550,7 +550,7 @@ public class ActorDetailTests : BunitContext
 
         Assert.Empty(cut.FindAll(".modal-shell-title"));
 
-        var searchBtn = cut.FindAll("button.actor-toolbar-btn").First(b => b.TextContent.Contains("Search"));
+        var searchBtn = cut.FindAll("button.page-toolbar-btn").First(b => b.TextContent.Contains("Search"));
         await cut.InvokeAsync(() => searchBtn.Click());
 
         var title = cut.Find(".modal-shell-title");
@@ -581,7 +581,7 @@ public class ActorDetailTests : BunitContext
 
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Remu"));
 
-        var deleteBtn = cut.Find("button.actor-toolbar-btn-danger");
+        var deleteBtn = cut.Find("button.page-toolbar-btn-danger");
         await cut.InvokeAsync(() => deleteBtn.Click());
 
         var modal = cut.Find(".actor-delete-modal-backdrop");
@@ -616,7 +616,7 @@ public class ActorDetailTests : BunitContext
         Services.AddSingleton(Substitute.For<INfoSyncService>());
 
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Remu"));
-        var deleteBtn = cut.Find("button.actor-toolbar-btn-danger");
+        var deleteBtn = cut.Find("button.page-toolbar-btn-danger");
 
         await cut.InvokeAsync(() => deleteBtn.Click());
         var cancelBtn = cut.FindAll("button")
@@ -630,7 +630,7 @@ public class ActorDetailTests : BunitContext
         await cut.InvokeAsync(() => modal.KeyDown(new KeyboardEventArgs { Key = "Escape" }));
         Assert.Empty(cut.FindAll(".actor-delete-modal-backdrop"));
 
-        await cut.InvokeAsync(() => cut.Find("button.actor-toolbar-btn-danger").Click());
+        await cut.InvokeAsync(() => cut.Find("button.page-toolbar-btn-danger").Click());
         await cut.InvokeAsync(() => cut.Find(".actor-delete-modal-backdrop").Click());
         Assert.Empty(cut.FindAll(".actor-delete-modal-backdrop"));
         await actorService.DidNotReceive().DeleteAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
@@ -664,7 +664,7 @@ public class ActorDetailTests : BunitContext
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
 
         // Favorite button present in toolbar and not active initially
-        var favBtn = cut.FindAll("button.actor-toolbar-btn")
+        var favBtn = cut.FindAll("button.page-toolbar-btn")
             .FirstOrDefault(b => b.TextContent.Contains("Favorite"));
         Assert.NotNull(favBtn);
         Assert.DoesNotContain("active", favBtn.ClassList);
@@ -678,7 +678,7 @@ public class ActorDetailTests : BunitContext
         await actorService.Received(1).ToggleFavoriteAsync(1, Arg.Any<CancellationToken>());
 
         // Button is now active and labeled "Favorited"
-        var updatedFavBtn = cut.FindAll("button.actor-toolbar-btn")
+        var updatedFavBtn = cut.FindAll("button.page-toolbar-btn")
             .FirstOrDefault(b => b.TextContent.Contains("Favorited"));
         Assert.NotNull(updatedFavBtn);
         Assert.Contains("active", updatedFavBtn.ClassList);
@@ -712,7 +712,7 @@ public class ActorDetailTests : BunitContext
 
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Remu"));
 
-        var favBtn = cut.FindAll("button.actor-toolbar-btn")
+        var favBtn = cut.FindAll("button.page-toolbar-btn")
             .FirstOrDefault(b => b.TextContent.Contains("Favorited"));
         Assert.NotNull(favBtn);
         Assert.Contains("active", favBtn.ClassList);
@@ -749,7 +749,7 @@ public class ActorDetailTests : BunitContext
 
         Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
 
-        var syncBtn = cut.FindAll("button.actor-toolbar-btn")
+        var syncBtn = cut.FindAll("button.page-toolbar-btn")
             .First(b => b.TextContent.Contains("Sync .nfo"));
         await cut.InvokeAsync(() => syncBtn.Click());
 
@@ -782,7 +782,7 @@ public class ActorDetailTests : BunitContext
 
         var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
 
-        var refreshBtn = cut.FindAll("button.actor-toolbar-btn")
+        var refreshBtn = cut.FindAll("button.page-toolbar-btn")
             .FirstOrDefault(b => b.TextContent.Contains("Refresh"));
         Assert.NotNull(refreshBtn);
 
@@ -1777,10 +1777,10 @@ public class ActorDetailTests : BunitContext
     {
         var cut = await RenderWithMoviesAsync(MovieStatus.Missing, MovieStatus.Got);
 
-        var review = cut.FindAll("a.actor-toolbar-btn").FirstOrDefault(a => a.TextContent.Contains("Review"));
+        var review = cut.FindAll("a.page-toolbar-btn").FirstOrDefault(a => a.TextContent.Contains("Review"));
         Assert.NotNull(review);
         Assert.Equal("/movies/review?actorId=1", review.GetAttribute("href"));
-        Assert.DoesNotContain(cut.FindAll(".actor-toolbar-btn"), b => b.TextContent.Contains("Cleanup"));
+        Assert.DoesNotContain(cut.FindAll(".page-toolbar-btn"), b => b.TextContent.Contains("Cleanup"));
     }
 
     [Fact]
@@ -1788,7 +1788,7 @@ public class ActorDetailTests : BunitContext
     {
         var cut = await RenderWithMoviesAsync(MovieStatus.Missing);
 
-        Assert.DoesNotContain(cut.FindAll(".actor-toolbar-btn"), b => b.TextContent.Contains("Review"));
+        Assert.DoesNotContain(cut.FindAll(".page-toolbar-btn"), b => b.TextContent.Contains("Review"));
     }
 
     [Fact]

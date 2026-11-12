@@ -27,7 +27,7 @@
 
 .scene-chapter-writer-status,
 .scene-chapter-writer-done {
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .scene-chapter-writer-actions {
@@ -56,8 +56,8 @@
 
 /* After .scene-editor-btn: same specificity, so it has to come later to win. */
 .scene-chapter-writer-confirm-btn {
-    background-color: #2f8fd6;
-    border-color: #2f8fd6;
+    background-color: var(--jb-accent);
+    border-color: var(--jb-accent);
     color: #fff;
 }
 

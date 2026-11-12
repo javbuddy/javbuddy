@@ -7,7 +7,7 @@
 .sync-movie-list-container {
     max-height: 380px;
     overflow-y: auto;
-    border: 1px solid #3d4354;
+    border: 1px solid var(--jb-dark-border-strong);
     border-radius: 4px;
 }
 
@@ -20,5 +20,5 @@
     top: 0;
     background-color: #1a1e27;
     z-index: 2;
-    border-bottom: 2px solid #3d4354;
+    border-bottom: 2px solid var(--jb-dark-border-strong);
 }

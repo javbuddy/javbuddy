@@ -30,7 +30,7 @@
 
     .delete-confirm-dialog p {
         margin: 0;
-        color: var(--scene-editor-muted, #94a3b8);
+        color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
         font-size: 0.85rem;
     }
 
@@ -60,7 +60,7 @@
 }
 
 .delete-confirm-confirm-btn {
-    background-color: #dc3545;
-    border-color: #dc3545;
+    background-color: var(--jb-danger);
+    border-color: var(--jb-danger);
     color: #ffffff;
 }

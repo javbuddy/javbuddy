@@ -7,9 +7,8 @@
     /// <summary>Link target for the back-navigation button.</summary>
     [Parameter, EditorRequired] public string Href { get; set; } = "";
 
-    /// <summary>The page's own toolbar-button CSS class (e.g. "movie-toolbar-btn",
-    /// "actor-toolbar-btn") — each page keeps its own toolbar styling, only the chevron
-    /// icon + wrapper markup is shared here.</summary>
+    /// <summary>The page's own toolbar-button CSS class (normally the global
+    /// "page-toolbar-btn") — only the chevron icon + wrapper markup is shared here.</summary>
     [Parameter, EditorRequired] public string CssClass { get; set; } = "";
 
     [Parameter] public RenderFragment? ChildContent { get; set; }

@@ -56,8 +56,8 @@
 }
 
 .scene-editor-save-btn {
-    background-color: #2f8fd6;
-    border-color: #2f8fd6;
+    background-color: var(--jb-accent);
+    border-color: var(--jb-accent);
     color: #fff;
 }
 
@@ -73,7 +73,7 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     cursor: pointer;
     font-size: 0.9rem;
     line-height: 1;
@@ -92,7 +92,7 @@
 
 .scene-editor-empty {
     margin: 0;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     font-size: 0.8rem;
 }
 
@@ -144,14 +144,14 @@
 .scene-editor-pos {
     flex: none;
     min-width: 1.1rem;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     font-variant-numeric: tabular-nums;
 }
 
 .scene-editor-range {
     flex: none;
     font-variant-numeric: tabular-nums;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .scene-editor-name {
@@ -164,7 +164,7 @@
 
 .scene-editor-name-default {
     font-style: italic;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .scene-editor-form {
@@ -197,7 +197,7 @@
 .scene-editor-label {
     font-size: 0.72rem;
     font-weight: 600;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .scene-editor-hint {
@@ -240,7 +240,7 @@
     align-items: baseline;
     gap: 0.25rem 0.35rem;
     font-size: 0.75rem;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .scene-editor-meta-actors {
@@ -263,7 +263,7 @@
 .scene-editor-links-hint {
     margin: 0.35rem 0 0;
     font-size: 0.75rem;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .scene-editor-chips {
@@ -291,7 +291,7 @@ button.scene-editor-chip {
 
 .scene-editor-chip-on {
     background-color: rgba(47, 143, 214, 0.18);
-    border-color: #2f8fd6;
+    border-color: var(--jb-accent);
 }
 
 .scene-editor-chip-remove {
@@ -343,7 +343,7 @@ button.scene-editor-chip {
 .scene-editor-hidden-badge {
     display: inline-flex;
     align-self: center;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .scene-editor-hidden-toggle {
@@ -379,7 +379,7 @@ button.scene-editor-chip {
     align-items: center;
     gap: 0.5rem;
     font-size: 0.75rem;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     white-space: nowrap;
 }
 
@@ -436,7 +436,7 @@ button.scene-editor-chip {
     margin: 0.3rem 0 0;
     font-size: 0.8rem;
     font-weight: 600;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 /* Highlight and apex list items (moved from HighlightEditor.razor.css / ApexEditor.razor.css). */
@@ -499,7 +499,7 @@ button.scene-editor-chip {
     padding: 0 0.35rem;
     border-radius: 999px;
     background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.08));
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     font-size: 0.7rem;
     white-space: nowrap;
 }

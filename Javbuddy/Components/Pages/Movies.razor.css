@@ -6,7 +6,7 @@
     row-gap: 1.25rem;
     margin-top: 2rem;
     padding-top: 1.25rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid var(--jb-border);
 }
 
 .movies-stats-legend {
@@ -33,15 +33,15 @@
 }
 
 .movies-stats-swatch-missing {
-    background-color: #2f8fd6;
+    background-color: var(--jb-status-wanted);
 }
 
 .movies-stats-swatch-downloading {
-    background-color: #e6b800;
+    background-color: var(--jb-status-downloading);
 }
 
 .movies-stats-swatch-got {
-    background-color: #2fa84f;
+    background-color: var(--jb-status-got);
 }
 
 .movies-stats-numbers {
@@ -68,12 +68,12 @@
     }
 
 :root[data-theme="dark"] .movies-stats-footer {
-    border-top-color: #363c4a;
+    border-top-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .movies-stats-legend-item,
 :root[data-theme="dark"] .movies-stats-row span {
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
 }
 
 /* Browsing r18.dev releases instead of the library: hidden, not removed — VirtualizedGrid's JS keeps

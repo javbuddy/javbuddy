@@ -29,7 +29,7 @@
     margin: 0;
     font-size: 0.85rem;
     font-style: italic;
-    color: #6c757d;
+    color: var(--jb-muted);
 }
 
 .backups-card-control {
@@ -133,12 +133,12 @@
 }
 
 .backups-row.selected {
-    border-color: #2f8fd6;
+    border-color: var(--jb-accent);
     background: rgba(47, 143, 214, 0.08);
 }
 
 .backups-row-icon {
-    color: #2f8fd6;
+    color: var(--jb-accent);
     flex: 0 0 auto;
 }
 
@@ -153,7 +153,7 @@
 
 .backups-row-sub {
     font-size: 0.8rem;
-    color: #6c757d;
+    color: var(--jb-muted);
 }
 
 .backups-badges {
@@ -171,7 +171,7 @@
 }
 
 .backups-badge-kind {
-    border-color: #e6b800;
+    border-color: var(--jb-status-downloading);
     color: #b38f00;
 }
 
@@ -181,7 +181,7 @@
 }
 
 :root[data-theme="dark"] .backups-badge-kind {
-    color: #e6b800;
+    color: var(--jb-status-downloading);
 }
 
 @media (max-width: 700px) {

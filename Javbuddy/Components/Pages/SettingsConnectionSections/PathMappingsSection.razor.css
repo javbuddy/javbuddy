@@ -1,5 +1,5 @@
 .path-mapping-card {
-    border: 1px solid var(--bs-border-color, #dee2e6);
+    border: 1px solid var(--bs-border-color, var(--jb-border));
     border-radius: 0.375rem;
     padding: 0.75rem 1rem 1rem;
     margin-bottom: 1rem;

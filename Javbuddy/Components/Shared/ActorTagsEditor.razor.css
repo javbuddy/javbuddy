@@ -15,7 +15,7 @@
 .actor-tags-name {
     min-width: 5rem;
     font-size: 0.75rem;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .actor-tags-row ::deep .tag-search {
@@ -33,7 +33,7 @@
 .actor-tags-hint,
 .actor-tags-error {
     font-size: 0.75rem;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .actor-tags-error {
@@ -47,7 +47,7 @@
     padding: 0.1rem 0.5rem;
     font-size: 0.75rem;
     color: var(--scene-editor-fg, #e2e8f0);
-    border: 1px solid #2f8fd6;
+    border: 1px solid var(--jb-accent);
     border-radius: 999px;
     background-color: rgba(47, 143, 214, 0.18);
 }
@@ -55,7 +55,7 @@
 /* Inherited: dashed and italic like the clip editors' inherited actors; rolled up: dashed, muted, no remove. */
 .actor-tag-chip-inherited {
     font-style: italic;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     background-color: rgba(47, 143, 214, 0.06);
     border-style: dashed;
     border-color: rgba(47, 143, 214, 0.6);
@@ -63,7 +63,7 @@
 
 .actor-tag-chip-rolled-up {
     font-style: italic;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     background: transparent;
     border-style: dashed;
     border-color: var(--scene-editor-border, rgba(255, 255, 255, 0.22));

@@ -38,7 +38,7 @@ public class ActorAddFlowTests
         // Scoped to the actor's own toolbar — the sidebar nav also has a "Missing" link (its
         // top-level section, renamed to match the /missing route) that would otherwise ambiguously
         // match the same accessible name.
-        await page.Locator(".actor-toolbar").GetByRole(AriaRole.Link, new() { Name = "Missing" }).ClickAsync();
+        await page.Locator(".page-toolbar").GetByRole(AriaRole.Link, new() { Name = "Missing" }).ClickAsync();
 
         await Expect(page).ToHaveURLAsync(new Regex($"/actors/{Regex.Escape(encodedName)}/missing$"));
         await Expect(page).ToHaveTitleAsync($"{displayName} · Missing · Javbuddy");

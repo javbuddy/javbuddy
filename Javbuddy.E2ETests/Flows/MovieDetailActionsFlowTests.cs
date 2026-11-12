@@ -195,7 +195,7 @@ public class MovieDetailActionsFlowTests
             var jellyfinBadge = page.Locator("a.movie-detail-badge-jellyfin");
             await Expect(playBadgeBtn).ToBeVisibleAsync();
             await Expect(jellyfinBadge).ToBeVisibleAsync();
-            await Expect(page.Locator(".movie-toolbar-btn-play")).ToHaveCountAsync(0);
+            await Expect(page.Locator(".page-toolbar-btn-play")).ToHaveCountAsync(0);
             await Expect(page.Locator(".movie-detail-poster-play-btn")).ToHaveCountAsync(0);
 
             // Click Play badge button -> opens player modal

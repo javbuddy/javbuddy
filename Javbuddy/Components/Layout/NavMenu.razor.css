@@ -79,7 +79,7 @@
 .nav-badge {
     margin-left: auto;
     margin-right: 1.4rem;
-    background-color: #e6b800;
+    background-color: var(--jb-status-downloading);
     color: #ffffff;
     font-size: 0.75rem;
     font-weight: 700;
@@ -89,7 +89,7 @@
 }
 
     .nav-item ::deep .nav-link {
-        color: #b9bfd1;
+        color: var(--jb-dark-text-dim);
         background: none;
         border: none;
         border-left: 3px solid transparent;
@@ -105,7 +105,7 @@
 .nav-item ::deep .nav-link.active {
     background-color: #2b2f3d;
     color: #ffffff;
-    border-left-color: #1c9fc4;
+    border-left-color: var(--jb-info);
 }
 
 .nav-item ::deep .nav-link:hover {
@@ -123,7 +123,7 @@
 .nav-item ::deep .nav-sublink {
     display: block;
     padding: 0.5rem 1.4rem 0.5rem 2.9rem;
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
     text-decoration: none;
     font-size: 0.88rem;
     font-weight: 500;
@@ -155,7 +155,7 @@
     gap: 0.6rem;
     padding: 0.5rem 1.4rem;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
     font-size: 0.8rem;
     background-color: #35394a;
     overflow: hidden;
@@ -210,7 +210,7 @@
     width: 0.85rem;
     height: 0.85rem;
     border: 2px solid rgba(185, 191, 209, 0.35);
-    border-top-color: #1c9fc4;
+    border-top-color: var(--jb-info);
     border-radius: 50%;
     animation: active-task-spin 0.8s linear infinite;
 }
@@ -244,7 +244,7 @@
     background: none;
     border: none;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
     font-size: 0.95rem;
     font-weight: 500;
     background-color: #35394a;

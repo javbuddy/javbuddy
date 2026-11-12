@@ -19,7 +19,7 @@
 
 <PageTitle>Status · Javbuddy</PageTitle>
 
-<h1 class="status-section-title">Health</h1>
+<h1 class="data-page-title status-section-title">Health</h1>
 
 @if (healthMessages is null)
 {
@@ -28,7 +28,7 @@
 else if (healthMessages.Count == 0)
 {
     <div class="health-row health-ok">
-        <span class="health-icon health-icon-ok" aria-hidden="true"></span>
+        <span class="status-icon status-icon-ok health-icon" aria-hidden="true"></span>
         <span>No issues found.</span>
     </div>
 }
@@ -38,7 +38,7 @@ else
         @foreach (var message in healthMessages)
         {
             <div class="health-row">
-                <span class="health-icon health-icon-warning" aria-hidden="true"></span>
+                <span class="status-icon status-icon-warning health-icon" aria-hidden="true"></span>
                 <span>@message</span>
             </div>
         }
@@ -46,7 +46,7 @@ else
 }
 
 <div class="d-flex align-items-center justify-content-between">
-    <h1 class="status-section-title mb-0">Sub-services</h1>
+    <h1 class="data-page-title status-section-title mb-0">Sub-services</h1>
     <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="RefreshSubServiceHealthAsync" disabled="@refreshingSubServices">
         @(refreshingSubServices ? "Checking…" : "Refresh")
     </button>
@@ -59,7 +59,7 @@ else
 else if (subServiceHealth.All(row => !row.Configured))
 {
     <div class="health-row health-ok">
-        <span class="health-icon health-icon-ok" aria-hidden="true"></span>
+        <span class="status-icon status-icon-ok health-icon" aria-hidden="true"></span>
         <span>No sub-services configured.</span>
     </div>
 }
@@ -71,7 +71,7 @@ else
             <div class="health-row">
                 @if (row.Success)
                 {
-                    <span class="health-icon health-icon-ok" aria-hidden="true"></span>
+                    <span class="status-icon status-icon-ok health-icon" aria-hidden="true"></span>
                     <span>
                         <strong>
                             @if (row.Url is not null)
@@ -91,7 +91,7 @@ else
                 }
                 else
                 {
-                    <span class="health-icon health-icon-warning" aria-hidden="true"></span>
+                    <span class="status-icon status-icon-warning health-icon" aria-hidden="true"></span>
                     <span>
                         <strong>
                             @if (row.Url is not null)
@@ -111,7 +111,7 @@ else
 }
 
 <div class="d-flex align-items-center justify-content-between">
-    <h1 class="status-section-title mb-0">Image Cache</h1>
+    <h1 class="data-page-title status-section-title mb-0">Image Cache</h1>
     @if (!confirmingPurge)
     {
         <button class="btn btn-sm btn-outline-danger" type="button" @onclick="() => confirmingPurge = true" disabled="@purging">
@@ -177,7 +177,7 @@ else
     </div>
 }
 
-<h1 class="status-section-title">Disk Space</h1>
+<h1 class="data-page-title status-section-title">Disk Space</h1>
 
 @if (diskSpace is null)
 {
@@ -190,7 +190,7 @@ else if (diskSpace.Count == 0)
 else
 {
     <div class="disk-space-table">
-        <div class="disk-space-row disk-space-header">
+        <div class="data-table-row data-table-header disk-space-row disk-space-header">
             <span>Location</span>
             <span>Used Space</span>
             <span>Free Space</span>
@@ -199,7 +199,7 @@ else
         </div>
         @foreach (var location in diskSpace)
         {
-            <div class="disk-space-row">
+            <div class="data-table-row disk-space-row">
                 <span class="disk-space-location">
                     @if (!string.IsNullOrEmpty(location.Label))
                     {
@@ -222,7 +222,7 @@ else
     </div>
 }
 
-<h1 class="status-section-title">About</h1>
+<h1 class="data-page-title status-section-title">About</h1>
 
 <div class="about-table">
     <div class="about-row">

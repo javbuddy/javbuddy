@@ -11,7 +11,7 @@
 
 <PageTitle>Missing · Javbuddy</PageTitle>
 
-<h1 class="missing-title">Missing</h1>
+<h1 class="data-page-title missing-title">Missing</h1>
 
 @if (!loaded)
 {
@@ -28,7 +28,7 @@ else if (total == 0)
    its JS holds on to it for the page's lifetime. Its row geometry needs every row to be the same
    height, which is why each cell stays on one line (the full text is in the tooltip). *@
 <div class="missing-table @(loaded && total > 0 ? "" : "missing-table-hidden")">
-    <div class="missing-row missing-header">
+    <div class="data-table-row data-table-stack data-table-header missing-row missing-header">
         <span>Code</span>
         <span>Title</span>
         <span>Studio</span>
@@ -50,18 +50,18 @@ else if (total == 0)
         <div class="missing-rows">
             @foreach (var movie in movies)
             {
-                <div class="missing-row missing-row-item" @key="movie.Id">
+                <div class="data-table-row data-table-stack missing-row missing-row-item" @key="movie.Id">
                     <span class="missing-code missing-cell" title="@movie.Code">@movie.Code</span>
-                    <a class="missing-title-link missing-cell" href="@($"/movies/{Uri.EscapeDataString(movie.Code ?? string.Empty)}")" title="@movie.DisplayName">@movie.DisplayName</a>
+                    <a class="data-table-link missing-title-link missing-cell" href="@($"/movies/{Uri.EscapeDataString(movie.Code ?? string.Empty)}")" title="@movie.DisplayName">@movie.DisplayName</a>
                     <span class="missing-cell" title="@movie.MetaStudio">@(movie.MetaStudio ?? "—")</span>
                     <span class="missing-cell">@(movie.MetaReleaseDate is { } d ? d.ToString("MMM d yyyy") : "—")</span>
                     <span class="missing-status">
                         @if (movie.MetaFetchedAt is null)
                         {
-                            <span class="missing-icon missing-icon-warning" aria-hidden="true" title="No metadata fetched yet"></span>
+                            <span class="status-icon status-icon-warning" aria-hidden="true" title="No metadata fetched yet"></span>
                         }
                         <button class="missing-icon-btn" type="button" @onclick="() => OpenSearch(movie)" title="Search">
-                            <span class="missing-icon missing-icon-search" aria-hidden="true"></span>
+                            <span class="status-icon missing-icon-search" aria-hidden="true"></span>
                         </button>
                     </span>
                 </div>

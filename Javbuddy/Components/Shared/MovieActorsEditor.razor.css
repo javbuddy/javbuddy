@@ -31,7 +31,7 @@
 }
 
 .movie-actors-hint {
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .movie-actors-error {
@@ -64,7 +64,7 @@
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background-color: #2f8fd6;
+    background-color: var(--jb-accent);
     color: #ffffff;
     display: flex;
     align-items: center;
@@ -134,7 +134,7 @@
 }
 
 .movie-actors-item-unmatched .movie-actors-name {
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 /* CastSearchAdd's own top margin is sized for Movie Detail's Cast section. */

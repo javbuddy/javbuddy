@@ -3,7 +3,7 @@
     gap: 0.5rem;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--jb-border);
     flex-wrap: wrap;
 }
 
@@ -56,7 +56,7 @@
 }
 
 :root[data-theme="dark"] .mediainfo-version-tabs {
-    border-color: #363c4a;
+    border-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .mediainfo-version-tab {
@@ -71,8 +71,8 @@
 }
 
 :root[data-theme="dark"] .mediainfo-version-tab.active {
-    background-color: #2f8fd6;
-    border-color: #2f8fd6;
+    background-color: var(--jb-accent);
+    border-color: var(--jb-accent);
     color: #ffffff;
 }
 

@@ -33,11 +33,11 @@
 else
 {
     <div class="import-stats-table">
-        <div class="import-stats-row import-stats-header">
+        <div class="data-table-row data-table-header import-stats-row import-stats-header">
             <span>When</span>
             <span>Result</span>
         </div>
-        <div class="import-stats-row">
+        <div class="data-table-row import-stats-row">
             <span>@lastCompletedRun.EndedAt!.Value.ToLocalTime().ToString("g")</span>
             <span class="@(lastCompletedRun.Success ? "import-stats-highlight" : "import-stats-error")">
                 @(lastCompletedRun.Success ? MoviesScannedText(lastCompletedRun) : lastCompletedRun.ErrorMessage)

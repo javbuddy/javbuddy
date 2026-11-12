@@ -16,11 +16,11 @@
 }
 
 .settings-link:hover {
-    color: #1c9fc4;
+    color: var(--jb-info);
 }
 
 :root[data-theme="dark"] .settings-link {
-    color: #dfe2e8;
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .settings-link:hover {

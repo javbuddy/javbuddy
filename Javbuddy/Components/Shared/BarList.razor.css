@@ -29,17 +29,17 @@
 .bar-list-fill {
     display: block;
     height: 100%;
-    background: #2f8fd6;
+    background: var(--jb-accent);
     border-radius: 3px;
 }
 
 .bar-list-value {
-    color: #6c757d;
+    color: var(--jb-muted);
     font-variant-numeric: tabular-nums;
 }
 
 .bar-list-empty {
-    color: #6c757d;
+    color: var(--jb-muted);
     font-size: 0.85rem;
     margin: 0;
 }

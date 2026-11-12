@@ -16,13 +16,13 @@
 }
 
 .movie-delete-files-note {
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
 .movie-delete-files-error,
 .movie-delete-files-warning {
     padding: 0.45rem 0.6rem;
-    border: 1px solid #dc3545;
+    border: 1px solid var(--jb-danger);
     border-radius: 4px;
     background: rgba(220, 53, 69, 0.15);
     color: #f1aeb5;
@@ -63,7 +63,7 @@
 
 .movie-delete-files-size,
 .movie-delete-files-total {
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     white-space: nowrap;
 }
 

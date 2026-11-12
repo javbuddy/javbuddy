@@ -9,15 +9,15 @@
 }
 
 .seeds-badge-none {
-    background-color: #dc3545;
+    background-color: var(--jb-danger);
 }
 
 .seeds-badge-low {
-    background-color: #d9822b;
+    background-color: var(--jb-status-missing);
 }
 
 .seeds-badge-good {
-    background-color: #2fa84f;
+    background-color: var(--jb-status-got);
 }
 
 /* Bootstrap's own table theming only kicks in under [data-bs-theme=dark], which this app never
@@ -25,13 +25,13 @@
    CSS variables unless overridden here, same as every other Bootstrap component this app patches
    for dark mode in app.css. */
 :root[data-theme="dark"] .modal-shell-body .table {
-    --bs-table-color: #dfe2e8;
+    --bs-table-color: var(--jb-dark-text);
     --bs-table-bg: transparent;
     --bs-table-border-color: #3d4452;
     --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
-    --bs-table-striped-color: #dfe2e8;
+    --bs-table-striped-color: var(--jb-dark-text);
     --bs-table-active-bg: rgba(255, 255, 255, 0.06);
-    --bs-table-active-color: #dfe2e8;
+    --bs-table-active-color: var(--jb-dark-text);
     --bs-table-hover-bg: rgba(255, 255, 255, 0.04);
-    --bs-table-hover-color: #dfe2e8;
+    --bs-table-hover-color: var(--jb-dark-text);
 }

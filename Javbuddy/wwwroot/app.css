@@ -11,6 +11,29 @@ html, body {
     scroll-behavior: auto;
 }
 
+/* Color tokens — the app's most repeated hard-coded colors, named by role. Each keeps one value in both
+   themes (no per-theme switching yet); the dark-* ones are the dark theme's greys. Custom properties
+   cross CSS isolation scopes, so any .razor.css can use them. See docs/ui-guidelines.md. */
+:root {
+    --jb-accent: #2f8fd6;
+    --jb-status-wanted: #2f8fd6;
+    --jb-status-downloading: #e6b800;
+    --jb-status-got: #2fa84f;
+    --jb-status-missing: #d9822b;
+    --jb-info: #1c9fc4;
+    --jb-danger: #dc3545;
+    --jb-muted: #6c757d;
+    --jb-border: #dee2e6;
+    --jb-dark-bg: #1b1e27;
+    --jb-dark-surface: #242833;
+    --jb-dark-border: #363c4a;
+    --jb-dark-border-strong: #3d4354;
+    --jb-dark-text: #dfe2e8;
+    --jb-dark-text-dim: #b9bfd1;
+    --jb-dark-muted: #9aa1af;
+    --jb-dark-muted-cool: #94a3b8;
+}
+
 /* The video player modal and the image viewers cover the whole viewport, so the page behind them
    mustn't keep its own scrollbar (next to the player's side panel, or over the viewer's dark
    overlay), or scroll along when the wheel lands outside that panel. */
@@ -83,13 +106,13 @@ h1:focus {
     color-scheme: dark;
     /* Bootstrap's own secondary text (.form-text, captions, …) reads this; its
        light default is near-black and unreadable on dark cards. Matches .text-muted. */
-    --bs-secondary-color: #9aa1af;
+    --bs-secondary-color: var(--jb-dark-muted);
     --bs-secondary-color-rgb: 154, 161, 175;
 }
 
 :root[data-theme="dark"] body {
-    background-color: #1b1e27;
-    color: #dfe2e8;
+    background-color: var(--jb-dark-bg);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] a,
@@ -98,16 +121,16 @@ h1:focus {
 }
 
 :root[data-theme="dark"] .card {
-    background-color: #242833;
-    border-color: #363c4a;
-    color: #dfe2e8;
+    background-color: var(--jb-dark-surface);
+    border-color: var(--jb-dark-border);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .form-control,
 :root[data-theme="dark"] .form-select {
-    background-color: #1b1e27;
+    background-color: var(--jb-dark-bg);
     border-color: #3d4452;
-    color: #dfe2e8;
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .form-control::placeholder {
@@ -117,21 +140,21 @@ h1:focus {
 :root[data-theme="dark"] .form-control:disabled,
 :root[data-theme="dark"] .form-select:disabled {
     background-color: #2a2f3b;
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
 }
 
 :root[data-theme="dark"] .form-control:focus,
 :root[data-theme="dark"] .form-select:focus {
-    background-color: #1b1e27;
-    color: #dfe2e8;
+    background-color: var(--jb-dark-bg);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .text-muted {
-    color: #9aa1af !important;
+    color: var(--jb-dark-muted) !important;
 }
 
 :root[data-theme="dark"] hr {
-    border-color: #363c4a;
+    border-color: var(--jb-dark-border);
     opacity: 1;
 }
 
@@ -165,7 +188,7 @@ h1:focus {
 }
 
 :root[data-theme="dark"] .btn-outline-secondary {
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
     border-color: #4a5062;
 }
 
@@ -176,20 +199,20 @@ h1:focus {
 }
 
 :root[data-theme="dark"] .table {
-    --bs-table-color: #dfe2e8;
+    --bs-table-color: var(--jb-dark-text);
     --bs-table-bg: transparent;
-    --bs-table-border-color: #363c4a;
+    --bs-table-border-color: var(--jb-dark-border);
     --bs-table-striped-bg: rgba(255, 255, 255, 0.03);
-    --bs-table-striped-color: #dfe2e8;
+    --bs-table-striped-color: var(--jb-dark-text);
     --bs-table-active-bg: rgba(255, 255, 255, 0.06);
-    --bs-table-active-color: #dfe2e8;
+    --bs-table-active-color: var(--jb-dark-text);
     --bs-table-hover-bg: rgba(255, 255, 255, 0.04);
-    --bs-table-hover-color: #dfe2e8;
-    color: #dfe2e8;
+    --bs-table-hover-color: var(--jb-dark-text);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .form-check-input {
-    background-color: #1b1e27;
+    background-color: var(--jb-dark-bg);
     border-color: #4a5062;
 }
 
@@ -248,4 +271,189 @@ h1:focus {
     height: 100vh;
     z-index: 35;
     background: transparent;
+}
+
+/* Dark page toolbar (Movie Detail, Actor Detail/Edit/Missing, Torrent Sort) and its buttons, including
+   ToolbarMenuButton. A page that needs a different edge or spacing keeps a scoped override on its own
+   class next to `page-toolbar` (scoped rules win on specificity). The toolbar's look is deliberately the
+   same in both themes. */
+.page-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    background-color: #35394a;
+    border-radius: 4px 4px 0 0;
+    padding: 0.5rem 0.75rem;
+    margin: 0 -0.01px;
+}
+
+.page-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    color: #cfd3de;
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.4rem 0.6rem;
+    border-radius: 3px;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.page-toolbar-btn:hover:not(:disabled) {
+    background-color: #454a5e;
+    color: #ffffff;
+}
+
+.page-toolbar-btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.page-toolbar-btn-danger:hover:not(:disabled) {
+    background-color: #7a2e33;
+    color: #ffffff;
+}
+
+.page-toolbar-btn-favorite.active {
+    color: #e23b57;
+}
+
+.page-toolbar-btn-favorite.active:hover:not(:disabled) {
+    background-color: rgba(226, 59, 87, 0.15);
+    color: #e23b57;
+}
+
+.page-toolbar-sep {
+    width: 1px;
+    align-self: stretch;
+    background-color: #454a5e;
+    margin: 0.25rem 0.25rem;
+}
+
+/* Data-table page chrome shared by System > Tasks/Status, Activity > Queue/History, Missing and Library
+   Import: the page title, the header row, the grid row with its divider, the movie link, the mask-image
+   status icons and the download-status badges. Each page keeps only its own grid-template-columns, max
+   width and genuine differences in its scoped CSS (which wins on specificity). `data-table-stack` opts a
+   row (and its header) into the phone layout: header hidden, one column (the page's scoped rule sets
+   `grid-template-columns: 1fr`, since its own column template would otherwise win). */
+.data-page-title {
+    font-size: 1.6rem;
+    font-weight: 400;
+    color: #333;
+    margin: 0.5rem 0 1rem;
+}
+
+:root[data-theme="dark"] .data-page-title {
+    color: var(--jb-dark-text);
+}
+
+.data-table-header {
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid var(--jb-border);
+}
+
+:root[data-theme="dark"] .data-table-header {
+    color: var(--jb-dark-text-dim);
+    border-bottom-color: #3d4452;
+}
+
+.data-table-row {
+    display: grid;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 0.25rem;
+}
+
+.data-table-row:not(.data-table-header) {
+    border-bottom: 1px solid #eee;
+}
+
+:root[data-theme="dark"] .data-table-row:not(.data-table-header) {
+    border-bottom-color: var(--jb-dark-border);
+}
+
+@media (max-width: 900px) {
+    .data-table-stack {
+        gap: 0.15rem;
+        padding: 0.75rem 0.25rem;
+    }
+
+    .data-table-stack.data-table-header {
+        display: none;
+    }
+}
+
+.data-table-link {
+    color: var(--jb-info);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.data-table-link:hover {
+    text-decoration: underline;
+}
+
+.status-icon {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    background-color: currentColor;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+}
+
+.status-icon-warning {
+    color: var(--jb-status-missing);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16z'/%3E%3Cpath fill='white' d='M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16z'/%3E%3Cpath fill='white' d='M7.002 11a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 4.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 4.995z'/%3E%3C/svg%3E");
+}
+
+.status-icon-ok {
+    color: var(--jb-status-got);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l4.98-5.25a.75.75 0 0 0-.02-1.06z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l4.98-5.25a.75.75 0 0 0-.02-1.06z'/%3E%3C/svg%3E");
+}
+
+.activity-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+.activity-badge-queued {
+    background-color: var(--jb-muted);
+}
+
+.activity-badge-downloading {
+    background-color: var(--jb-info);
+}
+
+.activity-badge-seeding {
+    background-color: #7952b3;
+}
+
+.activity-badge-completed {
+    background-color: var(--jb-status-got);
+}
+
+.activity-badge-removed {
+    background-color: var(--jb-muted);
+}
+
+.activity-badge-error {
+    background-color: var(--jb-danger);
 }

@@ -19,7 +19,7 @@
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background-color: #2f8fd6;
+    background-color: var(--jb-accent);
     color: #fff;
     display: flex;
     align-items: center;
@@ -66,7 +66,7 @@ a.cleanup-actor-avatar:hover {
 }
 
 a.cleanup-actor-name:hover {
-    color: #1c9fc4;
+    color: var(--jb-info);
 }
 
 .cleanup-actor-avatar-wrap {
@@ -117,7 +117,7 @@ a.cleanup-actor-name:hover {
 
     .cleanup-edit-cast-btn:hover,
     .cleanup-edit-tags-btn:hover {
-        background: #dee2e6;
+        background: var(--jb-border);
         color: #212529;
     }
 
@@ -169,7 +169,7 @@ a.cleanup-actor-name:hover {
     appearance: none;
     background: none;
     border: none;
-    color: #6c757d;
+    color: var(--jb-muted);
     cursor: pointer;
     font-size: 0.9rem;
     line-height: 1;
@@ -183,19 +183,19 @@ a.cleanup-actor-name:hover {
 :root[data-theme="dark"] .cleanup-edit-cast-btn,
 :root[data-theme="dark"] .cleanup-edit-tags-btn {
     background-color: #2c3240;
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
 }
 
 :root[data-theme="dark"] .cleanup-edit-cast-btn:hover,
 :root[data-theme="dark"] .cleanup-edit-tags-btn:hover {
-    background-color: #363c4a;
-    color: #dfe2e8;
+    background-color: var(--jb-dark-border);
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] .cleanup-tag {
     background-color: #2c3240;
     border-color: #4a5062;
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
 }
 
 :root[data-theme="dark"] .cleanup-tag-implied {
@@ -203,7 +203,7 @@ a.cleanup-actor-name:hover {
 }
 
 :root[data-theme="dark"] .cleanup-tag-remove-btn {
-    color: #9aa1af;
+    color: var(--jb-dark-muted);
 }
 
 :root[data-theme="dark"] .cleanup-tag-remove-btn:hover {
@@ -216,7 +216,7 @@ a.cleanup-actor-name:hover {
 }
 
 :root[data-theme="dark"] .cleanup-actor-name {
-    color: #dfe2e8;
+    color: var(--jb-dark-text);
 }
 
 :root[data-theme="dark"] a.cleanup-actor-name:hover {

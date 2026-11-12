@@ -9,7 +9,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    border-bottom: 1px solid #363c4a;
+    border-bottom: 1px solid var(--jb-dark-border);
     margin-bottom: 0.9rem;
     padding-bottom: 0.5rem;
 }
@@ -309,9 +309,9 @@
     min-width: 0;
     border-radius: 6px;
     overflow: hidden;
-    background-color: #242833;
+    background-color: var(--jb-dark-surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    color: #dfe2e8;
+    color: var(--jb-dark-text);
     transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 
@@ -435,7 +435,7 @@
 .movie-scenes-card-title-default {
     font-style: italic;
     font-weight: 500;
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
 }
 
 .movie-scenes-range {
@@ -471,7 +471,7 @@
     flex-wrap: wrap;
     gap: 0.2rem 0.6rem;
     font-size: 0.75rem;
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
 }
 
 /* A highlight's inherited actors: muted and italic, like the editor's implied chips. */
@@ -497,7 +497,7 @@
     height: 18px;
     border-radius: 50%;
     object-fit: cover;
-    background-color: #363c4a;
+    background-color: var(--jb-dark-border);
 }
 
 .movie-scenes-actor-initial {
@@ -517,10 +517,10 @@
 
 .movie-scenes-tag {
     padding: 0 0.4rem;
-    border: 1px solid #3d4354;
+    border: 1px solid var(--jb-dark-border-strong);
     border-radius: 999px;
     font-size: 0.7rem;
-    color: #b9bfd1;
+    color: var(--jb-dark-text-dim);
 }
 
 /* Phones: pins keep only their icon (the labels would collide), the shelf swipes a card and a bit,

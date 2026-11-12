@@ -1,25 +1,25 @@
 /* The drop zone is copied from ActorImageUploadModal.razor.css — CSS isolation does not share it. */
-.movie-image-upload-divider { display: flex; align-items: center; gap: 0.75rem; margin: 1.25rem 0; color: #9aa1af; font-size: 0.8rem; }
-.movie-image-upload-divider::before, .movie-image-upload-divider::after { content: ""; flex: 1; border-top: 1px solid #3d4354; }
+.movie-image-upload-divider { display: flex; align-items: center; gap: 0.75rem; margin: 1.25rem 0; color: var(--jb-dark-muted); font-size: 0.8rem; }
+.movie-image-upload-divider::before, .movie-image-upload-divider::after { content: ""; flex: 1; border-top: 1px solid var(--jb-dark-border-strong); }
 .movie-image-upload-progress { display: grid; gap: 0.35rem; margin-top: 1rem; font-size: 0.85rem; }
-:root[data-theme="dark"] .modal-shell-panel .form-control { color: #fff; background: #14161d; border-color: #3d4354; }
+:root[data-theme="dark"] .modal-shell-panel .form-control { color: #fff; background: #14161d; border-color: var(--jb-dark-border-strong); }
 
 .upload-dropzone {
     position: relative;
     padding: 2rem 1.5rem;
     text-align: center;
     color: #fff;
-    background-color: #1b1e27;
+    background-color: var(--jb-dark-bg);
     border: 2px dashed #454a5e;
     border-radius: 6px;
     cursor: pointer;
     transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.upload-dropzone-hint { color: #9aa1af; }
+.upload-dropzone-hint { color: var(--jb-dark-muted); }
 
 .upload-dropzone:hover {
-    border-color: #2f8fd6;
+    border-color: var(--jb-accent);
     background-color: #1e2430;
 }
 

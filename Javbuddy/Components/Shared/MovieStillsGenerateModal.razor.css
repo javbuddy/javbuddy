@@ -1,11 +1,11 @@
 :root[data-theme="dark"] .modal-shell-panel .form-control,
-:root[data-theme="dark"] .modal-shell-panel .form-select { color: #fff; background-color: #14161d; border-color: #3d4354; }
+:root[data-theme="dark"] .modal-shell-panel .form-select { color: #fff; background-color: #14161d; border-color: var(--jb-dark-border-strong); }
 .stills-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; }
 .stills-option { display: grid; gap: 0.25rem; }
 .stills-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }
-.stills-tile { display: grid; gap: 0.25rem; padding: 0.35rem; border: 2px solid transparent; border-radius: 6px; cursor: pointer; background: #1b1e27; }
+.stills-tile { display: grid; gap: 0.25rem; padding: 0.35rem; border: 2px solid transparent; border-radius: 6px; cursor: pointer; background: var(--jb-dark-bg); }
 .stills-tile img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; }
-.stills-tile-selected { border-color: #2f8fd6; }
+.stills-tile-selected { border-color: var(--jb-accent); }
 .stills-tile-caption { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: #fff; }
 
 /* The scene cards' generating shimmer (ScenePreviewPlaceholder.razor.css), copied because CSS isolation does not share it. */

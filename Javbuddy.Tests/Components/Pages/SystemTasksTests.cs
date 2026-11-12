@@ -83,7 +83,7 @@ public class SystemTasksTests : BunitContext
         var dismissBtn = cut.Find(".tasks-dismiss-btn");
         Assert.NotNull(dismissBtn);
         Assert.Equal("Mark as Failed", dismissBtn.GetAttribute("title"));
-        Assert.Contains("tasks-icon-running", cut.Find(".tasks-icon").ClassName);
+        Assert.Contains("tasks-icon-running", cut.Find(".status-icon").ClassName);
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class SystemTasksTests : BunitContext
         var cut = Render<SystemTasks>();
 
         Assert.Empty(cut.FindAll(".tasks-dismiss-btn"));
-        Assert.Contains("tasks-icon-ok", cut.Find(".tasks-icon").ClassName);
+        Assert.Contains("status-icon-ok", cut.Find(".status-icon").ClassName);
     }
 
     [Fact]
@@ -144,7 +144,7 @@ public class SystemTasksTests : BunitContext
         cut.WaitForAssertion(() =>
         {
             Assert.Empty(cut.FindAll(".tasks-dismiss-btn"));
-            Assert.Contains("tasks-icon-warning", cut.Find(".tasks-icon").ClassName);
+            Assert.Contains("status-icon-warning", cut.Find(".status-icon").ClassName);
         });
     }
 
@@ -174,7 +174,7 @@ public class SystemTasksTests : BunitContext
         cut.WaitForAssertion(() =>
         {
             Assert.DoesNotContain("No task runs yet.", cut.Markup);
-            Assert.Contains("tasks-icon-ok", cut.Find(".tasks-icon").ClassName);
+            Assert.Contains("status-icon-ok", cut.Find(".status-icon").ClassName);
         });
     }
 

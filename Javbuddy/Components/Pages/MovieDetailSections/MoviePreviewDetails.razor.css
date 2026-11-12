@@ -1,6 +1,6 @@
 .movie-hero {
     position: relative;
-    background-color: #1b1e27;
+    background-color: var(--jb-dark-bg);
     background-size: cover;
     background-position: center 20%;
     border-radius: 0 0 4px 4px;

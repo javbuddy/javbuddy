@@ -12,7 +12,7 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--scene-editor-muted, #94a3b8);
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
     cursor: help;
     transition: color 0.15s ease, background-color 0.15s ease;
 }

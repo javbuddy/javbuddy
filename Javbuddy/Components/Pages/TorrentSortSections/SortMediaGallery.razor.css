@@ -8,7 +8,7 @@
 .sort-gallery-heading {
     font-size: 0.8rem;
     font-weight: 600;
-    color: #6c757d;
+    color: var(--jb-muted);
     margin-bottom: 0.4rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
@@ -26,7 +26,7 @@
     display: block;
     border-radius: 3px;
     overflow: hidden;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--jb-border);
 }
 
     .sort-gallery-thumb-link:hover {
@@ -64,15 +64,15 @@
     .sort-screenshot-action-fanart:hover,
     .sort-screenshot-action-poster.is-active,
     .sort-screenshot-action-fanart.is-active {
-        background: #1c9fc4;
+        background: var(--jb-info);
         color: #06222b;
-        border-color: #1c9fc4;
+        border-color: var(--jb-info);
     }
 
     .sort-screenshot-action-delete:hover {
-        background: #dc3545;
+        background: var(--jb-danger);
         color: #ffffff;
-        border-color: #dc3545;
+        border-color: var(--jb-danger);
     }
 
 .sort-screenshot-badges {
@@ -92,14 +92,14 @@
     align-items: center;
     justify-content: center;
     color: #06222b;
-    background: #1c9fc4;
+    background: var(--jb-info);
 }
 
 :root[data-theme="dark"] .sort-movie-gallery-section {
-    background-color: #1b1e27;
-    border-top-color: #363c4a;
+    background-color: var(--jb-dark-bg);
+    border-top-color: var(--jb-dark-border);
 }
 
 :root[data-theme="dark"] .sort-gallery-thumb-link {
-    border-color: #363c4a;
+    border-color: var(--jb-dark-border);
 }
