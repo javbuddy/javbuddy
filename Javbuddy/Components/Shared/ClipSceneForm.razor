@@ -1,0 +1,47 @@
+@* A scene's add/edit form in ClipEditor. Its own component, like ClipHighlightForm and ClipApexForm, so
+   typing in a field re-renders only this form (the input events call back into this component) and not
+   ClipEditor's whole tree. ClipEditor validates and saves; it also owns the model, since the m / Shift+M
+   shortcuts and the Now buttons set its times. The scene's actors and tags live beside the form in ClipEditor. *@
+<form class="scene-editor-form" @onsubmit="OnSave" @onsubmit:preventDefault>
+    <label class="scene-editor-field">
+        <span class="scene-editor-label">Title</span>
+        <input class="scene-editor-input scene-editor-title-input" type="text" maxlength="200" placeholder="Scene @(Model.SceneId is { } id ? Scenes.FirstOrDefault(s => s.Id == id)?.Position : Scenes.Count + 1)" @bind="Model.Title" @bind:event="oninput" />
+    </label>
+    <div class="scene-editor-times">
+        <label class="scene-editor-field">
+            <span class="scene-editor-label">Start</span>
+            <ClipTimeField @bind-Value="Model.Start" ClassPrefix="scene-editor" InputClass="scene-editor-start-input" NowClass="scene-editor-now-btn scene-editor-start-now-btn"
+                           OnNow="() => OnNow.InvokeAsync(false)" NowTitle="Set from the player's current time" />
+        </label>
+        <label class="scene-editor-field">
+            <span class="scene-editor-label">End <span class="scene-editor-hint">(optional)</span></span>
+            <ClipTimeField @bind-Value="Model.End" ClassPrefix="scene-editor" Placeholder="next scene" InputClass="scene-editor-end-input" NowClass="scene-editor-now-btn scene-editor-end-now-btn"
+                           OnNow="() => OnNow.InvokeAsync(true)" NowTitle="Set from the player's current time">
+                @if (!string.IsNullOrEmpty(Model.End))
+                {
+                    <button type="button" class="scene-editor-icon-btn scene-editor-clear-end-btn" @onclick="() => Model.End = string.Empty" aria-label="Clear end" title="Clear end (run to the next scene)">×</button>
+                }
+            </ClipTimeField>
+        </label>
+    </div>
+    <div class="scene-editor-form-actions">
+        <button type="submit" class="scene-editor-btn scene-editor-save-btn" disabled="@Busy">@(Model.SceneId is null ? "Add" : "Save")</button>
+        <button type="button" class="scene-editor-btn scene-editor-cancel-btn" @onclick="OnCancel" disabled="@Busy">Cancel</button>
+    </div>
+</form>
+
+@code {
+    [Parameter, EditorRequired] public SceneFormModel Model { get; set; } = null!;
+
+    /// <summary>The movie's scenes, for the "Scene N" title placeholder.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<SceneItem> Scenes { get; set; } = [];
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback OnSave { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>A Now button: true for the end, false for the start.</summary>
+    [Parameter] public EventCallback<bool> OnNow { get; set; }
+}

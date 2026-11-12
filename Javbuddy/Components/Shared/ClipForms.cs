@@ -16,6 +16,16 @@ public sealed class SceneActorFormModel(IReadOnlyList<SceneActorItem> own) : ICl
     public HashSet<int>? ActorIds { get; set; } = own.Count > 0 ? [.. own.Select(a => a.ActorId)] : null;
 }
 
+/// <summary>ClipEditor's scene add/edit form state, shared with ClipSceneForm (the Now buttons and the
+/// shortcuts set its times from ClipEditor). The scene's actors and tags apply at once, outside this model.</summary>
+public sealed class SceneFormModel
+{
+    public int? SceneId { get; init; }
+    public string Title { get; set; } = string.Empty;
+    public string Start { get; set; } = string.Empty;
+    public string End { get; set; } = string.Empty;
+}
+
 /// <summary>ClipEditor's highlight add/edit form state, shared with ClipHighlightForm (the shortcuts set
 /// its times from ClipEditor).</summary>
 public sealed class HighlightFormModel : IClipActorForm

@@ -208,14 +208,6 @@
 
     private const int ThumbWidth = 64;
 
-    private sealed class SceneForm
-    {
-        public int? SceneId { get; init; }
-        public string Title { get; set; } = string.Empty;
-        public string Start { get; set; } = string.Empty;
-        public string End { get; set; } = string.Empty;
-    }
-
     private IReadOnlyList<SceneItem> scenes = [];
     private IReadOnlyList<HighlightItem> highlights = [];
     private IReadOnlyList<ApexItem> apexes = [];
@@ -232,7 +224,7 @@
     private IJSObjectReference? hoverPreviews;
     private readonly HashSet<int> collapsedSceneIds = [];
     private bool subscribed;
-    private SceneForm? sceneForm;
+    private SceneFormModel? sceneForm;
     private HighlightFormModel? highlightForm;
     private ApexFormModel? apexForm;
     private ApexWindow defaultApexWindow = ApexWindow.Default;
@@ -637,14 +629,14 @@
     {
         error = null;
         var time = await CurrentTimeAsync();
-        sceneForm = new SceneForm { Start = time is { } t ? SceneTimeFormat.FormatPrecise(t) : string.Empty };
+        sceneForm = new SceneFormModel { Start = time is { } t ? SceneTimeFormat.FormatPrecise(t) : string.Empty };
     }
 
     private async Task StartEditSceneAsync(SceneItem scene)
     {
         error = null;
         await ReloadCastAsync();
-        sceneForm = new SceneForm
+        sceneForm = new SceneFormModel
         {
             SceneId = scene.Id,
             Title = scene.Title ?? string.Empty,
@@ -1094,34 +1086,10 @@
     }
 
     private RenderFragment SceneFormFragment() => @<div class="scene-editor-form-wrap">
-    <form class="scene-editor-form" @onsubmit="SaveSceneAsync" @onsubmit:preventDefault>
-        <label class="scene-editor-field">
-            <span class="scene-editor-label">Title</span>
-            <input class="scene-editor-input scene-editor-title-input" type="text" maxlength="200" placeholder="Scene @(sceneForm?.SceneId is { } id ? scenes.FirstOrDefault(s => s.Id == id)?.Position : scenes.Count + 1)" @bind="sceneForm!.Title" @bind:event="oninput" />
-        </label>
-        <div class="scene-editor-times">
-            <label class="scene-editor-field">
-                <span class="scene-editor-label">Start</span>
-                <ClipTimeField @bind-Value="sceneForm!.Start" ClassPrefix="scene-editor" InputClass="scene-editor-start-input" NowClass="scene-editor-now-btn scene-editor-start-now-btn"
-                               OnNow="() => SetSceneTimeFromPlayerAsync(end: false)" NowTitle="Set from the player's current time" />
-            </label>
-            <label class="scene-editor-field">
-                <span class="scene-editor-label">End <span class="scene-editor-hint">(optional)</span></span>
-                <ClipTimeField @bind-Value="sceneForm!.End" ClassPrefix="scene-editor" Placeholder="next scene" InputClass="scene-editor-end-input" NowClass="scene-editor-now-btn scene-editor-end-now-btn"
-                               OnNow="() => SetSceneTimeFromPlayerAsync(end: true)" NowTitle="Set from the player's current time">
-                    @if (!string.IsNullOrEmpty(sceneForm!.End))
-                    {
-                        <button type="button" class="scene-editor-icon-btn scene-editor-clear-end-btn" @onclick="() => sceneForm!.End = string.Empty" aria-label="Clear end" title="Clear end (run to the next scene)">×</button>
-                    }
-                </ClipTimeField>
-            </label>
-        </div>
-        <div class="scene-editor-form-actions">
-            <button type="submit" class="scene-editor-btn scene-editor-save-btn" disabled="@busy">@(sceneForm!.SceneId is null ? "Add" : "Save")</button>
-            <button type="button" class="scene-editor-btn scene-editor-cancel-btn" @onclick="() => { sceneForm = null; error = null; }" disabled="@busy">Cancel</button>
-        </div>
-    </form>
-    @* Outside the <form>: Enter in the tag search must not submit the scene's times/title.
+    <ClipSceneForm Model="sceneForm!" Scenes="scenes" Busy="busy"
+                   OnSave="SaveSceneAsync" OnCancel="() => { sceneForm = null; error = null; }"
+                   OnNow="end => SetSceneTimeFromPlayerAsync(end)" />
+    @* Outside the form: Enter in the tag search must not submit the scene's times/title.
        Actor and tag changes apply immediately, independent of Save. *@
     @if (sceneForm?.SceneId is { } editingId && scenes.FirstOrDefault(s => s.Id == editingId) is { } editing)
     {
