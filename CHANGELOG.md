@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **The clip editor's new-scene form no longer has a large gap between Title and Start.** The scene form's styles had been split out with a rule that gave the Title field a tall flex-basis; the fields stack tightly again.
+
 ## [0.6.2] - 2026-11-12
 
 ### Added

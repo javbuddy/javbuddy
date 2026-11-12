@@ -58,6 +58,13 @@
     background-color: var(--scene-editor-form-bg, rgba(255, 255, 255, 0.03));
 }
 
+.scene-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
 .scene-editor-times {
     display: flex;
     flex-wrap: wrap;
@@ -65,10 +72,6 @@
 }
 
 .scene-editor-times .scene-editor-field {
-    flex: 1 1 8rem;
-}
-
-.scene-editor-field {
     flex: 1 1 8rem;
 }
 
