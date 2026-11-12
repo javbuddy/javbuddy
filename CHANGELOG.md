@@ -7,6 +7,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ### Fixed
 
 - **The clip editor's new-scene form no longer has a large gap between Title and Start.** The scene form's styles had been split out with a rule that gave the Title field a tall flex-basis; the fields stack tightly again.
+- **The delete button on Movie Detail's images is back in the top-right corner and translucent.** Its styling stopped applying when the Images section got the shared section header, so the button showed unstyled in the middle of the image on hover.
 
 ## [0.6.2] - 2026-11-12
 
