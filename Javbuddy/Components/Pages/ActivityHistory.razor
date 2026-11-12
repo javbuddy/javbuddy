@@ -89,7 +89,7 @@ else
         </div>
         @foreach (var row in history.Rows)
         {
-            <div class="data-table-row data-table-stack activity-row activity-row-history">
+            <div class="data-table-row data-table-stack activity-row activity-row-history" @key="row.Id">
                 <a class="data-table-link activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(row.MovieCode)}")">@row.MovieCode</a>
                 <span class="text-break">@row.ReleaseTitle</span>
                 <span>@row.Indexer</span>

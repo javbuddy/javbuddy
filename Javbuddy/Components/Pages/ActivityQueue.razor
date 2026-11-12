@@ -56,7 +56,7 @@ else
         </div>
         @foreach (var row in rows)
         {
-            <div class="data-table-row data-table-stack activity-row activity-row-queue">
+            <div class="data-table-row data-table-stack activity-row activity-row-queue" @key="row.Id">
                 <span><input type="checkbox" checked="@selected.Contains(row.Id)" @onchange="e => selected.Set(row.Id, (bool)e.Value!)" /></span>
                 <a class="data-table-link activity-movie-link" href="@($"/movies/{Uri.EscapeDataString(row.MovieCode)}")">@row.MovieCode</a>
                 <span class="text-break">@row.ReleaseTitle</span>
