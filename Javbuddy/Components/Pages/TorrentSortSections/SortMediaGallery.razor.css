@@ -14,32 +14,6 @@
     letter-spacing: 0.5px;
 }
 
-.sort-gallery-grid {
-    display: flex;
-    gap: 0.5rem;
-    overflow-x: auto;
-    padding-bottom: 0.4rem;
-}
-
-.sort-gallery-thumb-link {
-    flex-shrink: 0;
-    display: block;
-    border-radius: 3px;
-    overflow: hidden;
-    border: 1px solid var(--jb-border);
-}
-
-    .sort-gallery-thumb-link:hover {
-        opacity: 0.85;
-    }
-
-.sort-gallery-thumb {
-    height: 70px;
-    width: auto;
-    display: block;
-    object-fit: cover;
-}
-
 /* Screenshot hover actions (poster/fanart/delete) */
 .sort-screenshot-action {
     width: 30px;
@@ -100,6 +74,3 @@
     border-top-color: var(--jb-dark-border);
 }
 
-:root[data-theme="dark"] .sort-gallery-thumb-link {
-    border-color: var(--jb-dark-border);
-}

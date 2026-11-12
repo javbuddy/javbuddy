@@ -79,10 +79,6 @@
         color: #7d8493;
     }
 
-.movie-hero-rating {
-    color: #f0637a;
-}
-
 .movie-hero-badges {
     display: flex;
     flex-wrap: wrap;
@@ -98,11 +94,6 @@
     padding: 0.2rem 0.55rem;
     font-size: 0.8rem;
     font-weight: 500;
-}
-
-.movie-hero-badge-got {
-    background-color: rgba(47, 168, 79, 0.85);
-    border-color: transparent;
 }
 
 .movie-hero-badge-missing {
@@ -123,30 +114,12 @@
         color: #ffffff;
     }
 
-.movie-hero-cast,
-.movie-hero-notes {
+.movie-hero-cast {
     max-width: 900px;
     font-size: 0.9rem;
     color: #d8dae0;
     margin-bottom: 0.5rem;
 }
-
-.movie-hero-mediainfo {
-    max-width: 900px;
-    font-family: var(--bs-font-monospace);
-    font-size: 0.8rem;
-    color: #d8dae0;
-    margin-bottom: 0.5rem;
-}
-
-.movie-hero-cast-link {
-    color: #5eb4ec;
-    text-decoration: none;
-}
-
-    .movie-hero-cast-link:hover {
-        text-decoration: underline;
-    }
 
 .movie-hero-overview {
     max-width: 900px;

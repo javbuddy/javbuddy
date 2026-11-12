@@ -52,18 +52,6 @@
     font-weight: 400;
 }
 
-.apex-editor-input {
-    width: 100%;
-    min-width: 0;
-    padding: 0.25rem 0.4rem;
-    font-size: 0.8rem;
-    color: var(--scene-editor-fg, #e2e8f0);
-    background-color: var(--scene-editor-input-bg, rgba(255, 255, 255, 0.06));
-    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
-    border-radius: 4px;
-    box-sizing: border-box;
-}
-
 .apex-editor-window-row {
     display: flex;
     gap: 0.25rem;
