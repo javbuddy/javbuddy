@@ -98,8 +98,8 @@
 
         tags = links
             .Select(l => new TagChip(l.TagId, l.Tag.Name, l.Tag.ParentTag?.Name, !l.IsExplicit, l.FromClips))
-            .OrderBy(t => t.ParentName ?? t.Name, StringComparer.CurrentCultureIgnoreCase)
-            .ThenBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
+            .OrderBy(t => t.ParentName ?? t.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
         loadedMovieId = movieId;
         loaded = true;

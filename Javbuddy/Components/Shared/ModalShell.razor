@@ -5,7 +5,7 @@
    a panel with a header (title + close button), a scrolling body and an optional footer.
    The host renders it only while open and supplies the body (and footer) as child content. It focuses
    itself when it opens so Escape works at once (unless a control inside already has focus). *@
-<div @ref="backdrop" class="modal-shell-backdrop @(Themed ? "modal-shell-themed" : "")" @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+<div @ref="backdrop" class="modal-shell-backdrop @(Themed ? "modal-shell-themed" : "")" data-backdrop-dismiss @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
     <div class="modal-shell-panel" role="dialog" aria-modal="true" aria-labelledby="@titleId" style="max-width: @MaxWidth;@(Height is null ? "" : $" --modal-shell-height: {Height};")" @onclick:stopPropagation="true">
         <div class="modal-shell-header">
             <h5 id="@titleId" class="modal-shell-title">@(TitleContent ?? (builder => builder.AddContent(0, Title)))</h5>

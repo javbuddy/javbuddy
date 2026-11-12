@@ -1189,6 +1189,30 @@ public class MovieDetailTests : BunitContext
     }
 
     [Fact]
+    public async Task PreviewMovie_AddToLibraryThatThrows_ShowsTheError_AndReEnablesTheButton()
+    {
+        var dumpStore = Substitute.For<IR18DevDumpStore>();
+        dumpStore.GetMovieByCodeAsync("MGMJ-077", Arg.Any<CancellationToken>())
+            .Returns(new R18DevMovieDetail("MGMJ-077", "Preview Title", null, "Preview Description", null, 120,
+                null, null, null, null, null, null, [], [], null, [], []));
+        using var factory = SetUpServices(r18DevDumpStore: dumpStore);
+        using (var db = factory.CreateDbContext())
+        {
+            db.R18DevSettings.Add(new R18DevSettings { Enabled = true });
+            db.SaveChanges();
+        }
+        Services.GetRequiredService<IMovieAddService>().AddAsync("MGMJ-077", Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<MovieAddResult>(new InvalidOperationException("lookup exploded")));
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "MGMJ-077"));
+
+        await cut.FindAll("button.page-toolbar-btn").Single(b => b.TextContent.Contains("Add to Library")).ClickAsync(new());
+
+        Assert.Contains("lookup exploded", cut.Find(".alert-danger").TextContent);
+        var button = cut.FindAll("button.page-toolbar-btn").Single(b => b.TextContent.Contains("Add to Library"));
+        Assert.False(button.HasAttribute("disabled"));
+    }
+
+    [Fact]
     public void LinkedToJellyfin_RendersPlayBadgeButtonBeforeOpenInJellyfin()
     {
         using var factory = SetUpServices();

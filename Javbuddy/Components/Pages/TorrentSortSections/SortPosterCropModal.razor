@@ -9,7 +9,7 @@
 {
     @* Keys stop here: Esc closes only this dialog (not the editor drawer behind it), and
        Ctrl+Enter doesn't save the editor. *@
-    <div class="spc-backdrop" tabindex="0" @onkeydown="OnKeyDownAsync" @onkeydown:stopPropagation="true" @onclick="CloseAsync">
+    <div class="spc-backdrop" data-backdrop-dismiss tabindex="0" @onkeydown="OnKeyDownAsync" @onkeydown:stopPropagation="true" @onclick="CloseAsync">
         <div class="spc-panel" @onclick:stopPropagation="true">
             <div class="spc-header">
                 <h5 class="spc-title">Crop poster · @MovieId</h5>

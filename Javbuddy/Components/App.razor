@@ -244,6 +244,23 @@
 <body>
     <Routes />
     <ReconnectModal />
+    <script>
+        // A drag that starts inside a dialog (selecting text in an input) and is released over its backdrop
+        // is reported as a click on the backdrop, which would close the dialog and discard the edit. A
+        // backdrop marked data-backdrop-dismiss only gets the click when the press began on it too. Capture
+        // phase on window, so it runs before Blazor's own delegated click handler.
+        (function () {
+            var pressTarget = null;
+            window.addEventListener('mousedown', function (e) { pressTarget = e.target; }, true);
+            window.addEventListener('click', function (e) {
+                var started = pressTarget;
+                pressTarget = null;
+                if (started && e.target instanceof Element && e.target.hasAttribute('data-backdrop-dismiss') && started !== e.target) {
+                    e.stopImmediatePropagation();
+                }
+            }, true);
+        })();
+    </script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script>
         if (window.Blazor && window.Blazor.addEventListener) {

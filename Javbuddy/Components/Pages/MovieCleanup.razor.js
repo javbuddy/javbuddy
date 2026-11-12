@@ -1,3 +1,5 @@
+import { isShortcutBlocked } from '../Shared/ScrubBar.razor.js';
+
 // Stops the card's video and aborts its stream before the movie's folder is deleted.
 // Just removing the <video> from the DOM doesn't reliably end the download, and while
 // the stream still has the file open a network share keeps it around after the delete (NFS .nfsXXXX,
@@ -19,21 +21,16 @@ export function releaseVideo(selector) {
 // exists on a Review card, so Cleanup mode, the summary and the empty state are left alone.
 let onReviewKeyDown = null;
 
-function isEditable(element) {
-    return element instanceof Element
-        && (element.closest('input, textarea, select') !== null || element.isContentEditable);
-}
-
 export function initReviewShortcuts() {
     disposeReviewShortcuts();
     onReviewKeyDown = (event) => {
-        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+        // Unlike the other shortcuts, Shift is not allowed here (isShortcutBlocked ignores it).
+        if (event.shiftKey) return;
         if (event.key !== ' ' && event.key !== 'n' && event.key !== 'N') return;
 
         const next = document.querySelector('.cleanup-next-btn');
         if (!next) return;
-        if (document.querySelector('.image-lightbox-backdrop, .cleanup-modal-overlay, .delete-confirm-backdrop')) return;
-        if (isEditable(event.target) || isEditable(document.activeElement)) return;
+        if (isShortcutBlocked(event)) return;
 
         // Claimed even on key repeat or without a video: Space would otherwise scroll the page or
         // activate a focused button, and a focused <video>'s native controls would toggle it a

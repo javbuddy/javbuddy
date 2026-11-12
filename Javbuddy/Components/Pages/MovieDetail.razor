@@ -47,6 +47,11 @@ else if (movie is null && preview is not null)
         </button>
     </div>
 
+    @if (previewAddError is not null)
+    {
+        <div class="alert alert-danger py-2 movie-cover-save-notice" role="alert">@previewAddError</div>
+    }
+
     <MoviePreviewDetails Preview="preview" OnBrowseCatalog="BrowseCatalog" />
     <R18DevRelatedReleasesShelf Related="related" OnSeeAll="BrowseRelated" />
     <ProwlarrSearchModal Code="@preview.DvdId" Show="showPreviewSearchModal" OnClose="ClosePreviewSearchModal" OnMovieAdded="OnPreviewMovieAdded" />
@@ -506,6 +511,7 @@ else
     private bool deleting;
     private bool deleteFiles;
     private string? deleteError;
+    private string? previewAddError;
     private string? coverSaveNotice;
     private bool coverSaveNoticeIsWarning;
     private bool showMetadataRefreshModal;
@@ -783,10 +789,21 @@ else
         if (preview is null) return;
 
         addingPreview = true;
+        previewAddError = null;
+        try
+        {
+            await MovieAddService.AddAsync(preview.DvdId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            previewAddError = $"Couldn't add {preview.DvdId} to the library: {ex.Message}";
+            return;
+        }
+        finally
+        {
+            addingPreview = false;
+        }
 
-        await MovieAddService.AddAsync(preview.DvdId);
-
-        addingPreview = false;
         // The movie now exists — reload switches this same page from the preview branch to the
         // normal detail view (ownership/ ownership+metadata already applied by AddAsync).
         await LoadAsync(MovieParts.All);

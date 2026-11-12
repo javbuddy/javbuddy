@@ -29,4 +29,31 @@ public class ModalEscapeFlowTests(E2EFixture fixture)
 
         await Expect(dialog).ToBeHiddenAsync();
     }
+
+    [Fact]
+    public async Task DraggingATextSelectionOutOfAnInput_OntoTheBackdrop_KeepsTheDialogOpen_ButAPlainBackdropClickCloses()
+    {
+        var page = await fixture.NewPageAsync();
+        await page.GotoInteractiveAsync("/movies/tags");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Create Tag", Exact = true }).First.ClickAsync();
+        var dialog = page.GetByRole(AriaRole.Dialog);
+        var input = dialog.Locator("#new-tag-name");
+        await Expect(input).ToBeVisibleAsync();
+        await input.FillAsync("Drag select me");
+
+        // Press inside the input, release over the backdrop (a click lands on their common ancestor, the backdrop).
+        var box = (await input.BoundingBoxAsync())!;
+        await page.Mouse.MoveAsync(box.X + 20, box.Y + box.Height / 2);
+        await page.Mouse.DownAsync();
+        await page.Mouse.MoveAsync(2, 2);
+        await page.Mouse.UpAsync();
+
+        await Expect(dialog).ToBeVisibleAsync();
+        await Expect(input).ToHaveValueAsync("Drag select me");
+
+        // A press and release on the backdrop itself still closes it.
+        await page.Mouse.ClickAsync(2, 2);
+
+        await Expect(dialog).ToBeHiddenAsync();
+    }
 }

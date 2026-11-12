@@ -212,12 +212,19 @@
         isCreating = true;
         errorMessage = null;
 
-        var result = CreateTag is not null
-            ? await CreateTag(tagName, selectedParentId)
-            : selectedParentId.HasValue
-                ? await TagService.CreateTagAsync(tagName, selectedParentId.Value)
-                : await TagService.CreateTagAsync(tagName);
-        isCreating = false;
+        TagOperationResult result;
+        try
+        {
+            result = CreateTag is not null
+                ? await CreateTag(tagName, selectedParentId)
+                : selectedParentId.HasValue
+                    ? await TagService.CreateTagAsync(tagName, selectedParentId.Value)
+                    : await TagService.CreateTagAsync(tagName);
+        }
+        finally
+        {
+            isCreating = false;
+        }
 
         if (result.Success && result.Tag is not null)
         {
