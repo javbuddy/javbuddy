@@ -537,30 +537,53 @@ else
 
     private const int RelatedReleaseCount = 12;
 
+    // Puts every per-movie field back to its initial value, so nothing of the previous movie (an open
+    // dialog, an in-flight busy flag, a notice, a child component reference) is still there for the next.
     private void ResetForNewMovie()
     {
         loaded = false;
         movie = null;
         preview = null;
+        addingPreview = false;
         related = R18DevRelatedReleases.None;
         castEntries = new();
         scenes = [];
         sceneCast = [];
         highlights = [];
         apexes = [];
+        highlightCounts = new Dictionary<int, int>();
+        apexCounts = new Dictionary<int, int>();
         jellyfinWebUrl = null;
+        posterVersion = null;
         coverSaveNotice = null;
+        coverSaveNoticeIsWarning = false;
         showSearchModal = false;
         showPreviewSearchModal = false;
         showPosterLightbox = false;
         showVideoPlayerModal = false;
+        playerStartAt = null;
+        playerEndAt = null;
+        playerEditor = false;
         showPrimaryVersionMenu = false;
         showPlayMenu = false;
+        settingPrimary = false;
+        versionMenuError = null;
         showCoverCropModal = false;
         showStillsModal = false;
         showMetadataRefreshModal = false;
         confirmingDelete = false;
-        posterVersion = null;
+        deleting = false;
+        deleteFiles = false;
+        deleteError = null;
+        rescanning = false;
+        generatingArtwork = false;
+        loadingRawNfo = false;
+        scenesSection = null;
+        imagesSection = null;
+        nfoEditorRef = null;
+        mediaInfoModalRef = null;
+        videoRepairModalRef = null;
+        metadataEditorRef = null;
     }
 
     // Opens the Movies page's r18.dev catalog narrowed to one series or label.

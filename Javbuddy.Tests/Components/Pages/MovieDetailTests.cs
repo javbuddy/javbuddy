@@ -1,5 +1,6 @@
 using Bunit;
 using Javbuddy.Components.Pages;
+using Javbuddy.Components.Pages.MovieDetailSections;
 using Javbuddy.Components.Shared;
 using Javbuddy.Data;
 using Javbuddy.Models;
@@ -2115,5 +2116,25 @@ public class MovieDetailTests : BunitContext
 
         cut.WaitForAssertion(() => Assert.Contains("Second movie", cut.Markup));
         Assert.DoesNotContain("First movie", cut.Markup);
+    }
+
+    [Fact]
+    public void ChangingTheRouteCode_DropsAnNfoEditorLoadingStateOfThePreviousMovie()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123", Status = MovieStatus.Got, MetaTitle = "First movie" });
+            db.Movies.Add(new Movie { Code = "DEF-456", Status = MovieStatus.Got, MetaTitle = "Second movie" });
+            db.SaveChanges();
+        }
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+        cut.InvokeAsync(() => cut.FindComponent<NfoEditor>().Instance.LoadingChanged.InvokeAsync(true));
+        Assert.Contains("Loading…", cut.Find(".page-toolbar").TextContent);
+
+        cut.Render(p => p.Add(x => x.RouteCode, "DEF-456"));
+
+        cut.WaitForAssertion(() => Assert.Contains("Second movie", cut.Markup));
+        Assert.DoesNotContain("Loading…", cut.Find(".page-toolbar").TextContent);
     }
 }
