@@ -15,5 +15,5 @@ public sealed record KeyboardShortcut(IReadOnlyList<string> Keys, string Action)
     public static readonly KeyboardShortcut EndHighlight = new(["Shift+H"], "End the started highlight at the playhead");
     public static readonly KeyboardShortcut MarkApex = new(["A"], "Open a new apex at the playhead");
     public static readonly KeyboardShortcut JumpHighlight = new(["H", "Shift+H"], "Jump to the next / previous highlight");
-    public static readonly KeyboardShortcut JumpApex = new(["A", "Shift+A"], "Jump to the next / previous apex (5 s before it)");
+    public static readonly KeyboardShortcut JumpApex = new(["A", "Shift+A"], "Jump to the next / previous apex (its lead-in before it)");
 }
