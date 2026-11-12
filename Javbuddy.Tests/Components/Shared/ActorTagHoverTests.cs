@@ -24,6 +24,17 @@ public class ActorTagHoverTests : BunitContext
     }
 
     [Fact]
+    public void Host_HasEmptyTitle_SoARowsSeekTitleIsNotInherited()
+    {
+        var cut = Render<ActorTagHover>(p => p
+            .Add(c => c.Tags, [new EffectiveActorTag(5, 1, false, null)])
+            .Add(c => c.Library, Library)
+            .AddChildContent("Mei"));
+
+        Assert.Equal("", cut.Find(".actor-hover").GetAttribute("title"));
+    }
+
+    [Fact]
     public void EachInstance_HasItsOwnPopoverId()
     {
         var first = Render<ActorTagHover>(p => p.Add(c => c.InheritedFrom, "scene 1").AddChildContent("Mei"));

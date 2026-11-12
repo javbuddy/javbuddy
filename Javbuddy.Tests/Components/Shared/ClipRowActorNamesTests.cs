@@ -30,6 +30,32 @@ public class ClipRowActorNamesTests : BunitContext
     }
 
     [Fact]
+    public void HighlightRow_ActorNames_OverrideTheRowsSeekTitle()
+    {
+        var highlight = new HighlightItem(1, 1, "Highlight 1", null, 10, 20, false, 0) { Actors = Actors };
+        var cut = Render<ClipHighlightRow>(p => p
+            .Add(x => x.Node, new HighlightNode(highlight, [], EffectiveActors.None, [], []))
+            .Add(x => x.ActorTags, Tags)
+            .Add(x => x.ActorTagLibrary, Library));
+
+        Assert.Equal("", cut.Find(".highlight-editor-actors").GetAttribute("title"));
+        Assert.Equal("", cut.Find(".highlight-editor-actors .actor-hover").GetAttribute("title"));
+    }
+
+    [Fact]
+    public void ApexRow_ActorNames_OverrideTheRowsSeekTitle()
+    {
+        var apex = new ApexItem(1, 1, 100, []) { Actors = Actors };
+        var cut = Render<ClipApexRow>(p => p
+            .Add(x => x.Node, new ApexNode(apex, EffectiveActors.None))
+            .Add(x => x.ActorTags, Tags)
+            .Add(x => x.ActorTagLibrary, Library));
+
+        Assert.Equal("", cut.Find(".apex-editor-actors").GetAttribute("title"));
+        Assert.Equal("", cut.Find(".apex-editor-actors .actor-hover").GetAttribute("title"));
+    }
+
+    [Fact]
     public void ApexRow_ShowsActorNamesWithTagHovers()
     {
         var apex = new ApexItem(1, 1, 100, []) { Actors = Actors };
