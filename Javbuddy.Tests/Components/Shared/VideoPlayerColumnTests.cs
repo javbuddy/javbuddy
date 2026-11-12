@@ -206,6 +206,54 @@ public class VideoPlayerColumnTests : BunitContext
     }
 
     [Fact]
+    public void TheHostsControls_GetTheCcButtonToPlaceInTheirBar_InsteadOfTheFloatingOne()
+    {
+        var cut = Render<VideoPlayerColumn>(p => p
+            .Add(x => x.VideoClass, "test-video")
+            .Add(x => x.Src, "/api/movies/1/stream")
+            .Add(x => x.NativeControls, false)
+            .Add(x => x.Subtitles, TwoTracks)
+            .Add(x => x.Controls, (RenderFragment)(b =>
+            {
+                b.OpenComponent<ExtraControlsProbe>(0);
+                b.CloseComponent();
+            })));
+
+        Assert.Empty(cut.FindAll(".video-player-subtitles-overlay"));
+        Assert.Single(cut.FindAll(".probe .video-player-subtitles-in-bar .video-player-subtitles-button"));
+    }
+
+    [Fact]
+    public void TheHostsControls_GetNoCcButton_WithoutSubtitles()
+    {
+        var cut = Render<VideoPlayerColumn>(p => p
+            .Add(x => x.VideoClass, "test-video")
+            .Add(x => x.Src, "/api/movies/1/stream")
+            .Add(x => x.NativeControls, false)
+            .Add(x => x.Controls, (RenderFragment)(b =>
+            {
+                b.OpenComponent<ExtraControlsProbe>(0);
+                b.CloseComponent();
+            })));
+
+        Assert.Empty(cut.FindAll(".video-player-subtitles-button"));
+    }
+
+    /// <summary>A host's controls: draws what the column hands down for its bar.</summary>
+    private sealed class ExtraControlsProbe : ComponentBase
+    {
+        [CascadingParameter(Name = "PlayerExtraControls")] public RenderFragment? ExtraControls { get; set; }
+
+        protected override void BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "probe");
+            builder.AddContent(2, ExtraControls);
+            builder.CloseElement();
+        }
+    }
+
+    [Fact]
     public void WithTheScrubBar_ThePlayerControlsReplaceTheBrowsers_ExceptInVrMode()
     {
         var cut = Render<VideoPlayerColumn>(p => p

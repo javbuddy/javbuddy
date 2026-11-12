@@ -1,6 +1,7 @@
 using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Services.Trickplay;
+using Microsoft.AspNetCore.Components;
 
 namespace Javbuddy.Tests.Components.Shared;
 
@@ -38,6 +39,21 @@ public class ClipControlsTests : BunitContext
         var options = Assert.IsType<ClipControls.ClipRange>(init.Arguments[2]);
         Assert.Equal(new ClipControls.ClipRange("video.video-player-video", 90, 100.5, Trickplay, Playlist: false, HasPrevious: false), options);
         Assert.Empty(cut.FindAll(".clip-controls-prev, .clip-controls-next"));
+    }
+
+    [Fact]
+    public void TheCcButtonTheColumnHandsDown_SitsBeforeTheMuteButton()
+    {
+        var cut = Render<CascadingValue<RenderFragment?>>(p => p
+            .Add(x => x.Name, "PlayerExtraControls")
+            .Add(x => x.Value, (RenderFragment)(b => b.AddMarkupContent(0, "<button class=\"test-cc\"></button>")))
+            .AddChildContent<ClipControls>(c => c
+                .Add(x => x.VideoSelector, "video.video-player-video")
+                .Add(x => x.OnEnded, () => { })));
+
+        var bar = cut.Find(".clip-controls");
+        var children = bar.Children.Select(e => e.ClassList.Contains("test-cc") ? "cc" : e.ClassList.Contains("clip-controls-volume-group") ? "volume" : "").Where(x => x != "").ToList();
+        Assert.Equal(["cc", "volume"], children);
     }
 
     [Fact]

@@ -41,17 +41,23 @@
         </div>
     </div>
     <span class="clip-controls-time"></span>
-    <button type="button" class="clip-controls-btn clip-controls-mute" aria-label="Mute or unmute" title="Mute/unmute">
-        <PlayerIcon Name="PlayerIconName.Sound" Class="clip-controls-icon-sound" />
-        <PlayerIcon Name="PlayerIconName.Muted" Class="clip-controls-icon-muted" />
-    </button>
-    <input type="range" class="clip-controls-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume" title="Volume" />
+    @ExtraControls
+    <div class="clip-controls-volume-group">
+        <button type="button" class="clip-controls-btn clip-controls-mute" aria-label="Mute or unmute" title="Mute/unmute">
+            <PlayerIcon Name="PlayerIconName.Sound" Class="clip-controls-icon-sound" />
+            <PlayerIcon Name="PlayerIconName.Muted" Class="clip-controls-icon-muted" />
+        </button>
+        <div class="clip-controls-volume-popup">
+            <input type="range" class="clip-controls-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume" title="Volume" />
+        </div>
+    </div>
     <button type="button"
             class="clip-controls-btn clip-controls-loop @(loop ? "clip-controls-loop-on" : null)"
             aria-pressed="@(loop ? "true" : "false")"
+            aria-label="Loop"
             title="Loop: restart the clip at its end instead of closing the player"
             @onclick="ToggleLoopAsync">
-        Loop
+        <PlayerIcon Name="PlayerIconName.Loop" />
     </button>
     <button type="button" class="clip-controls-btn clip-controls-fullscreen" aria-label="Toggle fullscreen" title="Toggle fullscreen (f, double-click video)">
         <PlayerIcon Name="PlayerIconName.FullscreenEnter" Class="clip-controls-fs-icon-enter" />
@@ -104,6 +110,10 @@
 
     /// <summary>Whether Previous can go back a clip; otherwise it restarts this one.</summary>
     [Parameter] public bool HasPrevious { get; set; }
+
+    /// <summary>Extra controls the player column hands down (its CC button), shown just before the mute button like the
+    /// scrub bar's.</summary>
+    [CascadingParameter(Name = "PlayerExtraControls")] public RenderFragment? ExtraControls { get; set; }
 
     /// <summary>What the module needs to run the controls, serialized camelCase.</summary>
     public sealed record ClipRange(string VideoSelector, double StartSeconds, double? EndSeconds, TrickplayLayout? Trickplay, bool Playlist, bool HasPrevious);

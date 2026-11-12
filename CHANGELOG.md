@@ -4,11 +4,16 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **The clip player's volume slider and Loop button match the movie player's.** The volume slider pops up above the speaker icon on hover instead of always showing, and Loop is an icon (highlighted while on) rather than the word.
+
 ### Fixed
 
 - **The clip editor's new-scene form no longer has a large gap between Title and Start.** The scene form's styles had been split out with a rule that gave the Title field a tall flex-basis; the fields stack tightly again.
 - **The delete button on Movie Detail's images is back in the top-right corner and translucent.** Its styling stopped applying when the Images section got the shared section header, so the button showed unstyled in the middle of the image on hover.
 - **Hover previews fade in instead of loading in view.** A scene card's, apex marker's or editor row's preview video used to appear as soon as it was added, so its loading showed. It now stays hidden until its first frame plays, then fades in over the still. Hovering an apex marker on Movie Detail now starts its clip at once, over the apex's screenshot, instead of waiting a moment with an empty frame.
+- **The CC button is part of the control bar when playing a scene, highlight or apex.** It floated over the video as a separate button; it now sits in the bar beside the volume, as when playing a full movie.
 
 ## [0.6.2] - 2026-11-12
 

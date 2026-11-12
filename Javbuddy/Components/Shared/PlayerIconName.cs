@@ -11,4 +11,5 @@ public enum PlayerIconName
     Muted,
     FullscreenEnter,
     FullscreenExit,
+    Loop,
 }
