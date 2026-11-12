@@ -122,7 +122,7 @@ else if (Scene is { } scene)
             <div class="scene-wall-tags">
                 @foreach (var tag in tags)
                 {
-                    <span class="scene-wall-tag">@TagLabel(tag)</span>
+                    <span class="scene-wall-tag">@ImplicitChip.TagLabel(tag)</span>
                 }
                 @foreach (var chip in ImplicitChip.ForTags(implicitTags))
                 {
@@ -141,6 +141,4 @@ else if (Scene is { } scene)
             <span class="scene-wall-apex-count" title="@label" aria-label="@label"><ApexIcon Size="8" /> @count</span>
         }
     </text>;
-
-    private static string TagLabel(SceneTagItem tag) => tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}";
 }

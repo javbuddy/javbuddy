@@ -3,7 +3,7 @@
 <SearchAddBox TItem="TagListItem" ClassPrefix="tag-search" Compact="true" Placeholder="Search tags to add…"
               Search="SearchAsync" OnAdd="AddAsync" OnAddFreeText="OnAddFreeText">
     <ItemTemplate Context="candidate">
-        @(candidate.ParentTagName != null ? $"{candidate.ParentTagName} › {candidate.Name}" : candidate.Name)
+        @TagLabel.Format(candidate.ParentTagName, candidate.Name)
     </ItemTemplate>
 </SearchAddBox>
 

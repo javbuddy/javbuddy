@@ -109,7 +109,7 @@ Domain services are grouped into `Services/<Group>/` folders whose namespace mat
 | `Actors/` | actor CRUD/merge/import, discovery, photos, name and physical-attribute helpers |
 | `Scenes/` | scenes, highlights, chapter import/write, scene detection and time helpers, the scenes wall queries |
 | `Nfo/` | .nfo sync, drift detection/push, history, the .nfo file writer and the pure XML helpers |
-| `Tags/` | tag management, normalization, script detection, actor tags (`ActorTagService`, the filters' `ActorTagOptions`) |
+| `Tags/` | tag management, normalization, script detection, actor tags (`ActorTagService`, the filters' `ActorTagOptions`), `TagLabel` ("Parent › Name" for a subtag, used by every tag chip, option and log line) |
 | `Torrents/` | grab, the Activity Queue and History services, change notifier, path mapping, and the TorrentSort wizard (`TorrentSortService`, the thin `TorrentSortWizardState` coordinator, its per-step parts in `SortWizard/`, its helpers) |
 | `Settings/` | connection settings save/read and connection status tiles (per-source discovery toggles live in `MovieDiscovery/DiscoverySettingsService`) |
 | `Monitoring/` | system status, disk space, task activity and change notifiers |

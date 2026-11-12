@@ -3,6 +3,7 @@ using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.LocalLibrary;
+using Javbuddy.Services.Tags;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Movies;
@@ -163,7 +164,7 @@ public class MovieCleanupService(
             .FirstOrDefaultAsync(ct);
         if (tag is null) return;
 
-        var name = tag.ParentName is not null ? $"{tag.ParentName} › {tag.Name}" : tag.Name;
+        var name = TagLabel.Format(tag.ParentName, tag.Name);
         sessionTracker.RecordEdit(CleanupEdit.Tag(movieId, tagId, name, added));
     }
 

@@ -219,7 +219,7 @@
                                 <div class="movie-scenes-tags">
                                     @foreach (var tag in scene.Tags)
                                     {
-                                        <span class="movie-scenes-tag">@(tag.ParentName is null ? tag.Name : $"{tag.ParentName} › {tag.Name}")</span>
+                                        <span class="movie-scenes-tag">@ImplicitChip.TagLabel(tag)</span>
                                     }
                                 </div>
                             }

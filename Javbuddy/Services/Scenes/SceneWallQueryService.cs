@@ -459,7 +459,7 @@ public sealed class SceneWallQueryService(
             .Select(at => new { at.Tag.Id, at.Tag.Name, Parent = at.Tag.ParentTag != null ? at.Tag.ParentTag.Name : null })
             .Distinct()
             .ToListAsync(ct);
-        return tags.Select(t => new SceneWallOption(t.Id, t.Parent is null ? t.Name : $"{t.Parent} › {t.Name}"))
+        return tags.Select(t => new SceneWallOption(t.Id, TagLabel.Format(t.Parent, t.Name)))
             .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
@@ -536,7 +536,7 @@ public sealed class SceneWallQueryService(
             .Select(t => new TagOption(t.Id, t.Name, t.ParentTag != null ? t.ParentTag.Name : null));
 
     private static List<SceneWallOption> TagOptions(IEnumerable<TagOption> tags) =>
-        tags.Select(t => new SceneWallOption(t.Id, t.Parent is null ? t.Name : $"{t.Parent} › {t.Name}"))
+        tags.Select(t => new SceneWallOption(t.Id, TagLabel.Format(t.Parent, t.Name)))
             .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <summary>The distinct actors behind a set of (owner, actor) rows.</summary>
