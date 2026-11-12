@@ -72,6 +72,22 @@ public class MovieTagsEditorTests : BunitContext
     }
 
     [Fact]
+    public async Task Chips_AreSortedOrdinallyIgnoringCase_LikeTheGenresSection()
+    {
+        // Ordinal puts "Étude" after "Zebra" (U+00C9 > 'Z'); a culture-aware sort would put it first.
+        foreach (var name in new[] { "Étude", "zebra", "Apple" })
+        {
+            await tagService.AddTagToMovieAsync(movieId, await CreateTagAsync(name));
+        }
+
+        var cut = RenderEditor();
+        await cut.Find(".movie-tags-toggle").ClickAsync();
+
+        var names = cut.FindAll(".movie-tags-chip").Select(c => c.TextContent.Replace("×", "").Trim()).ToList();
+        Assert.Equal(["Apple", "zebra", "Étude"], names);
+    }
+
+    [Fact]
     public async Task Search_AddsTheChosenTagToTheMovie()
     {
         await CreateTagAsync("Outdoor");
