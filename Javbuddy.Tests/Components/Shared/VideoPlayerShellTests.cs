@@ -95,6 +95,35 @@ public class VideoPlayerShellTests : BunitContext
         Assert.Equal(previousExpected ? 1 : 0, previous);
     }
 
+    private const string IdleModulePath = "./Components/Shared/PlayerIdleChrome.razor.js";
+
+    [Fact]
+    public void WithoutASidePanel_TheChromeHidesWhenIdle()
+    {
+        SetupKeysModule();
+        var idle = JSInterop.SetupModule(IdleModulePath);
+        idle.Mode = JSRuntimeMode.Loose;
+
+        Render<VideoPlayerShell>(p => p.Add(x => x.Show, true).Add(x => x.MovieId, 1));
+
+        Assert.Single(idle.Invocations, i => i.Identifier == "init");
+    }
+
+    [Fact]
+    public void WithASidePanel_TheSceneEditorKeepsTheChromeVisible()
+    {
+        SetupKeysModule();
+        var idle = JSInterop.SetupModule(IdleModulePath);
+        idle.Mode = JSRuntimeMode.Loose;
+
+        Render<VideoPlayerShell>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.MovieId, 1)
+            .Add(x => x.SidePanel, _ => builder => builder.AddContent(0, "editor")));
+
+        Assert.DoesNotContain(idle.Invocations, i => i.Identifier == "init");
+    }
+
     [Fact]
     public async Task WithASidePanel_NextAndPreviousStayOff_AsTheEditorsFieldsTakeTheirLetters()
     {

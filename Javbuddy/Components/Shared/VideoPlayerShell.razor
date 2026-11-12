@@ -128,7 +128,11 @@
                         </aside>
                     }
                     </div>
-                    <PlayerIdleChrome Root="panelRef" VideoSelector="video.video-player-video" />
+                    @* The scene editor is a working view: its titlebar, scrub bar and cursor stay put. *@
+                    @if (SidePanel is null)
+                    {
+                        <PlayerIdleChrome Root="panelRef" VideoSelector="video.video-player-video" />
+                    }
                 }
             </div>
         </div>
