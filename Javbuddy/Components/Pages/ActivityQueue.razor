@@ -2,6 +2,7 @@
 @using Javbuddy.Models
 @using Javbuddy.Services.QBittorrent
 @using Javbuddy.Services.Tasks
+@using Javbuddy.Services.Torrents
 @implements IAsyncDisposable
 @inject ITorrentQueueService QueueService
 @inject IQBittorrentClient QBittorrentClient
@@ -160,19 +161,7 @@ else
         if (rows is null || !NeedsLivePoll(rows)) return;
 
         var live = await QBittorrentClient.GetTorrentsAsync(ct);
-        var byHash = live
-            .Where(t => t.Hash is not null)
-            .ToDictionary(t => t.Hash!, t => t, StringComparer.OrdinalIgnoreCase);
-
-        foreach (var row in rows)
-        {
-            if (row.Hash is not null && byHash.TryGetValue(row.Hash, out var liveTorrent))
-            {
-                row.Progress = liveTorrent.Progress;
-                row.DownloadSpeedBytesPerSec = liveTorrent.DlSpeed;
-                row.EtaSeconds = liveTorrent.Eta;
-            }
-        }
+        TorrentLiveProgress.Apply(rows, live);
 
         await InvokeAsync(StateHasChanged);
     }

@@ -161,6 +161,7 @@ Domain services (`Services/<Group>/*.cs`):
 | `TorrentChangeNotifier.cs` | Cross-circuit pub/sub for torrent queue changes |
 | `TorrentGrabService.cs` | Send a torrent to qBittorrent |
 | `TorrentQueueService.cs` | Activity > Queue reads (active downloads, count for the sidebar badge) and removal of selected downloads from qBittorrent |
+| `TorrentLiveProgress.cs` | Pure merge of qBittorrent's live torrent list (progress, speed, ETA by hash) into the Queue page's loaded rows |
 | `SystemStatusService.cs` | System > Status: migration state, health messages, which integrations are configured (via `ConnectionStatusService`) and their live connection tests |
 | `MovieDetailQueryService.cs` / `ActorDetailQueryService.cs` | Movie Detail's movie/tag/cast reads and Actor Detail's movie/photo-count reads, so those pages don't open a DbContext |
 | `StringExtensions.cs` | `TrimToNull` (trim, or null when blank), `CompactName` (strip ASCII and full-width spaces — the form used for all actor-name matching) |
