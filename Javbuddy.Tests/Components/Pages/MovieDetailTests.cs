@@ -2118,6 +2118,168 @@ public class MovieDetailTests : BunitContext
         Assert.DoesNotContain("First movie", cut.Markup);
     }
 
+    // Wraps the page's reads in substitutes that forward to the real services (or return nothing for the clips), so a
+    // test can count how often the page read each part of the movie again after an edit.
+    private sealed record ReadSpies(
+        IMovieDetailQueryService Query,
+        IMovieSceneService Scenes,
+        IMovieHighlightService Highlights,
+        IMovieApexService Apexes,
+        IImageServingService ImageServing,
+        IJellyfinClient Jellyfin);
+
+    private ReadSpies SpyOnReads(TestDbContextFactory factory, IImageServingService imageServing)
+    {
+        var realQuery = new MovieDetailQueryService(factory);
+        var query = Substitute.For<IMovieDetailQueryService>();
+        query.GetByCodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(ci => realQuery.GetByCodeAsync(ci.Arg<string>(), ci.Arg<CancellationToken>()));
+        query.GetCastAsync(Arg.Any<Movie>(), Arg.Any<CancellationToken>()).Returns(ci => realQuery.GetCastAsync(ci.Arg<Movie>(), ci.Arg<CancellationToken>()));
+        query.GetCastAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(ci => realQuery.GetCastAsync(ci.Arg<int>(), ci.Arg<CancellationToken>()));
+        query.GetMovieTagsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(ci => realQuery.GetMovieTagsAsync(ci.Arg<int>(), ci.Arg<CancellationToken>()));
+        Services.AddSingleton(query);
+
+        var scenes = Substitute.For<IMovieSceneService>();
+        scenes.GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<SceneItem>>([]));
+        scenes.GetCastOptionsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<SceneActorItem>>([]));
+        Services.AddSingleton(scenes);
+        var highlights = Substitute.For<IMovieHighlightService>();
+        highlights.GetHighlightsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<HighlightItem>>([]));
+        Services.AddSingleton(highlights);
+        var apexes = Substitute.For<IMovieApexService>();
+        apexes.GetApexesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<ApexItem>>([]));
+        Services.AddSingleton(apexes);
+
+        var jellyfin = Services.GetRequiredService<IJellyfinClient>();
+        jellyfin.GetWebUrlAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("http://jellyfin/web");
+        imageServing.GetPosterVersionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("v1");
+        return new ReadSpies(query, scenes, highlights, apexes, imageServing, jellyfin);
+    }
+
+    private static async Task AssertEveryPartReadTimesAsync(ReadSpies spies, ILocalLibraryClient library, int times, int castTimes)
+    {
+        await spies.Query.Received(times).GetByCodeAsync("ABC-123", Arg.Any<CancellationToken>());
+        await spies.ImageServing.Received(times).GetPosterVersionAsync("ABC-123", Arg.Any<CancellationToken>());
+        await spies.Scenes.Received(times).GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Highlights.Received(times).GetHighlightsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Apexes.Received(times).GetApexesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Jellyfin.Received(times).GetWebUrlAsync("item", "server", Arg.Any<CancellationToken>());
+        await library.Received(times).ListExtraFanartFileNamesAsync("ABC-123", Arg.Any<CancellationToken>());
+        await spies.Query.Received(castTimes).GetCastAsync(Arg.Any<Movie>(), Arg.Any<CancellationToken>());
+    }
+
+    private static Movie JellyfinLinkedMovie() => new()
+    {
+        Code = "ABC-123",
+        Status = MovieStatus.Got,
+        MetaSourceName = "Local",
+        MetaGenres = "Drama",
+        MetaActresses = "Mikami Yua",
+        JellyfinItemId = "item",
+        JellyfinServerId = "server",
+    };
+
+    [Fact]
+    public async Task AddingATag_ReadsOnlyTheMovieRowAgain()
+    {
+        var imageServing = Substitute.For<IImageServingService>();
+        using var factory = SetUpServices(imageServing: imageServing);
+        using (var db = factory.CreateDbContext())
+        {
+            db.AddRange(new Tag { Name = "Solo" }, JellyfinLinkedMovie());
+            db.SaveChanges();
+        }
+        var spies = SpyOnReads(factory, imageServing);
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+        await AssertEveryPartReadTimesAsync(spies, localLibraryClient, times: 1, castTimes: 1);
+
+        cut.Find("button.movie-detail-edit-tags-btn").Click();
+        cut.Find("input.tag-search-input").Input("Solo");
+        cut.WaitForElement(".tag-search-candidate").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button.movie-detail-badge"), b => b.TextContent.Trim() == "Solo"));
+        await spies.Query.Received(2).GetByCodeAsync("ABC-123", Arg.Any<CancellationToken>());
+        await spies.ImageServing.Received(1).GetPosterVersionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await spies.Scenes.Received(1).GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Scenes.Received(1).GetCastOptionsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Highlights.Received(1).GetHighlightsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Apexes.Received(1).GetApexesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Jellyfin.Received(1).GetWebUrlAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await spies.Query.Received(1).GetCastAsync(Arg.Any<Movie>(), Arg.Any<CancellationToken>());
+        await localLibraryClient.Received(1).ListExtraFanartFileNamesAsync("ABC-123", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task TogglingTheStatus_ReadsOnlyTheMovieRowAgain_AndTheBadgeFollows()
+    {
+        var imageServing = Substitute.For<IImageServingService>();
+        using var factory = SetUpServices(imageServing: imageServing);
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(JellyfinLinkedMovie());
+            db.SaveChanges();
+        }
+        var spies = SpyOnReads(factory, imageServing);
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+        Assert.Equal("Got", cut.Find(".movie-detail-badge-status-got").TextContent.Trim());
+
+        cut.FindAll("button").Single(b => b.TextContent.Contains("Mark as Missing")).Click();
+
+        cut.WaitForAssertion(() => Assert.Equal("Missing", cut.Find(".movie-detail-badge-status-missing").TextContent.Trim()));
+        Assert.Contains("Mark as Got", cut.Markup);
+        await spies.Query.Received(2).GetByCodeAsync("ABC-123", Arg.Any<CancellationToken>());
+        await spies.ImageServing.Received(1).GetPosterVersionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await spies.Scenes.Received(1).GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Jellyfin.Received(1).GetWebUrlAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await spies.Query.Received(1).GetCastAsync(Arg.Any<Movie>(), Arg.Any<CancellationToken>());
+        await localLibraryClient.Received(1).ListExtraFanartFileNamesAsync("ABC-123", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AddingACastMember_ReadsTheCastAndClipsAgain_ButNotThePosterJellyfinOrImages()
+    {
+        var imageServing = Substitute.For<IImageServingService>();
+        using var factory = SetUpServices(imageServing: imageServing);
+        using (var db = factory.CreateDbContext())
+        {
+            var mikami = new Actor { FirstName = "Yua", LastName = "Mikami" };
+            db.AddRange(mikami, new Actor { FirstName = "Yui", LastName = "Hatano" }, JellyfinLinkedMovie());
+            db.SaveChanges();
+        }
+        var spies = SpyOnReads(factory, imageServing);
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+
+        cut.Find("button.movie-detail-edit-cast-btn").Click();
+        cut.Find("input.cast-search-input").Input("Hatano");
+        cut.WaitForElement(".cast-search-candidate").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains(cut.FindAll(".movie-detail-cast-name"), n => n.TextContent.Trim() == "Hatano Yui"));
+        await spies.Query.Received(2).GetCastAsync(Arg.Any<Movie>(), Arg.Any<CancellationToken>());
+        await spies.Scenes.Received(2).GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Scenes.Received(2).GetCastOptionsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.ImageServing.Received(1).GetPosterVersionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await spies.Jellyfin.Received(1).GetWebUrlAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await localLibraryClient.Received(1).ListExtraFanartFileNamesAsync("ABC-123", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Rescanning_ReadsEveryPartAgain()
+    {
+        var imageServing = Substitute.For<IImageServingService>();
+        using var factory = SetUpServices(imageServing: imageServing);
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(JellyfinLinkedMovie());
+            db.SaveChanges();
+        }
+        var spies = SpyOnReads(factory, imageServing);
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+
+        await ClickToolbarMenuItemAsync(cut, "Refresh", "Rescan");
+
+        cut.WaitForAssertion(() => spies.Query.Received(2).GetByCodeAsync("ABC-123", Arg.Any<CancellationToken>()));
+        await AssertEveryPartReadTimesAsync(spies, localLibraryClient, times: 2, castTimes: 2);
+    }
+
     [Fact]
     public void ChangingTheRouteCode_DropsAnNfoEditorLoadingStateOfThePreviousMovie()
     {

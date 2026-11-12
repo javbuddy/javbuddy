@@ -54,6 +54,28 @@ public class MovieGenresSectionTests : BunitContext
     }
 
     [Fact]
+    public void RemovingAnImpliedTag_RaisesOnClipsChanged_InsteadOfOnChanged_WhenBound()
+    {
+        var changed = 0;
+        var clipsChanged = 0;
+        var movie = new Movie { Id = MovieId, Code = "ABC-123" };
+        movie.MovieTags.Add(new MovieTag { TagId = Implied, Tag = new Tag { Id = Implied, Name = "Squirt" }, IsExplicit = false, FromClips = true });
+        movie.MovieTags.Add(new MovieTag { TagId = Explicit, Tag = new Tag { Id = Explicit, Name = "Solo" }, IsExplicit = true });
+        var cut = Render<MovieGenresSection>(p => p
+            .Add(x => x.Movie, movie)
+            .Add(x => x.OnChanged, () => changed++)
+            .Add(x => x.OnClipsChanged, () => clipsChanged++));
+        cut.Find(".movie-detail-edit-tags-btn").Click();
+
+        Chip(cut, "Solo").QuerySelector(".movie-detail-tag-remove-btn")!.Click();
+        Assert.Equal((1, 0), (changed, clipsChanged));
+
+        Chip(cut, "Squirt").QuerySelector(".movie-detail-tag-remove-btn")!.Click();
+        cut.Find(".delete-confirm-confirm-btn").Click();
+        Assert.Equal((1, 1), (changed, clipsChanged));
+    }
+
+    [Fact]
     public void RemovingAnImpliedTag_AsksFirst_ThenRemovesItFromTheClips()
     {
         var cut = RenderEditing();

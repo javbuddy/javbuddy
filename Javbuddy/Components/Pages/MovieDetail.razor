@@ -363,9 +363,9 @@ else
                 <p class="movie-detail-notes"><strong>Notes:</strong> @movie.Notes</p>
             }
 
-            <MovieGenresSection Movie="movie" OnChanged="LoadAsync" />
+            <MovieGenresSection Movie="movie" OnChanged="OnTagsChangedAsync" OnClipsChanged="OnClipTagsChangedAsync" />
 
-            <MovieCastSection Movie="movie" Cast="castEntries" OnChanged="LoadAsync" />
+            <MovieCastSection Movie="movie" Cast="castEntries" OnChanged="OnCastChangedAsync" />
         </div>
 
         @* Full width below the poster and details, so the scenes timeline and cards have room. *@
@@ -388,21 +388,21 @@ else
                                     OnApexesChanged="OnApexesChanged" />
             }
 
-            <MovieImagesSection @ref="imagesSection" Movie="movie" OnGenerateStillsRequested="OpenStillsModal" />
+            <MovieImagesSection @ref="imagesSection" Movie="movie" RefreshToken="imagesRefresh" OnGenerateStillsRequested="OpenStillsModal" />
         </div>
     </div>
 
     @if (movie.Status != MovieStatus.Missing)
     {
-        <NfoEditor @ref="nfoEditorRef" Code="@(movie.Code ?? "")" MovieId="@movie.Id" LoadingChanged="@(v => loadingRawNfo = v)" OnConflictResolved="LoadAsync" />
+        <NfoEditor @ref="nfoEditorRef" Code="@(movie.Code ?? "")" MovieId="@movie.Id" LoadingChanged="@(v => loadingRawNfo = v)" OnConflictResolved="ReloadAllAsync" />
 
         <MediaInfoModal @ref="mediaInfoModalRef" Movie="movie" />
-        <VideoRepairModal @ref="videoRepairModalRef" Movie="movie" OnRepaired="LoadAsync" />
+        <VideoRepairModal @ref="videoRepairModalRef" Movie="movie" OnRepaired="ReloadAllAsync" />
     }
 
     <ProwlarrSearchModal Movie="movie" Show="showSearchModal" OnClose="CloseSearchModal" />
 
-    <MetadataEditorModal @ref="metadataEditorRef" Movie="movie" OnSaved="LoadAsync" />
+    <MetadataEditorModal @ref="metadataEditorRef" Movie="movie" OnSaved="OnMetadataEditedAsync" />
 
     <ImageLightboxModal Show="@showPosterLightbox"
                         Title="@movie.DisplayName"
@@ -500,6 +500,8 @@ else
     // The left-eye crop takes the left half of the frame, which is only right for side-by-side layouts.
     private bool IsSideBySideVr => movie?.IsSideBySideVr == true;
     private MovieImagesSection? imagesSection;
+    // Bumped by a reload that can have changed the extrafanart folder, which the images section lists again.
+    private int imagesRefresh;
     private bool confirmingDelete;
     private bool deleting;
     private bool deleteFiles;
@@ -531,7 +533,7 @@ else
         if (RouteCode == loadedRouteCode) return;
         if (loadedRouteCode is not null) ResetForNewMovie();
         loadedRouteCode = RouteCode;
-        await LoadAsync();
+        await LoadAsync(MovieParts.All);
         related = await ReleaseBrowseService.GetRelatedAsync(RouteCode, RelatedReleaseCount);
     }
 
@@ -555,6 +557,7 @@ else
         apexCounts = new Dictionary<int, int>();
         jellyfinWebUrl = null;
         posterVersion = null;
+        imagesRefresh = 0;
         coverSaveNotice = null;
         coverSaveNoticeIsWarning = false;
         showSearchModal = false;
@@ -673,8 +676,34 @@ else
         Nav.NavigateTo("/");
     }
 
-    private async Task LoadAsync()
+    // The parts of the page's data an edit can change. A handler reloads only the parts its change can
+    // affect; anything it isn't sure about reloads All (what the first load does too).
+    [Flags]
+    private enum MovieParts
     {
+        // Nothing beyond the movie row with its files and tags (status, flags, metadata text, NFO drift,
+        // tag chips), which every reload reads.
+        Core = 0,
+        // The poster's cache-busting version (a disk stat and two queries).
+        Poster = 2,
+        // Scenes, highlights and apexes, and their generated media being queued.
+        Clips = 4,
+        // The movie's tracked actors the clips can be assigned to.
+        SceneCast = 8,
+        // The cast chips with their ages and avatars, read from the movie's cast text.
+        Cast = 16,
+        // The Jellyfin link, even when the movie's Jellyfin ids are the same.
+        Jellyfin = 32,
+        // The extrafanart folder listing.
+        Images = 64,
+        All = Poster | Clips | SceneCast | Cast | Jellyfin | Images,
+    }
+
+    private Task ReloadAllAsync() => LoadAsync(MovieParts.All);
+
+    private async Task LoadAsync(MovieParts parts)
+    {
+        var previous = movie;
         movie = await MovieDetailQuery.GetByCodeAsync(RouteCode);
         loaded = true;
 
@@ -686,33 +715,68 @@ else
             return;
         }
 
-        posterVersion = string.IsNullOrWhiteSpace(movie.Code) ? null : await ImageServing.GetPosterVersionAsync(movie.Code);
-        scenes = await SceneService.GetScenesAsync(movie.Id);
-        highlights = await HighlightService.GetHighlightsAsync(movie.Id);
-        apexes = await ApexService.GetApexesAsync(movie.Id);
-        sceneCast = await SceneService.GetCastOptionsAsync(movie.Id);
-        RecountScenes();
-        if (scenes.Any(s => s.ThumbVersion is null || s.PreviewVersion is null))
+        if (parts.HasFlag(MovieParts.Poster))
         {
-            // Generated in the background; MovieScenesSection reloads the cards as each is written.
-            await SceneMedia.EnsureQueuedAsync(movie.Id);
-        }
-        if (highlights.Any(h => h.ThumbVersion is null || h.PreviewVersion is null))
-        {
-            await HighlightMedia.EnsureQueuedAsync(movie.Id);
-        }
-        if (apexes.Any(a => Javbuddy.Services.SceneMedia.ApexMediaExtensions.IsMissingMedia(ApexMedia, a.ThumbVersion, a.PreviewVersion)))
-        {
-            await ApexMedia.EnsureQueuedAsync(movie.Id);
+            posterVersion = string.IsNullOrWhiteSpace(movie.Code) ? null : await ImageServing.GetPosterVersionAsync(movie.Code);
         }
 
-        jellyfinWebUrl = movie is { JellyfinItemId: not null, JellyfinServerId: not null }
-            ? await JellyfinClient.GetWebUrlAsync(movie.JellyfinItemId, movie.JellyfinServerId)
-            : null;
+        if (parts.HasFlag(MovieParts.Clips))
+        {
+            scenes = await SceneService.GetScenesAsync(movie.Id);
+            highlights = await HighlightService.GetHighlightsAsync(movie.Id);
+            apexes = await ApexService.GetApexesAsync(movie.Id);
+        }
+        if (parts.HasFlag(MovieParts.SceneCast))
+        {
+            sceneCast = await SceneService.GetCastOptionsAsync(movie.Id);
+        }
+        if (parts.HasFlag(MovieParts.Clips))
+        {
+            RecountScenes();
+            if (scenes.Any(s => s.ThumbVersion is null || s.PreviewVersion is null))
+            {
+                // Generated in the background; MovieScenesSection reloads the cards as each is written.
+                await SceneMedia.EnsureQueuedAsync(movie.Id);
+            }
+            if (highlights.Any(h => h.ThumbVersion is null || h.PreviewVersion is null))
+            {
+                await HighlightMedia.EnsureQueuedAsync(movie.Id);
+            }
+            if (apexes.Any(a => Javbuddy.Services.SceneMedia.ApexMediaExtensions.IsMissingMedia(ApexMedia, a.ThumbVersion, a.PreviewVersion)))
+            {
+                await ApexMedia.EnsureQueuedAsync(movie.Id);
+            }
+        }
 
+        // The link only changes with the movie's Jellyfin ids, so an edit that leaves them alone keeps it.
+        if (parts.HasFlag(MovieParts.Jellyfin)
+            || previous?.JellyfinItemId != movie.JellyfinItemId || previous?.JellyfinServerId != movie.JellyfinServerId)
+        {
+            jellyfinWebUrl = movie is { JellyfinItemId: not null, JellyfinServerId: not null }
+                ? await JellyfinClient.GetWebUrlAsync(movie.JellyfinItemId, movie.JellyfinServerId)
+                : null;
+        }
 
-        castEntries = await MovieDetailQuery.GetCastAsync(movie);
+        if (parts.HasFlag(MovieParts.Cast))
+        {
+            castEntries = await MovieDetailQuery.GetCastAsync(movie);
+        }
+
+        if (parts.HasFlag(MovieParts.Images)) imagesRefresh++;
     }
+
+    // A tag was added or removed: the tag chips, the genre text and the NFO drift badge change, nothing else.
+    private Task OnTagsChangedAsync() => LoadAsync(MovieParts.Core);
+
+    // An implied tag was removed from the movie's scenes, highlights and apexes as well.
+    private Task OnClipTagsChangedAsync() => LoadAsync(MovieParts.Clips);
+
+    // A cast member or an actor's tag changed: the cast text, the tag chips the clips roll up and the NFO drift
+    // badge (Core), the cast chips, and what the clips inherit and can be assigned to.
+    private Task OnCastChangedAsync() => LoadAsync(MovieParts.Cast | MovieParts.SceneCast | MovieParts.Clips);
+
+    // The release date changes the cast's ages; creating the .nfo can make the poster appear.
+    private Task OnMetadataEditedAsync() => LoadAsync(MovieParts.Cast | MovieParts.Poster);
 
     private async Task AddPreviewToLibrary()
     {
@@ -725,7 +789,7 @@ else
         addingPreview = false;
         // The movie now exists — reload switches this same page from the preview branch to the
         // normal detail view (ownership/ ownership+metadata already applied by AddAsync).
-        await LoadAsync();
+        await LoadAsync(MovieParts.All);
     }
 
     private async Task RescanMovie()
@@ -736,7 +800,7 @@ else
         try
         {
             await MovieRescanService.RescanAsync(movie.Id);
-            await LoadAsync();
+            await LoadAsync(MovieParts.All);
         }
         finally
         {
@@ -755,7 +819,7 @@ else
             var result = await PosterGeneration.GenerateAsync(movie.Id);
             coverSaveNotice = result.Success ? "Poster and fanart generated from the video." : result.ErrorMessage;
             coverSaveNoticeIsWarning = !result.Success;
-            if (result.Success) await LoadAsync();
+            if (result.Success) await LoadAsync(MovieParts.Poster);
         }
         finally
         {
@@ -770,7 +834,7 @@ else
         var result = await MovieService.CreateNfoAsync(movie.Id);
         coverSaveNotice = result.Success ? "Created the .nfo from the stored metadata." : result.ErrorMessage;
         coverSaveNoticeIsWarning = !result.Success;
-        if (result.Success) await LoadAsync();
+        if (result.Success) await LoadAsync(MovieParts.Poster);
     }
 
     private Task OpenNfoEditor() => nfoEditorRef?.OpenAsync() ?? Task.CompletedTask;
@@ -794,7 +858,7 @@ else
     // The modal's "Add & Download" already created the Movie row (and queued the grab); reload
     // switches this same page from the preview branch to the normal tracked detail view, same as
     // AddPreviewToLibrary above.
-    private async Task OnPreviewMovieAdded(Movie _) => await LoadAsync();
+    private async Task OnPreviewMovieAdded(Movie _) => await LoadAsync(MovieParts.All);
 
     private void OpenPosterLightbox() => showPosterLightbox = true;
 
@@ -856,7 +920,8 @@ else
                 return;
             }
             CloseVersionMenu();
-            await LoadAsync();
+            // A different main file changes the media details, the trickplay and the clips' media.
+            await LoadAsync(MovieParts.All);
         }
         finally
         {
@@ -944,20 +1009,20 @@ else
     {
         coverSaveNotice = result.Message;
         coverSaveNoticeIsWarning = result.IsWarning;
-        await LoadAsync();
+        await LoadAsync(MovieParts.Poster);
     }
 
     private void OpenMetadataRefreshModal() => showMetadataRefreshModal = true;
 
     private void CloseMetadataRefreshModal() => showMetadataRefreshModal = false;
 
-    private async Task OnMetadataRefreshAppliedAsync() => await LoadAsync();
+    private async Task OnMetadataRefreshAppliedAsync() => await LoadAsync(MovieParts.All);
 
     private async Task ToggleStatus()
     {
         if (movie is null) return;
         await MovieService.ToggleStatusAsync(movie.Id);
-        await LoadAsync();
+        await LoadAsync(MovieParts.Core);
     }
 
     private async Task ToggleFavorite()
@@ -971,7 +1036,7 @@ else
     {
         if (movie is null) return;
         await MovieCleanupService.UnblacklistAsync(movie.Id);
-        await LoadAsync();
+        await LoadAsync(MovieParts.Core);
     }
 
     private void OpenDeleteConfirm()

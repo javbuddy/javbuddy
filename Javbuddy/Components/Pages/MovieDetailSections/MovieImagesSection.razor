@@ -57,10 +57,14 @@
 @code {
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
 
+    /// <summary>Changes when the page's reload may have changed the extrafanart folder (a rescan, a metadata refresh),
+    /// which lists it again; any other reload, with the same movie, keeps the listing.</summary>
+    [Parameter] public int RefreshToken { get; set; }
+
     /// <summary>Raised when the Add Images dialog's "Generate stills" option is chosen; the page hosts that dialog.</summary>
     [Parameter] public EventCallback OnGenerateStillsRequested { get; set; }
 
-    private Movie? loadedFor;
+    private (int MovieId, string? Code, int Token)? loadedFor;
     private List<string> extraFanartFiles = new();
     private bool hasLocalFolder;
     private bool showImageUploadModal;
@@ -69,12 +73,13 @@
     private string? imagesError;
     private int extraFanartGeneration;
 
-    // The page hands over a new Movie on every reload (a rescan, a status change, …), which is when
-    // the folder is listed again; a re-render with the same Movie keeps the listing.
+    // The folder is listed again for another movie or when the page changes RefreshToken; the new Movie
+    // every reload hands over (a status change, a tag edit, …) can't have changed it, so it keeps the listing.
     protected override async Task OnParametersSetAsync()
     {
-        if (ReferenceEquals(loadedFor, Movie)) return;
-        loadedFor = Movie;
+        var key = (Movie.Id, Movie.Code, RefreshToken);
+        if (loadedFor == key) return;
+        loadedFor = key;
         await LoadExtraFanartAsync();
     }
 
