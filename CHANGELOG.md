@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-11-12
+
 ### Changed
 
 - **Scene and highlight cards on Movie Detail no longer show a tooltip over their picture.** The play button over the card's picture used to show "Play <title>" on hover; it keeps that as its accessible name only.
