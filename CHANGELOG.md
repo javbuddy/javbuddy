@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
+- **Scene and highlight cards on Movie Detail no longer show a tooltip over their picture.** The play button over the card's picture used to show "Play <title>" on hover; it keeps that as its accessible name only.
 - **The clip player's volume slider and Loop button match the movie player's.** The volume slider pops up above the speaker icon on hover instead of always showing, and Loop is an icon (highlighted while on) rather than the word.
 - **The Transgender checkbox on Actor Edit has no help text under it.** The line about the filters including or excluding the actor is gone.
 
