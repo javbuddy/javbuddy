@@ -1,3 +1,5 @@
+import { isShortcutBlocked } from './ScrubBar.razor.js';
+
 // Arrow-key seeking: ←/→ skip 5 s, Shift+←/→ skip 60 s; ,/. step one frame. Clamped to the video's
 // length, or to [min, max] when given (a clip's range). Guarded like the other player shortcuts (MovieCleanup.razor.js, ClipEditor.razor.js):
 // ignored while typing, with a modifier other than Shift, or with a lightbox/Review modal open.
@@ -33,11 +35,6 @@ function sampleFrameDuration(video) {
     video.requestVideoFrameCallback(onFrame);
 }
 
-function isEditable(element) {
-    return element instanceof Element
-        && (element.closest('input, textarea, select') !== null || element.isContentEditable);
-}
-
 // The first target ahead of `at`, or the last one behind it.
 function jumpTarget(targets, at, forward) {
     if (forward) return targets.find(t => t > at + NEXT_EPSILON_SECONDS);
@@ -47,7 +44,6 @@ function jumpTarget(targets, at, forward) {
 export function init(key, selector, min, max, highlights, apexes) {
     dispose(key);
     const onKeyDown = (event) => {
-        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
         const isFrameStep = event.key === ',' || event.key === '.';
         const letter = event.key.length === 1 ? event.key.toLowerCase() : null;
         const isJump = letter === 'h' || letter === 'a';
@@ -55,8 +51,7 @@ export function init(key, selector, min, max, highlights, apexes) {
         if (isJump && jumpTargets.length === 0) return;
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && !isFrameStep && !isJump) return;
         if (isFrameStep && event.shiftKey) return;
-        if (document.querySelector('.image-lightbox-backdrop, .cleanup-modal-overlay, .delete-confirm-backdrop')) return;
-        if (isEditable(event.target) || isEditable(document.activeElement)) return;
+        if (isShortcutBlocked(event)) return;
 
         const video = document.querySelector(selector);
         if (!video || !(video.readyState > 0)) return;

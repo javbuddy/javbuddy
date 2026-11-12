@@ -1,3 +1,5 @@
+import { isShortcutBlocked } from './ScrubBar.razor.js';
+
 // Player access for ClipEditor and the scene timeline: reading the video's
 // current time for "Set from player", seeking to a scene, playing just a highlight's clip
 //, and the editor's playhead shortcuts (Review mode's scene keys, extended to
@@ -120,19 +122,12 @@ export function playClip(selector, start, end) {
 // like MovieCleanup.razor.js's Review shortcuts: ignored while typing or with a modal/lightbox open.
 const shortcutHandlers = new Map();
 
-function isEditable(element) {
-    return element instanceof Element
-        && (element.closest('input, textarea, select') !== null || element.isContentEditable);
-}
-
 export function initShortcuts(key, dotNetRef, selector, bindings) {
     disposeShortcuts(key);
     const onKeyDown = (event) => {
-        if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
         const method = event.key.length === 1 ? bindings[(event.shiftKey ? 'shift+' : '') + event.key.toLowerCase()] : undefined;
         if (!method) return;
-        if (document.querySelector('.image-lightbox-backdrop, .cleanup-modal-overlay, .delete-confirm-backdrop')) return;
-        if (isEditable(event.target) || isEditable(document.activeElement)) return;
+        if (isShortcutBlocked(event)) return;
 
         const time = currentTime(selector);
         if (time === null) return;
