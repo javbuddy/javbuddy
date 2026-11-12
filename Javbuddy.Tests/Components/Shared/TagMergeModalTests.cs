@@ -3,6 +3,7 @@ using Javbuddy.Components.Shared;
 using Javbuddy.Models;
 using Javbuddy.Services.Tags;
 using Javbuddy.Tests.TestSupport;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -205,5 +206,46 @@ public class TagMergeModalTests : BunitContext
 
         Assert.Contains("Cannot merge a tag into itself.", cut.Find(".alert-danger").TextContent);
         Assert.False(invoked);
+    }
+
+    [Fact]
+    public async Task TypingQuickly_SearchesOnceWithTheFinalText()
+    {
+        var tagService = Substitute.For<ITagService>();
+        tagService.GetMergeCandidatesAsync(1, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(new List<TagMergeCandidate> { new(2, "Target", 1, false) });
+        Services.AddSingleton(tagService);
+
+        var cut = Render<TagMergeModal>(p => p.Add(x => x.Show, true).Add(x => x.SourceTag, new Tag { Id = 1, Name = "Source" }));
+        var input = cut.Find("input[type=text]");
+
+        await Task.WhenAll(input.InputAsync(new ChangeEventArgs { Value = "t" }),
+            input.InputAsync(new ChangeEventArgs { Value = "ta" }),
+            input.InputAsync(new ChangeEventArgs { Value = "tar" }));
+
+        await tagService.Received(1).GetMergeCandidatesAsync(1, "tar", Arg.Any<CancellationToken>());
+        await tagService.DidNotReceive().GetMergeCandidatesAsync(1, "t", Arg.Any<CancellationToken>());
+        await tagService.DidNotReceive().GetMergeCandidatesAsync(1, "ta", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SlowOlderResponse_DoesNotOverwriteANewerSearch()
+    {
+        var tagService = Substitute.For<ITagService>();
+        var initial = new TaskCompletionSource<IReadOnlyList<TagMergeCandidate>>();
+        tagService.GetMergeCandidatesAsync(1, "", Arg.Any<CancellationToken>()).Returns(initial.Task);
+        tagService.GetMergeCandidatesAsync(1, "new", Arg.Any<CancellationToken>())
+            .Returns(new List<TagMergeCandidate> { new(3, "Newer Result", 1, false) });
+        Services.AddSingleton(tagService);
+
+        var cut = Render<TagMergeModal>(p => p.Add(x => x.Show, true).Add(x => x.SourceTag, new Tag { Id = 1, Name = "Source" }));
+        await cut.Find("input[type=text]").InputAsync(new ChangeEventArgs { Value = "new" });
+        Assert.Contains("Newer Result", cut.Find(".tag-candidate-list").TextContent);
+
+        initial.SetResult(new List<TagMergeCandidate> { new(2, "Older Result", 1, false) });
+        await cut.InvokeAsync(() => { });
+
+        Assert.Contains("Newer Result", cut.Find(".tag-candidate-list").TextContent);
+        Assert.DoesNotContain("Older Result", cut.Find(".tag-candidate-list").TextContent);
     }
 }

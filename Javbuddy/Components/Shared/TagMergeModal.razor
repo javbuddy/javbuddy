@@ -1,5 +1,7 @@
 @using Javbuddy.Models
 @using Javbuddy.Services
+@using Javbuddy.Services.Common
+@implements IDisposable
 @inject ITagService TagService
 
 @if (Show && EffectiveSources.Count > 0)
@@ -123,6 +125,8 @@
     private IReadOnlyList<TagMergeCandidate> candidates = [];
     private TagMergeCandidate? selectedTarget;
     private bool isSearching;
+    private int loadVersion;
+    private readonly Debouncer searchDebouncer = new();
     private bool isMerging;
     private bool createReplacementRule;
     private string? errorMessage;
@@ -139,6 +143,7 @@
         if (Show && sourceIds.Count > 0 && (loadedForIds is null || !loadedForIds.SequenceEqual(sourceIds)))
         {
             loadedForIds = sourceIds;
+            searchDebouncer.Cancel();
             searchQuery = "";
             selectedTarget = null;
             errorMessage = null;
@@ -151,13 +156,16 @@
         }
     }
 
-    private async Task LoadCandidatesAsync()
+    private async Task LoadCandidatesAsync(CancellationToken ct = default)
     {
         var sourceIds = SourceIds;
         if (sourceIds.Count == 0) return;
 
+        // A slower, older response must not overwrite a newer one: only the latest load applies its result.
+        var version = ++loadVersion;
         isSearching = true;
-        var loaded = await TagService.GetMergeCandidatesAsync(sourceIds[0], searchQuery);
+        var loaded = await TagService.GetMergeCandidatesAsync(sourceIds[0], searchQuery, ct);
+        if (version != loadVersion) return;
         candidates = loaded.Where(c => !sourceIds.Contains(c.Id)).ToList();
         if (selectedTarget is null && candidates.Count > 0 && candidates[0].IsSuggested)
         {
@@ -169,8 +177,11 @@
     private async Task OnSearchInput(ChangeEventArgs e)
     {
         searchQuery = e.Value?.ToString() ?? "";
-        await LoadCandidatesAsync();
+        // Debounced, so a lookup doesn't run per keystroke.
+        await searchDebouncer.RunAsync(LoadCandidatesAsync);
     }
+
+    public void Dispose() => searchDebouncer.Dispose();
 
     private void SelectTarget(TagMergeCandidate candidate)
     {
