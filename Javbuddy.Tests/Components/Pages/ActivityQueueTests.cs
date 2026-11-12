@@ -138,4 +138,48 @@ public class ActivityQueueTests : BunitContext
 
         await cut.WaitForAssertionAsync(() => qbittorrent.Received(1).GetTorrentsAsync(Arg.Any<CancellationToken>()));
     }
+
+    private ITorrentQueueService SetUpFailingQueue()
+    {
+        var queue = Substitute.For<ITorrentQueueService>();
+        queue.GetActiveAsync(Arg.Any<CancellationToken>()).Returns(
+            Task.FromResult(new List<TorrentDownload> { new() { Id = 1, MovieCode = "AAA-001", ReleaseTitle = "Release", Status = TorrentDownloadStatus.Completed } }),
+            Task.FromException<List<TorrentDownload>>(new InvalidOperationException("reload failed")));
+        queue.RemoveAsync(Arg.Any<IReadOnlyCollection<int>>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("remove failed")));
+        Services.AddSingleton(new TorrentChangeNotifier());
+        Services.AddSingleton<TimeProvider>(clock);
+        Services.AddSingleton(Substitute.For<IQBittorrentClient>());
+        Services.AddSingleton(queue);
+        return queue;
+    }
+
+    [Fact]
+    public async Task Refresh_ThatThrows_ReleasesTheRefreshingFlag()
+    {
+        SetUpFailingQueue();
+        var cut = Render<ActivityQueue>();
+        var refresh = cut.Find("button.activity-toolbar-btn");
+
+        await Record.ExceptionAsync(() => refresh.ClickAsync());
+
+        refresh = cut.Find("button.activity-toolbar-btn");
+        Assert.False(refresh.HasAttribute("disabled"));
+        Assert.Contains("Refresh", refresh.TextContent);
+        Assert.DoesNotContain("Refreshing", refresh.TextContent);
+    }
+
+    [Fact]
+    public async Task RemoveSelected_ThatThrows_ReleasesTheRemovingFlag()
+    {
+        SetUpFailingQueue();
+        var cut = Render<ActivityQueue>();
+        await cut.FindAll("input[type=checkbox]")[1].ChangeAsync(new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = true });
+        var remove = cut.Find("button.activity-toolbar-btn-danger");
+        Assert.False(remove.HasAttribute("disabled"));
+
+        await Record.ExceptionAsync(() => remove.ClickAsync());
+
+        Assert.False(cut.Find("button.activity-toolbar-btn-danger").HasAttribute("disabled"));
+    }
 }

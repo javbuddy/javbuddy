@@ -350,21 +350,30 @@ else
     private async Task RefreshSubServiceHealthAsync()
     {
         refreshingSubServices = true;
-
-        configuredFlags = await SystemStatusService.GetConfiguredAsync();
-        await LoadSubServiceHealthAsync(configuredFlags);
-        refreshingSubServices = false;
+        try
+        {
+            configuredFlags = await SystemStatusService.GetConfiguredAsync();
+            await LoadSubServiceHealthAsync(configuredFlags);
+        }
+        finally
+        {
+            refreshingSubServices = false;
+        }
     }
 
     private async Task PurgeCacheAsync()
     {
         purging = true;
-
-        await ImageCacheMaintenanceService.PurgeAsync();
-        imageCacheStats = await ImageCacheMaintenanceService.GetStatsAsync();
-
-        purging = false;
-        confirmingPurge = false;
+        try
+        {
+            await ImageCacheMaintenanceService.PurgeAsync();
+            imageCacheStats = await ImageCacheMaintenanceService.GetStatsAsync();
+        }
+        finally
+        {
+            purging = false;
+            confirmingPurge = false;
+        }
     }
 
     // Mirrors Program.cs's own fallback so this reports the directory that's actually in effect,

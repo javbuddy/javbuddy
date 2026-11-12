@@ -278,8 +278,15 @@
         isMerging = true;
         errorMessage = null;
 
-        var result = await ActorService.MergeAsync(SourceActor.Id, selectedTarget.Id, updateNfoOnDisk);
-        isMerging = false;
+        ActorOperationResult result;
+        try
+        {
+            result = await ActorService.MergeAsync(SourceActor.Id, selectedTarget.Id, updateNfoOnDisk);
+        }
+        finally
+        {
+            isMerging = false;
+        }
 
         if (!result.Success || result.Actor is null)
         {

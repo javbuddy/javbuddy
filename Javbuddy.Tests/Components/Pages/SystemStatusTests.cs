@@ -203,6 +203,23 @@ public class SystemStatusTests : BunitContext
     }
 
     [Fact]
+    public async Task PurgeCache_ThatThrows_ReleasesThePurgingFlag()
+    {
+        SetUpServices();
+        Services.GetRequiredService<IImageCacheMaintenanceService>().PurgeAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new IOException("disk gone")));
+        var cut = Render<SystemStatus>();
+        await cut.Find("button.btn-outline-danger").ClickAsync(new());
+        var confirm = cut.Find("button.btn-danger");
+
+        await Record.ExceptionAsync(() => confirm.ClickAsync(new()));
+
+        var purge = cut.Find("button.btn-outline-danger");
+        Assert.False(purge.HasAttribute("disabled"));
+        Assert.Contains("Purge Cache", purge.TextContent);
+    }
+
+    [Fact]
     public async Task ClickingRefresh_ReRunsTheChecks()
     {
         var (factory, javinizer, _, _, _) = SetUpServices();

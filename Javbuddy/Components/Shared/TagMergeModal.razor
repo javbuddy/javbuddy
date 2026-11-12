@@ -195,10 +195,17 @@
         isMerging = true;
         errorMessage = null;
 
-        var result = sourceIds.Count == 1
-            ? await TagService.MergeAsync(sourceIds[0], selectedTarget.Id, createReplacementRule)
-            : await TagService.MergeManyAsync(sourceIds, selectedTarget.Id, createReplacementRule);
-        isMerging = false;
+        TagOperationResult result;
+        try
+        {
+            result = sourceIds.Count == 1
+                ? await TagService.MergeAsync(sourceIds[0], selectedTarget.Id, createReplacementRule)
+                : await TagService.MergeManyAsync(sourceIds, selectedTarget.Id, createReplacementRule);
+        }
+        finally
+        {
+            isMerging = false;
+        }
 
         if (!result.Success || result.Tag is null)
         {

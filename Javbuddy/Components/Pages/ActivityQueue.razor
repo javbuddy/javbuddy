@@ -180,19 +180,24 @@ else
     private async Task Refresh()
     {
         refreshing = true;
-
-        using (var scope = ScopeFactory.CreateScope())
+        try
         {
-            var task = scope.ServiceProvider.GetServices<IScheduledTask>().FirstOrDefault(t => t is QBittorrentSyncTask);
-            if (task is not null)
+            using (var scope = ScopeFactory.CreateScope())
             {
-                var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
-                await runner.RunAsync(task, CancellationToken.None);
+                var task = scope.ServiceProvider.GetServices<IScheduledTask>().FirstOrDefault(t => t is QBittorrentSyncTask);
+                if (task is not null)
+                {
+                    var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
+                    await runner.RunAsync(task, CancellationToken.None);
+                }
             }
-        }
 
-        await LoadAsync();
-        refreshing = false;
+            await LoadAsync();
+        }
+        finally
+        {
+            refreshing = false;
+        }
     }
 
     private void ToggleSelectAll(ChangeEventArgs e)
@@ -206,12 +211,17 @@ else
         if (rows is null || selected.Count == 0) return;
 
         removing = true;
+        try
+        {
+            await QueueService.RemoveAsync(selected.ToList());
 
-        await QueueService.RemoveAsync(selected.ToList());
-
-        selected.Clear();
-        await LoadAsync();
-        removing = false;
+            selected.Clear();
+            await LoadAsync();
+        }
+        finally
+        {
+            removing = false;
+        }
     }
 
     private static string FormatEta(long? seconds)

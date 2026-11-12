@@ -834,8 +834,15 @@
     private async Task RunDiscoveryAsync()
     {
         busy = true;
-        var count = await TagRuleService.RunDiscoveryAsync();
-        busy = false;
+        int count;
+        try
+        {
+            count = await TagRuleService.RunDiscoveryAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
         SetStatus($"Discovery scanned {count} movie{(count == 1 ? "" : "s")}.", false);
         await LoadTagsAsync();
         await RefreshAllTagsAsync();
@@ -851,8 +858,15 @@
         }
 
         busy = true;
-        var result = await TagRuleService.AddReplacementRuleAsync(newRuleSource, newRuleMatchMode, targetTag.Id);
-        busy = false;
+        TagOperationResult result;
+        try
+        {
+            result = await TagRuleService.AddReplacementRuleAsync(newRuleSource, newRuleMatchMode, targetTag.Id);
+        }
+        finally
+        {
+            busy = false;
+        }
         SetStatus(result.Success ? "Rule added." : result.ErrorMessage ?? "Failed to add rule.", !result.Success);
         if (result.Success)
         {
@@ -871,8 +885,15 @@
     private async Task ApplyRulesToLibraryAsync()
     {
         busy = true;
-        var count = await TagRuleService.ApplyReplacementRulesToLibraryAsync();
-        busy = false;
+        int count;
+        try
+        {
+            count = await TagRuleService.ApplyReplacementRulesToLibraryAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
         SetStatus($"Applied rules across {count} movie{(count == 1 ? "" : "s")}.", false);
         await LoadRulesAsync();
         await RefreshAllTagsAsync();
@@ -881,8 +902,15 @@
     private async Task AddIgnoredTagAsync()
     {
         busy = true;
-        var result = await TagRuleService.AddIgnoredTagAsync(newIgnoredValue, newIgnoredMatchMode);
-        busy = false;
+        OperationResult result;
+        try
+        {
+            result = await TagRuleService.AddIgnoredTagAsync(newIgnoredValue, newIgnoredMatchMode);
+        }
+        finally
+        {
+            busy = false;
+        }
         SetStatus(result.Success ? "Added to ignore list." : result.ErrorMessage ?? "Failed to add.", !result.Success);
         if (result.Success)
         {
@@ -900,8 +928,15 @@
     private async Task StripIgnoredFromLibraryAsync()
     {
         busy = true;
-        var count = await TagRuleService.StripIgnoredTagsFromLibraryAsync();
-        busy = false;
+        int count;
+        try
+        {
+            count = await TagRuleService.StripIgnoredTagsFromLibraryAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
         SetStatus($"Stripped ignored tags across {count} movie{(count == 1 ? "" : "s")}.", false);
         await LoadIgnoredAsync();
         await RefreshAllTagsAsync();

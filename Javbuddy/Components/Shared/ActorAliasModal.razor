@@ -116,9 +116,16 @@
         errorMessage = null;
         successMessage = null;
 
-        var result = await ActorService.AddAliasAsync(Actor.Id, newAliasName);
-        isAdding = false;
-        isProcessing = false;
+        ActorOperationResult result;
+        try
+        {
+            result = await ActorService.AddAliasAsync(Actor.Id, newAliasName);
+        }
+        finally
+        {
+            isAdding = false;
+            isProcessing = false;
+        }
 
         if (!result.Success)
         {
@@ -140,8 +147,15 @@
         errorMessage = null;
         successMessage = null;
 
-        var result = await ActorService.RemoveAliasAsync(Actor.Id, aliasId);
-        isProcessing = false;
+        ActorOperationResult result;
+        try
+        {
+            result = await ActorService.RemoveAliasAsync(Actor.Id, aliasId);
+        }
+        finally
+        {
+            isProcessing = false;
+        }
 
         if (!result.Success)
         {

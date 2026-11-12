@@ -101,8 +101,15 @@
         isSaving = true;
         errorMessage = null;
 
-        var result = await TagService.SetParentAsync(Tag.Id, selectedParentId);
-        isSaving = false;
+        TagOperationResult result;
+        try
+        {
+            result = await TagService.SetParentAsync(Tag.Id, selectedParentId);
+        }
+        finally
+        {
+            isSaving = false;
+        }
 
         if (result.Success)
         {
