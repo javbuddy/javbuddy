@@ -1853,6 +1853,71 @@ public class MovieDetailTests : BunitContext
         Assert.True(lightbox.Instance.Show);
     }
 
+    private IRenderedComponent<MovieDetail> RenderMovieWithMetadata()
+    {
+        var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123", MetaSourceName = "javinizer", Status = MovieStatus.Got });
+            db.SaveChanges();
+        }
+
+        return Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+    }
+
+    [Fact]
+    public async Task CropFromTheLightbox_ClosesTheLightboxAndOpensTheCropModal()
+    {
+        var cut = RenderMovieWithMetadata();
+        cut.Find(".movie-detail-poster-clickable").Click();
+        Assert.True(cut.FindComponent<ImageLightboxModal>().Instance.Show);
+
+        await cut.InvokeAsync(() => cut.FindComponent<ImageLightboxModal>().Instance.OnCropRequested.InvokeAsync());
+
+        Assert.True(cut.FindComponent<MovieCoverCropModal>().Instance.Show);
+        Assert.False(cut.FindComponent<ImageLightboxModal>().Instance.Show);
+    }
+
+    [Fact]
+    public async Task ALateCloseFromTheLightbox_LeavesTheCropModalOpen()
+    {
+        var cut = RenderMovieWithMetadata();
+        cut.Find(".movie-detail-poster-clickable").Click();
+        await cut.InvokeAsync(() => cut.FindComponent<ImageLightboxModal>().Instance.OnCropRequested.InvokeAsync());
+
+        await cut.InvokeAsync(() => cut.FindComponent<ImageLightboxModal>().Instance.OnClose.InvokeAsync());
+
+        Assert.True(cut.FindComponent<MovieCoverCropModal>().Instance.Show);
+    }
+
+    [Fact]
+    public async Task OpeningADialog_ReplacesTheOneAlreadyOpen()
+    {
+        var cut = RenderMovieWithMetadata();
+        cut.Find(".movie-detail-poster-clickable").Click();
+        Assert.True(cut.FindComponent<ImageLightboxModal>().Instance.Show);
+
+        cut.Find(".page-toolbar-btn-danger").Click();
+
+        Assert.False(cut.FindComponent<ImageLightboxModal>().Instance.Show);
+        Assert.NotEmpty(cut.FindAll(".delete-confirm-dialog"));
+
+        await cut.InvokeAsync(() => cut.FindComponent<MovieCoverCropModal>().Instance.OnClose.InvokeAsync());
+        Assert.NotEmpty(cut.FindAll(".delete-confirm-dialog"));
+    }
+
+    [Fact]
+    public void CancellingTheDeleteConfirm_ClosesIt()
+    {
+        var cut = RenderMovieWithMetadata();
+        cut.Find(".page-toolbar-btn-danger").Click();
+        Assert.NotEmpty(cut.FindAll(".delete-confirm-dialog"));
+
+        cut.Find(".delete-confirm-cancel-btn").Click();
+
+        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+    }
+
     private IRenderedComponent<MovieDetail> RenderWithExtraFanart(List<string> files, bool hasLocalFolder)
     {
         var factory = SetUpServices();

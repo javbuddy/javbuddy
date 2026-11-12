@@ -161,6 +161,7 @@ Domain services (`Services/<Group>/*.cs`):
 | `TorrentChangeNotifier.cs` | Cross-circuit pub/sub for torrent queue changes |
 | `TorrentGrabService.cs` | Send a torrent to qBittorrent |
 | `TorrentQueueService.cs` | Activity > Queue reads (active downloads, count for the sidebar badge) and removal of selected downloads from qBittorrent |
+| `TorrentLiveProgress.cs` | Pure merge of qBittorrent's live torrent list (progress, speed, ETA by hash) into the Queue page's loaded rows |
 | `SystemStatusService.cs` | System > Status: migration state, health messages, which integrations are configured (via `ConnectionStatusService`) and their live connection tests |
 | `MovieDetailQueryService.cs` / `ActorDetailQueryService.cs` | Movie Detail's movie/tag/cast reads and Actor Detail's movie/photo-count reads, so those pages don't open a DbContext |
 | `StringExtensions.cs` | `TrimToNull` (trim, or null when blank), `CompactName` (strip ASCII and full-width spaces — the form used for all actor-name matching) |
@@ -183,7 +184,7 @@ Per-integration subfolders (`Services/<Integration>/`):
 | `QBittorrent/` | `QBittorrentClient`, `QBittorrentDtos` | Torrent client integration |
 | `LocalLibrary/` | `LocalLibraryClient`, `LocalNfoParser`, `LocalLibraryDtos`, `LocalLibraryMetadataMapper` | Local filesystem scanning and the movie .nfo parser; the image cache built on it lives in `Images/`, the .nfo writer in `Nfo/` |
 | `MediaInfo/` | `MediaInfoProber` | Wraps the native `libmediainfo` library for video file introspection |
-| `R18Dev/` | `R18DevDumpStore`, `R18DevDumpImporter`, `DumpParser`, `R18DevDumpPaths`, `R18DevCatalogFacets` (per-release columns + indexes the catalog browse filters on, built at import), `R18DevReleaseMatcher` (Got/Wanted/Missing vs the library), `R18DevReleaseBrowseService` (catalog browse, per-status counts, related releases, code suggestions), `ActorFilmographyService` (actor Missing page filmography + r18.dev name override) | Reads/imports the read-only r18.dev SQL dump (the one place raw SQL is expected — see `AGENTS.md`) |
+| `R18Dev/` | `R18DevDumpStore`, `R18DevDumpImporter`, `DumpParser`, `R18DevDumpPaths`, `R18DevCatalogFacets` (per-release columns + indexes the catalog browse filters on, built at import), `R18DevReleaseMatcher` (Got/Wanted/Missing vs the library), `R18DevDumpService` (Settings > Metadata's r18.dev tile: deleting the dump together with clearing the import bookkeeping, and the save that does so when the source is disabled), `R18DevReleaseBrowseService` (catalog browse, per-status counts, related releases, code suggestions), `ActorFilmographyService` (actor Missing page filmography + r18.dev name override) | Reads/imports the read-only r18.dev SQL dump (the one place raw SQL is expected — see `AGENTS.md`) |
 | `Ffmpeg/` | `FfmpegClient`, `FfmpegBinaryResolver`, `FfmpegModels` | Wraps `ffmpeg` for video processing (used by `VrMerge/`) |
 | `VrMerge/` | `VrMergeService`, `VrPartDetector`, `VrMergeJobTracker`, `VrMergeModels` | VR multi-part file merge workflow |
 

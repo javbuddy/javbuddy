@@ -54,7 +54,7 @@ else if (movie is null && preview is not null)
 
     <MoviePreviewDetails Preview="preview" OnBrowseCatalog="BrowseCatalog" />
     <R18DevRelatedReleasesShelf Related="related" OnSeeAll="BrowseRelated" />
-    <ProwlarrSearchModal Code="@preview.DvdId" Show="showPreviewSearchModal" OnClose="ClosePreviewSearchModal" OnMovieAdded="OnPreviewMovieAdded" />
+    <ProwlarrSearchModal Code="@preview.DvdId" Show="IsOpen(MovieModal.PreviewSearch)" OnClose="ClosePreviewSearchModal" OnMovieAdded="OnPreviewMovieAdded" />
 }
 else if (movie is null)
 {
@@ -392,11 +392,11 @@ else
         <VideoRepairModal @ref="videoRepairModalRef" Movie="movie" OnRepaired="ReloadAllAsync" />
     }
 
-    <ProwlarrSearchModal Movie="movie" Show="showSearchModal" OnClose="CloseSearchModal" />
+    <ProwlarrSearchModal Movie="movie" Show="IsOpen(MovieModal.Search)" OnClose="CloseSearchModal" />
 
     <MetadataEditorModal @ref="metadataEditorRef" Movie="movie" OnSaved="OnMetadataEditedAsync" />
 
-    <ImageLightboxModal Show="@showPosterLightbox"
+    <ImageLightboxModal Show="@IsOpen(MovieModal.PosterLightbox)"
                         Title="@movie.DisplayName"
                         ImageUrl="@PosterFullUrl()"
                         AlternateImageUrl="@(HasFetchedMetadata ? BackdropFullUrl() : null)"
@@ -406,26 +406,26 @@ else
                         OnCropRequested="OpenCoverCropModal"
                         OnClose="ClosePosterLightbox" />
 
-    <MovieStillsGenerateModal Show="@showStillsModal"
+    <MovieStillsGenerateModal Show="@IsOpen(MovieModal.Stills)"
                               MovieId="@movie.Id"
                               Code="@(movie.Code ?? "")"
                               IsVr="@IsSideBySideVr"
-                              OnClose="() => showStillsModal = false"
+                              OnClose="() => CloseModal(MovieModal.Stills)"
                               OnSaved="OnStillsSavedAsync" />
 
-    <MovieCoverCropModal Show="@showCoverCropModal"
+    <MovieCoverCropModal Show="@IsOpen(MovieModal.CoverCrop)"
                          Code="@(movie.Code ?? "")"
                          Title="@movie.DisplayName"
                          OnClose="CloseCoverCropModal"
                          OnCoverChanged="OnCoverChangedAsync" />
 
-    <MovieMetadataRefreshModal Show="@showMetadataRefreshModal"
+    <MovieMetadataRefreshModal Show="@IsOpen(MovieModal.MetadataRefresh)"
                                Movie="movie"
                                CurrentPosterUrl="@(HasFetchedMetadata ? PosterFullUrl() : null)"
                                OnClose="CloseMetadataRefreshModal"
                                OnApplied="OnMetadataRefreshAppliedAsync" />
 
-    <VideoPlayerModal Show="@showVideoPlayerModal"
+    <VideoPlayerModal Show="@IsOpen(MovieModal.VideoPlayer)"
                       Title="@movie.DisplayName"
                       Code="@movie.Code"
                       ExternalWebUrl="@jellyfinWebUrl"
@@ -442,13 +442,13 @@ else
                       OnApexesChanged="OnApexesChanged"
                       OnClose="CloseVideoPlayerModal" />
 
-    @if (confirmingDelete)
+    @if (IsOpen(MovieModal.DeleteConfirm))
     {
         <DeleteConfirmDialog ItemName="@MovieDetailText.DeleteLabel(movie)" Busy="deleting"
                              Message="@(deleteFiles
                                  ? "Its metadata, cast and tag links, images, scenes, highlights and apexes are removed from Javbuddy, and its folder is deleted from disk."
                                  : "Its metadata, cast and tag links, images, scenes, highlights and apexes are removed from Javbuddy. Video files on disk are left alone.")"
-                             OnConfirm="DeleteMovie" OnCancel="() => confirmingDelete = false">
+                             OnConfirm="DeleteMovie" OnCancel="() => CloseModal(MovieModal.DeleteConfirm)">
             <MovieDeleteFilesOption MovieId="@movie.Id" @bind-Checked="deleteFiles" Disabled="deleting" />
             @if (deleteError is not null)
             {
@@ -466,10 +466,24 @@ else
     private bool addingPreview;
     private bool loaded;
     private List<MovieCastEntry> castEntries = new();
-    private bool showSearchModal;
-    private bool showPreviewSearchModal;
-    private bool showPosterLightbox;
-    private bool showVideoPlayerModal;
+    // The page's dialogs are mutually exclusive (each sits over the whole page and the lightbox closes
+    // itself before it asks for the crop), so one value says which is open. The modal components that
+    // keep their own open state (the .nfo editor, Media Info, Repair Video, the metadata editor) are
+    // opened through their @ref instead.
+    private enum MovieModal
+    {
+        None,
+        Search,
+        PreviewSearch,
+        PosterLightbox,
+        VideoPlayer,
+        CoverCrop,
+        Stills,
+        MetadataRefresh,
+        DeleteConfirm,
+    }
+
+    private MovieModal openModal;
     // Whether the Versions badge's primary-version picker is open.
     private bool showPrimaryVersionMenu;
     private bool showPlayMenu;
@@ -486,22 +500,18 @@ else
     private IReadOnlyList<ApexItem> apexes = [];
     private IReadOnlyDictionary<int, int> highlightCounts = new Dictionary<int, int>();
     private IReadOnlyDictionary<int, int> apexCounts = new Dictionary<int, int>();
-    private bool showCoverCropModal;
-    private bool showStillsModal;
 
     // The left-eye crop takes the left half of the frame, which is only right for side-by-side layouts.
     private bool IsSideBySideVr => movie?.IsSideBySideVr == true;
     private MovieImagesSection? imagesSection;
     // Bumped by a reload that can have changed the extrafanart folder, which the images section lists again.
     private int imagesRefresh;
-    private bool confirmingDelete;
     private bool deleting;
     private bool deleteFiles;
     private string? deleteError;
     private string? previewAddError;
     private string? coverSaveNotice;
     private bool coverSaveNoticeIsWarning;
-    private bool showMetadataRefreshModal;
     // Changes only when the poster does, so an unchanged cover is painted straight from the browser's
     // cache while a changed one gets a new URL.
     private string? posterVersion;
@@ -553,10 +563,7 @@ else
         imagesRefresh = 0;
         coverSaveNotice = null;
         coverSaveNoticeIsWarning = false;
-        showSearchModal = false;
-        showPreviewSearchModal = false;
-        showPosterLightbox = false;
-        showVideoPlayerModal = false;
+        openModal = MovieModal.None;
         playerStartAt = null;
         playerEndAt = null;
         playerEditor = false;
@@ -564,10 +571,6 @@ else
         showPlayMenu = false;
         settingPrimary = false;
         versionMenuError = null;
-        showCoverCropModal = false;
-        showStillsModal = false;
-        showMetadataRefreshModal = false;
-        confirmingDelete = false;
         deleting = false;
         deleteFiles = false;
         deleteError = null;
@@ -851,22 +854,33 @@ else
 
     private Task OpenMetadataEditor() => metadataEditorRef?.OpenAsync() ?? Task.CompletedTask;
 
-    private void OpenSearchModal() => showSearchModal = true;
+    private bool IsOpen(MovieModal modal) => openModal == modal;
 
-    private void CloseSearchModal() => showSearchModal = false;
+    private void OpenModal(MovieModal modal) => openModal = modal;
 
-    private void OpenPreviewSearchModal() => showPreviewSearchModal = true;
+    // Only closes the modal that is open, so a close callback arriving after another modal took over
+    // (the lightbox closing as it hands over to the crop) leaves that one alone.
+    private void CloseModal(MovieModal modal)
+    {
+        if (openModal == modal) openModal = MovieModal.None;
+    }
 
-    private void ClosePreviewSearchModal() => showPreviewSearchModal = false;
+    private void OpenSearchModal() => OpenModal(MovieModal.Search);
+
+    private void CloseSearchModal() => CloseModal(MovieModal.Search);
+
+    private void OpenPreviewSearchModal() => OpenModal(MovieModal.PreviewSearch);
+
+    private void ClosePreviewSearchModal() => CloseModal(MovieModal.PreviewSearch);
 
     // The modal's "Add & Download" already created the Movie row (and queued the grab); reload
     // switches this same page from the preview branch to the normal tracked detail view, same as
     // AddPreviewToLibrary above.
     private async Task OnPreviewMovieAdded(Movie _) => await LoadAsync(MovieParts.All);
 
-    private void OpenPosterLightbox() => showPosterLightbox = true;
+    private void OpenPosterLightbox() => OpenModal(MovieModal.PosterLightbox);
 
-    private void ClosePosterLightbox() => showPosterLightbox = false;
+    private void ClosePosterLightbox() => CloseModal(MovieModal.PosterLightbox);
 
     private void OpenVideoPlayerModal() => OpenVideoPlayerAt(null);
 
@@ -940,7 +954,7 @@ else
         playerStartAt = startAtSeconds;
         playerEndAt = endAtSeconds;
         playerEditor = editor;
-        showVideoPlayerModal = true;
+        OpenModal(MovieModal.VideoPlayer);
     }
 
     // The player streams the local file, so Jellyfin isn't needed to play.
@@ -990,7 +1004,7 @@ else
 
     private async Task CloseVideoPlayerModal()
     {
-        showVideoPlayerModal = false;
+        CloseModal(MovieModal.VideoPlayer);
 
         // The player's Movie tags and Movie actors editors change the
         // movie without telling the page.
@@ -999,13 +1013,13 @@ else
         castEntries = await MovieDetailQuery.GetCastAsync(movie.Id);
     }
 
-    private void OpenStillsModal() => showStillsModal = true;
+    private void OpenStillsModal() => OpenModal(MovieModal.Stills);
 
     private Task OnStillsSavedAsync() => imagesSection?.ReloadAsync() ?? Task.CompletedTask;
 
-    private void OpenCoverCropModal() => showCoverCropModal = true;
+    private void OpenCoverCropModal() => OpenModal(MovieModal.CoverCrop);
 
-    private void CloseCoverCropModal() => showCoverCropModal = false;
+    private void CloseCoverCropModal() => CloseModal(MovieModal.CoverCrop);
 
     private void DismissCoverSaveNotice() => coverSaveNotice = null;
 
@@ -1016,9 +1030,9 @@ else
         await LoadAsync(MovieParts.Poster);
     }
 
-    private void OpenMetadataRefreshModal() => showMetadataRefreshModal = true;
+    private void OpenMetadataRefreshModal() => OpenModal(MovieModal.MetadataRefresh);
 
-    private void CloseMetadataRefreshModal() => showMetadataRefreshModal = false;
+    private void CloseMetadataRefreshModal() => CloseModal(MovieModal.MetadataRefresh);
 
     private async Task OnMetadataRefreshAppliedAsync() => await LoadAsync(MovieParts.All);
 
@@ -1047,7 +1061,7 @@ else
     {
         deleteFiles = false;
         deleteError = null;
-        confirmingDelete = true;
+        OpenModal(MovieModal.DeleteConfirm);
     }
 
     private async Task DeleteMovie()
@@ -1069,7 +1083,7 @@ else
             deleteError = result.ErrorMessage;
             return;
         }
-        confirmingDelete = false;
+        CloseModal(MovieModal.DeleteConfirm);
         Nav.NavigateTo("/");
     }
 }

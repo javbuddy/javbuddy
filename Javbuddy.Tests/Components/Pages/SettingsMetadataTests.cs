@@ -71,6 +71,7 @@ public class SettingsMetadataTests : BunitContext
 
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
         Services.AddSingleton(NewTaskActivityTracker());
@@ -112,6 +113,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
         Services.AddSingleton(NewTaskActivityTracker());
@@ -144,6 +146,7 @@ public class SettingsMetadataTests : BunitContext
 
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
         Services.AddSingleton(NewTaskActivityTracker());
@@ -181,6 +184,7 @@ public class SettingsMetadataTests : BunitContext
 
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
         Services.AddSingleton(NewTaskActivityTracker());
@@ -208,6 +212,7 @@ public class SettingsMetadataTests : BunitContext
             .AddInMemoryCollection(env is null ? [] : new Dictionary<string, string?> { ["MinnanoAv:UseChallengeSolver"] = env }).Build());
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
         Services.AddSingleton(NewTaskActivityTracker());
@@ -234,6 +239,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton(Substitute.For<IR18DevDumpStore>());
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
 
@@ -334,6 +340,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
         Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton(NewTaskActivityTracker());
