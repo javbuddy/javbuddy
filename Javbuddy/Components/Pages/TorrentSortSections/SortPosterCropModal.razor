@@ -57,7 +57,7 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@saving">Cancel</button>
                 @if (source is not null)
                 {
-                    <button type="button" class="btn btn-primary btn-sm spc-save" @onclick="SaveAsync" disabled="@saving">
+                    <button type="button" class="btn btn-primary btn-sm spc-save" @onclick="SaveAsync" disabled="@(saving || !cropperStarted)">
                         @(saving ? "Saving…" : "Save crop")
                     </button>
                 }
@@ -86,6 +86,9 @@
     private CropperViewport? viewport;
     private ElementReference previewCanvasRef;
     private IJSObjectReference? jsModule;
+    private DotNetObjectReference<SortPosterCropModal>? selfRef;
+    // Save stays off until the cropper script has the image; it still refuses while the image is loading.
+    private bool cropperStarted;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -99,6 +102,7 @@
             prevShow = false;
             await DestroyCropperAsync();
             source = null;
+            cropperStarted = false;
             errorMessage = null;
         }
     }
@@ -108,6 +112,7 @@
         loading = true;
         errorMessage = null;
         source = null;
+        cropperStarted = false;
         StateHasChanged();
 
         var (loaded, error) = await SortService.GetPosterCropSourceAsync(TorrentDownloadId, MovieId);
@@ -132,8 +137,12 @@
             // Stream the bytes to the browser as a blob URL rather than a base64 data: URL in the render tree.
             using var streamRef = new DotNetStreamReference(new MemoryStream(source.Bytes, writable: false));
             await jsModule.InvokeVoidAsync("setImageSource", viewport.Image, streamRef, source.ContentType);
+            selfRef ??= DotNetObjectReference.Create(this);
+            await jsModule.InvokeVoidAsync("setHost", selfRef);
             await jsModule.InvokeVoidAsync("initCropper", viewport.Container, viewport.Image, previewCanvasRef);
             await jsModule.InvokeVoidAsync("setAspectRatio", 2.0 / 3.0);
+            cropperStarted = true;
+            StateHasChanged();
         }
         catch (JSException ex)
         {
@@ -149,7 +158,12 @@
         errorMessage = null;
         try
         {
-            var rect = await jsModule.InvokeAsync<CropRectDto>("getCropRect");
+            var rect = await jsModule.InvokeAsync<CropRectDto?>("getCropRect");
+            if (rect is null)
+            {
+                errorMessage = "The image is still loading. Try again in a moment.";
+                return;
+            }
             var result = await SortService.CropPosterAsync(TorrentDownloadId, ResultId, new NormalizedCropRect(rect.x, rect.y, rect.width, rect.height), source.Width, source.Height);
             if (!result.Success)
             {
@@ -173,6 +187,19 @@
             saving = false;
         }
     }
+
+    /// <summary>Called from JS when the browser can't decode the poster.</summary>
+    [JSInvokable]
+    public Task OnImageError() => InvokeAsync(() =>
+    {
+        errorMessage = "The poster could not be displayed. It may be corrupt or in an unsupported format.";
+        cropperStarted = false;
+        StateHasChanged();
+    });
+
+    /// <summary>Called from JS on wheel zoom; this dialog has no zoom slider to follow it.</summary>
+    [JSInvokable]
+    public Task OnZoomChanged(double zoom) => Task.CompletedTask;
 
     private async Task OnKeyDownAsync(KeyboardEventArgs e)
     {
@@ -198,6 +225,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        selfRef?.Dispose();
         if (jsModule is null) return;
         try
         {

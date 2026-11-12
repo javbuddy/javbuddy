@@ -601,4 +601,20 @@ public class MovieCoverCropModalTests : BunitContext
             -12.3,
             Arg.Any<CancellationToken>()));
     }
+
+    [Fact]
+    public void MovieCoverCropModal_Save_BeforeTheImageIsLaidOut_SavesNothing()
+    {
+        var module = JSInterop.SetupModule("./Components/Shared/MovieCoverCropModal.razor.js");
+        module.Mode = JSRuntimeMode.Loose;
+        // The cropper session returns null until the image has loaded and has a crop box.
+        module.Setup<MovieCoverCropModal.CropRectDto>("getCropRect").SetResult(null!);
+        var cut = RenderWithLoadedImage(module);
+        var cropService = Services.GetRequiredService<IMovieCoverCropService>();
+
+        cut.Find(".crop-save-btn").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("still loading", cut.Markup));
+        cropService.DidNotReceiveWithAnyArgs().SaveCroppedCoverAsync(default!, default!, default!, default, default);
+    }
 }
