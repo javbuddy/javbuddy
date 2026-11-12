@@ -42,7 +42,7 @@ else
 }
 
 <div class="d-flex align-items-center justify-content-between">
-    <h1 class="data-page-title status-section-title mb-0">Sub-services</h1>
+    <h2 class="data-page-title status-section-title mb-0">Sub-services</h2>
     <button class="btn btn-sm btn-outline-secondary" type="button" @onclick="RefreshSubServiceHealthAsync" disabled="@refreshingSubServices">
         @(refreshingSubServices ? "Checking…" : "Refresh")
     </button>
@@ -107,7 +107,7 @@ else
 }
 
 <div class="d-flex align-items-center justify-content-between">
-    <h1 class="data-page-title status-section-title mb-0">Image Cache</h1>
+    <h2 class="data-page-title status-section-title mb-0">Image Cache</h2>
     @if (!confirmingPurge)
     {
         <button class="btn btn-sm btn-outline-danger" type="button" @onclick="() => confirmingPurge = true" disabled="@purging">
@@ -173,7 +173,7 @@ else
     </div>
 }
 
-<h1 class="data-page-title status-section-title">Disk Space</h1>
+<h2 class="data-page-title status-section-title">Disk Space</h2>
 
 @if (diskSpace is null)
 {
@@ -218,7 +218,7 @@ else
     </div>
 }
 
-<h1 class="data-page-title status-section-title">About</h1>
+<h2 class="data-page-title status-section-title">About</h2>
 
 <div class="about-table">
     <div class="about-row">

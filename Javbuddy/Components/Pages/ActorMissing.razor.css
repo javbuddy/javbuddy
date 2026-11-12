@@ -10,12 +10,6 @@
     margin: 0.35rem 0;
 }
 
-.missing-title {
-    font-size: 1.75rem;
-    font-weight: 700;
-    margin-bottom: 0.4rem;
-}
-
 .r18dev-name-override {
     display: flex;
     align-items: center;

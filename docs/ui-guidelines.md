@@ -129,6 +129,11 @@ Near-duplicates of these (`#3d4256`, `#3d4452`, `#35394a`, `#2a2f3b`, `#4a5062`/
 | `MovieActorsEditor.razor` / `MovieTagsEditor.razor` | The movie's cast and its movie-level tags as collapsed sections of the `ClipEditor` panel, edited while watching | Used by `VideoPlayerModal`; `MovieTagsEditor` also by `MovieCleanup.razor`. Themed by `--scene-editor-*`. |
 | `ActorTagHover.razor` (+ `ActorTagPillStyle.cs`) | Wraps an actor's name or chip: hover or focus opens a top-layer popover with where an inherited actor comes from and their actor tags | Placed by `ActorTagHover.razor.js`, which `App.razor` loads once. |
 
+## Page headings
+
+- Every routable page renders **exactly one `h1`**: `Routes.razor`'s `FocusOnNavigate Selector="h1"` moves focus to it after an in-app navigation, and it is the heading a screen reader lands on. A page whose design has no visible title (Settings' link list, Discover, Backups) carries `<h1 class="visually-hidden">Title</h1>` (Bootstrap's class) right after its `<PageTitle>`. A page with several titled sections (System Status, System Tasks) makes the first its `h1` and the rest `h2` with the same classes. `NotFound` uses `<h1 class="h3">` to keep its smaller look. `PageHeadingTests` (E2E) sweeps every route and fails when a page has none or more than one, so a new page is added to its list.
+- A visible page title on a data-style page uses the global `.data-page-title` (1.6rem, weight 400), not a new per-page size; the page's own class beside it (`activity-title`, `tasks-section-title`, `missing-title`) is only a hook for tests and for a genuine spacing difference. Pages whose title is a plain Bootstrap `h1` (Movies, Actors, Settings pages, Add pages) and the two centered hero titles (`.import-title` on Library Import and Actor Import) are deliberate larger styles and stay as they are.
+
 ## Blazor CSS isolation gotchas
 
 `.razor.css` files are scoped per component — identical class names in two different `.razor.css` files do **not** share styles. When a new component needs the same look as an existing one, copy the needed CSS rules into the new component's own `.razor.css` rather than assuming reuse across components.
