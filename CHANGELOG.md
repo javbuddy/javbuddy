@@ -8,6 +8,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 - **The clip editor's new-scene form no longer has a large gap between Title and Start.** The scene form's styles had been split out with a rule that gave the Title field a tall flex-basis; the fields stack tightly again.
 - **The delete button on Movie Detail's images is back in the top-right corner and translucent.** Its styling stopped applying when the Images section got the shared section header, so the button showed unstyled in the middle of the image on hover.
+- **Hover previews fade in instead of loading in view.** A scene card's, apex marker's or editor row's preview video used to appear as soon as it was added, so its loading showed. It now stays hidden until its first frame plays, then fades in over the still. Hovering an apex marker on Movie Detail now starts its clip at once, over the apex's screenshot, instead of waiting a moment with an empty frame.
 
 ## [0.6.2] - 2026-11-12
 

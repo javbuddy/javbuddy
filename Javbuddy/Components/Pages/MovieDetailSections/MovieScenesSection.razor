@@ -51,9 +51,10 @@
                     {
                         var label = $"{apex.DisplayLabel} ({SceneTimeFormat.Format(apex.Seconds)})";
                         var preview = apex.PreviewVersion is { } previewVersion ? $"/apex-image/{apex.Id}/preview?v={previewVersion}" : null;
+                        var thumb = apex.ThumbVersion is { } thumbVersion ? $"/apex-image/{apex.Id}/thumb?v={thumbVersion}" : null;
                         @* display: contents, so the marker and its popover are positioned against the row; the
                            hover binding treats the pair as one card. *@
-                        <span class="movie-scenes-timeline-apex-host" @key="apex.Id">
+                        <span class="movie-scenes-timeline-apex-host" data-hover-instant @key="apex.Id">
                             <button type="button" class="movie-scenes-timeline-apex @(apex.IsFavorite ? "movie-scenes-timeline-apex-fav" : null)"
                                     style="@FormattableString.Invariant($"left:{Percent(apex.Seconds, duration):0.###}%")"
                                     data-start="@apex.Seconds.ToString(CultureInfo.InvariantCulture)" data-highlight-name="@apex.DisplayLabel"
@@ -62,7 +63,7 @@
                             <div class="movie-scenes-timeline-apex-popover" aria-hidden="true"
                                  style="@FormattableString.Invariant($"--x:{Percent(apex.Seconds, duration) / 100:0.#####}")">
                                 <div class="movie-scenes-timeline-apex-popover-at">
-                                    <ApexPreviewPopover HoverPreviewUrl="@preview" Generating="Movie.HasLocalVideo && ApexMedia.ServesPreview"
+                                    <ApexPreviewPopover ThumbUrl="@thumb" HoverPreviewUrl="@preview" Generating="Movie.HasLocalVideo && ApexMedia.ServesPreview"
                                                         Actors="apex.Actors" Tags="apex.Tags" Seconds="apex.Seconds" />
                                 </div>
                             </div>

@@ -58,6 +58,12 @@ export function bindHoverPreviews(container, cardSelector = '.scene-wall-card') 
         video.disablePictureInPicture = true;
         const poster = card.querySelector('.scene-preview-media img')?.getAttribute('src');
         if (poster) video.poster = poster;
+        // Invisible until the first frame is decoded, then faded in over the still beneath it, so the
+        // load (an empty or poster-only frame, a stall) is never seen.
+        video.style.opacity = '0';
+        video.style.transition = 'opacity 120ms ease-out';
+        const shown = video;
+        shown.addEventListener('playing', () => { shown.style.opacity = '1'; }, { once: true });
         video.src = src;
         live.appendChild(video);
         video.play().catch(() => { });
@@ -65,7 +71,11 @@ export function bindHoverPreviews(container, cardSelector = '.scene-wall-card') 
 
     const schedule = () => {
         clearTimeout(timer);
-        timer = setTimeout(play, Number(container.dataset.hoverPreviewDelay) || HOVER_PREVIEW_DELAY_MS);
+        // A card marked data-hover-instant (a small, deliberate target like a timeline marker, which scrolling
+        // doesn't carry under the pointer in bulk) starts at once.
+        const delay = card?.hasAttribute('data-hover-instant') ? 0
+            : Number(container.dataset.hoverPreviewDelay) || HOVER_PREVIEW_DELAY_MS;
+        timer = setTimeout(play, delay);
     };
 
     const onOver = e => {
@@ -85,7 +95,8 @@ export function bindHoverPreviews(container, cardSelector = '.scene-wall-card') 
             unbind();
             return;
         }
-        if (!card) return;
+        // An instant card has no delay to restart: restarting it would rebuild its video on every scroll event.
+        if (!card || card.hasAttribute('data-hover-instant')) return;
         stop();
         schedule();
     };

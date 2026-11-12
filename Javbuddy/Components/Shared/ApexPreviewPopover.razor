@@ -2,7 +2,7 @@
     <div class="apex-preview-media">
         @if (HoverPreviewUrl is not null)
         {
-            <ScenePreviewMedia HoverPreviewUrl="@HoverPreviewUrl" />
+            <ScenePreviewMedia ThumbUrl="@ThumbUrl" HoverPreviewUrl="@HoverPreviewUrl" />
         }
         else
         {
@@ -35,6 +35,9 @@
     /// the marker is hovered; the clip is only a data attribute here, which ClipCard.razor.js's
     /// bindHoverPreviews plays then.</summary>
     [Parameter] public string? HoverPreviewUrl { get; set; }
+
+    /// <summary>The apex's screenshot, shown under the clip while it loads.</summary>
+    [Parameter] public string? ThumbUrl { get; set; }
 
     [Parameter] public bool Generating { get; set; }
 
