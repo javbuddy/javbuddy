@@ -122,7 +122,7 @@ public class ToolbarMenuButtonTests : BunitContext
         var lists = cut.FindAll(".toolbar-menu-list");
         Assert.Single(lists);
         Assert.Contains("Tools item", lists[0].TextContent);
-        var expanded = cut.FindAll("button.toolbar-menu-btn").Select(b => b.GetAttribute("aria-expanded")).ToArray();
+        var expanded = cut.FindAll("button.toolbar-menu-btn").Select(b => b.GetAttribute("aria-expanded") ?? "").ToArray();
         Assert.Equal(["false", "true"], expanded);
     }
 
