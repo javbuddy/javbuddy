@@ -145,6 +145,7 @@ public class ClipEditorHighlightTests : ClipEditorTestBase
         cut.Find(".highlight-editor-delete-btn").Click();
         cut.WaitForAssertion(() => Assert.Equal("Delete \"Highlight 1\"?", cut.Find(".delete-confirm-backdrop .modal-shell-title").TextContent));
         Assert.Single(await StoredAsync());
+        Assert.Equal("Its screenshot and preview are deleted too.", cut.Find(".delete-confirm-backdrop .delete-confirm-message").TextContent);
 
         cut.Find(".delete-confirm-confirm-btn").Click();
         cut.WaitForAssertion(() =>

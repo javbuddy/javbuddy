@@ -109,6 +109,7 @@ public class ClipEditorApexTests : ClipEditorTestBase
         var cut = RenderEditor();
 
         await cut.Find(".apex-editor-delete-btn").ClickAsync();
+        Assert.Equal("Its hover preview is deleted too.", cut.Find(".delete-confirm-backdrop .delete-confirm-message").TextContent);
         await cut.Find(".delete-confirm-confirm-btn").ClickAsync();
 
         Assert.Empty(await apexService.GetApexesAsync(movieId));
