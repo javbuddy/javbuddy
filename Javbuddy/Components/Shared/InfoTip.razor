@@ -1,0 +1,7 @@
+@* A small circled "i" with a tooltip, for a modal's header actions: the CSS tooltip shows on hover and on keyboard focus, which a title attribute doesn't. *@
+<span class="info-tip" tabindex="0" role="img" aria-label="@Text" data-tip="@Text">i</span>
+
+@code {
+    /// <summary>The tooltip text, also the accessible name.</summary>
+    [Parameter, EditorRequired] public string Text { get; set; } = string.Empty;
+}

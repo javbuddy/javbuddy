@@ -60,13 +60,13 @@
 }
 
 :root[data-theme="dark"] .mediainfo-version-tab {
-    background-color: #2b303c;
+    background-color: var(--jb-dark-raised-cool);
     border-color: #3f4756;
     color: #c5cbd8;
 }
 
 :root[data-theme="dark"] .mediainfo-version-tab:hover {
-    background-color: #353b49;
+    background-color: var(--jb-dark-border);
     border-color: #4f586b;
 }
 

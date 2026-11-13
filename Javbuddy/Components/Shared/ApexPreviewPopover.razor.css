@@ -39,7 +39,7 @@
     aspect-ratio: 16 / 9;
     overflow: hidden;
     border-radius: 4px;
-    background-color: #15171d;
+    background-color: var(--jb-dark-deep);
 }
 
 .apex-preview-details {

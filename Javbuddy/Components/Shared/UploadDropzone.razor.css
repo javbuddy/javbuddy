@@ -4,7 +4,7 @@
     text-align: center;
     color: #fff;
     background-color: var(--jb-dark-bg);
-    border: 2px dashed #454a5e;
+    border: 2px dashed var(--jb-dark-control);
     border-radius: 6px;
     cursor: pointer;
     transition: border-color 0.15s ease, background-color 0.15s ease;
@@ -40,11 +40,11 @@
    dark panel. The input above it takes the click, so this is only a visual. */
 .upload-dropzone-browse {
     margin-top: 0.75rem;
-    background-color: #2b303c;
-    border: 1px solid #454a5e;
+    background-color: var(--jb-dark-raised-cool);
+    border: 1px solid var(--jb-dark-control);
 }
 
 .upload-dropzone:hover:not(.upload-dropzone-disabled) .upload-dropzone-browse {
-    background-color: #454a5e;
+    background-color: var(--jb-dark-control);
     color: #ffffff;
 }

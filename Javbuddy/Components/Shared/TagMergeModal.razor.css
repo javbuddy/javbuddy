@@ -11,7 +11,7 @@
     overflow-y: auto;
     border: 1px solid var(--jb-dark-border-strong);
     border-radius: 4px;
-    background-color: #1a1c23;
+    background-color: var(--jb-dark-popup);
 }
 
 .tag-candidate-item {
@@ -30,7 +30,7 @@
 }
 
 .tag-candidate-item:hover {
-    background-color: #252a36;
+    background-color: var(--jb-dark-surface);
 }
 
 .tag-candidate-item.selected {

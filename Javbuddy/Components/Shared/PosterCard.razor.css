@@ -79,7 +79,7 @@
 .poster-image {
     position: relative;
     aspect-ratio: 2 / 3;
-    background: #2b2f38;
+    background: var(--jb-dark-raised);
     background-repeat: no-repeat;
     border-bottom: 4px solid transparent;
 }

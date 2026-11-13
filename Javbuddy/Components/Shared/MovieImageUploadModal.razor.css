@@ -2,5 +2,5 @@
 .movie-image-upload-divider { display: flex; align-items: center; gap: 0.75rem; margin: 1.25rem 0; color: var(--jb-dark-muted); font-size: 0.8rem; }
 .movie-image-upload-divider::before, .movie-image-upload-divider::after { content: ""; flex: 1; border-top: 1px solid var(--jb-dark-border-strong); }
 .movie-image-upload-progress { display: grid; gap: 0.35rem; margin-top: 1rem; font-size: 0.85rem; }
-:root[data-theme="dark"] .modal-shell-panel .form-control { color: #fff; background: #14161d; border-color: var(--jb-dark-border-strong); }
+:root[data-theme="dark"] .modal-shell-panel .form-control { color: #fff; background: var(--jb-dark-deep); border-color: var(--jb-dark-border-strong); }
 

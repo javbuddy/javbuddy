@@ -37,7 +37,7 @@
     left: 0;
     width: 420px;
     max-width: 90vw;
-    background-color: #35394a;
+    background-color: var(--jb-dark-border);
     border-radius: 4px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     padding: 0.5rem 0;
@@ -64,7 +64,7 @@
 }
 
     .search-dropdown .search-result:hover {
-        background-color: #3d4256;
+        background-color: var(--jb-dark-border-strong);
         color: #ffffff;
     }
 
@@ -74,7 +74,7 @@
     flex-shrink: 0;
     object-fit: cover;
     border-radius: 2px;
-    background: #2b2f38;
+    background: var(--jb-dark-raised);
 }
 
 .search-result-avatar {

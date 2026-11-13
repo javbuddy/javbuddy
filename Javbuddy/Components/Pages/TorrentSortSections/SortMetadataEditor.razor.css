@@ -342,9 +342,9 @@
     --search-add-fg: #e6e8ec;
     --search-add-input-bg: rgba(255, 255, 255, 0.06);
     --search-add-input-border: rgba(255, 255, 255, 0.14);
-    --search-add-results-bg: #1a1c23;
+    --search-add-results-bg: var(--jb-dark-popup);
     --search-add-results-border: var(--jb-dark-border-strong);
-    --search-add-hover-bg: #252a36;
+    --search-add-hover-bg: var(--jb-dark-surface);
 }
 
 :root[data-theme="dark"] .sme-cast-chip {
@@ -367,12 +367,12 @@
 :root[data-theme="dark"] .sme-hint,
 :root[data-theme="dark"] .sme-cast-remove,
 :root[data-theme="dark"] .sme-genre-remove {
-    color: #9aa1b2;
+    color: var(--jb-dark-muted);
 }
 
 :root[data-theme="dark"] .sme-cast-remove:hover,
 :root[data-theme="dark"] .sme-genre-remove:hover {
-    background: #3a4150;
+    background: var(--jb-dark-hover);
     color: #ff6b6b;
 }
 
@@ -399,7 +399,7 @@
 
 :root[data-theme="dark"] .sme-source-badge {
     border-color: #4a5163;
-    color: #9aa1b2;
+    color: var(--jb-dark-muted);
 }
 
 :root[data-theme="dark"] .sme-source-panel {
@@ -415,7 +415,7 @@
 }
 
 :root[data-theme="dark"] .sme-hint-inline {
-    color: #9aa1b2;
+    color: var(--jb-dark-muted);
 }
 
 :root[data-theme="dark"] .sme-footer {

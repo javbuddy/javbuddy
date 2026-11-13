@@ -24,9 +24,9 @@
                 Also add a scene from 0:00 to @SceneTimeFormat.Format(openingPrompt.Seconds), before the first fade to black?
             </p>
             <div class="scene-detector-opening-actions">
-                <button type="button" class="scene-editor-btn scene-detector-opening-insert-btn" @onclick="() => ConfirmOpeningAsync(insert: true)" disabled="@busy">Insert before and accept</button>
-                <button type="button" class="scene-editor-btn scene-detector-opening-skip-btn" @onclick="() => ConfirmOpeningAsync(insert: false)" disabled="@busy">Accept without inserting</button>
-                <button type="button" class="scene-editor-btn scene-detector-opening-cancel-btn" @onclick="CancelOpening" disabled="@busy">Cancel</button>
+                <button type="button" class="scene-editor-btn clip-btn scene-detector-opening-insert-btn" @onclick="() => ConfirmOpeningAsync(insert: true)" disabled="@busy">Insert before and accept</button>
+                <button type="button" class="scene-editor-btn clip-btn scene-detector-opening-skip-btn" @onclick="() => ConfirmOpeningAsync(insert: false)" disabled="@busy">Accept without inserting</button>
+                <button type="button" class="scene-editor-btn clip-btn scene-detector-opening-cancel-btn" @onclick="CancelOpening" disabled="@busy">Cancel</button>
             </div>
         </div>
     }
@@ -35,7 +35,7 @@
         @* While a scan runs, what it has found so far is listed already. *@
         <div class="scene-detector-header">
             <span class="scene-detector-heading">@suggestions.Count suggested @(suggestions.Count == 1 ? "boundary" : "boundaries")@(runningJob is not null ? " so far" : null)</span>
-            <button type="button" class="scene-editor-btn scene-detector-accept-all-btn" @onclick="RequestAcceptAllAsync" disabled="@busy">@(runningJob is not null ? "Accept all so far" : "Accept all")</button>
+            <button type="button" class="scene-editor-btn clip-btn scene-detector-accept-all-btn" @onclick="RequestAcceptAllAsync" disabled="@busy">@(runningJob is not null ? "Accept all so far" : "Accept all")</button>
         </div>
         <ul class="scene-detector-list">
             @foreach (var suggestion in suggestions)
@@ -51,7 +51,7 @@
     }
     else if (runningJob is null)
     {
-        <button type="button" class="scene-editor-btn scene-detector-start-btn" @onclick="StartAsync" disabled="@busy" title="Scan the whole video for fades to black and hard cuts, and suggest scene boundaries. Takes a while for long or 8K files; runs in the background.">
+        <button type="button" class="scene-editor-btn clip-btn scene-detector-start-btn" @onclick="StartAsync" disabled="@busy" title="Scan the whole video for fades to black and hard cuts, and suggest scene boundaries. Takes a while for long or 8K files; runs in the background.">
             Detect scenes…
         </button>
     }

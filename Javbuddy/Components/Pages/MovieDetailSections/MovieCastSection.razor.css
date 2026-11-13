@@ -40,7 +40,7 @@ a.movie-detail-cast-avatar {
 }
 
 .movie-detail-cast-avatar-photo {
-    background-color: #2b2f38;
+    background-color: var(--jb-dark-raised);
 }
 
 .movie-detail-cast-avatar-wrap {

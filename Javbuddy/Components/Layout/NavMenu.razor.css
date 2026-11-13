@@ -109,7 +109,7 @@
 }
 
 .nav-item ::deep .nav-link:hover {
-    background-color: #3d4256;
+    background-color: var(--jb-dark-border-strong);
     color: white;
 }
 
@@ -146,7 +146,7 @@
     flex-direction: column;
     flex-shrink: 0;
     margin-top: auto;
-    background-color: #35394a;
+    background-color: var(--jb-dark-border);
 }
 
 .active-task-status {
@@ -157,7 +157,7 @@
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     color: var(--jb-dark-text-dim);
     font-size: 0.8rem;
-    background-color: #35394a;
+    background-color: var(--jb-dark-border);
     overflow: hidden;
 }
 
@@ -247,11 +247,11 @@
     color: var(--jb-dark-text-dim);
     font-size: 0.95rem;
     font-weight: 500;
-    background-color: #35394a;
+    background-color: var(--jb-dark-border);
 }
 
 .sidebar-collapse-toggle:hover {
-    background-color: #3d4256;
+    background-color: var(--jb-dark-border-strong);
     color: white;
 }
 

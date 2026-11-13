@@ -1,0 +1,36 @@
+@* The body of a crop dialog: the cropper viewport (ChildContent) beside a framed previews column, with an optional
+   busy overlay over the viewport. The dialogs (ActorImageUploadModal, MovieCoverCropModal, SortPosterCropModal) own the
+   viewport, the preview canvases and the CropToolbar; this owns the layout. A host sizes its variant through CSS custom
+   properties in Style (inline, since a host's scoped CSS doesn't reach a child component's elements):
+   --crop-workspace-gap, --crop-previews-width, --crop-previews-padding, --crop-previews-gap. *@
+<div class="cropper-workspace" style="@Style">
+    <div class="cropper-viewport-wrapper">
+        @ChildContent
+        @if (BusyLabel is not null)
+        {
+            <div class="cropper-busy" role="status">
+                <span class="spinner-border" aria-hidden="true"></span>
+                <span class="visually-hidden">@BusyLabel</span>
+            </div>
+        }
+    </div>
+    <div class="cropper-previews" title="@PreviewsTitle">
+        @Previews
+    </div>
+</div>
+
+@code {
+    /// <summary>The viewport (and anything that belongs under it, like a hint).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The preview canvases, centred in the framed column.</summary>
+    [Parameter] public RenderFragment? Previews { get; set; }
+
+    [Parameter] public string? PreviewsTitle { get; set; }
+
+    /// <summary>Covers the viewport with a spinner while set; the text is its screen-reader label.</summary>
+    [Parameter] public string? BusyLabel { get; set; }
+
+    /// <summary>The host's variant sizing, as the custom properties named above.</summary>
+    [Parameter] public string? Style { get; set; }
+}

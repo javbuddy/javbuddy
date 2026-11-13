@@ -32,6 +32,12 @@ html, body {
     --jb-dark-text-dim: #b9bfd1;
     --jb-dark-muted: #9aa1af;
     --jb-dark-muted-cool: #94a3b8;
+    --jb-dark-deep: #14161d;
+    --jb-dark-popup: #1a1c23;
+    --jb-dark-raised: #2b2f38;
+    --jb-dark-raised-cool: #2b303c;
+    --jb-dark-hover: #3a4150;
+    --jb-dark-control: #454a5e;
 }
 
 /* The video player modal and the image viewers cover the whole viewport, so the page behind them
@@ -129,7 +135,7 @@ h1:focus {
 :root[data-theme="dark"] .form-control,
 :root[data-theme="dark"] .form-select {
     background-color: var(--jb-dark-bg);
-    border-color: #3d4452;
+    border-color: var(--jb-dark-border-strong);
     color: var(--jb-dark-text);
 }
 
@@ -139,7 +145,7 @@ h1:focus {
 
 :root[data-theme="dark"] .form-control:disabled,
 :root[data-theme="dark"] .form-select:disabled {
-    background-color: #2a2f3b;
+    background-color: var(--jb-dark-raised);
     color: var(--jb-dark-muted);
 }
 
@@ -159,7 +165,7 @@ h1:focus {
 }
 
 :root[data-theme="dark"] code {
-    background-color: #2a2f3b;
+    background-color: var(--jb-dark-raised);
     color: #e7a9d0;
 }
 
@@ -193,7 +199,7 @@ h1:focus {
 }
 
 :root[data-theme="dark"] .btn-outline-secondary:hover {
-    background-color: #3a4150;
+    background-color: var(--jb-dark-hover);
     border-color: #4a5062;
     color: #ffffff;
 }
@@ -243,13 +249,34 @@ h1:focus {
 }
 
 .sort-dropdown-item:hover {
-    background-color: #3d4256;
+    background-color: var(--jb-dark-border-strong);
     color: #ffffff;
 }
 
 .sort-dropdown-item.active {
     color: #4fc3e0;
     font-weight: 600;
+}
+
+/* A multi-select group's option rows (MultiSelectFilterGroup, via DropdownToggleItem). */
+.sort-dropdown-subitem {
+    padding-left: 2rem;
+}
+
+/* A subtag, under its parent's row: indented one more level, with a guide line like the tags page's hierarchy. */
+.sort-dropdown-nested {
+    padding-left: 3rem;
+    font-size: 0.85rem;
+    color: #c4c8d4;
+}
+
+/* Excluded by an include/exclude group: struck through and red, with a ✕ in place of the ✓. */
+.multiselect-excluded {
+    color: #f28b82;
+}
+
+.multiselect-excluded .dropdown-item-label {
+    text-decoration: line-through;
 }
 
 .sort-dropdown-arrow {
@@ -259,7 +286,7 @@ h1:focus {
 
 .sort-dropdown-divider {
     height: 1px;
-    background: #3d4256;
+    background: var(--jb-dark-border-strong);
     margin: 0.35rem 0;
 }
 
@@ -282,7 +309,7 @@ h1:focus {
     flex-wrap: wrap;
     align-items: center;
     gap: 0.25rem;
-    background-color: #35394a;
+    background-color: var(--jb-dark-border);
     border-radius: 4px 4px 0 0;
     padding: 0.5rem 0.75rem;
     margin: 0 -0.01px;
@@ -304,7 +331,7 @@ h1:focus {
 }
 
 .page-toolbar-btn:hover:not(:disabled) {
-    background-color: #454a5e;
+    background-color: var(--jb-dark-control);
     color: #ffffff;
 }
 
@@ -330,7 +357,7 @@ h1:focus {
 .page-toolbar-sep {
     width: 1px;
     align-self: stretch;
-    background-color: #454a5e;
+    background-color: var(--jb-dark-control);
     margin: 0.25rem 0.25rem;
 }
 
@@ -359,7 +386,7 @@ h1:focus {
 
 :root[data-theme="dark"] .data-table-header {
     color: var(--jb-dark-text-dim);
-    border-bottom-color: #3d4452;
+    border-bottom-color: var(--jb-dark-border-strong);
 }
 
 .data-table-row {
@@ -456,4 +483,122 @@ h1:focus {
 
 .activity-badge-error {
     background-color: var(--jb-danger);
+}
+
+/* A modal footer's group of buttons that stay together on ModalShell's spread footer (Cancel left, the pair right). */
+.modal-shell-footer-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* The clip editor's shared form pieces (ClipEditor, its scene/highlight/apex forms, ClipTimeField, SceneDetector,
+   SceneChapterWriter). Global so each component's isolated CSS doesn't need its own copy; they read the editor's
+   --scene-editor-* custom properties, which a page can override for its theme. */
+.clip-btn {
+    appearance: none;
+    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    color: var(--scene-editor-accent, #6ea8fe);
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    white-space: nowrap;
+}
+
+.clip-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* The form's Add / Save button; after .clip-btn so it wins at equal specificity. */
+.clip-btn-primary {
+    background-color: var(--jb-accent);
+    border-color: var(--jb-accent);
+    color: #fff;
+}
+
+/* A bare icon button (a row's edit / delete, the collapse arrow, the end time's clear ×). */
+.clip-icon-btn {
+    appearance: none;
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.clip-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.clip-icon-btn:hover:not(:disabled) {
+    background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.08));
+    color: var(--scene-editor-fg, #e2e8f0);
+}
+
+.clip-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.5rem;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 6px;
+    background-color: var(--scene-editor-form-bg, rgba(255, 255, 255, 0.03));
+}
+
+.clip-form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.clip-form-times {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.clip-form-times .clip-form-field {
+    flex: 1 1 8rem;
+}
+
+.clip-form-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
+}
+
+.clip-form-hint {
+    font-weight: 400;
+}
+
+.clip-form-input {
+    width: 100%;
+    min-width: 0;
+    padding: 0.25rem 0.4rem;
+    font-size: 0.8rem;
+    color: var(--scene-editor-fg, #e2e8f0);
+    background-color: var(--scene-editor-input-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.clip-form-actions {
+    display: flex;
+    gap: 0.35rem;
 }

@@ -97,7 +97,7 @@
 }
 
 .candidate-avatar-photo {
-    background-color: #2b2f38;
+    background-color: var(--jb-dark-raised);
 }
 
 .candidate-avatar img {
@@ -138,12 +138,12 @@
 
 :root[data-theme="dark"] .import-tips-card code,
 :root[data-theme="dark"] .source-card code {
-    background: #2a2f3b;
+    background: var(--jb-dark-raised);
     color: #e7a9d0;
 }
 
 :root[data-theme="dark"] .candidate-source-badge {
-    background-color: #2b303c;
+    background-color: var(--jb-dark-raised-cool);
     color: #cfd3de;
     border-color: var(--jb-dark-border-strong);
 }
@@ -169,7 +169,7 @@
 
 :root[data-theme="dark"] .candidate-table th {
     color: var(--jb-dark-text-dim);
-    border-bottom-color: #3d4452;
+    border-bottom-color: var(--jb-dark-border-strong);
 }
 
 :root[data-theme="dark"] .candidate-table td {
@@ -204,5 +204,5 @@
 
 :root[data-theme="dark"] .candidate-progress-label,
 :root[data-theme="dark"] .scan-progress-label {
-    color: #9aa1b2 !important;
+    color: var(--jb-dark-muted) !important;
 }

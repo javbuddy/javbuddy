@@ -6,7 +6,7 @@
 
 .sort-dropdown-divider {
     height: 1px;
-    background-color: #454a5e;
+    background-color: var(--jb-dark-control);
     margin: 0.35rem 0;
 }
 

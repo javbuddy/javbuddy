@@ -11,7 +11,7 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem;
-    background-color: #2a2e3b;
+    background-color: var(--jb-dark-raised);
     border: 1px solid var(--jb-dark-border-strong);
     border-radius: 6px;
     min-height: 75px;
@@ -48,7 +48,7 @@
 }
 
 .actor-card-avatar-photo {
-    background-color: #2b2f38;
+    background-color: var(--jb-dark-raised);
 }
 
     .actor-card-avatar-photo img {
@@ -94,7 +94,7 @@
     overflow-y: auto;
     border: 1px solid var(--jb-dark-border-strong);
     border-radius: 4px;
-    background-color: #1a1c23;
+    background-color: var(--jb-dark-popup);
 }
 
 .candidate-item {
@@ -112,7 +112,7 @@
 }
 
 .candidate-item:hover {
-    background-color: #252a36;
+    background-color: var(--jb-dark-surface);
 }
 
 .candidate-item.selected {
@@ -136,7 +136,7 @@
 }
 
 .candidate-avatar-photo {
-    background-color: #2b2f38;
+    background-color: var(--jb-dark-raised);
 }
 
     .candidate-avatar-photo img {

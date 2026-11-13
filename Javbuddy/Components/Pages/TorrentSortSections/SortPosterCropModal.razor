@@ -30,18 +30,18 @@
                         javinizer-go has no full-size poster for this movie, so this crops the current, already-cropped poster.
                     </div>
                 }
-                <div class="spc-workspace">
-                    <div class="spc-viewport-wrapper">
+                <CropWorkspace Style="--crop-workspace-gap: 1.25rem; --crop-previews-width: 160px; --crop-previews-padding: 0.85rem">
+                    <ChildContent>
                         <CropperViewport HeightPx="420" @ref="viewport" />
                         <small class="spc-hint">Drag inside the box to move it · drag the handles to resize · scroll to zoom</small>
-                    </div>
-                    <div class="spc-preview">
+                    </ChildContent>
+                    <Previews>
                         <span class="spc-preview-title">Poster</span>
                         <div class="spc-preview-wrapper">
                             <canvas width="130" height="195" class="spc-preview-canvas" @ref="previewCanvasRef"></canvas>
                         </div>
-                    </div>
-                </div>
+                    </Previews>
+                </CropWorkspace>
             }
         </ChildContent>
         <FooterContent>

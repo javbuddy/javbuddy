@@ -81,7 +81,7 @@
 }
 
     :root[data-theme="dark"] .slide-over-drawer-close-btn:hover {
-        background-color: #3a4150;
+        background-color: var(--jb-dark-hover);
         color: #ffffff;
     }
 

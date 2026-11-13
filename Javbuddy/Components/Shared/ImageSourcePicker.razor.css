@@ -33,13 +33,13 @@
 }
 
 .url-input {
-    background-color: #14161d;
+    background-color: var(--jb-dark-deep);
     border-color: var(--jb-dark-border-strong);
     color: #ffffff;
 }
 
 .url-input:focus {
-    background-color: #14161d;
+    background-color: var(--jb-dark-deep);
     border-color: var(--jb-accent);
     color: #ffffff;
     box-shadow: 0 0 0 0.2rem rgba(47, 143, 214, 0.25);

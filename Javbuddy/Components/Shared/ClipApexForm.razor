@@ -3,14 +3,14 @@
    ClipActorChips' inherit-until-chosen rule, computed at the form's time; a new apex is offered the
    previous apex's tags. ClipEditor validates and saves, and owns the model, since the a
    shortcut opens and moves it. *@
-<form class="apex-editor-form" @onsubmit="OnSave" @onsubmit:preventDefault>
-    <label class="apex-editor-field">
-        <span class="apex-editor-label">Time</span>
+<form class="apex-editor-form clip-form" @onsubmit="OnSave" @onsubmit:preventDefault>
+    <label class="apex-editor-field clip-form-field">
+        <span class="apex-editor-label clip-form-label">Time</span>
         <ClipTimeField @bind-Value="Model.Time" ClassPrefix="apex-editor" InputClass="apex-editor-time-input" NowClass="apex-editor-now-btn"
                        OnNow="OnNow" NowTitle="Use the player's current time" />
     </label>
-    <div class="apex-editor-field">
-        <span class="apex-editor-label">Plays <span class="apex-editor-hint">(seconds before and after; blank uses the default)</span></span>
+    <div class="apex-editor-field clip-form-field">
+        <span class="apex-editor-label clip-form-label">Plays <span class="apex-editor-hint clip-form-hint">(seconds before and after; blank uses the default)</span></span>
         <span class="apex-editor-window-row">
             <ClipTimeField @bind-Value="Model.LeadIn" ClassPrefix="apex-editor" Fill="true" AriaLabel="Lead-in seconds" Placeholder="@ApexWindowText.Format(DefaultWindow.LeadInSeconds)"
                            InputClass="apex-editor-lead-in-input" NowClass="apex-editor-now-btn apex-editor-lead-in-now-btn"
@@ -20,12 +20,12 @@
                            OnNow="() => OnWindowNow.InvokeAsync(true)" NowTitle="End the clip at the player's current time (after the apex)" />
         </span>
     </div>
-    <div class="apex-editor-field">
-        <span class="apex-editor-label">Actors</span>
+    <div class="apex-editor-field clip-form-field">
+        <span class="apex-editor-label clip-form-label">Actors</span>
         <ClipActorChips Form="Model" Cast="Cast" Inherited="Inherited()" ClassPrefix="apex-editor" Busy="Busy" />
     </div>
-    <div class="apex-editor-field">
-        <span class="apex-editor-label">Tags</span>
+    <div class="apex-editor-field clip-form-field">
+        <span class="apex-editor-label clip-form-label">Tags</span>
         <ClipTagChips FormTags="Model.Tags" ClassPrefix="apex-editor" Busy="Busy" OnChanged="Rerender">
             @if (Model.ApexId is null && PreviousTagSuggestions() is { Count: > 0 } suggestions)
             {
@@ -34,14 +34,14 @@
                     {
                         <button type="button" class="apex-editor-suggestion" disabled="@Busy" title="Add tag from the previous apex" @onclick="() => Model.Tags.Add(tag)">@ImplicitChip.TagLabel(tag)</button>
                     }
-                    <button type="button" class="apex-editor-btn apex-editor-copy-tags-btn" disabled="@Busy" @onclick="() => Model.Tags.AddRange(suggestions)">Copy previous tags</button>
+                    <button type="button" class="apex-editor-btn clip-btn apex-editor-copy-tags-btn" disabled="@Busy" @onclick="() => Model.Tags.AddRange(suggestions)">Copy previous tags</button>
                 </div>
             }
         </ClipTagChips>
     </div>
-    <div class="apex-editor-form-actions">
-        <button type="submit" class="apex-editor-btn apex-editor-save-btn" disabled="@Busy">@(Model.ApexId is null ? "Add" : "Save")</button>
-        <button type="button" class="apex-editor-btn apex-editor-cancel-btn" @onclick="OnCancel" disabled="@Busy">Cancel</button>
+    <div class="apex-editor-form-actions clip-form-actions">
+        <button type="submit" class="apex-editor-btn clip-btn apex-editor-save-btn clip-btn-primary" disabled="@Busy">@(Model.ApexId is null ? "Add" : "Save")</button>
+        <button type="button" class="apex-editor-btn clip-btn apex-editor-cancel-btn" @onclick="OnCancel" disabled="@Busy">Cancel</button>
     </div>
 </form>
 

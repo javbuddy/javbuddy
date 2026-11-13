@@ -3,9 +3,9 @@
    in ChildContent, which keeps the caller's CSS scope. ClassPrefix plus InputClass / NowClass keep each
    form's own class names on the elements, which tests and the E2E suite select on. *@
 <span class="clip-time-row @ClassPrefix-time-row @(Fill ? "clip-time-row-fill" : null)">
-    <input class="clip-time-input @ClassPrefix-input @InputClass" type="text" inputmode="decimal" placeholder="@Placeholder" aria-label="@AriaLabel"
+    <input class="clip-time-input clip-form-input @ClassPrefix-input @InputClass" type="text" inputmode="decimal" placeholder="@Placeholder" aria-label="@AriaLabel"
            @bind:get="Value" @bind:set="ValueChanged.InvokeAsync" @bind:event="oninput" />
-    <button type="button" class="clip-time-now-btn @ClassPrefix-btn @NowClass" @onclick="OnNow" title="@NowTitle">Now</button>
+    <button type="button" class="clip-time-now-btn clip-btn @ClassPrefix-btn @NowClass" @onclick="OnNow" title="@NowTitle">Now</button>
     @ChildContent
 </span>
 

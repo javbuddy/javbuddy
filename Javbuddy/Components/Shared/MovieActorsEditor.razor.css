@@ -75,7 +75,7 @@
 }
 
 .movie-actors-avatar-photo {
-    background-color: #2b2f38;
+    background-color: var(--jb-dark-raised);
 }
 
     .movie-actors-avatar-photo img {

@@ -1,7 +1,7 @@
 .cropper-viewport {
     position: relative;
     width: 100%;
-    background-color: #14161d;
+    background-color: var(--jb-dark-deep);
     border: 1px solid var(--jb-dark-border-strong);
     border-radius: 4px;
     overflow: hidden;

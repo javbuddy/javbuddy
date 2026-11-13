@@ -92,7 +92,7 @@
     align-items: center;
     padding: 0 0.4rem;
     border: none;
-    border-right: 2px solid #1b1e26;
+    border-right: 2px solid var(--jb-dark-bg);
     color: #fff;
     font-size: 0.75rem;
     text-align: left;
@@ -294,7 +294,7 @@
 .movie-scenes-media {
     position: relative;
     aspect-ratio: 16 / 9;
-    background-color: #15171d;
+    background-color: var(--jb-dark-deep);
 }
 
 .movie-scenes-play {

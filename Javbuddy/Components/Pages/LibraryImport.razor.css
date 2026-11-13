@@ -69,7 +69,7 @@
 }
 
 :root[data-theme="dark"] .import-tips code {
-    background: #2a2f3b;
+    background: var(--jb-dark-raised);
     color: #e7a9d0;
 }
 

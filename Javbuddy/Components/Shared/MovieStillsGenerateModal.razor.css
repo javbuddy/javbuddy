@@ -1,5 +1,5 @@
 :root[data-theme="dark"] .modal-shell-panel .form-control,
-:root[data-theme="dark"] .modal-shell-panel .form-select { color: #fff; background-color: #14161d; border-color: var(--jb-dark-border-strong); }
+:root[data-theme="dark"] .modal-shell-panel .form-select { color: #fff; background-color: var(--jb-dark-deep); border-color: var(--jb-dark-border-strong); }
 .stills-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.75rem; }
 .stills-option { display: grid; gap: 0.25rem; }
 .stills-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }

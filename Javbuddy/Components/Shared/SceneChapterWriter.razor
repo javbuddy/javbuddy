@@ -32,14 +32,14 @@
                 </p>
             }
             <div class="scene-chapter-writer-actions">
-                <button type="button" class="scene-editor-btn scene-chapter-writer-confirm-btn" @onclick="StartAsync" disabled="@busy">Write chapters</button>
-                <button type="button" class="scene-editor-btn scene-chapter-writer-cancel-btn" @onclick="Cancel" disabled="@busy">Cancel</button>
+                <button type="button" class="scene-editor-btn clip-btn scene-chapter-writer-confirm-btn" @onclick="StartAsync" disabled="@busy">Write chapters</button>
+                <button type="button" class="scene-editor-btn clip-btn scene-chapter-writer-cancel-btn" @onclick="Cancel" disabled="@busy">Cancel</button>
             </div>
         </div>
     }
     else
     {
-        <button type="button" class="scene-editor-btn scene-chapter-writer-open-btn" @onclick="LoadPlanAsync" disabled="@(busy || SceneCount == 0)" title="Write these scenes into the video file as chapters, so Jellyfin and other players show them">
+        <button type="button" class="scene-editor-btn clip-btn scene-chapter-writer-open-btn" @onclick="LoadPlanAsync" disabled="@(busy || SceneCount == 0)" title="Write these scenes into the video file as chapters, so Jellyfin and other players show them">
             Write chapters to file…
         </button>
     }

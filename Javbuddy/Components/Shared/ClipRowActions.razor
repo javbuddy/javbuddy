@@ -6,18 +6,18 @@
 <div class="clip-row-actions @(AlignToTitle ? "clip-row-actions-top" : null)">
 @if (OnPlay.HasDelegate)
 {
-    <button type="button" class="clip-row-btn @ClassPrefix-icon-btn @ClassPrefix-play-btn" @onclick="OnPlay" aria-label="Play @Label" title="@PlayTitle">
+    <button type="button" class="clip-icon-btn @ClassPrefix-icon-btn @ClassPrefix-play-btn" @onclick="OnPlay" aria-label="Play @Label" title="@PlayTitle">
         <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" /></svg>
     </button>
 }
-<button type="button" class="clip-row-btn @ClassPrefix-icon-btn @ClassPrefix-fav-btn @(IsFavorite ? $"clip-row-fav-on {ClassPrefix}-fav-on" : null)" @onclick="OnToggleFavorite" disabled="@Busy"
+<button type="button" class="clip-icon-btn @ClassPrefix-icon-btn @ClassPrefix-fav-btn @(IsFavorite ? $"clip-row-fav-on {ClassPrefix}-fav-on" : null)" @onclick="OnToggleFavorite" disabled="@Busy"
         aria-pressed="@(IsFavorite ? "true" : "false")" aria-label="@(IsFavorite ? "Unfavorite" : "Favorite") @Label" title="@(IsFavorite ? $"Remove from favorite {FavoriteNoun}" : $"Add to favorite {FavoriteNoun}")">
     <FavoriteHeartIcon Filled="IsFavorite" Size="12" />
 </button>
-<button type="button" class="clip-row-btn @ClassPrefix-icon-btn @ClassPrefix-edit-btn" @onclick="OnEdit" disabled="@Busy" aria-label="Edit @Label" title="Edit">
+<button type="button" class="clip-icon-btn @ClassPrefix-icon-btn @ClassPrefix-edit-btn" @onclick="OnEdit" disabled="@Busy" aria-label="Edit @Label" title="Edit">
     <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5z" /></svg>
 </button>
-<button type="button" class="clip-row-btn @ClassPrefix-icon-btn @ClassPrefix-delete-btn" @onclick="OnDelete" disabled="@Busy" aria-label="Delete @Label" title="Delete">×</button>
+<button type="button" class="clip-icon-btn @ClassPrefix-icon-btn @ClassPrefix-delete-btn" @onclick="OnDelete" disabled="@Busy" aria-label="Delete @Label" title="Delete">×</button>
 </div>
 
 @code {

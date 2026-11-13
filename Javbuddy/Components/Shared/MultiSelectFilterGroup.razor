@@ -22,19 +22,10 @@
         @foreach (var option in FilteredOptions)
         {
             var nested = option.IsNested && string.IsNullOrWhiteSpace(searchTerm);
-            <button type="button" class="sort-dropdown-item sort-dropdown-subitem @(nested ? "sort-dropdown-nested" : null) @(option.IsSelected ? "active" : null) @(option.IsExcluded ? "multiselect-excluded" : null)"
-                    title="@(Excludable ? (option.IsSelected ? "Click to exclude" : option.IsExcluded ? "Click to clear" : "Click to include") : null)"
-                    @onclick="option.OnClick">
-                <span class="multiselect-option-label">@(nested ? option.NestedLabel : option.Label)</span>
-                @if (option.IsSelected)
-                {
-                    <span class="ms-2">✓</span>
-                }
-                else if (option.IsExcluded)
-                {
-                    <span class="ms-2" aria-label="excluded">✕</span>
-                }
-            </button>
+            <DropdownToggleItem Class="@($"sort-dropdown-subitem {(nested ? "sort-dropdown-nested" : null)} {(option.IsExcluded ? "multiselect-excluded" : null)}")"
+                                Label="@(nested ? option.NestedLabel : option.Label)" Active="option.IsSelected" Excluded="option.IsExcluded"
+                                Title="@(Excludable ? (option.IsSelected ? "Click to exclude" : option.IsExcluded ? "Click to clear" : "Click to include") : null)"
+                                OnClick="option.OnClick" />
         }
         @if (Searchable && !FilteredOptions.Any())
         {

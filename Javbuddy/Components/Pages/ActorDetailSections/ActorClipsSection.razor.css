@@ -18,4 +18,4 @@
 }
 
 :root[data-theme="dark"] .actor-clips { color: #e3e5e8; background: var(--jb-dark-surface); border-color: var(--jb-dark-border-strong); }
-:root[data-theme="dark"] .actor-clips ::deep .scene-wall-card { --scene-wall-card-bg: #2b303c; }
+:root[data-theme="dark"] .actor-clips ::deep .scene-wall-card { --scene-wall-card-bg: var(--jb-dark-raised-cool); }

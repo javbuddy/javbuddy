@@ -1,64 +1,8 @@
 /* An apex's add/edit form; reads the editor's --scene-editor-* custom properties. */
 
-.apex-editor-btn {
-    appearance: none;
-    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
-    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
-    border-radius: 4px;
-    color: var(--scene-editor-accent, #6ea8fe);
-    cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.2rem 0.55rem;
-    white-space: nowrap;
-}
-
-.apex-editor-btn:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
-
-.apex-editor-save-btn {
-    background-color: var(--jb-accent);
-    border-color: var(--jb-accent);
-    color: #fff;
-}
-
-.apex-editor-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.45rem;
-    padding: 0.5rem;
-    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
-    border-radius: 6px;
-    background-color: var(--scene-editor-form-bg, rgba(255, 255, 255, 0.03));
-}
-
-.apex-editor-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    min-width: 0;
-}
-
-.apex-editor-label {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
-}
-
-.apex-editor-hint {
-    font-weight: 400;
-}
-
 .apex-editor-window-row {
     display: flex;
     gap: 0.25rem;
-}
-
-.apex-editor-form-actions {
-    display: flex;
-    gap: 0.35rem;
 }
 
 /* The previous apex's tags offered when adding one, dashed "+ Tag" chips like Sort

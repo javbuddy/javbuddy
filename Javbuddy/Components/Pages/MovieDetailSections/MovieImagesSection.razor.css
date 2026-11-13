@@ -10,7 +10,7 @@
     padding: 2rem 1rem;
     color: inherit;
     background: transparent;
-    border: 2px dashed #454a5e;
+    border: 2px dashed var(--jb-dark-control);
     border-radius: 6px;
     cursor: pointer;
 }

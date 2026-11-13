@@ -321,7 +321,7 @@ public class ActorImageUploadModalTests : BunitContext
         Assert.Empty(cut.FindAll(".zoom-controls .btn-tool"));
         Assert.Contains(cut.FindAll(".cropper-toolbar > .btn-tool"), b => b.TextContent == "Reset");
         // The hint moved into the header, and the preview caption is gone, but both avatar previews stay.
-        Assert.Contains("Scroll to zoom", cut.Find(".modal-shell-header-actions .header-info").GetAttribute("data-tip"));
+        Assert.Contains("Scroll to zoom", cut.Find(".modal-shell-header-actions .info-tip").GetAttribute("data-tip"));
         Assert.Empty(cut.FindAll(".preview-title"));
         Assert.NotEmpty(cut.FindAll(".preview-circle-wrapper canvas"));
         Assert.NotEmpty(cut.FindAll(".preview-square-wrapper canvas"));

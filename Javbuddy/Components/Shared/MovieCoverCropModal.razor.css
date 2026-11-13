@@ -2,7 +2,7 @@
 .source-strip {
     display: flex;
     align-items: flex-start; /* keeps Upload level with the thumbnails when their scrollbar adds height */
-    gap: 0.9rem; /* same gap as .cropper-workspace, so the strip lines up with the image and preview below */
+    gap: 0.9rem; /* same gap as CropWorkspace, so the strip lines up with the image and preview below */
     margin-bottom: 0.75rem;
 }
 
@@ -97,98 +97,12 @@
     border-color: var(--jb-accent);
 }
 
-/* Workspace */
-.cropper-workspace {
-    display: flex;
-    gap: 0.9rem;
-    align-items: flex-start;
-}
-
-@media (max-width: 768px) {
-    .cropper-workspace {
-        flex-direction: column;
-    }
-}
-
-.cropper-viewport-wrapper {
-    position: relative;
-    flex: 1;
-    min-width: 0;
-}
-
-.cropper-busy {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #ffffff;
-    background-color: rgba(20, 22, 29, 0.7);
-    border-radius: 4px;
-}
-
-.header-info {
-    position: relative;
-    width: 20px;
-    height: 20px;
-    display: grid;
-    place-items: center;
-    font-size: 0.72rem;
-    font-weight: 600;
-    font-style: italic;
-    color: var(--jb-dark-muted);
-    border: 1px solid #5a6177;
-    border-radius: 50%;
-    cursor: help;
-}
-
-/* A CSS tooltip, because a title attribute doesn't show on keyboard focus. */
-.header-info:hover::after,
-.header-info:focus-visible::after {
-    content: attr(data-tip);
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 10;
-    width: max-content;
-    max-width: 240px;
-    padding: 0.35rem 0.55rem;
-    font-size: 0.75rem;
-    font-style: normal;
-    font-weight: 400;
-    line-height: 1.35;
-    text-align: left;
-    color: #cfd3de;
-    background-color: #14161d;
-    border: 1px solid var(--jb-dark-border-strong);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.header-info:hover,
-.header-info:focus-visible {
-    color: #ffffff;
-    border-color: #ffffff;
-}
-
-.cropper-previews {
-    width: 150px;
-    flex-shrink: 0;
-    display: flex;
-    justify-content: center;
-    background-color: var(--jb-dark-bg);
-    padding: 0.5rem;
-    border-radius: 4px;
-    border: 1px solid #35394a;
-}
-
 .preview-poster-wrapper {
     width: 130px;
     height: 185px;
     border-radius: 2px;
     overflow: hidden;
-    background: #14161d;
+    background: var(--jb-dark-deep);
     border: 1px solid var(--jb-dark-border-strong);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
@@ -198,12 +112,4 @@
     height: 100%;
     display: block;
     object-fit: cover;
-}
-
-/* Footer */
-
-.footer-actions-right {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
 }
