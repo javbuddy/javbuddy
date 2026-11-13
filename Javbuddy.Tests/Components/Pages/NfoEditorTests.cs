@@ -42,7 +42,7 @@ public class NfoEditorTests : BunitContext
         // Mounted now, the diff editor's init would find no proposed .nfo to show, and nothing
         // would seed it once that arrives.
         Assert.Empty(cut.FindComponents<StandaloneDiffEditor>());
-        Assert.Contains("Loading…", cut.Markup);
+        Assert.NotNull(cut.Find(".spinner-border"));
 
         proposed.SetResult("<movie><title>Proposed</title></movie>");
 

@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
+- **The movie page's "Edit .nfo" menu item and editor dialog show a spinner while the .nfo loads** instead of the text "Loading…".
+
 - **The delete confirmation and the Torrent Sort poster crop use the same dialog frame as the other dark dialogs.** Both now have a titled header with a close button and the standard footer bar; the confirmation is a little wider and the crop dialog can no longer be closed (Esc, backdrop or Cancel) while its save is running. Esc, backdrop click and focus on open work as before, and neither closes the drawer or player they open over.
 - **Photo and image upload dialogs show a "Browse…" button instead of the browser's file input.** The actor photo upload dialog used the browser's own "Choose file" box; it now has the same dashed drop zone as the movie image and portrait dialogs, and all three show a Browse… button styled like the toolbar buttons. The whole zone still opens the file picker on a click and accepts dropped files.
 - **The clip editor's scene and highlight rows have their favorite, edit and delete buttons on the title line.** They used to sit in a column beside the whole row, which squeezed the actors and tags into a narrow column that wrapped one tag per line; the tags now use the row's full width.
