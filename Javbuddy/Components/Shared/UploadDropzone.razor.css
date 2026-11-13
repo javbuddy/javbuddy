@@ -1,0 +1,50 @@
+.upload-dropzone {
+    position: relative;
+    padding: 1.75rem 1.5rem;
+    text-align: center;
+    color: #fff;
+    background-color: var(--jb-dark-bg);
+    border: 2px dashed #454a5e;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.upload-dropzone:hover:not(.upload-dropzone-disabled) {
+    border-color: var(--jb-accent);
+    background-color: #1e2430;
+}
+
+.upload-dropzone-disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+/* The <input> is rendered by the InputFile component, so it doesn't carry this component's scope
+   attribute — ::deep reaches it through the drop zone. */
+.upload-dropzone ::deep .upload-dropzone-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: inherit;
+}
+
+.upload-dropzone ::deep .upload-dropzone-hint {
+    color: var(--jb-dark-muted);
+}
+
+/* Looks like a toolbar button (global .page-toolbar-btn) with its own background, since it sits on a
+   dark panel. The input above it takes the click, so this is only a visual. */
+.upload-dropzone-browse {
+    margin-top: 0.75rem;
+    background-color: #2b303c;
+    border: 1px solid #454a5e;
+}
+
+.upload-dropzone:hover:not(.upload-dropzone-disabled) .upload-dropzone-browse {
+    background-color: #454a5e;
+    color: #ffffff;
+}

@@ -6,10 +6,13 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
+- **Photo and image upload dialogs show a "Browse…" button instead of the browser's file input.** The actor photo upload dialog used the browser's own "Choose file" box; it now has the same dashed drop zone as the movie image and portrait dialogs, and all three show a Browse… button styled like the toolbar buttons. The whole zone still opens the file picker on a click and accepts dropped files.
 - **The clip editor's scene and highlight rows have their favorite, edit and delete buttons on the title line.** They used to sit in a column beside the whole row, which squeezed the actors and tags into a narrow column that wrapped one tag per line; the tags now use the row's full width.
 
 ### Fixed
 
+- **Switching between Movie Detail's Refresh and Tools menus takes one click.** With one menu open, clicking the other's button only closed the first, and a second click was needed to open the second; it now switches straight over. A click elsewhere or Escape still closes the menu.
+- **Typing in Actor Missing's filter no longer re-renders every release card.** Each keystroke made every card in the grid redraw even though nothing in it changed; a card now only redraws when its own release changes.
 - **Activity > Queue and History now pick up status changes that happen in the background.** A download that finished, was removed from qBittorrent, or was matched to its torrent by the periodic sync used to stay as it was on an already-open page until you reloaded it; the pages, the sidebar badge and the Movies downloading indicators now refresh when that happens.
 - **A failed save or search no longer leaves a dialog or page stuck.** Several actions marked themselves busy and only cleared that when the call came back, so an error left them disabled or spinning for good: the .nfo editor's load, save, import and restore, the metadata editor's Save (which also blocked closing the dialog), the Prowlarr search and Grab (which now show the error), the actor and tag merge dialogs' search, the poster crop's source load, the actor missing page's r18.dev name save, Settings > Metadata's Import now button, and the Movies grid's loading skeleton. They now return to normal when the action fails.
 - **The Play menu on Movie Detail no longer runs off the right edge of the window.** It now opens leftwards from the Play button's caret.

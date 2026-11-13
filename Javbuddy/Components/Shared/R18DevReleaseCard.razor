@@ -38,4 +38,32 @@
 
     /// <summary>Disables the add button while the parent's add call for this card is running.</summary>
     [Parameter] public bool AddInProgress { get; set; }
+
+    private R18DevReleaseRow? renderedRelease;
+    private EventCallback<string> renderedOnSearch;
+    private EventCallback<string> renderedOnAdd;
+    private bool renderedAddInProgress;
+    private bool parametersChanged = true;
+
+    // A parent re-render (e.g. Actor Missing on every filter keystroke) re-sets every parameter of every
+    // card, and Blazor treats a record or an EventCallback as always changed. Compare by value instead,
+    // so a card only re-renders when what it shows changes.
+    protected override void OnParametersSet()
+    {
+        parametersChanged = !Equals(renderedRelease, Release)
+            || !renderedOnSearch.Equals(OnSearch)
+            || !renderedOnAdd.Equals(OnAdd)
+            || renderedAddInProgress != AddInProgress;
+        renderedRelease = Release;
+        renderedOnSearch = OnSearch;
+        renderedOnAdd = OnAdd;
+        renderedAddInProgress = AddInProgress;
+    }
+
+    protected override bool ShouldRender()
+    {
+        var render = parametersChanged;
+        parametersChanged = false;
+        return render;
+    }
 }

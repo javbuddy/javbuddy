@@ -37,9 +37,18 @@
     [Parameter] public bool Busy { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
+    /// <summary>Set when the button sits in a <see cref="ToolbarMenuGroup"/>: opening this menu then closes
+    /// the group's other open menu.</summary>
+    [CascadingParameter] private ToolbarMenuGroup? Group { get; set; }
+
     private bool open;
 
-    private void Toggle() => open = !open;
+    private void Toggle()
+    {
+        open = !open;
+        if (open)
+            Group?.Opened(this);
+    }
 
     /// <summary>Called by a <see cref="ToolbarMenuItem"/> from its own click handler, which only
     /// re-renders the item — so this re-renders the menu itself.</summary>

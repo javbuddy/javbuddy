@@ -1,29 +1,3 @@
-.upload-dropzone {
-    border: 2px dashed #454a5e;
-    border-radius: 6px;
-    padding: 1.75rem 1.5rem;
-    text-align: center;
-    background-color: var(--jb-dark-bg);
-    cursor: pointer;
-    transition: border-color 0.15s ease, background-color 0.15s ease;
-    position: relative;
-}
-
-.upload-dropzone:hover {
-    border-color: var(--jb-accent);
-    background-color: #1e2430;
-}
-
-.upload-dropzone-input {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    cursor: pointer;
-}
-
 .upload-icon {
     color: var(--jb-accent);
     margin-bottom: 0.75rem;
