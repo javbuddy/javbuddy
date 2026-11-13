@@ -606,10 +606,15 @@ else
         if (actor is null) return;
 
         savingR18DevName = true;
+        try
+        {
+            actor.R18DevName = await FilmographyService.SaveR18DevNameAsync(actor.Id, r18DevNameInput);
+        }
+        finally
+        {
+            savingR18DevName = false;
+        }
 
-        actor.R18DevName = await FilmographyService.SaveR18DevNameAsync(actor.Id, r18DevNameInput);
-
-        savingR18DevName = false;
         loadingFilmography = true;
         await LoadFilmographyAsync();
     }

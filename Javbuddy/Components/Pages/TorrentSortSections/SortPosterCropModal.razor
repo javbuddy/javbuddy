@@ -113,8 +113,20 @@
         cropperStarted = false;
         StateHasChanged();
 
-        var (loaded, error) = await SortService.GetPosterCropSourceAsync(TorrentDownloadId, MovieId);
-        loading = false;
+        PosterCropSource? loaded;
+        string? error;
+        try
+        {
+            (loaded, error) = await SortService.GetPosterCropSourceAsync(TorrentDownloadId, MovieId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            (loaded, error) = (null, $"Could not load the full-size poster: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
         if (loaded is null)
         {
             errorMessage = error ?? "Could not load the full-size poster.";

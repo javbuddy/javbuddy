@@ -210,15 +210,23 @@
             model.MetaDescription,
             model.ContentType);
 
-        var result = await MovieService.UpdateMetadataAsync(Movie.Id, update);
-        var nfoWarning = result.Success ? result.ErrorMessage : null;
-        foreach (var vr in model.VrFormats.Where(v => v.Choice != v.Original))
+        OperationResult result;
+        string? nfoWarning;
+        try
         {
-            if (!result.Success) break;
-            result = await MovieService.SetVrTypeAsync(Movie.Id, vr.FileId,
-                vr.Choice is VrChoice.Auto or VrChoice.None ? null : vr.Choice, detect: vr.Choice == VrChoice.Auto);
+            result = await MovieService.UpdateMetadataAsync(Movie.Id, update);
+            nfoWarning = result.Success ? result.ErrorMessage : null;
+            foreach (var vr in model.VrFormats.Where(v => v.Choice != v.Original))
+            {
+                if (!result.Success) break;
+                result = await MovieService.SetVrTypeAsync(Movie.Id, vr.FileId,
+                    vr.Choice is VrChoice.Auto or VrChoice.None ? null : vr.Choice, detect: vr.Choice == VrChoice.Auto);
+            }
         }
-        saving = false;
+        finally
+        {
+            saving = false;
+        }
 
         if (!result.Success)
         {

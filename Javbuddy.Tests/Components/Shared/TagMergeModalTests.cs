@@ -248,4 +248,23 @@ public class TagMergeModalTests : BunitContext
         Assert.Contains("Newer Result", cut.Find(".tag-candidate-list").TextContent);
         Assert.DoesNotContain("Older Result", cut.Find(".tag-candidate-list").TextContent);
     }
+
+    [Fact]
+    public async Task SearchThatThrows_ClearsTheSearchingSpinner()
+    {
+        var tagService = Substitute.For<ITagService>();
+        tagService.GetMergeCandidatesAsync(1, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(
+                Task.FromResult<IReadOnlyList<TagMergeCandidate>>([]),
+                Task.FromException<IReadOnlyList<TagMergeCandidate>>(new InvalidOperationException("search failed")));
+        Services.AddSingleton(tagService);
+        var cut = Render<TagMergeModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.SourceTag, new Tag { Id = 1, Name = "Solowork" }));
+
+        await Record.ExceptionAsync(() => cut.Find("input[type=text]").InputAsync(new ChangeEventArgs { Value = "solo" }));
+
+        Assert.DoesNotContain("Loading", cut.Find(".tag-candidate-list").TextContent);
+        Assert.Contains("No candidate tags found.", cut.Find(".tag-candidate-list").TextContent);
+    }
 }

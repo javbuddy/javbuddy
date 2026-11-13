@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **A failed save or search no longer leaves a dialog or page stuck.** Several actions marked themselves busy and only cleared that when the call came back, so an error left them disabled or spinning for good: the .nfo editor's load, save, import and restore, the metadata editor's Save (which also blocked closing the dialog), the Prowlarr search and Grab (which now show the error), the actor and tag merge dialogs' search, the poster crop's source load, the actor missing page's r18.dev name save, Settings > Metadata's Import now button, and the Movies grid's loading skeleton. They now return to normal when the action fails.
 - **The Play menu on Movie Detail no longer runs off the right edge of the window.** It now opens leftwards from the Play button's caret.
 
 ## [0.6.3] - 2026-11-12

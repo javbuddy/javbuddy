@@ -155,4 +155,48 @@ public class ProwlarrSearchModalTests : BunitContext
         var button = Assert.Single(cut.FindAll("button.btn-primary"));
         Assert.Contains("Add & Download", button.TextContent);
     }
+
+    [Fact]
+    public void Search_ThatThrows_ShowsTheError_InsteadOfSpinningForever()
+    {
+        var prowlarr = Substitute.For<IProwlarrClient>();
+        prowlarr.SearchAsync("ABC-123", Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<ProwlarrSearchResult>(new InvalidOperationException("prowlarr down")));
+        Services.AddSingleton(prowlarr);
+        Services.AddSingleton(Substitute.For<ITorrentGrabService>());
+        Services.AddSingleton(Substitute.For<IMovieAddService>());
+
+        var cut = Render<ProwlarrSearchModal>(parameters => parameters
+            .Add(x => x.Code, "ABC-123")
+            .Add(x => x.Show, true));
+
+        cut.WaitForAssertion(() => Assert.Contains("prowlarr down", cut.Find(".alert-danger").TextContent));
+    }
+
+    [Fact]
+    public void Grab_ThatThrows_ShowsTheError_AndReEnablesTheButton()
+    {
+        var release = new ReleaseResourceDto { Title = "ABC-123 release", Guid = "release-1", MagnetUrl = "magnet:?xt=urn:btih:abc" };
+        var prowlarr = Substitute.For<IProwlarrClient>();
+        prowlarr.SearchAsync("ABC-123", Arg.Any<CancellationToken>())
+            .Returns(new ProwlarrSearchResult(true, [release], null));
+        Services.AddSingleton(prowlarr);
+        var movie = new Movie { Id = 1, Code = "ABC-123" };
+        var grab = Substitute.For<ITorrentGrabService>();
+        grab.GrabAsync(movie, release, Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<OperationResult>(new InvalidOperationException("qbittorrent down")));
+        Services.AddSingleton(grab);
+        Services.AddSingleton(Substitute.For<IMovieAddService>());
+        var cut = Render<ProwlarrSearchModal>(parameters => parameters
+            .Add(x => x.Movie, movie)
+            .Add(x => x.Show, true));
+        cut.WaitForAssertion(() => Assert.Contains("ABC-123 release", cut.Markup));
+
+        cut.Find("button.btn-primary").Click();
+
+        cut.WaitForAssertion(() => Assert.Contains("qbittorrent down", cut.Find(".alert-danger").TextContent));
+        var button = cut.Find("button.btn-primary");
+        Assert.False(button.HasAttribute("disabled"));
+        Assert.Contains("Grab", button.TextContent);
+    }
 }

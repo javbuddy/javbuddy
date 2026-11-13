@@ -232,4 +232,23 @@ public class ActorMergeModalTests : BunitContext
         Assert.Contains("Newer Result", cut.Find(".candidate-list").TextContent);
         Assert.DoesNotContain("Older Result", cut.Find(".candidate-list").TextContent);
     }
+
+    [Fact]
+    public async Task SearchThatThrows_ClearsTheSearchingSpinner()
+    {
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetMergeCandidatesAsync(1, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(
+                Task.FromResult<IReadOnlyList<ActorMergeCandidate>>([]),
+                Task.FromException<IReadOnlyList<ActorMergeCandidate>>(new InvalidOperationException("search failed")));
+        Services.AddSingleton(actorService);
+        var cut = Render<ActorMergeModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.SourceActor, new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" }));
+
+        await Record.ExceptionAsync(() => cut.Find("input[type=text]").InputAsync(new ChangeEventArgs { Value = "yui" }));
+
+        Assert.DoesNotContain("Loading", cut.Find(".candidate-list").TextContent);
+        Assert.Contains("No candidate actors found.", cut.Find(".candidate-list").TextContent);
+    }
 }
