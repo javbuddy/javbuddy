@@ -147,7 +147,8 @@ public class MovieDetailToolbarTests : BunitContext
 
         Assert.Contains(cut.FindAll("button.toolbar-menu-btn"), b => b.TextContent.Trim() == "Loading…");
         OpenMenu(cut, "Loading…");
-        Assert.True(MenuItem(cut, "Loading…").HasAttribute("disabled"));
+        var editNfo = cut.FindAll(".toolbar-menu-item").Single(b => b.QuerySelector(".spinner-border") is not null);
+        Assert.True(editNfo.HasAttribute("disabled"));
     }
 
     [Fact]
