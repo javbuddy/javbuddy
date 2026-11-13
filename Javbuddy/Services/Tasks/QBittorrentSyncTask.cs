@@ -1,6 +1,7 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.QBittorrent;
+using Javbuddy.Services.Torrents;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Tasks;
@@ -14,7 +15,7 @@ namespace Javbuddy.Services.Tasks;
 /// — this effectively runs at most once a minute automatically; the Activity &gt; Queue page also
 /// triggers it on demand via its Refresh button (same "run now" pattern as System &gt; Tasks),
 /// and separately live-polls qBittorrent directly for sub-minute progress while it's open.</summary>
-public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContextFactory<AppDbContext> dbFactory, IConfiguration configuration) : IScheduledTask
+public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContextFactory<AppDbContext> dbFactory, IConfiguration configuration, TorrentChangeNotifier changeNotifier) : IScheduledTask
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan MinimumInterval = TimeSpan.FromSeconds(10);
@@ -22,6 +23,7 @@ public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContex
     private readonly IQBittorrentClient qBittorrentClient = qBittorrentClient;
     private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
     private readonly IConfiguration configuration = configuration;
+    private readonly TorrentChangeNotifier changeNotifier = changeNotifier;
 
     public string Name => "qBittorrent Sync";
 
@@ -61,6 +63,7 @@ public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContex
         var correlated = 0;
         var updated = 0;
         var removed = 0;
+        var meaningfulChange = false;
 
         foreach (var row in tracked)
         {
@@ -75,31 +78,43 @@ public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContex
                     row.Hash = match.Hash;
                     ApplyLiveState(row, match);
                     correlated++;
+                    meaningfulChange = true;
                 }
                 continue;
             }
 
             if (byHash.TryGetValue(row.Hash, out var live))
             {
-                ApplyLiveState(row, live);
+                // Only a status/completion change is worth waking other pages; pure progress/speed/ETA
+                // ticks are covered by the Queue page's own live polling.
+                meaningfulChange |= ApplyLiveState(row, live);
                 updated++;
             }
             else
             {
                 row.RemovedFromClientAt = DateTime.UtcNow;
                 removed++;
+                meaningfulChange = true;
             }
         }
 
         await db.SaveChangesAsync(ct);
+        if (meaningfulChange)
+        {
+            changeNotifier.NotifyChanged();
+        }
         return $"correlated {correlated}, updated {updated}, removed {removed}";
     }
 
-    private static void ApplyLiveState(TorrentDownload row, QBittorrentTorrentDto live)
+    /// <summary>Copies qBittorrent's live state onto the row; returns true when the row's Status or
+    /// CompletedAt changed (as opposed to just progress/speed/ETA/paths).</summary>
+    private static bool ApplyLiveState(TorrentDownload row, QBittorrentTorrentDto live)
     {
         row.Progress = live.Progress;
         row.DownloadSpeedBytesPerSec = live.DlSpeed;
         row.EtaSeconds = live.Eta;
+        var previousStatus = row.Status;
+        var previousCompletedAt = row.CompletedAt;
         row.Status = MapStatus(live.State);
         row.SavePath = live.SavePath;
         row.ContentPath = live.ContentPath;
@@ -107,6 +122,7 @@ public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContex
         {
             row.CompletedAt = DateTimeOffset.FromUnixTimeSeconds(live.CompletionOn).UtcDateTime;
         }
+        return row.Status != previousStatus || row.CompletedAt != previousCompletedAt;
     }
 
     // qBittorrent's post-completion states, mapped to two distinct statuses: Seeding while it's
