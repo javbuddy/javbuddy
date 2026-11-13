@@ -313,9 +313,12 @@ button.movie-detail-badge {
     border-bottom-right-radius: 0;
 }
 
-/* Sized to its rows, not the Versions menu's 280px minimum. */
+/* Sized to its rows, not the Versions menu's 280px minimum. Opens leftwards from the split button's right edge,
+   as the Play badge sits towards the end of its row and a rightwards menu ran off the window. */
 .movie-detail-play-menu {
     min-width: 0;
+    left: auto;
+    right: 0;
 }
 
 .movie-detail-play-menu-label {

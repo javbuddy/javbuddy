@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Play menu on Movie Detail no longer runs off the right edge of the window.** It now opens leftwards from the Play button's caret.
+
 ## [0.6.3] - 2026-11-12
 
 ### Changed
