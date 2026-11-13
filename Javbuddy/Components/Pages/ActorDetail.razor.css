@@ -200,22 +200,18 @@
     border-radius: 3px;
 }
 
-/* The delete dialog is the shared DeleteConfirmDialog, themed light here (it is dark by default) through
-   custom properties on a wrapper: display: contents keeps the fixed dialog out of the layout. */
+/* The delete dialog is the shared DeleteConfirmDialog, themed light here (Themed; it is dark by default); the
+   wrapper sets the button and message colours through custom properties. */
 .actor-delete-theme {
     display: contents;
-    --scene-editor-dialog-bg: #ffffff;
     --scene-editor-border: #ced4da;
-    --scene-editor-fg: #212529;
     --scene-editor-muted: #495057;
     --scene-editor-btn-bg: #ffffff;
     --scene-editor-accent: #6c757d;
 }
 
 :root[data-theme="dark"] .actor-delete-theme {
-    --scene-editor-dialog-bg: var(--jb-dark-surface);
     --scene-editor-border: var(--jb-dark-border-strong);
-    --scene-editor-fg: #e3e5e8;
     --scene-editor-muted: #b4b8c1;
     --scene-editor-btn-bg: transparent;
     --scene-editor-accent: #b4b8c1;

@@ -358,10 +358,10 @@ public class HighlightFlowTests
         }
         var page = await OpenPlayerAsync(movie);
         var panel = page.Locator(".video-player-side-panel");
-        var dialog = page.Locator(".delete-confirm-dialog");
+        var dialog = page.Locator(".delete-confirm-backdrop");
 
         await panel.Locator(".highlight-editor-delete-btn").ClickAsync();
-        await Expect(dialog.Locator("h2")).ToHaveTextAsync("Delete \"Climax\"?");
+        await Expect(dialog.Locator(".modal-shell-title")).ToHaveTextAsync("Delete \"Climax\"?");
         await Expect(page.Locator(".delete-confirm-cancel-btn")).ToBeFocusedAsync();
         await page.Keyboard.PressAsync("Escape");
         await Expect(dialog).ToHaveCountAsync(0);

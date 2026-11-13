@@ -37,12 +37,12 @@ public class SceneDeleteConfirmFlowTests
         await page.Locator("button.movie-scenes-edit-btn").ClickAsync();
         var player = page.Locator(".video-player-modal-backdrop");
         var panel = page.Locator(".video-player-side-panel");
-        var dialog = page.Locator(".delete-confirm-dialog");
+        var dialog = page.Locator(".delete-confirm-backdrop");
         await Expect(panel.Locator(".scene-editor-row")).ToHaveCountAsync(1);
 
         // Esc cancels the dialog only; the player modal around it stays open.
         await panel.Locator(".scene-editor-delete-btn").ClickAsync();
-        await Expect(dialog.Locator("h2")).ToHaveTextAsync("Delete \"Interview\"?");
+        await Expect(dialog.Locator(".modal-shell-title")).ToHaveTextAsync("Delete \"Interview\"?");
         await Expect(page.Locator(".delete-confirm-cancel-btn")).ToBeFocusedAsync();
         await page.Keyboard.PressAsync("Escape");
         await Expect(dialog).ToHaveCountAsync(0);
@@ -95,7 +95,7 @@ public class SceneDeleteConfirmFlowTests
         var code = (await page.Locator(".cleanup-code").TextContentAsync())!;
 
         await page.Locator(".scene-editor-delete-btn").ClickAsync();
-        await Expect(page.Locator(".delete-confirm-dialog")).ToBeVisibleAsync();
+        await Expect(page.Locator(".delete-confirm-backdrop")).ToBeVisibleAsync();
 
         // N would move to the next movie, and M, H and A would add a scene, start a highlight or
         // mark an apex behind the dialog.
@@ -110,7 +110,7 @@ public class SceneDeleteConfirmFlowTests
         await Expect(page.Locator(".apex-editor-row")).ToHaveCountAsync(0);
 
         await page.Keyboard.PressAsync("Escape");
-        await Expect(page.Locator(".delete-confirm-dialog")).ToHaveCountAsync(0);
+        await Expect(page.Locator(".delete-confirm-backdrop")).ToHaveCountAsync(0);
         await Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
     }
 }

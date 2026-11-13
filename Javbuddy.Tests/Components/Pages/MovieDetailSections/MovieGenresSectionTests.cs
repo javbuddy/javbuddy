@@ -85,7 +85,7 @@ public class MovieGenresSectionTests : BunitContext
 
         cut.Find(".delete-confirm-confirm-btn").Click();
         tags.Received(1).RemoveTagFromMovieAndClipsAsync(MovieId, Implied, Arg.Any<CancellationToken>());
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class MovieGenresSectionTests : BunitContext
 
         Chip(cut, "Blonde").QuerySelector(".movie-detail-tag-remove-btn")!.Click();
 
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
         tags.Received(1).RemoveTagFromMovieAsync(MovieId, LeftoverActorTag, Arg.Any<CancellationToken>());
         tags.DidNotReceiveWithAnyArgs().RemoveTagFromMovieAndClipsAsync(default, default);
     }

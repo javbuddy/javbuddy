@@ -167,7 +167,7 @@ public class ClipEditorTreeTests : ClipEditorTestBase
         var cut = RenderClipEditor();
 
         await cut.Find(".scene-editor-delete-btn").ClickAsync();
-        Assert.Contains("Highlights and apexes inside it stay.", cut.Find(".delete-confirm-dialog").TextContent);
+        Assert.Contains("Highlights and apexes inside it stay.", cut.Find(".delete-confirm-backdrop").TextContent);
         await cut.Find(".delete-confirm-confirm-btn").ClickAsync();
 
         Assert.Empty(cut.FindAll(".scene-editor-list"));

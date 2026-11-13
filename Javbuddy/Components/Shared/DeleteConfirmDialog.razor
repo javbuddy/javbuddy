@@ -1,23 +1,20 @@
-@* Modal delete confirmation, shared by the scene editor and the highlight editor
-. Render it only while a delete is pending. Esc and backdrop clicks cancel and stop
-   here, so they don't also close a player modal around it; Cancel is focused on open so Esc works
-   without a click first. The Review shortcut and seek-key guards look for .delete-confirm-backdrop.
-   Themed by the --scene-editor-* custom properties. *@
-<div class="delete-confirm-backdrop" data-backdrop-dismiss role="presentation" @onclick="CancelAsync" @onclick:stopPropagation="true"
-     @onkeydown="HandleKeyDownAsync" @onkeydown:stopPropagation="true">
-    <div class="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="@titleId" @onclick:stopPropagation="true">
-        <h2 id="@titleId">@(Title ?? $"Delete \"{ItemName}\"?")</h2>
+@* Modal delete confirmation (a ModalShell), shared by the scene editor, the highlight editor and the pages' deletes.
+   Render it only while a delete is pending. Esc and backdrop clicks cancel and stop here, so they don't also
+   close a player modal around it; Cancel is focused on open so Esc works without a click first. The Review
+   shortcut and seek-key guards look for .delete-confirm-backdrop. *@
+<ModalShell Title="@(Title ?? $"Delete \"{ItemName}\"?")" MaxWidth="26rem" Busy="Busy" OnClose="OnCancel" Themed="Themed" ZIndex="1060" StopPropagation="true" BackdropClass="delete-confirm-backdrop">
+    <ChildContent>
         @if (Message is not null)
         {
-            <p>@Message</p>
+            <p class="delete-confirm-message">@Message</p>
         }
         @ChildContent
-        <div class="delete-confirm-actions">
-            <button type="button" class="delete-confirm-btn delete-confirm-cancel-btn" @ref="cancelButton" @onclick="CancelAsync" disabled="@Busy">Cancel</button>
-            <button type="button" class="delete-confirm-btn delete-confirm-confirm-btn" @onclick="OnConfirm" disabled="@Busy">@ConfirmText</button>
-        </div>
-    </div>
-</div>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="delete-confirm-btn delete-confirm-cancel-btn" @ref="cancelButton" @onclick="CancelAsync" disabled="@Busy">Cancel</button>
+        <button type="button" class="delete-confirm-btn delete-confirm-confirm-btn" @onclick="OnConfirm" disabled="@Busy">@ConfirmText</button>
+    </FooterContent>
+</ModalShell>
 
 @code {
     /// <summary>What's being deleted, shown as <c>Delete "ItemName"?</c></summary>
@@ -25,6 +22,10 @@
 
     /// <summary>The whole title, in place of <c>Delete "ItemName"?</c>.</summary>
     [Parameter] public string? Title { get; set; }
+
+    /// <summary>Follow the light/dark theme (white panel in the light theme) instead of always dark; the buttons and message
+    /// then take their colours from the --scene-editor-* custom properties a host wrapper sets (Actor Detail).</summary>
+    [Parameter] public bool Themed { get; set; }
 
     /// <summary>The confirm button's label.</summary>
     [Parameter] public string ConfirmText { get; set; } = "Delete";
@@ -43,7 +44,6 @@
 
     [Parameter] public EventCallback OnCancel { get; set; }
 
-    private readonly string titleId = "delete-confirm-title-" + Guid.NewGuid().ToString("N");
     private ElementReference cancelButton;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -59,6 +59,4 @@
     }
 
     private Task CancelAsync() => Busy ? Task.CompletedTask : OnCancel.InvokeAsync();
-
-    private Task HandleKeyDownAsync(KeyboardEventArgs e) => e.Key == "Escape" ? CancelAsync() : Task.CompletedTask;
 }

@@ -7,61 +7,53 @@
    the Movie Detail crop dialog's cropper script (MovieCoverCropModal.razor.js). *@
 @if (Show)
 {
-    @* Keys stop here: Esc closes only this dialog (not the editor drawer behind it), and
-       Ctrl+Enter doesn't save the editor. *@
-    <div class="spc-backdrop" data-backdrop-dismiss tabindex="0" @onkeydown="OnKeyDownAsync" @onkeydown:stopPropagation="true" @onclick="CloseAsync">
-        <div class="spc-panel" @onclick:stopPropagation="true">
-            <div class="spc-header">
-                <h5 class="spc-title">Crop poster · @MovieId</h5>
-                <button type="button" class="spc-close-btn" @onclick="CloseAsync" aria-label="Close">
-                    <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8 2.146 2.854z" /></svg>
+    @* Above the metadata editor's drawer (z-index 1050); keys and clicks stop here so Esc closes only this
+       dialog (not the drawer behind it) and Ctrl+Enter doesn't save the editor. Closing waits for a running save. *@
+    <ModalShell Title="@($"Crop poster · {MovieId}")" MaxWidth="880px" Busy="saving" OnClose="CloseAsync" ZIndex="1060" StopPropagation="true">
+        <ChildContent>
+            @if (errorMessage is not null)
+            {
+                <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
+            }
+            @if (loading)
+            {
+                <div class="text-center py-5">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Loading poster…
+                </div>
+            }
+            else if (source is not null)
+            {
+                @if (!source.IsFullSize)
+                {
+                    <div class="alert alert-warning py-2 mb-3 spc-fallback-note">
+                        javinizer-go has no full-size poster for this movie, so this crops the current, already-cropped poster.
+                    </div>
+                }
+                <div class="spc-workspace">
+                    <div class="spc-viewport-wrapper">
+                        <CropperViewport HeightPx="420" @ref="viewport" />
+                        <small class="spc-hint">Drag inside the box to move it · drag the handles to resize · scroll to zoom</small>
+                    </div>
+                    <div class="spc-preview">
+                        <span class="spc-preview-title">Poster</span>
+                        <div class="spc-preview-wrapper">
+                            <canvas width="130" height="195" class="spc-preview-canvas" @ref="previewCanvasRef"></canvas>
+                        </div>
+                    </div>
+                </div>
+            }
+        </ChildContent>
+        <FooterContent>
+            <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@saving">Cancel</button>
+            @if (source is not null)
+            {
+                <button type="button" class="btn btn-primary btn-sm spc-save" @onclick="SaveAsync" disabled="@(saving || !cropperStarted)">
+                    @(saving ? "Saving…" : "Save crop")
                 </button>
-            </div>
-            <div class="spc-body">
-                @if (errorMessage is not null)
-                {
-                    <div class="alert alert-danger py-2 mb-3">@errorMessage</div>
-                }
-                @if (loading)
-                {
-                    <div class="text-center py-5">
-                        <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                        Loading poster…
-                    </div>
-                }
-                else if (source is not null)
-                {
-                    @if (!source.IsFullSize)
-                    {
-                        <div class="alert alert-warning py-2 mb-3 spc-fallback-note">
-                            javinizer-go has no full-size poster for this movie, so this crops the current, already-cropped poster.
-                        </div>
-                    }
-                    <div class="spc-workspace">
-                        <div class="spc-viewport-wrapper">
-                            <CropperViewport HeightPx="420" @ref="viewport" />
-                            <small class="spc-hint">Drag inside the box to move it · drag the handles to resize · scroll to zoom</small>
-                        </div>
-                        <div class="spc-preview">
-                            <span class="spc-preview-title">Poster</span>
-                            <div class="spc-preview-wrapper">
-                                <canvas width="130" height="195" class="spc-preview-canvas" @ref="previewCanvasRef"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                }
-            </div>
-            <div class="spc-footer">
-                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@saving">Cancel</button>
-                @if (source is not null)
-                {
-                    <button type="button" class="btn btn-primary btn-sm spc-save" @onclick="SaveAsync" disabled="@(saving || !cropperStarted)">
-                        @(saving ? "Saving…" : "Save crop")
-                    </button>
-                }
-            </div>
-        </div>
-    </div>
+            }
+        </FooterContent>
+    </ModalShell>
 }
 
 @code {
@@ -207,11 +199,6 @@
         StateHasChanged();
     });
 
-
-    private async Task OnKeyDownAsync(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") await CloseAsync();
-    }
 
     private async Task CloseAsync()
     {

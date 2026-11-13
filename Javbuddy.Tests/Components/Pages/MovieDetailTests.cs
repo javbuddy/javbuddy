@@ -164,7 +164,7 @@ public class MovieDetailTests : BunitContext
             cut.Find(".page-toolbar-btn-danger").Click();
 
             Assert.False(cut.Find(".movie-delete-files-toggle input").HasAttribute("checked"));
-            Assert.Contains("Video files on disk are left alone.", cut.Find(".delete-confirm-dialog").TextContent);
+            Assert.Contains("Video files on disk are left alone.", cut.Find(".delete-confirm-backdrop").TextContent);
             Assert.Empty(cut.FindAll(".movie-delete-files-list"));
 
             cut.Find(".delete-confirm-confirm-btn").Click();
@@ -198,7 +198,7 @@ public class MovieDetailTests : BunitContext
             cut.Find(".movie-delete-files-toggle input").Change(true);
 
             cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".movie-delete-files-list li").Count));
-            var dialog = cut.Find(".delete-confirm-dialog").TextContent;
+            var dialog = cut.Find(".delete-confirm-backdrop").TextContent;
             Assert.Contains("ABC-123.mp4", dialog);
             Assert.Contains("ABC-123.nfo", dialog);
             Assert.Contains("2 files, 3 KB freed", dialog);
@@ -238,7 +238,7 @@ public class MovieDetailTests : BunitContext
 
             cut.Find(".delete-confirm-confirm-btn").Click();
 
-            cut.WaitForAssertion(() => Assert.Contains("Refusing to delete", cut.Find(".delete-confirm-dialog .alert-danger").TextContent));
+            cut.WaitForAssertion(() => Assert.Contains("Refusing to delete", cut.Find(".delete-confirm-backdrop .alert-danger").TextContent));
             Assert.True(Directory.Exists(folder));
             Assert.True(factory.CreateDbContext().Movies.Any());
         }
@@ -1900,10 +1900,10 @@ public class MovieDetailTests : BunitContext
         cut.Find(".page-toolbar-btn-danger").Click();
 
         Assert.False(cut.FindComponent<ImageLightboxModal>().Instance.Show);
-        Assert.NotEmpty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.NotEmpty(cut.FindAll(".delete-confirm-backdrop"));
 
         await cut.InvokeAsync(() => cut.FindComponent<MovieCoverCropModal>().Instance.OnClose.InvokeAsync());
-        Assert.NotEmpty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.NotEmpty(cut.FindAll(".delete-confirm-backdrop"));
     }
 
     [Fact]
@@ -1911,11 +1911,11 @@ public class MovieDetailTests : BunitContext
     {
         var cut = RenderMovieWithMetadata();
         cut.Find(".page-toolbar-btn-danger").Click();
-        Assert.NotEmpty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.NotEmpty(cut.FindAll(".delete-confirm-backdrop"));
 
         cut.Find(".delete-confirm-cancel-btn").Click();
 
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
     }
 
     private IRenderedComponent<MovieDetail> RenderWithExtraFanart(List<string> files, bool hasLocalFolder)
@@ -1986,12 +1986,12 @@ public class MovieDetailTests : BunitContext
         var cut = RenderWithExtraFanart(files, hasLocalFolder: true);
 
         await cut.FindAll(".movie-image-delete-btn")[1].ClickAsync(new());
-        Assert.Contains("Delete \"fanart2.jpg\"?", cut.Find(".delete-confirm-dialog").TextContent);
+        Assert.Contains("Delete \"fanart2.jpg\"?", cut.Find(".delete-confirm-backdrop").TextContent);
         await cut.Find(".delete-confirm-confirm-btn").ClickAsync(new());
 
         await extraFanartService.Received(1).DeleteAsync(Arg.Any<int>(), "fanart2.jpg", Arg.Any<CancellationToken>());
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("img.fanart-thumb")));
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
     }
 
     [Fact]
