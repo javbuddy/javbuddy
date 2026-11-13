@@ -273,6 +273,40 @@ public class R18DevReleaseBrowseServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetPreviewAsync_SourceEnabled_IsTheDumpsEntryForTheCode()
+    {
+        SeedSettings(enabled: true);
+        var detail = Detail(null, null);
+        store.GetMovieByCodeAsync("MIDE-001", Arg.Any<CancellationToken>()).Returns(detail);
+
+        Assert.Same(detail, await Service.GetPreviewAsync("MIDE-001"));
+    }
+
+    [Fact]
+    public async Task GetPreviewAsync_NotInTheDump_IsNull()
+    {
+        SeedSettings(enabled: true);
+
+        Assert.Null(await Service.GetPreviewAsync("MIDE-001"));
+    }
+
+    [Fact]
+    public async Task GetPreviewAsync_SourceDisabled_IsNullWithoutQueryingTheDump()
+    {
+        SeedSettings(enabled: false);
+
+        Assert.Null(await Service.GetPreviewAsync("MIDE-001"));
+        await store.DidNotReceiveWithAnyArgs().GetMovieByCodeAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task GetPreviewAsync_NoSettingsRowYet_IsNull()
+    {
+        Assert.Null(await Service.GetPreviewAsync("MIDE-001"));
+        await store.DidNotReceiveWithAnyArgs().GetMovieByCodeAsync(default!, default);
+    }
+
+    [Fact]
     public async Task SuggestAsync_MarksSuggestionsAgainstTheLibrary()
     {
         SeedSettings(enabled: true);

@@ -1,6 +1,6 @@
 @using Javbuddy.Models
 
-@if (show)
+@if (Show)
 {
     <ModalShell Themed="true" Title="Media Info" MaxWidth="900px" OnClose="Close">
         <ChildContent>
@@ -61,7 +61,12 @@
     /// for each movie file/version. Doesn't re-probe the file itself.</summary>
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
 
-    private bool show;
+    /// <summary>Whether the modal is open. The page owns it; the modal asks to close through <see cref="OnClose"/>.</summary>
+    [Parameter] public bool Show { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool wasShown;
     private MovieFile? activeFile;
     private string? fullReport;
 
@@ -74,19 +79,19 @@
         .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
-    protected override void OnParametersSet() => sortedFiles = null;
-
-    private string? ActiveScanError => activeFile is not null ? activeFile.MediaScanError : Movie.MediaScanError;
-
-    public Task OpenAsync()
+    // The active file starts at the primary one each time the modal opens, not on every parameter set.
+    protected override void OnParametersSet()
     {
         sortedFiles = null;
-        activeFile = Files.FirstOrDefault(f => f.IsPrimary) ?? Files.FirstOrDefault();
-        UpdateReport();
-        show = true;
-        StateHasChanged();
-        return Task.CompletedTask;
+        if (Show && !wasShown)
+        {
+            activeFile = Files.FirstOrDefault(f => f.IsPrimary) ?? Files.FirstOrDefault();
+            UpdateReport();
+        }
+        wasShown = Show;
     }
+
+    private string? ActiveScanError => activeFile is not null ? activeFile.MediaScanError : Movie.MediaScanError;
 
     private void SelectFile(MovieFile file)
     {
@@ -106,5 +111,5 @@
         }
     }
 
-    private void Close() => show = false;
+    private Task Close() => OnClose.InvokeAsync();
 }

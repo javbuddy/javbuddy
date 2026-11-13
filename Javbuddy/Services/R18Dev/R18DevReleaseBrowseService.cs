@@ -62,6 +62,10 @@ public interface IR18DevReleaseBrowseService
     /// movie's series and label ids for Movie Detail's badges.</summary>
     Task<R18DevRelatedReleases> GetRelatedAsync(string code, int limit, CancellationToken ct = default);
 
+    /// <summary>The dump's entry for <paramref name="code"/>, for Movie Detail's preview of a release that isn't in the
+    /// library yet; null while the r18.dev source is disabled or the dump has no such release.</summary>
+    Task<R18DevMovieDetail?> GetPreviewAsync(string code, CancellationToken ct = default);
+
     /// <summary>Catalog releases whose code starts with <paramref name="term"/>, marked against the
     /// local library — the header search's and Add New's suggestions. Empty while r18.dev is disabled
     /// or its catalog can't be queried.</summary>
@@ -153,6 +157,13 @@ public class R18DevReleaseBrowseService(IDbContextFactory<AppDbContext> dbFactor
         var rows = R18DevReleaseMatcher.CollapseDuplicates(library.Classify(entries)).Take(limit).ToList();
         var total = await dumpStore.CountCatalogAsync(filter, self, ct);
         return new R18DevRelatedReleases(detail.SeriesRef, detail.LabelRef, rows, total);
+    }
+
+    public async Task<R18DevMovieDetail?> GetPreviewAsync(string code, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var enabled = await db.R18DevSettings.OrderBy(s => s.Id).Select(s => s.Enabled).FirstOrDefaultAsync(ct);
+        return enabled ? await dumpStore.GetMovieByCodeAsync(code, ct) : null;
     }
 
     public async Task<IReadOnlyList<R18DevReleaseRow>> SuggestAsync(string term, int limit, CancellationToken ct = default)

@@ -162,8 +162,14 @@ The exception is chrome that many components render identically: the sort/filter
 
 New pages with the same chrome should use these instead of copying the rules.
 
+## Pages with several dialogs
+
+A page that hosts several dialogs (Movie Detail, Actor Detail) keeps the open one in a single enum (`MovieDetailSections/MovieDetailDialog.cs`, `ActorDetailSections/ActorDetailDialog.cs`) rather than a bool per dialog: they are mutually exclusive, so one value says which is open. Every dialog component takes `Show` from it (`Show="IsOpen(...)"`) and asks to close through `OnClose`; the page's `CloseDialog` only closes the dialog that is open, so a late close callback can't shut the one that took over. A dialog that loads or resets something when it opens does so when `Show` turns true (remember the last value, as `MetadataEditorModal` and `MediaInfoModal` do), not on every parameter set, and one that is closed from outside (the page moved on to another movie) lets go of what it holds. Don't open a dialog through `@ref` and a public `OpenAsync`. A section that needs a page's dialog asks for it through an `EventCallback<...Dialog>` (`MovieDetailToolbar`, `MovieDetailBadges`) instead of owning a copy of it.
+
+Dependencies sit with their real user: a section that does an action injects the service for it (`MovieDetailToolbar` the rescan and poster generation, `MovieDetailBadges` the primary-version and Cleanup blacklist calls, `MovieDeleteDialog` the delete, `MoviePreviewSection` the add), and the page keeps only what it loads for itself.
+
 ## Page vs. component vs. service boundary
 
 Razor pages/components should not inject `IDbContextFactory<AppDbContext>` or an integration client (`IJavinizerClient`, `IJellyfinClient`, etc.) directly for anything beyond a single read-only display query. Data mutation and any non-trivial or cross-cutting query belongs in a service, called from the component (`AGENTS.md`).
 
-Worked example: `ProwlarrSearchModal.razor` injects `IProwlarrClient` and `ITorrentGrabService` directly — acceptable because it's a single-purpose modal performing one focused search-and-grab action, not a page doing broader data orchestration. Compare to `MovieDetail.razor`, which calls into `MovieService`/`SearchService` for its mutations rather than talking to `IDbContextFactory<AppDbContext>` itself.
+Worked example: `ProwlarrSearchModal.razor` injects `IProwlarrClient` and `ITorrentGrabService` directly — acceptable because it's a single-purpose modal performing one focused search-and-grab action, not a page doing broader data orchestration. Compare to Movie Detail, whose sections call into `MovieService`/`MovieRescanService` and friends for their mutations rather than talking to `IDbContextFactory<AppDbContext>` itself.

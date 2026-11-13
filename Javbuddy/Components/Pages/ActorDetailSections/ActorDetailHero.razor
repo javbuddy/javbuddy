@@ -1,0 +1,160 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Actors
+
+@* Actor Detail's hero: the photo (click for the large one, or the initials to upload), the name with its
+   badges, the movie and image counts, the physical attributes, the Jellyfin and r18.dev badges and the
+   aliases. Display only; the page owns the data and what the clicks open. *@
+<div class="actor-hero">
+    @if (HasImage)
+    {
+        <div class="actor-hero-avatar actor-hero-avatar-photo actor-hero-avatar-clickable" @onclick="OnLightboxRequested" title="Click to view large photo">
+            <img src="@($"/actor-image/{Actor.Id}/full?v={ImageVersion}")" alt="@Actor.DisplayName" />
+        </div>
+    }
+    else
+    {
+        <div class="actor-hero-avatar actor-hero-avatar-clickable" @onclick="OnPhotoUploadRequested" title="Click to upload photo">@ActorMatching.Initials(Actor.DisplayName)</div>
+    }
+    <div class="actor-hero-info">
+        <h1 class="actor-hero-title">
+            @Actor.DisplayName
+            <BirthdayIndicator BirthDate="Actor.BirthDate" />
+            @if (Actor.IsFavorite)
+            {
+                <span class="actor-hero-favorite" title="Favorite">♥</span>
+            }
+            @if (Actor.IsRetired)
+            {
+                <span class="actor-badge actor-badge-retired" title="Retired from the industry">Retired</span>
+            }
+            @if (Actor.IsTransgender)
+            {
+                <span class="actor-badge actor-badge-transgender" title="Transgender">Transgender</span>
+            }
+            @if (!string.IsNullOrWhiteSpace(Actor.JapaneseNameKanji) || !string.IsNullOrWhiteSpace(Actor.JapaneseNameKana))
+            {
+                <span class="actor-hero-japanese">
+                    @Actor.JapaneseNameKanji
+                    @if (!string.IsNullOrWhiteSpace(Actor.JapaneseNameKanji) && !string.IsNullOrWhiteSpace(Actor.JapaneseNameKana))
+                    {
+                        <span class="actor-hero-japanese-sep">·</span>
+                    }
+                    @Actor.JapaneseNameKana
+                </span>
+            }
+        </h1>
+        <p class="actor-hero-meta">@MovieCount movie@(MovieCount == 1 ? "" : "s") · @ImageCount image@(ImageCount == 1 ? "" : "s")</p>
+        @if (Actor.HasPhysicalAttributes)
+        {
+            <div class="actor-hero-attributes">
+                @if (Actor.BirthDate.HasValue)
+                {
+                    <span class="actor-attribute-item">
+                        <span class="actor-attribute-label">Birthdate:</span>
+                        <span class="actor-attribute-value">@Actor.FormattedBirthDate</span>
+                    </span>
+                }
+                @if (!string.IsNullOrWhiteSpace(Actor.FormattedMeasurements))
+                {
+                    <span class="actor-attribute-item">
+                        <span class="actor-attribute-label">Measurements:</span>
+                        <span class="actor-attribute-value">@Actor.FormattedMeasurements</span>
+                    </span>
+                }
+                @if (cupSizeHistory.Count > 0)
+                {
+                    <span class="actor-attribute-item" title="@ActorPhysicalAttributesHelper.JapaneseCupSizeExplanation">
+                        <span class="actor-attribute-label">Cup size:</span>
+                        <span class="actor-attribute-value">
+                            @if (Actor.CupSizePeriods.Count == 0)
+                            {
+                                <span class="actor-cup-step">@cupSizeHistory[0].CupSize</span>
+                            }
+                            else
+                            {
+                                @for (var i = 0; i < cupSizeHistory.Count; i++)
+                                {
+                                    var step = cupSizeHistory[i];
+                                    var isCurrent = i == cupSizeHistory.Count - 1;
+                                    @if (i > 0)
+                                    {
+                                        <span class="actor-cup-arrow" aria-hidden="true">→</span>
+                                    }
+                                    <span class="actor-cup-step@(isCurrent ? " actor-cup-step-current" : "")" title="@ActorPhysicalAttributesHelper.FormatCupSizeStepRange(step)">@step.CupSize</span>
+                                }
+                            }
+                        </span>
+                        <span class="actor-cup-info-icon" title="@ActorPhysicalAttributesHelper.JapaneseCupSizeExplanation" aria-label="Japanese cup size details">
+                            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">
+                                <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
+                                <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
+                            </svg>
+                        </span>
+                    </span>
+                }
+                @if (!string.IsNullOrWhiteSpace(Actor.FormattedHeight))
+                {
+                    <span class="actor-attribute-item">
+                        <span class="actor-attribute-label">Height:</span>
+                        <span class="actor-attribute-value">@Actor.FormattedHeight</span>
+                    </span>
+                }
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(Actor.JellyfinPersonId) || !string.IsNullOrWhiteSpace(Actor.R18DevName))
+        {
+            <div class="actor-hero-badges">
+                @if (!string.IsNullOrWhiteSpace(JellyfinWebUrl))
+                {
+                    <a class="actor-badge actor-badge-jellyfin" href="@JellyfinWebUrl" target="_blank" rel="noopener noreferrer" title="Open in Jellyfin">
+                        <JellyfinIcon Size="12" />
+                        Open in Jellyfin
+                    </a>
+                }
+                else if (!string.IsNullOrWhiteSpace(Actor.JellyfinPersonId))
+                {
+                    <span class="actor-badge" title="Jellyfin Person ID">Jellyfin</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(Actor.R18DevName))
+                {
+                    <span class="actor-badge" title="r18.dev Name Override">r18: @Actor.R18DevName</span>
+                }
+            </div>
+        }
+        @if (Actor.Aliases.Count > 0)
+        {
+            <div class="actor-hero-aliases">
+                <span class="text-muted small">Aliases:</span>
+                @foreach (var alias in Actor.Aliases)
+                {
+                    <span class="actor-alias-tag">@alias.Name</span>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Actor Actor { get; set; } = null!;
+
+    [Parameter] public int MovieCount { get; set; }
+
+    [Parameter] public int ImageCount { get; set; }
+
+    [Parameter] public bool HasImage { get; set; }
+
+    [Parameter] public long ImageVersion { get; set; }
+
+    [Parameter] public string? JellyfinWebUrl { get; set; }
+
+    /// <summary>The photo was clicked: the page shows it large.</summary>
+    [Parameter] public EventCallback OnLightboxRequested { get; set; }
+
+    /// <summary>The initials were clicked: the page opens the photo upload.</summary>
+    [Parameter] public EventCallback OnPhotoUploadRequested { get; set; }
+
+    private IReadOnlyList<CupSizeStep> cupSizeHistory = [];
+
+    protected override void OnParametersSet() =>
+        cupSizeHistory = ActorPhysicalAttributesHelper.CupSizeHistory(Actor.CupSize, Actor.CupSizePeriods);
+}

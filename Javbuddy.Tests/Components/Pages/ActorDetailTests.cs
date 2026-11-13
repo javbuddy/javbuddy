@@ -211,7 +211,7 @@ public class ActorDetailTests : BunitContext
             await db.SaveChangesAsync();
         }
 
-        var module = JSInterop.SetupModule("./Components/Pages/ActorDetail.razor.js");
+        var module = JSInterop.SetupModule("./Components/Pages/ActorDetailSections/ActorMoviesSection.razor.js");
         List<string?> TrackedKeys() => module.Invocations
             .Where(i => i.Identifier == "trackScroll").Select(i => i.Arguments[0]?.ToString()).ToList();
 

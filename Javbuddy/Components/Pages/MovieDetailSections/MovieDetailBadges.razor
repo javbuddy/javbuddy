@@ -1,0 +1,326 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Movies
+@using Javbuddy.Services.Scenes
+@using Javbuddy.Services.Actors
+@using Javbuddy.Services.R18Dev
+@inject IMovieService MovieService
+@inject IMovieCleanupService MovieCleanupService
+@inject MovieFilterNavigationState FilterNavigationState
+@inject NavigationManager Nav
+
+@* Movie Detail's badge row: status, content type, the NFO drift, Cleanup blacklist and broken B-frame flags,
+   the cast age warning, runtime, year, code, studio, label and series, the resolution, VR format and file size, the
+   Versions picker for the primary version, the Play button with its menu of the highlights and apexes, and the
+   Jellyfin link. The filter badges go to the Movies page; the rest ask the page to open a dialog, play or reload. *@
+<div class="movie-detail-badges">
+    <span class="movie-detail-badge movie-detail-badge-status-@(Movie.Status == MovieStatus.Got ? "got" : "missing")" title="@MovieDetailText.MetaFetchedTooltip(Movie)">@Movie.Status</span>
+    <button type="button" class="movie-detail-badge movie-detail-badge-content-type" @onclick="() => FilterByContentType(Movie.ContentType)" disabled="@(!Interactive)" title="Content type: show all @MovieFilterOptions.ContentTypeLabel(Movie.ContentType) movies">@MovieFilterOptions.ContentTypeLabel(Movie.ContentType)</button>
+    @if (Movie.NfoDriftKind != NfoDriftKind.None && Movie.Status != MovieStatus.Missing)
+    {
+        <button type="button" class="movie-detail-badge movie-detail-badge-warning" @onclick="() => Open(MovieDetailDialog.NfoConflictReview)" disabled="@(!Interactive)" title="@MovieDetailText.NfoDriftTooltip(Movie)">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
+                <path d="M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.15.15 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.2.2 0 0 1-.054.06.18.18 0 0 1-.066.018H1.146a.18.18 0 0 1-.066-.018.2.2 0 0 1-.054-.06c-.033-.059-.034-.123.002-.183L7.884 2.073a.15.15 0 0 1 .054-.057zm-1.044-.45a1.13 1.13 0 0 0-1.96 0L.18 13.233c-.457.778.091 1.767.98 1.767h13.679c.89 0 1.438-.99.98-1.767L8.982 1.566z" />
+                <path d="M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.553.553 0 0 1-1.1 0z" />
+            </svg>
+            NFO: @NfoDriftDetector.Label(Movie.NfoDriftKind)
+        </button>
+    }
+    @if (Movie.CleanupBlacklisted)
+    {
+        <button type="button" class="movie-detail-badge movie-detail-badge-warning" @onclick="RemoveFromCleanupBlacklist" disabled="@(!Interactive)" title="Excluded from the Cleanup review queue — click to remove">
+            Blacklisted from Cleanup
+        </button>
+    }
+    @if (Movie.HasBrokenBFrames && Movie.Status != MovieStatus.Missing)
+    {
+        <button type="button" class="movie-detail-badge movie-detail-badge-danger" @onclick="() => Open(MovieDetailDialog.VideoRepair)" title="Broken B-frame timestamps detected / marked — click to repair">
+            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
+                <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
+                <path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
+            </svg>
+            Broken B-Frames
+        </button>
+    }
+    @if (MovieDetailText.UnderageCastTooltip(CastEntries) is { } underageCastTooltip)
+    {
+        <span class="movie-detail-badge movie-detail-badge-underage" title="@underageCastTooltip" aria-label="@underageCastTooltip">⚠ Cast age under @ActorPhysicalAttributesHelper.MinimumActorAge</span>
+    }
+    @if (Movie.MetaRuntimeMinutes is not null)
+    {
+        <span class="movie-detail-badge">@(Movie.MetaRuntimeMinutes) Minutes</span>
+    }
+    @if (Movie.MetaReleaseDate is not null)
+    {
+        <span class="movie-detail-badge">@Movie.MetaReleaseDate.Value.Year</span>
+    }
+    @if (MovieDetailText.CodePrefix(Movie.Code) is { } codePrefix)
+    {
+        <span class="movie-detail-badge"><button type="button" class="movie-detail-code-prefix" @onclick="() => FilterByCodePrefix(codePrefix)">@codePrefix</button>@Movie.Code![codePrefix.Length..]</span>
+    }
+    else
+    {
+        <span class="movie-detail-badge">@Movie.Code</span>
+    }
+    @if (!string.IsNullOrWhiteSpace(Movie.MetaStudio))
+    {
+        <button type="button" class="movie-detail-badge" @onclick="() => FilterByStudio(Movie.MetaStudio)">@Movie.MetaStudio</button>
+    }
+    @if (!string.IsNullOrWhiteSpace(Movie.MetaLabel) && Movie.MetaLabel != Movie.MetaStudio)
+    {
+        @if (Related.Label is { } catalogLabel)
+        {
+            <button type="button" class="movie-detail-badge" title="Browse this label's releases on r18.dev" @onclick="() => BrowseCatalog((null, catalogLabel))">@Movie.MetaLabel</button>
+        }
+        else
+        {
+            <span class="movie-detail-badge">@Movie.MetaLabel</span>
+        }
+    }
+    @if (Related.Series is { } catalogSeries)
+    {
+        <button type="button" class="movie-detail-badge" title="Browse this series' releases on r18.dev" @onclick="() => BrowseCatalog((catalogSeries, null))">@(Movie.MetaSeries ?? catalogSeries.Name)</button>
+    }
+    @if (ResolutionDisplay is not null)
+    {
+        <span class="movie-detail-badge">@ResolutionDisplay</span>
+    }
+    @if (Movie.VrType is not null)
+    {
+        <span class="movie-detail-badge" title="VR / 3D format of the primary version">@Movie.VrType</span>
+    }
+    @if (Movie.LocalFileSizeDisplay is not null)
+    {
+        <span class="movie-detail-badge">@Movie.LocalFileSizeDisplay</span>
+    }
+    @if (Movie.MovieFiles.Count > 1)
+    {
+        @* Picks the movie's primary version. *@
+        <span class="movie-detail-version-anchor" @onkeydown="OnVersionMenuKeyDown">
+            <button type="button" class="movie-detail-badge movie-detail-badge-versions"
+                    aria-haspopup="menu" aria-expanded="@(showPrimaryVersionMenu ? "true" : "false")"
+                    title="Choose the primary version" @onclick="() => ToggleVersionMenu()">
+                @Movie.MovieFiles.Count Versions <span class="movie-detail-versions-caret" aria-hidden="true">▾</span>
+            </button>
+            @if (showPrimaryVersionMenu)
+            {
+                <div class="movie-detail-version-backdrop" @onclick="CloseVersionMenu"></div>
+                <div class="movie-detail-version-menu movie-detail-version-menu-end" role="menu" aria-label="Primary version">
+                    <div class="movie-detail-version-heading">Primary version</div>
+                    @foreach (var file in OrderedVersions)
+                    {
+                        <button type="button" class="movie-detail-version-choice" role="menuitemradio"
+                                aria-checked="@(file.IsPrimary ? "true" : "false")" disabled="@settingPrimary" title="@file.FileName"
+                                @onclick="() => SetPrimaryVersionAsync(file.Id)">
+                            <span class="movie-detail-version-check" aria-hidden="true">@(file.IsPrimary ? "✓" : null)</span>
+                            <span class="movie-detail-version-label">@MovieVersionParser.FormatVersionLabel(file)</span>
+                        </button>
+                    }
+                    @if (versionMenuError is not null)
+                    {
+                        <div class="movie-detail-version-error">@versionMenuError</div>
+                    }
+                </div>
+            }
+        </span>
+    }
+    @if (CanPlay)
+    {
+        @* Play, with a caret menu for the movie's highlights and apexes when it has any. *@
+        <span class="movie-detail-version-anchor movie-detail-play-split" @onkeydown="OnPlayMenuKeyDown">
+            <button type="button" class="movie-detail-badge movie-detail-badge-play @(HasClipMenu ? "movie-detail-split-play-first" : null)" @onclick="OnPlay" title="Play movie">
+                <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
+                    <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
+                </svg>
+                Play
+            </button>
+            @if (HasClipMenu)
+            {
+                <button type="button" class="movie-detail-badge movie-detail-badge-play movie-detail-play-caret"
+                        aria-haspopup="menu" aria-expanded="@(showPlayMenu ? "true" : "false")"
+                        title="More ways to play" aria-label="More ways to play" @onclick="() => showPlayMenu = !showPlayMenu">
+                    <span aria-hidden="true">▾</span>
+                </button>
+                @if (showPlayMenu)
+                {
+                    <div class="movie-detail-version-backdrop" @onclick="() => showPlayMenu = false"></div>
+                    <div class="movie-detail-version-menu movie-detail-play-menu" role="menu" aria-label="Play">
+                        <button type="button" class="movie-detail-version-choice" role="menuitem" @onclick="() => PlayFromMenu(null, false)">
+                            <span class="movie-detail-play-menu-label">Play movie</span>
+                            @if (Movie.MediaDurationSeconds is > 0 and var movieSeconds)
+                            {
+                                <span class="movie-detail-play-menu-meta">@SceneTimeFormat.Format(movieSeconds)</span>
+                            }
+                        </button>
+                        @if (Highlights.Count > 0)
+                        {
+                            <div class="movie-detail-play-menu-rule" role="separator"></div>
+                            <div class="movie-detail-play-menu-row">
+                                <button type="button" class="movie-detail-version-choice" role="menuitem" @onclick="() => PlayFromMenu(PlayerClipKind.Highlight, false)">
+                                    <span class="movie-detail-play-menu-highlight"><SparkleIcon Size="12" /></span>
+                                    <span class="movie-detail-play-menu-label">All highlights<br /><span class="movie-detail-play-menu-meta">@ClipSummary(Highlights.Count, Highlights.Sum(h => h.DurationSeconds))</span></span>
+                                </button>
+                                <button type="button" class="movie-detail-play-menu-shuffle" role="menuitem" title="Shuffle highlights" aria-label="Shuffle highlights" @onclick="() => PlayFromMenu(PlayerClipKind.Highlight, true)"><ShuffleIcon Size="10" /> Shuffle</button>
+                            </div>
+                        }
+                        @if (Apexes.Count > 0)
+                        {
+                            <div class="movie-detail-play-menu-rule" role="separator"></div>
+                            <div class="movie-detail-play-menu-row">
+                                <button type="button" class="movie-detail-version-choice" role="menuitem" @onclick="() => PlayFromMenu(PlayerClipKind.Apex, false)">
+                                    <span class="movie-detail-play-menu-apex"><ApexIcon Size="12" /></span>
+                                    <span class="movie-detail-play-menu-label">All apexes<br /><span class="movie-detail-play-menu-meta">@ClipSummary(Apexes.Count, ApexRanges.TotalClipSeconds(Apexes, Movie.MediaDurationSeconds))</span></span>
+                                </button>
+                                <button type="button" class="movie-detail-play-menu-shuffle" role="menuitem" title="Shuffle apexes" aria-label="Shuffle apexes" @onclick="() => PlayFromMenu(PlayerClipKind.Apex, true)"><ShuffleIcon Size="10" /> Shuffle</button>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </span>
+    }
+    @if (!string.IsNullOrWhiteSpace(Movie.JellyfinItemId))
+    {
+        <a class="movie-detail-badge movie-detail-badge-jellyfin" href="@JellyfinWebUrl" target="_blank" rel="noopener noreferrer" title="@MovieDetailText.JellyfinLinkedTooltip(Movie)">
+            <JellyfinIcon Size="14" />
+            Open in Jellyfin
+        </a>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+
+    [Parameter] public IReadOnlyList<MovieCastEntry> CastEntries { get; set; } = [];
+
+    /// <summary>The movie's r18.dev series and label, which the label and series badges browse the catalog by.</summary>
+    [Parameter] public R18DevRelatedReleases Related { get; set; } = R18DevRelatedReleases.None;
+
+    [Parameter] public IReadOnlyList<HighlightItem> Highlights { get; set; } = [];
+
+    [Parameter] public IReadOnlyList<ApexItem> Apexes { get; set; } = [];
+
+    /// <summary>Whether the movie has a local video the player can stream.</summary>
+    [Parameter] public bool CanPlay { get; set; }
+
+    [Parameter] public string? JellyfinWebUrl { get; set; }
+
+    /// <summary>False until the interactive circuit is up: a click on the prerendered HTML is silently dropped.</summary>
+    [Parameter] public bool Interactive { get; set; }
+
+    [Parameter] public EventCallback<MovieDetailDialog> OnOpenDialog { get; set; }
+
+    /// <summary>A change was made: the page reloads these parts of its data.</summary>
+    [Parameter] public EventCallback<MovieParts> OnReload { get; set; }
+
+    /// <summary>Play the whole movie.</summary>
+    [Parameter] public EventCallback OnPlay { get; set; }
+
+    /// <summary>Play the movie's highlights or apexes, in order or shuffled.</summary>
+    [Parameter] public EventCallback<(PlayerClipKind Kind, bool Shuffle)> OnPlayClips { get; set; }
+
+    // Whether the Versions badge's primary-version picker is open.
+    private bool showPrimaryVersionMenu;
+    private bool showPlayMenu;
+    private bool settingPrimary;
+    private string? versionMenuError;
+
+    private Task Open(MovieDetailDialog dialog) => OnOpenDialog.InvokeAsync(dialog);
+
+    private string? ResolutionDisplay => MediaQualityLabelFormatter.FormatDetail(Movie.MediaWidth, Movie.MediaHeight, Movie.MediaScanType);
+
+    // Opens the Movies page's r18.dev catalog narrowed to one series or label.
+    private void BrowseCatalog((R18DevCatalogRef? Series, R18DevCatalogRef? Label) target)
+    {
+        FilterNavigationState.SetPendingCatalogFilter(target.Series, target.Label);
+        Nav.NavigateTo("/");
+    }
+
+    private void FilterByStudio(string? studio)
+    {
+        if (string.IsNullOrWhiteSpace(studio)) return;
+        FilterNavigationState.SetPendingFilter(studio: studio);
+        Nav.NavigateTo("/");
+    }
+
+    private void FilterByContentType(MovieContentType contentType)
+    {
+        FilterNavigationState.SetPendingContentTypeFilter(contentType);
+        Nav.NavigateTo("/");
+    }
+
+    private void FilterByCodePrefix(string prefix)
+    {
+        FilterNavigationState.SetPendingFilter(codePrefix: prefix);
+        Nav.NavigateTo("/");
+    }
+
+    private async Task RemoveFromCleanupBlacklist()
+    {
+        await MovieCleanupService.UnblacklistAsync(Movie.Id);
+        await OnReload.InvokeAsync(MovieParts.Core);
+    }
+
+    private IEnumerable<MovieFile> OrderedVersions => Movie.MovieFiles
+        .OrderByDescending(f => f.IsPrimary)
+        .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase);
+
+    private void ToggleVersionMenu()
+    {
+        showPrimaryVersionMenu = !showPrimaryVersionMenu;
+        versionMenuError = null;
+    }
+
+    private void CloseVersionMenu() => showPrimaryVersionMenu = false;
+
+    // Escape closes the open version menu, from wherever focus is inside it.
+    private void OnVersionMenuKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") showPrimaryVersionMenu = false;
+    }
+
+    private async Task SetPrimaryVersionAsync(int fileId)
+    {
+        if (settingPrimary) return;
+        if (Movie.MovieFiles.Any(f => f.Id == fileId && f.IsPrimary))
+        {
+            CloseVersionMenu();
+            return;
+        }
+        settingPrimary = true;
+        versionMenuError = null;
+        try
+        {
+            var result = await MovieService.SetPrimaryFileAsync(Movie.Id, fileId);
+            if (!result.Success)
+            {
+                versionMenuError = result.ErrorMessage;
+                return;
+            }
+            CloseVersionMenu();
+            // A different main file changes the media details, the trickplay and the clips' media.
+            await OnReload.InvokeAsync(MovieParts.All);
+        }
+        finally
+        {
+            settingPrimary = false;
+        }
+    }
+
+    private static string ClipSummary(int count, double seconds) =>
+        $"{count} {(count == 1 ? "clip" : "clips")} · {SceneTimeFormat.Format(seconds)}";
+
+    // Escape closes the open Play menu, from wherever focus is inside it.
+    private void OnPlayMenuKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") showPlayMenu = false;
+    }
+
+    private bool HasClipMenu => Highlights.Count > 0 || Apexes.Count > 0;
+
+    // The Play menu: the whole movie (null kind), or the movie's highlights or apexes in order or shuffled.
+    private Task PlayFromMenu(PlayerClipKind? kind, bool shuffle)
+    {
+        showPlayMenu = false;
+        return kind is { } clipKind ? OnPlayClips.InvokeAsync((clipKind, shuffle)) : OnPlay.InvokeAsync();
+    }
+}

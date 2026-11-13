@@ -1,7 +1,7 @@
 @using Javbuddy.Models
 @inject IMovieService MovieService
 
-@if (show)
+@if (Show)
 {
     <ModalShell Themed="true" Title="Edit Metadata" MaxWidth="700px" Busy="saving" OnClose="Close">
         <ChildContent>
@@ -103,12 +103,17 @@
 
 @code {
     /// <summary>MovieDetail's "Edit Metadata" modal — edits the core Movie fields NfoEditor
-    /// and the Genres/Cast section editors don't cover. Opened imperatively via @ref/OpenAsync,
-    /// mirroring NfoEditor/MediaInfoModal. Copies Movie's current values into a local edit model on
+    /// and the Genres/Cast section editors don't cover. Opened through <see cref="Show"/>, like the page's
+    /// other dialogs. Copies Movie's current values into a local edit model on
     /// open so Cancel is a true discard — nothing touches <see cref="Movie"/> until Save succeeds.</summary>
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
 
     [Parameter] public EventCallback OnSaved { get; set; }
+
+    /// <summary>Whether the dialog is open. The page owns it; the dialog asks to close through <see cref="OnClose"/>.</summary>
+    [Parameter] public bool Show { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
 
     private sealed class EditModel
     {
@@ -153,44 +158,43 @@
 
     private const string FormId = "metadata-editor-form";
 
-    private bool show;
+    private bool wasShown;
     private bool saving;
     private string? saveError;
     private string? saveWarning;
     private EditModel model = new();
 
-    public Task OpenAsync()
+    // The edit model is copied from the movie each time the dialog opens, not on every parameter set: the page
+    // reloads the movie after a save, which must not wipe a warning or edits that are still on screen.
+    protected override void OnParametersSet()
     {
-        model = new EditModel
+        if (Show && !wasShown)
         {
-            Title = Movie.Title,
-            MetaTitle = Movie.MetaTitle,
-            MetaOriginalTitle = Movie.MetaOriginalTitle,
-            MetaReleaseDate = Movie.MetaReleaseDate,
-            MetaStudio = Movie.MetaStudio,
-            MetaLabel = Movie.MetaLabel,
-            MetaSeries = Movie.MetaSeries,
-            MetaDirector = Movie.MetaDirector,
-            MetaDescription = Movie.MetaDescription,
-            ContentType = Movie.ContentType,
-            VrFormats = Movie.MovieFiles
-                .OrderByDescending(f => f.IsPrimary)
-                .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
-                .Select(VrChoice.From)
-                .ToList(),
-        };
-        saveError = null;
-        saveWarning = null;
-        show = true;
-        StateHasChanged();
-        return Task.CompletedTask;
+            model = new EditModel
+            {
+                Title = Movie.Title,
+                MetaTitle = Movie.MetaTitle,
+                MetaOriginalTitle = Movie.MetaOriginalTitle,
+                MetaReleaseDate = Movie.MetaReleaseDate,
+                MetaStudio = Movie.MetaStudio,
+                MetaLabel = Movie.MetaLabel,
+                MetaSeries = Movie.MetaSeries,
+                MetaDirector = Movie.MetaDirector,
+                MetaDescription = Movie.MetaDescription,
+                ContentType = Movie.ContentType,
+                VrFormats = Movie.MovieFiles
+                    .OrderByDescending(f => f.IsPrimary)
+                    .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
+                    .Select(VrChoice.From)
+                    .ToList(),
+            };
+            saveError = null;
+            saveWarning = null;
+        }
+        wasShown = Show;
     }
 
-    private void Close()
-    {
-        if (saving) return;
-        show = false;
-    }
+    private Task Close() => saving ? Task.CompletedTask : OnClose.InvokeAsync();
 
     private async Task SaveAsync()
     {
@@ -242,7 +246,7 @@
             return;
         }
 
-        show = false;
+        await OnClose.InvokeAsync();
         await OnSaved.InvokeAsync();
     }
 }

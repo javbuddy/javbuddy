@@ -141,9 +141,10 @@
 @code {
     /// <summary>The .nfo Monaco-editor modal for MovieDetail's "Edit .nfo" toolbar button —
     /// extracted so the page doesn't carry the editor's theme/marker/dirty-tracking state and
-    /// XML-validation logic alongside its own metadata-fetch/toolbar concerns. Show/loading state
-    /// stays owned here; MovieDetail only needs <see cref="LoadingChanged"/> to relabel/disable its
-    /// own toolbar button, and calls <see cref="OpenAsync"/> via @ref to open this.</summary>
+    /// XML-validation logic alongside its own metadata-fetch/toolbar concerns. The page owns whether it is open
+    /// (<see cref="Show"/>, as <see cref="ConflictReview"/> or the plain editor) and learns of a close through
+    /// <see cref="OnClose"/>; the loading state stays owned here, MovieDetail only needing <see cref="LoadingChanged"/>
+    /// to relabel/disable its own toolbar button.</summary>
     [Parameter, EditorRequired] public string Code { get; set; } = "";
 
     [Parameter] public int MovieId { get; set; }
@@ -151,6 +152,17 @@
     [Parameter] public EventCallback<bool> LoadingChanged { get; set; }
 
     [Parameter] public EventCallback OnConflictResolved { get; set; }
+
+    /// <summary>Whether the editor is open. The page owns it; the editor asks to close through <see cref="OnClose"/>.</summary>
+    [Parameter] public bool Show { get; set; }
+
+    /// <summary>Opens the review of a drifted .nfo (the diff against the proposed one, with Import and Resolve)
+    /// instead of the plain editor. Read when <see cref="Show"/> turns true.</summary>
+    [Parameter] public bool ConflictReview { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool wasShown;
 
     private bool showRawNfo;
     private bool loadingRawNfo;
@@ -184,7 +196,39 @@
     private string DiffEditorId => $"{editorIdPrefix}-diff-{nfoDiffEditorInstance}";
     private string HistoryDiffEditorId => $"{editorIdPrefix}-history-{historyDiffEditorInstance}";
 
-    public async Task OpenConflictReviewAsync()
+    // Opens on the parameter turning true, not on every parameter set (LoadingChanged re-renders the page while the
+    // .nfo is still loading), so the flag is set before the first await. Closed from outside (the page moved on to
+    // another movie), the editors are released like on Close.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && !wasShown)
+        {
+            wasShown = true;
+            if (string.IsNullOrWhiteSpace(Code))
+            {
+                await OnClose.InvokeAsync();
+            }
+            else if (ConflictReview)
+            {
+                await OpenConflictReviewAsync();
+            }
+            else
+            {
+                await OpenAsync();
+            }
+        }
+        else if (!Show && wasShown)
+        {
+            wasShown = false;
+            if (showRawNfo)
+            {
+                await ReleaseEditorsAsync();
+                showRawNfo = false;
+            }
+        }
+    }
+
+    private async Task OpenConflictReviewAsync()
     {
         if (string.IsNullOrWhiteSpace(Code)) return;
 
@@ -235,7 +279,7 @@
         StateHasChanged();
     }
 
-    public async Task OpenAsync()
+    private async Task OpenAsync()
     {
         if (string.IsNullOrWhiteSpace(Code)) return;
 
@@ -250,13 +294,7 @@
         diffModifiedSeed = null;
         nfoEditorInstance++;
 
-        // This is called imperatively via @ref from MovieDetail's own click handler, not through an
-        // @onclick on this component's own markup — Blazor only auto-renders the component that owns
-        // the event handler that's actually running (MovieDetail), not a child whose state an outside
-        // caller mutated directly. Without this, reopening after a previous close (where rawNfoContent
-        // is already cached and the loading branch below — the only other place this component
-        // rendered itself — gets skipped) leaves showRawNfo=true in memory with nothing telling the
-        // browser to show it.
+        // Rendered now so the modal shows while the .nfo and Monaco load below.
         StateHasChanged();
 
         try
@@ -284,8 +322,7 @@
         }
 
         // Covers the reopen path: rawNfoContent/monacoReady may already have been set by the time
-        // this runs, which would otherwise skip every StateHasChanged above (see the comment on the
-        // one near the top of this method for why an explicit call is needed at all here).
+        // this runs, which would otherwise skip every render above.
         StateHasChanged();
     }
 
@@ -323,6 +360,7 @@
     {
         await ReleaseEditorsAsync();
         showRawNfo = false;
+        await OnClose.InvokeAsync();
     }
 
     // Disposes the mounted Monaco widget and its models before the markup that hosts it goes
@@ -642,6 +680,7 @@
                     nfoDirty = false;
                     await ReleaseEditorsAsync();
                     showRawNfo = false;
+                    await OnClose.InvokeAsync();
                     savingNfo = false;
                     await OnConflictResolved.InvokeAsync();
                     return;
@@ -660,6 +699,7 @@
                     nfoDirty = false;
                     await ReleaseEditorsAsync();
                     showRawNfo = false;
+                    await OnClose.InvokeAsync();
                     savingNfo = false;
                     return;
                 }
@@ -688,6 +728,7 @@
                 nfoDirty = false;
                 await ReleaseEditorsAsync();
                 showRawNfo = false;
+                await OnClose.InvokeAsync();
                 savingNfo = false;
                 await OnConflictResolved.InvokeAsync();
                 return;

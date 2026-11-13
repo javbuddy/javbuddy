@@ -57,7 +57,7 @@ public class VideoRepairModalTests : BunitContext
             ]);
 
         var cut = Render<VideoRepairModal>(p => p.Add(x => x.Movie, movie));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.Contains("Repair Video", cut.Find(".modal-shell-title").TextContent);
         Assert.Contains("ABC-123.mp4", cut.Find(".target-file-name").TextContent);
@@ -82,7 +82,7 @@ public class VideoRepairModalTests : BunitContext
             ]);
 
         var cut = Render<VideoRepairModal>(p => p.Add(x => x.Movie, movie));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.Contains("FFmpeg not found", cut.Markup);
         var startBtn = cut.Find("button.btn-primary");
@@ -117,7 +117,7 @@ public class VideoRepairModalTests : BunitContext
         repairService.StartRepairJobAsync(1, 10, Arg.Any<CancellationToken>()).Returns(job);
 
         var cut = Render<VideoRepairModal>(p => p.Add(x => x.Movie, movie));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         cut.Find("button.btn-primary").Click();
 
@@ -144,7 +144,7 @@ public class VideoRepairModalTests : BunitContext
         var cut = Render<VideoRepairModal>(p => p
             .Add(x => x.Movie, movie)
             .Add(x => x.OnRepaired, () => repaired++));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.Contains("ABC-123-4K.mp4", cut.Find(".target-file-name").TextContent);
         Assert.Contains("Repairing in progress", cut.Markup);
@@ -168,10 +168,12 @@ public class VideoRepairModalTests : BunitContext
             .Returns(OperationResult.Ok());
 
         var repairedInvoked = 0;
+        var closeRequests = 0;
         var cut = Render<VideoRepairModal>(p => p
             .Add(x => x.Movie, movie)
-            .Add(x => x.OnRepaired, () => repairedInvoked++));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+            .Add(x => x.OnRepaired, () => repairedInvoked++)
+            .Add(x => x.OnClose, () => closeRequests++));
+        cut.Render(p => p.Add(x => x.Show, true));
 
         var unmarkBtn = cut.Find("button.btn-outline-warning");
         Assert.Equal("Unmark Broken Flag", unmarkBtn.TextContent.Trim());
@@ -181,7 +183,42 @@ public class VideoRepairModalTests : BunitContext
         _ = cleanupService.Received(1).UnmarkBrokenBFrameAsync(1, Arg.Any<CancellationToken>());
         Assert.False(movie.HasBrokenBFrames);
         Assert.Equal(1, repairedInvoked);
+        Assert.Equal(1, closeRequests);
+        cut.Render(p => p.Add(x => x.Show, false));
         Assert.Empty(cut.Markup.Trim());
+    }
+
+    [Fact]
+    public void WhileTheCandidatesLoad_RendersNothing_ThenTheModalOnceTheyAreThere()
+    {
+        var movie = new Movie { Id = 1, Code = "ABC-123", Status = MovieStatus.Got };
+        var candidates = new TaskCompletionSource<IReadOnlyList<VideoRepairCandidate>>();
+        repairService.GetRepairCandidatesAsync(1, Arg.Any<CancellationToken>()).Returns(candidates.Task);
+        var cut = Render<VideoRepairModal>(p => p.Add(x => x.Movie, movie));
+
+        cut.Render(p => p.Add(x => x.Show, true));
+
+        Assert.Empty(cut.Markup.Trim());
+
+        candidates.SetResult([new VideoRepairCandidate { MovieId = 1, MovieCode = "ABC-123", FileName = "ABC-123.mp4", IsPrimary = true }]);
+
+        cut.WaitForAssertion(() => Assert.Contains("ABC-123.mp4", cut.Find(".target-file-name").TextContent));
+    }
+
+    [Fact]
+    public void ClosedFromOutsideWhileARepairRuns_StopsFollowingIt_AndReopeningLoadsTheCandidatesAgain()
+    {
+        var movie = new Movie { Id = 1, Code = "ABC-123", Status = MovieStatus.Got };
+        repairService.GetRepairCandidatesAsync(1, Arg.Any<CancellationToken>())
+            .Returns([new VideoRepairCandidate { MovieId = 1, MovieFileId = 10, MovieCode = "ABC-123", FileName = "ABC-123.mp4", IsPrimary = true }]);
+        var cut = Render<VideoRepairModal>(p => p.Add(x => x.Movie, movie).Add(x => x.Show, true));
+
+        cut.Render(p => p.Add(x => x.Show, false));
+        Assert.Empty(cut.Markup.Trim());
+        cut.Render(p => p.Add(x => x.Show, true));
+
+        Assert.Contains("ABC-123.mp4", cut.Find(".target-file-name").TextContent);
+        _ = repairService.Received(2).GetRepairCandidatesAsync(1, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -194,7 +231,7 @@ public class VideoRepairModalTests : BunitContext
             ]);
 
         var cut = Render<VideoRepairModal>(p => p.Add(x => x.Movie, movie));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.Empty(cut.FindAll("button.btn-outline-warning"));
     }

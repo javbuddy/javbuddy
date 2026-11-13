@@ -1,0 +1,70 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Common
+@using Javbuddy.Services.Movies
+@inject IMovieService MovieService
+@inject NavigationManager Nav
+
+@* Movie Detail's Delete confirmation: removes the movie from Javbuddy, optionally with its folder on disk (the
+   MovieDeleteFilesOption toggle), and goes back to the Movies page. A failed delete keeps the dialog open
+   with the reason. *@
+@if (Show)
+{
+    <DeleteConfirmDialog ItemName="@MovieDetailText.DeleteLabel(Movie)" Busy="deleting"
+                         Message="@(deleteFiles
+                             ? "Its metadata, cast and tag links, images, scenes, highlights and apexes are removed from Javbuddy, and its folder is deleted from disk."
+                             : "Its metadata, cast and tag links, images, scenes, highlights and apexes are removed from Javbuddy. Video files on disk are left alone.")"
+                         OnConfirm="DeleteMovie" OnCancel="OnClose">
+        <MovieDeleteFilesOption MovieId="@Movie.Id" @bind-Checked="deleteFiles" Disabled="deleting" />
+        @if (deleteError is not null)
+        {
+            <div class="alert alert-danger py-2 mt-3 mb-0">@deleteError</div>
+        }
+    </DeleteConfirmDialog>
+}
+
+@code {
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+
+    /// <summary>Whether the dialog is open. The page owns it; the dialog asks to close through <see cref="OnClose"/>.</summary>
+    [Parameter] public bool Show { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool wasShown;
+    private bool deleting;
+    private bool deleteFiles;
+    private string? deleteError;
+
+    // Each time the dialog opens it starts unchecked and without the last failure.
+    protected override void OnParametersSet()
+    {
+        if (Show && !wasShown)
+        {
+            deleteFiles = false;
+            deleteError = null;
+        }
+        wasShown = Show;
+    }
+
+    private async Task DeleteMovie()
+    {
+        deleting = true;
+        deleteError = null;
+        OperationResult result;
+        try
+        {
+            result = await MovieService.DeleteAsync(Movie.Id, deleteFiles);
+        }
+        finally
+        {
+            deleting = false;
+        }
+        if (!result.Success)
+        {
+            deleteError = result.ErrorMessage;
+            return;
+        }
+        await OnClose.InvokeAsync();
+        Nav.NavigateTo("/");
+    }
+}
