@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-11-13
+
 ### Changed
 
 - **The movie page's "Edit .nfo" menu item and editor dialog show a spinner while the .nfo loads** instead of the text "Loading…".
