@@ -1,21 +1,32 @@
-<button type="button" class="sort-dropdown-item @(Active ? "active" : "")" aria-pressed="@AriaPressed" title="@Title" @onclick="OnClick">
-    <span>@Label</span>
+<button type="button" class="sort-dropdown-item @Class @(Active ? "active" : "")" aria-pressed="@AriaPressed" title="@Title" @onclick="OnClick">
+    <span class="dropdown-item-label">@Label</span>
     @if (Active)
     {
         <span class="ms-2">✓</span>
+    }
+    else if (Excluded)
+    {
+        <span class="ms-2" aria-label="excluded">✕</span>
     }
 </button>
 
 @code {
     /// <summary>One checkable row of a dropdown menu: the label, highlighted with a trailing ✓ while
     /// <see cref="Active"/>. For a menu's on/off filters and its pick-one choices; a multi-select group's option
-    /// rows are <see cref="MultiSelectFilterGroup"/>'s own. <see cref="Pressed"/> adds <c>aria-pressed</c> (for an on/off
+    /// rows (indented, nested and struck-through when excluded) are this same row with <see cref="Class"/> and
+    /// <see cref="Excluded"/>. <see cref="Pressed"/> adds <c>aria-pressed</c> (for an on/off
     /// toggle; leave it null for a pick-one row) and <see cref="Title"/> a tooltip.</summary>
     [Parameter, EditorRequired] public string Label { get; set; } = "";
     [Parameter] public bool Active { get; set; }
     [Parameter] public EventCallback OnClick { get; set; }
     [Parameter] public bool? Pressed { get; set; }
     [Parameter] public string? Title { get; set; }
+
+    /// <summary>Extra classes on the row, for the caller's own styling (a group's indent or excluded colour).</summary>
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Shows a ✕ in place of the ✓, for an include/exclude group's excluded option. Ignored while <see cref="Active"/>.</summary>
+    [Parameter] public bool Excluded { get; set; }
 
     private string? AriaPressed => Pressed is { } p ? (p ? "true" : "false") : null;
 }

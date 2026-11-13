@@ -13,7 +13,7 @@
 }
 
 .modal-shell-panel {
-    background-color: #222631;
+    background-color: var(--jb-dark-surface);
     color: #cfd3de;
     border: 1px solid var(--jb-dark-border-strong);
     border-radius: 6px;
@@ -31,7 +31,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.85rem 1.25rem;
-    background-color: #2b303c;
+    background-color: var(--jb-dark-raised-cool);
     border-bottom: 1px solid var(--jb-dark-border-strong);
 }
 
@@ -76,7 +76,7 @@
     justify-content: flex-end;
     gap: 0.5rem;
     padding: 0.75rem 1.25rem;
-    background-color: #2b303c;
+    background-color: var(--jb-dark-raised-cool);
     border-top: 1px solid var(--jb-dark-border-strong);
 }
 
@@ -154,7 +154,7 @@
 }
 
 :root[data-theme="dark"] .modal-shell-themed .modal-shell-close-btn:hover:not(:disabled) {
-    background-color: #3a4150;
+    background-color: var(--jb-dark-hover);
     color: #ffffff;
 }
 

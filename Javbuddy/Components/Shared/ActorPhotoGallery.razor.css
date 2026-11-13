@@ -67,11 +67,11 @@
 }
 
 :root[data-theme="dark"] .actor-photo-gallery { color: #e3e5e8; background: var(--jb-dark-surface); border-color: var(--jb-dark-border-strong); }
-:root[data-theme="dark"] .actor-photo-album-pill { color: #cfd3de; background: #2b303c; border-color: #454a5e; }
+:root[data-theme="dark"] .actor-photo-album-pill { color: #cfd3de; background: var(--jb-dark-raised-cool); border-color: var(--jb-dark-control); }
 :root[data-theme="dark"] .actor-photo-album-pill:hover { color: #fff; border-color: var(--jb-accent); }
 :root[data-theme="dark"] .actor-photo-album-pill.active { color: #fff; background: var(--jb-accent); border-color: var(--jb-accent); }
 :root[data-theme="dark"] .actor-photo-album-editor { background: var(--jb-dark-bg); border-color: var(--jb-dark-border-strong); }
-:root[data-theme="dark"] .actor-photo-album-editor .form-control { color: #fff; background: #14161d; border-color: var(--jb-dark-border-strong); }
+:root[data-theme="dark"] .actor-photo-album-editor .form-control { color: #fff; background: var(--jb-dark-deep); border-color: var(--jb-dark-border-strong); }
 
 @media (max-width: 576px) {
     .actor-photo-gallery-header, .actor-photo-selected-album-actions { align-items: stretch; flex-direction: column; }

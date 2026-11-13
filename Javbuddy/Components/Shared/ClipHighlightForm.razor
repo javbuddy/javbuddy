@@ -5,35 +5,35 @@
    own, with what its apexes roll up to it shown grayed beside them, and an own tag they carry
    anyway marked redundant. ClipEditor validates and saves; it also owns the model, since the h / Shift+H shortcuts set its times. *@
 <div class="highlight-editor-form-wrap">
-    <form class="highlight-editor-form" @onsubmit="OnSave" @onsubmit:preventDefault>
-        <label class="highlight-editor-field">
-            <span class="highlight-editor-label">Title <span class="highlight-editor-hint">(optional)</span></span>
-            <input class="highlight-editor-input highlight-editor-title-input" type="text" maxlength="200" placeholder="@TitlePlaceholder()" @bind="Model.Title" @bind:event="oninput" />
+    <form class="highlight-editor-form clip-form" @onsubmit="OnSave" @onsubmit:preventDefault>
+        <label class="highlight-editor-field clip-form-field">
+            <span class="highlight-editor-label clip-form-label">Title <span class="highlight-editor-hint clip-form-hint">(optional)</span></span>
+            <input class="highlight-editor-input clip-form-input highlight-editor-title-input" type="text" maxlength="200" placeholder="@TitlePlaceholder()" @bind="Model.Title" @bind:event="oninput" />
         </label>
-        <div class="highlight-editor-times">
-            <label class="highlight-editor-field">
-                <span class="highlight-editor-label">Start</span>
+        <div class="highlight-editor-times clip-form-times">
+            <label class="highlight-editor-field clip-form-field">
+                <span class="highlight-editor-label clip-form-label">Start</span>
                 <ClipTimeField @bind-Value="Model.Start" ClassPrefix="highlight-editor" InputClass="highlight-editor-start-input" NowClass="highlight-editor-now-btn highlight-editor-start-now-btn"
                                OnNow="() => OnNow.InvokeAsync(false)" NowTitle="Mark in at the player's current time" />
             </label>
-            <label class="highlight-editor-field">
-                <span class="highlight-editor-label">End</span>
+            <label class="highlight-editor-field clip-form-field">
+                <span class="highlight-editor-label clip-form-label">End</span>
                 <ClipTimeField @bind-Value="Model.End" ClassPrefix="highlight-editor" InputClass="highlight-editor-end-input" NowClass="highlight-editor-now-btn highlight-editor-end-now-btn"
                                OnNow="() => OnNow.InvokeAsync(true)" NowTitle="Mark out at the player's current time" />
             </label>
         </div>
-        <div class="highlight-editor-field">
-            <span class="highlight-editor-label">Actors</span>
+        <div class="highlight-editor-field clip-form-field">
+            <span class="highlight-editor-label clip-form-label">Actors</span>
             <ClipActorChips Form="Model" Cast="Cast" Inherited="Inherited()" ClassPrefix="highlight-editor" Busy="Busy" OnChanged="Rerender" />
         </div>
-        <div class="highlight-editor-field">
-            <span class="highlight-editor-label">Tags</span>
+        <div class="highlight-editor-field clip-form-field">
+            <span class="highlight-editor-label clip-form-label">Tags</span>
             <ClipTagChips FormTags="Model.Tags" ClassPrefix="highlight-editor" Busy="Busy" OnChanged="Rerender"
                           RedundantTags="RolledUpTags" RolledUp="RolledUpChips()" />
         </div>
-        <div class="highlight-editor-form-actions">
-            <button type="submit" class="highlight-editor-btn highlight-editor-save-btn" disabled="@Busy">@(Model.HighlightId is null ? "Add" : "Save")</button>
-            <button type="button" class="highlight-editor-btn highlight-editor-cancel-btn" @onclick="OnCancel" disabled="@Busy">Cancel</button>
+        <div class="highlight-editor-form-actions clip-form-actions">
+            <button type="submit" class="highlight-editor-btn clip-btn highlight-editor-save-btn clip-btn-primary" disabled="@Busy">@(Model.HighlightId is null ? "Add" : "Save")</button>
+            <button type="button" class="highlight-editor-btn clip-btn highlight-editor-cancel-btn" @onclick="OnCancel" disabled="@Busy">Cancel</button>
         </div>
     </form>
 </div>

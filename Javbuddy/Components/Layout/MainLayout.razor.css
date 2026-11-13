@@ -43,7 +43,7 @@ main {
 }
 
 .sidebar {
-    background-color: #35394a;
+    background-color: var(--jb-dark-border);
 }
 
 @media (min-width: 641px) {

@@ -38,7 +38,7 @@ a.cleanup-actor-avatar:hover {
 }
 
 .cleanup-actor-avatar-photo {
-    background-color: #2b2f38;
+    background-color: var(--jb-dark-raised);
 }
 
 .cleanup-actor-img {

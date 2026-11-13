@@ -143,12 +143,12 @@ public class MovieCoverCropModalTests : BunitContext
         var cut = Render<MovieCoverCropModal>(p => p
             .Add(m => m.Show, true)
             .Add(m => m.Code, "IPX-535"));
-        Assert.Empty(cut.FindAll(".header-info"));
+        Assert.Empty(cut.FindAll(".info-tip"));
 
         cut.FindComponent<Microsoft.AspNetCore.Components.Forms.InputFile>().UploadFiles(InputFileContent.CreateFromBinary(new byte[] { 1, 2, 3 }, "cover.jpg", null, "image/jpeg"));
 
-        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".modal-shell-header-actions .header-info")));
-        Assert.Contains("Scroll to zoom", cut.Find(".header-info").GetAttribute("data-tip"));
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".modal-shell-header-actions .info-tip")));
+        Assert.Contains("Scroll to zoom", cut.Find(".info-tip").GetAttribute("data-tip"));
     }
 
     [Fact]

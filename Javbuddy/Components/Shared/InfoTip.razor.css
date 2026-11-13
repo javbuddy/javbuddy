@@ -1,0 +1,43 @@
+.info-tip {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-style: italic;
+    color: var(--jb-dark-muted);
+    border: 1px solid #5a6177;
+    border-radius: 50%;
+    cursor: help;
+}
+
+/* A CSS tooltip, because a title attribute doesn't show on keyboard focus. */
+.info-tip:hover::after,
+.info-tip:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 10;
+    width: max-content;
+    max-width: 240px;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1.35;
+    text-align: left;
+    color: #cfd3de;
+    background-color: var(--jb-dark-deep);
+    border: 1px solid var(--jb-dark-border-strong);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.info-tip:hover,
+.info-tip:focus-visible {
+    color: #ffffff;
+    border-color: #ffffff;
+}

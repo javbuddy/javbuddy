@@ -14,7 +14,7 @@
     object-fit: cover;
     border-radius: 4px;
     cursor: pointer;
-    background: #2b2f38;
+    background: var(--jb-dark-raised);
     transition: transform 0.12s ease, opacity 0.12s ease;
 }
 

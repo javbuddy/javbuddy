@@ -28,7 +28,7 @@
     justify-content: space-between;
     gap: 0.75rem;
     padding: 0.4rem 0.6rem;
-    background-color: #222631;
+    background-color: var(--jb-dark-surface);
     border: 1px solid #2d3242;
     border-radius: 4px;
 }

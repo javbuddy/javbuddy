@@ -25,7 +25,7 @@
 }
 
 .btn-tool {
-    background-color: #2b303c;
+    background-color: var(--jb-dark-raised-cool);
     border: 1px solid var(--jb-dark-border-strong);
     color: #cfd3de;
     font-size: 0.8rem;
@@ -43,7 +43,7 @@
 }
 
 .btn-tool:hover:not(:disabled) {
-    background-color: #35394a;
+    background-color: var(--jb-dark-border);
     color: #ffffff;
 }
 

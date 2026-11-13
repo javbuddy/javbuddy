@@ -27,7 +27,7 @@
     right: 0;
     max-height: 220px;
     overflow-y: auto;
-    background-color: var(--search-add-results-bg, #1a1c23);
+    background-color: var(--search-add-results-bg, var(--jb-dark-popup));
     border: 1px solid var(--search-add-results-border, var(--jb-dark-border-strong));
     border-radius: 4px;
     color: var(--search-add-fg, #e6e8ec);
@@ -44,5 +44,5 @@
 }
 
     .search-add-candidate:hover {
-        background-color: var(--search-add-hover-bg, #252a36);
+        background-color: var(--search-add-hover-bg, var(--jb-dark-surface));
     }

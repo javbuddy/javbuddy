@@ -6,7 +6,7 @@
 
 /* Its look is the global .page-toolbar-btn; an open menu keeps the hover highlight. */
 .toolbar-menu-btn[aria-expanded="true"] {
-    background-color: #454a5e;
+    background-color: var(--jb-dark-control);
     color: #ffffff;
 }
 
@@ -33,8 +33,8 @@
     top: calc(100% + 0.35rem);
     left: 0;
     min-width: 180px;
-    background-color: #2b303c;
-    border: 1px solid #454a5e;
+    background-color: var(--jb-dark-raised-cool);
+    border: 1px solid var(--jb-dark-control);
     border-radius: 4px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     padding: 0.35rem 0;

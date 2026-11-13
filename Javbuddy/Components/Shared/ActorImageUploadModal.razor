@@ -10,7 +10,7 @@
         <HeaderActions>
             @if (selectedImageBytes is not null)
             {
-                <span class="header-info" tabindex="0" role="img" aria-label="Drag inside the box to pan. Drag handles to resize. Scroll to zoom." data-tip="Drag inside the box to pan. Drag handles to resize. Scroll to zoom.">i</span>
+                <InfoTip Text="Drag inside the box to pan. Drag handles to resize. Scroll to zoom." />
             }
         </HeaderActions>
         <ChildContent>
@@ -43,27 +43,19 @@
             }
             else
             {
-                <div class="cropper-workspace">
-                    <div class="cropper-viewport-wrapper">
+                <CropWorkspace Style="--crop-previews-width: 140px; --crop-previews-padding: 0.75rem; --crop-previews-gap: 0.75rem" BusyLabel="@(!cropperReady && !imageFailed ? "Preparing image" : null)">
+                    <ChildContent>
                         <CropperViewport HeightPx="380" @ref="viewport" />
-                        @if (!cropperReady && !imageFailed)
-                        {
-                            <div class="cropper-busy" role="status">
-                                <span class="spinner-border" aria-hidden="true"></span>
-                                <span class="visually-hidden">Preparing image</span>
-                            </div>
-                        }
-                    </div>
-
-                    <div class="cropper-previews">
+                    </ChildContent>
+                    <Previews>
                         <div class="preview-circle-wrapper" title="Circular Avatar Preview">
                             <canvas width="96" height="96" class="preview-canvas" @ref="circleCanvasRef"></canvas>
                         </div>
                         <div class="preview-square-wrapper" title="Square Avatar Preview">
                             <canvas width="80" height="80" class="preview-canvas" @ref="squareCanvasRef"></canvas>
                         </div>
-                    </div>
-                </div>
+                    </Previews>
+                </CropWorkspace>
 
                 <CropToolbar @ref="toolbar"
                              Ratios="ratios"
@@ -79,7 +71,7 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ResetSelection" disabled="@saving">
                     Choose Different Image
                 </button>
-                <div class="footer-actions-right">
+                <div class="modal-shell-footer-group">
                     <button type="button" class="btn btn-secondary btn-sm" @onclick="SaveFullAsync" disabled="@saving">
                         Upload Full (Skip Crop)
                     </button>

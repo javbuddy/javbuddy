@@ -157,7 +157,7 @@
 }
 
 .actor-avatar-photo {
-    background: #2b2f38;
+    background: var(--jb-dark-raised);
 }
 
     .actor-avatar-photo img {

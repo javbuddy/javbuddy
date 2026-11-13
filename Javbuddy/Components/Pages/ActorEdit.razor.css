@@ -18,8 +18,8 @@
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background-color: #2b2f38;
-    border: 2px dashed #454a5e;
+    background-color: var(--jb-dark-raised);
+    border: 2px dashed var(--jb-dark-control);
     margin: 0 auto;
     display: flex;
     align-items: center;

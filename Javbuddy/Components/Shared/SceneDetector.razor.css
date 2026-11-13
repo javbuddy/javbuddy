@@ -97,21 +97,6 @@
     color: #fa5252;
 }
 
-/* Same look as the editor's buttons (CSS isolation: copied, not shared). */
-.scene-editor-btn {
-    appearance: none;
-    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
-    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
-    border-radius: 4px;
-    color: var(--scene-editor-accent, #6ea8fe);
-    cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.2rem 0.55rem;
-    white-space: nowrap;
-}
-
-.scene-editor-btn:disabled,
 .scene-detector-icon-btn:disabled {
     opacity: 0.5;
     cursor: default;

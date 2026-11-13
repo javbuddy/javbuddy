@@ -73,7 +73,7 @@
 }
 
     :root[data-theme="dark"] .missing-icon-btn:hover {
-        background-color: #3a4150;
+        background-color: var(--jb-dark-hover);
         color: #4fc3e0;
     }
 

@@ -92,7 +92,7 @@
     padding: 0.5rem;
     transform: translateX(-50%);
     text-align: left;
-    background-color: #1a1c23;
+    background-color: var(--jb-dark-popup);
     border: 1px solid var(--jb-dark-border-strong);
     border-radius: 6px;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);

@@ -36,48 +36,6 @@
     font-weight: 700;
 }
 
-.scene-editor-btn {
-    appearance: none;
-    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
-    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
-    border-radius: 4px;
-    color: var(--scene-editor-accent, #6ea8fe);
-    cursor: pointer;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0.2rem 0.55rem;
-    white-space: nowrap;
-}
-
-.scene-editor-btn:disabled,
-.scene-editor-icon-btn:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
-
-.scene-editor-icon-btn {
-    appearance: none;
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.6rem;
-    height: 1.6rem;
-    padding: 0;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
-    cursor: pointer;
-    font-size: 0.9rem;
-    line-height: 1;
-}
-
-.scene-editor-icon-btn:hover:not(:disabled) {
-    background-color: var(--scene-editor-hover-bg, rgba(255, 255, 255, 0.08));
-    color: var(--scene-editor-fg, #e2e8f0);
-}
-
 .scene-editor-error {
     margin: 0;
     color: #fa5252;
@@ -163,23 +121,6 @@
     color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
 }
 
-.scene-editor-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    min-width: 0;
-}
-
-.scene-editor-label {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
-}
-
-.scene-editor-hint {
-    font-weight: 400;
-}
-
 /* Actors and tags of a scene: a second line in the row, chips while editing. */
 .scene-editor-meta {
     grid-column: 2 / -1;
@@ -230,7 +171,7 @@
 
 /* The scene cards' dark frame under the generating shimmer, so it shows in either theme. */
 .scene-editor-thumb-generating {
-    background-color: #15171d;
+    background-color: var(--jb-dark-deep);
 }
 
 .scene-editor-thumb-tile {

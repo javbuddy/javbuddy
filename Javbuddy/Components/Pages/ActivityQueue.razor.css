@@ -91,7 +91,7 @@
 }
 
     :root[data-theme="dark"] .activity-toolbar-btn:hover:not(:disabled) {
-        background-color: #3a4150;
+        background-color: var(--jb-dark-hover);
         border-color: #4fc3e0;
         color: #4fc3e0;
     }

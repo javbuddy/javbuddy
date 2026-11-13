@@ -48,22 +48,22 @@
         <div class="clip-editor-add-row">
             @if (sceneForm is null)
             {
-                <button type="button" class="scene-editor-btn scene-editor-add-btn" @onclick="StartAddSceneAsync" disabled="@busy" title="Add a scene starting at the player's current time">+ Scene</button>
+                <button type="button" class="scene-editor-btn clip-btn scene-editor-add-btn" @onclick="StartAddSceneAsync" disabled="@busy" title="Add a scene starting at the player's current time">+ Scene</button>
             }
             @if (highlightForm is null)
             {
-                <button type="button" class="scene-editor-btn highlight-editor-add-btn" @onclick="StartAddHighlightAsync" disabled="@busy" title="Add a highlight starting at the player's current time">+ Highlight</button>
+                <button type="button" class="scene-editor-btn clip-btn highlight-editor-add-btn" @onclick="StartAddHighlightAsync" disabled="@busy" title="Add a highlight starting at the player's current time">+ Highlight</button>
             }
             @if (apexForm is null)
             {
-                <button type="button" class="scene-editor-btn apex-editor-add-btn" @onclick="StartAddApexAsync" disabled="@busy" title="Mark an apex at the player's current time">+ Apex</button>
+                <button type="button" class="scene-editor-btn clip-btn apex-editor-add-btn" @onclick="StartAddApexAsync" disabled="@busy" title="Mark an apex at the player's current time">+ Apex</button>
             }
             @if (tree.Scenes.Any(HasChildren))
             {
                 @* An icon, not "Collapse all" text, so it fits beside the add buttons in the player's 300px panel. *@
                 var allCollapsed = tree.Scenes.Where(HasChildren).All(n => collapsedSceneIds.Contains(n.Scene.Id));
                 var collapseAllLabel = allCollapsed ? "Expand all" : "Collapse all";
-                <button type="button" class="scene-editor-btn clip-editor-collapse-all-btn" @onclick="() => SetAllCollapsed(!allCollapsed)"
+                <button type="button" class="scene-editor-btn clip-btn clip-editor-collapse-all-btn" @onclick="() => SetAllCollapsed(!allCollapsed)"
                         aria-label="@collapseAllLabel" title="@(allCollapsed ? "Expand all scenes" : "Collapse all scenes")">
                     @if (allCollapsed)
                     {
@@ -101,7 +101,7 @@
         <p class="scene-editor-empty">No scenes yet.</p>
         @if (fileChapters is { Chapters.Count: > 0 } found)
         {
-            <button type="button" class="scene-editor-btn scene-editor-import-btn" @onclick="ImportChaptersAsync" disabled="@busy" title="@ImportTooltip(found)">
+            <button type="button" class="scene-editor-btn clip-btn scene-editor-import-btn" @onclick="ImportChaptersAsync" disabled="@busy" title="@ImportTooltip(found)">
                 Import @found.Chapters.Count @(found.Chapters.Count == 1 ? "chapter" : "chapters") from file
             </button>
         }
@@ -428,7 +428,7 @@
             return;
         }
         var collapsed = collapsedSceneIds.Contains(scene.Id);
-        <button type="button" class="scene-editor-icon-btn clip-editor-collapse-btn @(collapsed ? "clip-editor-collapsed" : null)" @onclick="() => ToggleCollapsed(scene.Id)"
+        <button type="button" class="scene-editor-icon-btn clip-icon-btn clip-editor-collapse-btn @(collapsed ? "clip-editor-collapsed" : null)" @onclick="() => ToggleCollapsed(scene.Id)"
                 aria-expanded="@(collapsed ? "false" : "true")" aria-label="@(collapsed ? "Expand" : "Collapse") @scene.DisplayTitle" title="@(collapsed ? "Show its highlights and apexes" : "Hide its highlights and apexes")">
             <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>
         </button>
@@ -558,8 +558,8 @@
             .Concat(tags.Where(t => effective.Actors.All(a => a.ActorId != t.ActorId)).Select(t => t.ActorId).Distinct()
                 .Select(id => cast.FirstOrDefault(c => c.ActorId == id) ?? new SceneActorItem(id, $"Actor {id}")))
             .ToList();
-        <div class="scene-editor-field">
-            <span class="scene-editor-label">Actor tags</span>
+        <div class="scene-editor-field clip-form-field">
+            <span class="scene-editor-label clip-form-label">Actor tags</span>
             <ActorTagsEditor Level="level" OwnerId="ownerId" Actors="actors" Tags="tags" Disabled="busy" OnChanged="ActorTagsChangedAsync" />
         </div>
     };
@@ -1142,14 +1142,14 @@
                        @onchange="e => SetHiddenFromOverviewAsync(editing.Id, e.Value is true)" />
                 <span>Hide from Scenes overview</span>
             </label>
-            <div class="scene-editor-field">
-                <span class="scene-editor-label">Actors</span>
+            <div class="scene-editor-field clip-form-field">
+                <span class="scene-editor-label clip-form-label">Actors</span>
                 @{ var actorForm = new SceneActorFormModel(editing.Actors); }
                 <ClipActorChips Form="actorForm" Cast="cast" Inherited="ClipActors.ForNewScene(cast)" ClassPrefix="scene-editor" Busy="busy"
                                 OnChanged="() => SetSceneActorsAsync(editing.Id, actorForm)" />
             </div>
-            <div class="scene-editor-field">
-                <span class="scene-editor-label">Scene tags</span>
+            <div class="scene-editor-field clip-form-field">
+                <span class="scene-editor-label clip-form-label">Scene tags</span>
                 @{
                     // What the scene's highlights and apexes roll up to it, grayed beside its own.
                     // Its own tags they carry anyway are marked redundant.
@@ -1166,7 +1166,7 @@
     }
     else if (sceneForm is { SceneId: null })
     {
-        <p class="scene-editor-hint scene-editor-links-hint">Add the scene first, then edit it to set actors and tags.</p>
+        <p class="scene-editor-hint clip-form-hint scene-editor-links-hint">Add the scene first, then edit it to set actors and tags.</p>
     }
     </div>;
 

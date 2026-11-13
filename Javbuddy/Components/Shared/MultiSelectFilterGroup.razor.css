@@ -1,30 +1,10 @@
-.sort-dropdown-subitem {
-    padding-left: 2rem;
-}
-
-/* A subtag, under its parent's row: indented one more level, with a guide line like the tags page's hierarchy. */
-.sort-dropdown-nested {
-    padding-left: 3rem;
-    font-size: 0.85rem;
-    color: #c4c8d4;
-}
-
-/* Excluded by an include/exclude group: struck through and red, with a ✕ in place of the ✓. */
-.multiselect-excluded {
-    color: #f28b82;
-}
-
-    .multiselect-excluded .multiselect-option-label {
-        text-decoration: line-through;
-    }
-
 .multiselect-search-row {
     padding: 0.4rem 1rem 0.25rem;
 }
 
 .multiselect-search-input {
     width: 100%;
-    background-color: #2b2f38;
+    background-color: var(--jb-dark-raised);
     color: #e7e9ee;
     border: 1px solid #4a5064;
     border-radius: 4px;

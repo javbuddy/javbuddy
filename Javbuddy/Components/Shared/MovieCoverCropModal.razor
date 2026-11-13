@@ -11,7 +11,7 @@
         <HeaderActions>
             @if (selectedImageBytes is not null)
             {
-                <span class="header-info" tabindex="0" role="img" aria-label="Drag inside the box to pan. Drag handles to resize. Scroll to zoom." data-tip="Drag inside the box to pan. Drag handles to resize. Scroll to zoom.">i</span>
+                <InfoTip Text="Drag inside the box to pan. Drag handles to resize. Scroll to zoom." />
             }
         </HeaderActions>
         <ChildContent>
@@ -80,24 +80,16 @@
             }
             else if (selectedImageBytes is not null)
             {
-                <div class="cropper-workspace">
-                    <div class="cropper-viewport-wrapper">
+                <CropWorkspace Style="--crop-previews-width: 150px; --crop-previews-padding: 0.5rem" BusyLabel="@(rotating ? "Rotating image" : preparingImage ? "Preparing image" : null)" PreviewsTitle="Poster card preview">
+                    <ChildContent>
                         <CropperViewport HeightPx="400" @ref="viewport" />
-                        @if (rotating || preparingImage)
-                        {
-                            <div class="cropper-busy" role="status">
-                                <span class="spinner-border" aria-hidden="true"></span>
-                                <span class="visually-hidden">@(rotating ? "Rotating image" : "Preparing image")</span>
-                            </div>
-                        }
-                    </div>
-
-                    <div class="cropper-previews" title="Poster card preview">
+                    </ChildContent>
+                    <Previews>
                         <div class="preview-poster-wrapper">
                             <canvas width="130" height="185" class="preview-canvas" @ref="previewPosterCanvasRef"></canvas>
                         </div>
-                    </div>
-                </div>
+                    </Previews>
+                </CropWorkspace>
 
                 <CropToolbar @ref="toolbar"
                              Ratios="ratios"
@@ -115,7 +107,7 @@
         <FooterContent>
             @if (selectedImageBytes is not null)
             {
-                <div class="footer-actions-right">
+                <div class="modal-shell-footer-group">
                     <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="CloseAsync" disabled="@(saving || rotating)">
                         Cancel
                     </button>

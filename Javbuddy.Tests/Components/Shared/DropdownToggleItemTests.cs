@@ -46,4 +46,18 @@ public class DropdownToggleItemTests : BunitContext
 
         Assert.Equal(1, clicks);
     }
+
+    [Fact]
+    public void ExcludedRow_ShowsACrossInPlaceOfTheCheckmark_AndTakesTheCallersClass()
+    {
+        var excluded = Render<DropdownToggleItem>(p => p.Add(x => x.Label, "Horror").Add(x => x.Excluded, true).Add(x => x.Class, "sort-dropdown-subitem multiselect-excluded"));
+        var both = Render<DropdownToggleItem>(p => p.Add(x => x.Label, "Horror").Add(x => x.Active, true).Add(x => x.Excluded, true));
+
+        Assert.Equal("✕", excluded.Find("span.ms-2").TextContent);
+        Assert.Equal("excluded", excluded.Find("span.ms-2").GetAttribute("aria-label"));
+        Assert.Contains("multiselect-excluded", excluded.Find("button").ClassList);
+        Assert.Contains("sort-dropdown-item", excluded.Find("button").ClassList);
+        Assert.Equal("✓", both.Find("span.ms-2").TextContent);
+        Assert.Single(both.FindAll("span.ms-2"));
+    }
 }

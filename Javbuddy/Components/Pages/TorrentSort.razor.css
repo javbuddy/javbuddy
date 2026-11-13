@@ -435,7 +435,7 @@
 
 :root[data-theme="dark"] .sort-movie-card,
 :root[data-theme="dark"] .sort-preview-card {
-    background-color: #232733;
+    background-color: var(--jb-dark-surface);
     border-color: var(--jb-dark-border);
     color: var(--jb-dark-text);
 }
@@ -456,7 +456,7 @@
 }
 
 :root[data-theme="dark"] .sort-genre-tag {
-    background-color: #2b303e;
+    background-color: var(--jb-dark-raised-cool);
     border-color: var(--jb-dark-border);
     color: var(--jb-dark-text);
 }
