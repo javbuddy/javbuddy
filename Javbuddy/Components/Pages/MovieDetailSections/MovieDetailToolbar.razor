@@ -1,0 +1,174 @@
+@using Javbuddy.Models
+@using Javbuddy.Services.Images
+@using Javbuddy.Services.Movies
+@inject IMovieService MovieService
+@inject IMovieRescanService MovieRescanService
+@inject IMoviePosterGenerationService PosterGeneration
+
+@* Movie Detail's toolbar: Back, the dialogs' buttons (Prowlarr search, Edit, Media Info, the Refresh and Tools menus),
+   Favorite, Mark as Got/Missing and Delete. The actions it does itself (rescan, generate poster and fanart, create
+   the .nfo, favorite, status) are done here; the page is told to open a dialog, to reload part of its data or to
+   show the notice under the toolbar. *@
+<div class="page-toolbar">
+    <BackButton Href="@BackHref" CssClass="page-toolbar-btn">@BackLabel</BackButton>
+    <span class="page-toolbar-sep"></span>
+    <button class="page-toolbar-btn" @onclick="() => Open(MovieDetailDialog.Search)" disabled="@string.IsNullOrWhiteSpace(Movie.Code)" title="Search Prowlarr" aria-label="Search Prowlarr">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="currentColor" stroke-width="1.3" /><line x1="10.3" y1="10.3" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
+        Search
+    </button>
+    <button class="page-toolbar-btn" @onclick="() => Open(MovieDetailDialog.MetadataEditor)" disabled="@(!Interactive)" title="Edit metadata" aria-label="Edit metadata">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z" /></svg>
+        Edit
+    </button>
+    @if (Movie.Status != MovieStatus.Missing)
+    {
+        <button class="page-toolbar-btn" @onclick="() => Open(MovieDetailDialog.MediaInfo)" disabled="@(!Interactive || string.IsNullOrWhiteSpace(Movie.Code))">
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.297.006-.406-.291-.472l-.451-.081.082-.381 2.29-.29zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" /></svg>
+            Media Info
+        </button>
+    }
+    <ToolbarMenuGroup>
+        <ToolbarMenuButton Busy="rescanning" Label="@(rescanning ? "Rescanning…" : "Refresh")" Title="Rescan or refresh metadata">
+            <Icon><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" /><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" /></svg></Icon>
+            <ChildContent>
+                <ToolbarMenuItem OnClick="RescanMovie" Disabled="@(!Interactive || rescanning || string.IsNullOrWhiteSpace(Movie.Code))">
+                    <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" /><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" /></svg>
+                    @(rescanning ? "Rescanning…" : "Rescan")
+                </ToolbarMenuItem>
+                <ToolbarMenuItem OnClick="() => Open(MovieDetailDialog.MetadataRefresh)" Disabled="@(!Interactive || string.IsNullOrWhiteSpace(Movie.Code))">
+                    <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" /><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" /></svg>
+                    Refresh with Javinizer
+                </ToolbarMenuItem>
+            </ChildContent>
+        </ToolbarMenuButton>
+        <ToolbarMenuButton Busy="@(LoadingRawNfo || generatingArtwork)" Label="@(generatingArtwork ? "Generating…" : LoadingRawNfo ? "Loading…" : "Tools")" Title="Crop the cover, edit the .nfo, generate stills or repair the video">
+            <Icon><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z" /></svg></Icon>
+            <ChildContent>
+                <ToolbarMenuItem OnClick="() => Open(MovieDetailDialog.CoverCrop)" Disabled="@(!Interactive || string.IsNullOrWhiteSpace(Movie.Code))">
+                    <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M3.5.5A.5.5 0 0 1 4 1v13h10a.5.5 0 0 1 0 1h-2v1.5a.5.5 0 0 1-1 0V15H4a1 1 0 0 1-1-1V4H1.5a.5.5 0 0 1 0-1H3V1.5a.5.5 0 0 1 .5-.5z"/><path d="M12.5 2a.5.5 0 0 1 .5.5V12h-9.5a.5.5 0 0 1 0-1H12V2.5a.5.5 0 0 1 .5-.5z"/></svg>
+                    Crop Cover
+                </ToolbarMenuItem>
+                @if (Movie.Status != MovieStatus.Missing)
+                {
+                    <ToolbarMenuItem OnClick="() => Open(MovieDetailDialog.NfoEditor)" Disabled="@(!Interactive || LoadingRawNfo || string.IsNullOrWhiteSpace(Movie.Code))">
+                        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5H10a.5.5 0 0 1-.5-.5z" /></svg>
+                        @(LoadingRawNfo ? "Loading…" : "Edit .nfo")
+                    </ToolbarMenuItem>
+                    <ToolbarMenuItem OnClick="GeneratePosterAndFanart" Disabled="@(!Interactive || generatingArtwork || string.IsNullOrWhiteSpace(Movie.Code))">
+                        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" /><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z" /></svg>
+                        @(generatingArtwork ? "Generating…" : "Generate poster & fanart")
+                    </ToolbarMenuItem>
+                    <ToolbarMenuItem OnClick="() => Open(MovieDetailDialog.Stills)" Disabled="@(!Interactive || string.IsNullOrWhiteSpace(Movie.Code) || Movie.MediaDurationSeconds is not > 0)">
+                        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H2z" /><path d="M6.5 5.5v5l4-2.5-4-2.5z" /></svg>
+                        Generate stills
+                    </ToolbarMenuItem>
+                    @if (Movie.MetaSourceName == Javbuddy.Services.LocalLibrary.LocalLibraryMetadataMapper.GeneratedSourceName)
+                    {
+                        <ToolbarMenuItem OnClick="CreateNfo" Disabled="@(!Interactive || string.IsNullOrWhiteSpace(Movie.Code))">
+                            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5H10a.5.5 0 0 1-.5-.5z" /></svg>
+                            Create .nfo
+                        </ToolbarMenuItem>
+                    }
+                    <ToolbarMenuItem OnClick="() => Open(MovieDetailDialog.VideoRepair)" Disabled="@(!Interactive || string.IsNullOrWhiteSpace(Movie.Code))">
+                        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M1 0 0 1l2.2 3.081a1 1 0 0 0 .815.419h.07a1 1 0 0 1 .708.293l2.675 2.675-2.617 2.654A3.003 3.003 0 0 0 0 13a3 3 0 1 0 5.878-.851l2.654-2.617.968.968-.305.914a1 1 0 0 0 .242 1.023l3.27 3.27a.997.997 0 0 0 1.414 0l1.586-1.586a.997.997 0 0 0 0-1.414l-3.27-3.27a1 1 0 0 0-1.023-.242L10.5 9.5l-.96-.96 2.68-2.643A3.005 3.005 0 0 0 16 3c0-.269-.035-.53-.102-.777l-2.14 2.141L12 4l-.364-1.757L13.777.102a3 3 0 0 0-3.675 3.68L7.462 6.46 4.793 3.793a1 1 0 0 1-.293-.707v-.071a1 1 0 0 0-.419-.814L1 0zm9.646 10.646a.5.5 0 0 1 .708 0l2.914 2.915a.5.5 0 0 1-.707.707l-2.915-2.914a.5.5 0 0 1 0-.708zM3 11l.471.242 1.058 1.058.242.47a2 2 0 0 1-2.041 2.04 2 2 0 0 1-2.04-2.041A2 2 0 0 1 3 11z" /></svg>
+                        Repair Video
+                    </ToolbarMenuItem>
+                }
+            </ChildContent>
+        </ToolbarMenuButton>
+    </ToolbarMenuGroup>
+    <span class="page-toolbar-sep"></span>
+    <button class="page-toolbar-btn @(Movie.IsFavorite ? "page-toolbar-btn-favorite active" : "")" @onclick="ToggleFavorite" disabled="@(!Interactive)" title="@(Movie.IsFavorite ? "Remove from favorites" : "Add to favorites")">
+        <FavoriteHeartIcon Filled="Movie.IsFavorite" Size="15" />
+        @(Movie.IsFavorite ? "Favorited" : "Favorite")
+    </button>
+    <button class="page-toolbar-btn" @onclick="ToggleStatus">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z" /></svg>
+        Mark as @(Movie.Status == MovieStatus.Missing ? "Got" : "Missing")
+    </button>
+    <button class="page-toolbar-btn page-toolbar-btn-danger" @onclick="() => Open(MovieDetailDialog.DeleteConfirm)">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" /><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z" /></svg>
+        Delete
+    </button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
+
+    [Parameter, EditorRequired] public string BackHref { get; set; } = "/";
+
+    [Parameter, EditorRequired] public string BackLabel { get; set; } = "All movies";
+
+    /// <summary>False until the interactive circuit is up: a click on the prerendered HTML is silently dropped, so
+    /// the buttons that need the circuit stay disabled until then.</summary>
+    [Parameter] public bool Interactive { get; set; }
+
+    /// <summary>Whether the .nfo editor is loading the file, which relabels and disables its menu item.</summary>
+    [Parameter] public bool LoadingRawNfo { get; set; }
+
+    [Parameter] public EventCallback<MovieDetailDialog> OnOpenDialog { get; set; }
+
+    /// <summary>An action changed the movie: the page reloads these parts of its data.</summary>
+    [Parameter] public EventCallback<MovieParts> OnReload { get; set; }
+
+    /// <summary>An action's outcome for the notice under the toolbar; a null message clears it.</summary>
+    [Parameter] public EventCallback<MovieNotice?> OnNotice { get; set; }
+
+    private bool rescanning;
+    private bool generatingArtwork;
+
+    private Task Open(MovieDetailDialog dialog) => OnOpenDialog.InvokeAsync(dialog);
+
+    private async Task RescanMovie()
+    {
+        if (string.IsNullOrWhiteSpace(Movie.Code) || rescanning) return;
+
+        rescanning = true;
+        try
+        {
+            await MovieRescanService.RescanAsync(Movie.Id);
+            await OnReload.InvokeAsync(MovieParts.All);
+        }
+        finally
+        {
+            rescanning = false;
+        }
+    }
+
+    private async Task GeneratePosterAndFanart()
+    {
+        if (generatingArtwork) return;
+
+        generatingArtwork = true;
+        await OnNotice.InvokeAsync(null);
+        try
+        {
+            var result = await PosterGeneration.GenerateAsync(Movie.Id);
+            await OnNotice.InvokeAsync(new MovieNotice(result.Success ? "Poster and fanart generated from the video." : result.ErrorMessage, !result.Success));
+            if (result.Success) await OnReload.InvokeAsync(MovieParts.Poster);
+        }
+        finally
+        {
+            generatingArtwork = false;
+        }
+    }
+
+    private async Task CreateNfo()
+    {
+        var result = await MovieService.CreateNfoAsync(Movie.Id);
+        await OnNotice.InvokeAsync(new MovieNotice(result.Success ? "Created the .nfo from the stored metadata." : result.ErrorMessage, !result.Success));
+        if (result.Success) await OnReload.InvokeAsync(MovieParts.Poster);
+    }
+
+    private async Task ToggleFavorite()
+    {
+        Movie.IsFavorite = await MovieService.ToggleFavoriteAsync(Movie.Id);
+        Movie.FavoritedAt = Movie.IsFavorite ? DateTime.UtcNow : null;
+    }
+
+    private async Task ToggleStatus()
+    {
+        await MovieService.ToggleStatusAsync(Movie.Id);
+        await OnReload.InvokeAsync(MovieParts.Core);
+    }
+}

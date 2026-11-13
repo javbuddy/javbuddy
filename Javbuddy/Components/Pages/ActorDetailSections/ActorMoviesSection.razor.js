@@ -1,4 +1,4 @@
-// Owns viewport-proximity image loading for the ActorDetail movie grid.
+// Owns viewport-proximity image loading for the Actor Detail movie grid.
 //
 // Native `loading="lazy"` only defers correctly on the initial static parse; once the interactive
 // circuit connects, the grid is re-inserted in one batch and Chromium loads everything at once.

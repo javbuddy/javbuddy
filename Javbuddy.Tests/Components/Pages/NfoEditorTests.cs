@@ -32,10 +32,12 @@ public class NfoEditorTests : BunitContext
         var cut = Render<NfoEditor>(p => p.Add(x => x.Code, "ABC-123").Add(x => x.MovieId, 7));
 
         // An earlier edit session leaves the on-disk .nfo loaded.
-        await cut.InvokeAsync(cut.Instance.OpenAsync);
+        cut.Render(p => p.Add(x => x.Show, true));
+        cut.WaitForAssertion(() => Assert.Contains("Close", cut.FindAll("button").Select(b => b.TextContent)));
         cut.FindAll("button").Single(b => b.TextContent == "Close").Click();
+        cut.Render(p => p.Add(x => x.Show, false));
 
-        var review = cut.InvokeAsync(cut.Instance.OpenConflictReviewAsync);
+        cut.Render(p => p.Add(x => x.ConflictReview, true).Add(x => x.Show, true));
 
         // Mounted now, the diff editor's init would find no proposed .nfo to show, and nothing
         // would seed it once that arrives.
@@ -43,9 +45,8 @@ public class NfoEditorTests : BunitContext
         Assert.Contains("Loading…", cut.Markup);
 
         proposed.SetResult("<movie><title>Proposed</title></movie>");
-        await review;
 
-        Assert.Single(cut.FindComponents<StandaloneDiffEditor>());
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<StandaloneDiffEditor>()));
     }
 
     [Fact]
@@ -56,7 +57,7 @@ public class NfoEditorTests : BunitContext
         history.GetGenerationsAsync(7, Arg.Any<CancellationToken>()).Returns(new List<NfoGenerationItem> { newer, older });
         history.RestoreAsync(7, 1, Arg.Any<CancellationToken>()).Returns("<movie>older</movie>");
         var cut = Render<NfoEditor>(p => p.Add(x => x.Code, "ABC-123").Add(x => x.MovieId, 7));
-        await cut.InvokeAsync(cut.Instance.OpenAsync);
+        cut.Render(p => p.Add(x => x.Show, true));
 
         cut.FindAll("button").Single(b => b.TextContent == "History").Click();
 
@@ -80,11 +81,99 @@ public class NfoEditorTests : BunitContext
     {
         history.GetGenerationsAsync(7, Arg.Any<CancellationToken>()).Returns(new List<NfoGenerationItem>());
         var cut = Render<NfoEditor>(p => p.Add(x => x.Code, "ABC-123").Add(x => x.MovieId, 7));
-        await cut.InvokeAsync(cut.Instance.OpenAsync);
+        cut.Render(p => p.Add(x => x.Show, true));
 
         cut.FindAll("button").Single(b => b.TextContent == "History").Click();
 
         Assert.Contains("No earlier versions stored yet", cut.Markup);
         Assert.True(cut.FindAll("button").Single(b => b.TextContent.Trim() == "Restore this version").HasAttribute("disabled"));
+    }
+
+    [Fact]
+    public void Show_OpensTheEditorAndLoadsTheNfoOnce_EvenWhenTheParentRendersAgainMeanwhile()
+    {
+        var cut = Render<NfoEditor>(p => p.Add(x => x.Code, "ABC-123").Add(x => x.MovieId, 7));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
+
+        cut.Render(p => p.Add(x => x.Show, true));
+        cut.Render(p => p.Add(x => x.Show, true).Add(x => x.MovieId, 7));
+
+        cut.WaitForAssertion(() => Assert.Contains("Edit .nfo", cut.Find(".modal-shell-title").TextContent));
+        _ = localLibrary.Received(1).GetRawNfoAsync("ABC-123", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void Show_AsConflictReview_OpensTheDiffAgainstTheProposedNfo()
+    {
+        nfoSync.GenerateProposedNfoAsync(7, Arg.Any<CancellationToken>()).Returns("<movie><title>Proposed</title></movie>");
+        var cut = Render<NfoEditor>(p => p.Add(x => x.Code, "ABC-123").Add(x => x.MovieId, 7));
+
+        cut.Render(p => p.Add(x => x.ConflictReview, true).Add(x => x.Show, true));
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<StandaloneDiffEditor>()));
+        _ = nfoSync.Received(1).GenerateProposedNfoAsync(7, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void Close_AsksTheParentToClose()
+    {
+        var closeRequests = 0;
+        var cut = Render<NfoEditor>(p => p
+            .Add(x => x.Code, "ABC-123")
+            .Add(x => x.MovieId, 7)
+            .Add(x => x.OnClose, () => closeRequests++));
+        cut.Render(p => p.Add(x => x.Show, true));
+        cut.WaitForAssertion(() => Assert.Contains("Close", cut.FindAll("button").Select(b => b.TextContent)));
+
+        cut.FindAll("button").Single(b => b.TextContent == "Close").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(1, closeRequests));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
+    }
+
+    [Fact]
+    public void ClosedFromOutside_HidesTheEditor_WithoutAskingTheParentAgain()
+    {
+        var closeRequests = 0;
+        var cut = Render<NfoEditor>(p => p
+            .Add(x => x.Code, "ABC-123")
+            .Add(x => x.MovieId, 7)
+            .Add(x => x.OnClose, () => closeRequests++));
+        cut.Render(p => p.Add(x => x.Show, true));
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop")));
+
+        cut.Render(p => p.Add(x => x.Show, false));
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".modal-shell-backdrop")));
+        Assert.Equal(0, closeRequests);
+    }
+
+    [Fact]
+    public void Show_WithoutACode_AsksTheParentToCloseInsteadOfOpening()
+    {
+        var closeRequests = 0;
+        var cut = Render<NfoEditor>(p => p
+            .Add(x => x.Code, "")
+            .Add(x => x.MovieId, 7)
+            .Add(x => x.OnClose, () => closeRequests++));
+
+        cut.Render(p => p.Add(x => x.Show, true));
+
+        cut.WaitForAssertion(() => Assert.Equal(1, closeRequests));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
+    }
+
+    [Fact]
+    public void Reopening_ShowsTheEditorAgain()
+    {
+        var cut = Render<NfoEditor>(p => p.Add(x => x.Code, "ABC-123").Add(x => x.MovieId, 7));
+        cut.Render(p => p.Add(x => x.Show, true));
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop")));
+        cut.Render(p => p.Add(x => x.Show, false));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".modal-shell-backdrop")));
+
+        cut.Render(p => p.Add(x => x.Show, true));
+
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop")));
     }
 }

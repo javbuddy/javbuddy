@@ -1,0 +1,8 @@
+/* The Movies section's card, like ActorPhotoGallery's and ActorClipsSection's (CSS isolation keeps
+   their rules there, so these are copies). */
+.actor-detail-movies { border-color: #dfe3e8; }
+.actor-detail-movies-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.actor-detail-movies-header .card-title { margin: 0; }
+.actor-detail-movies-count { color: var(--jb-muted); font-weight: 400; }
+
+:root[data-theme="dark"] .actor-detail-movies { color: #e3e5e8; background: var(--jb-dark-surface); border-color: var(--jb-dark-border-strong); }

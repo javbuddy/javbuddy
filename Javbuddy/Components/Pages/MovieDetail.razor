@@ -5,25 +5,12 @@
 @using Javbuddy.Components.Pages.MovieDetailSections
 @inject IMovieDetailQueryService MovieDetailQuery
 @inject IImageServingService ImageServing
-@inject IR18DevSettingsService R18DevSettingsService
 @inject IJellyfinClient JellyfinClient
-@inject IR18DevDumpStore R18DevDumpStore
 @inject IR18DevReleaseBrowseService ReleaseBrowseService
-@inject IMovieAddService MovieAddService
-@inject IMovieService MovieService
-@inject IMoviePosterGenerationService PosterGeneration
-@inject IMovieRescanService MovieRescanService
-@inject IMovieCleanupService MovieCleanupService
 @inject IMovieSceneService SceneService
 @inject IMovieHighlightService HighlightService
 @inject IMovieApexService ApexService
-@inject Javbuddy.Services.SceneMedia.ISceneMediaService SceneMedia
-@inject Javbuddy.Services.SceneMedia.IHighlightMediaService HighlightMedia
-@inject Javbuddy.Services.SceneMedia.IApexMediaService ApexMedia
-@inject MovieFilterNavigationState FilterNavigationState
-@inject INfoSyncService NfoSyncService
-@inject NavigationManager Nav
-@inject IJSRuntime JS
+@inject Javbuddy.Services.SceneMedia.IMovieClipMediaQueueService ClipMediaQueue
 @rendermode InteractiveServer
 
 <PageTitle>@(movie?.DisplayName ?? preview?.DisplayTitle ?? "Movie") · Javbuddy</PageTitle>
@@ -34,27 +21,13 @@
 }
 else if (movie is null && preview is not null)
 {
-    <div class="page-toolbar">
-        <BackButton Href="@BackHref" CssClass="page-toolbar-btn">@BackLabel</BackButton>
-        <span class="page-toolbar-sep"></span>
-        <button class="page-toolbar-btn" @onclick="AddPreviewToLibrary" disabled="@addingPreview">
-            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm.5-7.5v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0v3h3a.5.5 0 0 1 0 1h-3z" /></svg>
-            @(addingPreview ? "Adding…" : "Add to Library")
-        </button>
-        <button class="page-toolbar-btn" @onclick="OpenPreviewSearchModal">
-            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="currentColor" stroke-width="1.3" /><line x1="10.3" y1="10.3" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
-            Search Prowlarr
-        </button>
-    </div>
-
-    @if (previewAddError is not null)
-    {
-        <div class="alert alert-danger py-2 movie-cover-save-notice" role="alert">@previewAddError</div>
-    }
-
-    <MoviePreviewDetails Preview="preview" OnBrowseCatalog="BrowseCatalog" />
-    <R18DevRelatedReleasesShelf Related="related" OnSeeAll="BrowseRelated" />
-    <ProwlarrSearchModal Code="@preview.DvdId" Show="IsOpen(MovieModal.PreviewSearch)" OnClose="ClosePreviewSearchModal" OnMovieAdded="OnPreviewMovieAdded" />
+    <MoviePreviewSection Preview="preview"
+                         Related="related"
+                         BackHref="@BackHref"
+                         BackLabel="@BackLabel"
+                         OnAdded="ReloadAllAsync"
+                         OnSearchRequested="() => OpenDialog(MovieDetailDialog.PreviewSearch)" />
+    <ProwlarrSearchModal Code="@preview.DvdId" Show="IsOpen(MovieDetailDialog.PreviewSearch)" OnClose="() => CloseDialog(MovieDetailDialog.PreviewSearch)" OnMovieAdded="OnPreviewMovieAdded" />
 }
 else if (movie is null)
 {
@@ -62,88 +35,14 @@ else if (movie is null)
 }
 else
 {
-    <div class="page-toolbar">
-        <BackButton Href="@BackHref" CssClass="page-toolbar-btn">@BackLabel</BackButton>
-        <span class="page-toolbar-sep"></span>
-        <button class="page-toolbar-btn" @onclick="OpenSearchModal" disabled="@string.IsNullOrWhiteSpace(movie.Code)" title="Search Prowlarr" aria-label="Search Prowlarr">
-            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="currentColor" stroke-width="1.3" /><line x1="10.3" y1="10.3" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
-            Search
-        </button>
-        <button class="page-toolbar-btn" @onclick="OpenMetadataEditor" disabled="@(!interactive)" title="Edit metadata" aria-label="Edit metadata">
-            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z" /></svg>
-            Edit
-        </button>
-        @if (movie.Status != MovieStatus.Missing)
-        {
-            <button class="page-toolbar-btn" @onclick="OpenMediaInfoModal" disabled="@(!interactive || string.IsNullOrWhiteSpace(movie.Code))">
-                <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.297.006-.406-.291-.472l-.451-.081.082-.381 2.29-.29zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z" /></svg>
-                Media Info
-            </button>
-        }
-        <ToolbarMenuGroup>
-            <ToolbarMenuButton Busy="rescanning" Label="@(rescanning ? "Rescanning…" : "Refresh")" Title="Rescan or refresh metadata">
-                <Icon><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" /><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" /></svg></Icon>
-                <ChildContent>
-                    <ToolbarMenuItem OnClick="RescanMovie" Disabled="@(!interactive || rescanning || string.IsNullOrWhiteSpace(movie.Code))">
-                        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" /><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" /></svg>
-                        @(rescanning ? "Rescanning…" : "Rescan")
-                    </ToolbarMenuItem>
-                    <ToolbarMenuItem OnClick="OpenMetadataRefreshModal" Disabled="@(!interactive || string.IsNullOrWhiteSpace(movie.Code))">
-                        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z" /><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z" /></svg>
-                        Refresh with Javinizer
-                    </ToolbarMenuItem>
-                </ChildContent>
-            </ToolbarMenuButton>
-            <ToolbarMenuButton Busy="@(loadingRawNfo || generatingArtwork)" Label="@(generatingArtwork ? "Generating…" : loadingRawNfo ? "Loading…" : "Tools")" Title="Crop the cover, edit the .nfo, generate stills or repair the video">
-                <Icon><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311c.446.82.023 1.841-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413 1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.858 2.929 2.929 0 0 1 0 5.858z" /></svg></Icon>
-                <ChildContent>
-                    <ToolbarMenuItem OnClick="OpenCoverCropModal" Disabled="@(!interactive || string.IsNullOrWhiteSpace(movie.Code))">
-                        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M3.5.5A.5.5 0 0 1 4 1v13h10a.5.5 0 0 1 0 1h-2v1.5a.5.5 0 0 1-1 0V15H4a1 1 0 0 1-1-1V4H1.5a.5.5 0 0 1 0-1H3V1.5a.5.5 0 0 1 .5-.5z"/><path d="M12.5 2a.5.5 0 0 1 .5.5V12h-9.5a.5.5 0 0 1 0-1H12V2.5a.5.5 0 0 1 .5-.5z"/></svg>
-                        Crop Cover
-                    </ToolbarMenuItem>
-                    @if (movie.Status != MovieStatus.Missing)
-                    {
-                        <ToolbarMenuItem OnClick="OpenNfoEditor" Disabled="@(!interactive || loadingRawNfo || string.IsNullOrWhiteSpace(movie.Code))">
-                            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5H10a.5.5 0 0 1-.5-.5z" /></svg>
-                            @(loadingRawNfo ? "Loading…" : "Edit .nfo")
-                        </ToolbarMenuItem>
-                        <ToolbarMenuItem OnClick="GeneratePosterAndFanart" Disabled="@(!interactive || generatingArtwork || string.IsNullOrWhiteSpace(movie.Code))">
-                            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" /><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z" /></svg>
-                            @(generatingArtwork ? "Generating…" : "Generate poster & fanart")
-                        </ToolbarMenuItem>
-                        <ToolbarMenuItem OnClick="OpenStillsModal" Disabled="@(!interactive || string.IsNullOrWhiteSpace(movie.Code) || movie.MediaDurationSeconds is not > 0)">
-                            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1H2z" /><path d="M6.5 5.5v5l4-2.5-4-2.5z" /></svg>
-                            Generate stills
-                        </ToolbarMenuItem>
-                        @if (movie.MetaSourceName == Javbuddy.Services.LocalLibrary.LocalLibraryMetadataMapper.GeneratedSourceName)
-                        {
-                            <ToolbarMenuItem OnClick="CreateNfo" Disabled="@(!interactive || string.IsNullOrWhiteSpace(movie.Code))">
-                                <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M14 4.5V14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h5.5L14 4.5zM9.5 3V1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4.5H10a.5.5 0 0 1-.5-.5z" /></svg>
-                                Create .nfo
-                            </ToolbarMenuItem>
-                        }
-                        <ToolbarMenuItem OnClick="OpenVideoRepairModal" Disabled="@(!interactive || string.IsNullOrWhiteSpace(movie.Code))">
-                            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M1 0 0 1l2.2 3.081a1 1 0 0 0 .815.419h.07a1 1 0 0 1 .708.293l2.675 2.675-2.617 2.654A3.003 3.003 0 0 0 0 13a3 3 0 1 0 5.878-.851l2.654-2.617.968.968-.305.914a1 1 0 0 0 .242 1.023l3.27 3.27a.997.997 0 0 0 1.414 0l1.586-1.586a.997.997 0 0 0 0-1.414l-3.27-3.27a1 1 0 0 0-1.023-.242L10.5 9.5l-.96-.96 2.68-2.643A3.005 3.005 0 0 0 16 3c0-.269-.035-.53-.102-.777l-2.14 2.141L12 4l-.364-1.757L13.777.102a3 3 0 0 0-3.675 3.68L7.462 6.46 4.793 3.793a1 1 0 0 1-.293-.707v-.071a1 1 0 0 0-.419-.814L1 0zm9.646 10.646a.5.5 0 0 1 .708 0l2.914 2.915a.5.5 0 0 1-.707.707l-2.915-2.914a.5.5 0 0 1 0-.708zM3 11l.471.242 1.058 1.058.242.47a2 2 0 0 1-2.041 2.04 2 2 0 0 1-2.04-2.041A2 2 0 0 1 3 11z" /></svg>
-                            Repair Video
-                        </ToolbarMenuItem>
-                    }
-                </ChildContent>
-            </ToolbarMenuButton>
-        </ToolbarMenuGroup>
-        <span class="page-toolbar-sep"></span>
-        <button class="page-toolbar-btn @(movie.IsFavorite ? "page-toolbar-btn-favorite active" : "")" @onclick="ToggleFavorite" disabled="@(!interactive)" title="@(movie.IsFavorite ? "Remove from favorites" : "Add to favorites")">
-            <FavoriteHeartIcon Filled="movie.IsFavorite" Size="15" />
-            @(movie.IsFavorite ? "Favorited" : "Favorite")
-        </button>
-        <button class="page-toolbar-btn" @onclick="ToggleStatus">
-            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M2 2v13.5a.5.5 0 0 0 .74.439L8 13.069l5.26 2.87A.5.5 0 0 0 14 15.5V2a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z" /></svg>
-            Mark as @(movie.Status == MovieStatus.Missing ? "Got" : "Missing")
-        </button>
-        <button class="page-toolbar-btn page-toolbar-btn-danger" @onclick="OpenDeleteConfirm">
-            <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" /><path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z" /></svg>
-            Delete
-        </button>
-    </div>
+    <MovieDetailToolbar Movie="movie"
+                        BackHref="@BackHref"
+                        BackLabel="@BackLabel"
+                        Interactive="interactive"
+                        LoadingRawNfo="loadingRawNfo"
+                        OnOpenDialog="OpenDialog"
+                        OnReload="LoadAsync"
+                        OnNotice="OnNotice" />
 
     @if (coverSaveNotice is not null)
     {
@@ -161,7 +60,7 @@ else
         <div class="movie-detail-sidebar">
             @if (HasFetchedMetadata)
             {
-                <div class="movie-detail-poster movie-detail-poster-clickable" @onclick="OpenPosterLightbox" title="Click to view large poster">
+                <div class="movie-detail-poster movie-detail-poster-clickable" @onclick="() => OpenDialog(MovieDetailDialog.PosterLightbox)" title="Click to view large poster">
                     <img src="@PosterFullUrl()" alt="Cover" />
                 </div>
             }
@@ -174,180 +73,18 @@ else
         </div>
         <div class="movie-detail-main">
             <h1 class="movie-detail-title" title="@movie.DisplayName">@MovieDetailText.Truncate(movie.DisplayName, 70)</h1>
-            <div class="movie-detail-badges">
-                <span class="movie-detail-badge movie-detail-badge-status-@(movie.Status == MovieStatus.Got ? "got" : "missing")" title="@MovieDetailText.MetaFetchedTooltip(movie)">@movie.Status</span>
-                <button type="button" class="movie-detail-badge movie-detail-badge-content-type" @onclick="() => FilterByContentType(movie.ContentType)" disabled="@(!interactive)" title="Content type: show all @MovieFilterOptions.ContentTypeLabel(movie.ContentType) movies">@MovieFilterOptions.ContentTypeLabel(movie.ContentType)</button>
-                @if (movie.NfoDriftKind != NfoDriftKind.None && movie.Status != MovieStatus.Missing)
-                {
-                    <button type="button" class="movie-detail-badge movie-detail-badge-warning" @onclick="OpenConflictReview" disabled="@(!interactive)" title="@MovieDetailText.NfoDriftTooltip(movie)">
-                        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
-                            <path d="M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.15.15 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.2.2 0 0 1-.054.06.18.18 0 0 1-.066.018H1.146a.18.18 0 0 1-.066-.018.2.2 0 0 1-.054-.06c-.033-.059-.034-.123.002-.183L7.884 2.073a.15.15 0 0 1 .054-.057zm-1.044-.45a1.13 1.13 0 0 0-1.96 0L.18 13.233c-.457.778.091 1.767.98 1.767h13.679c.89 0 1.438-.99.98-1.767L8.982 1.566z" />
-                            <path d="M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.553.553 0 0 1-1.1 0z" />
-                        </svg>
-                        NFO: @NfoDriftDetector.Label(movie.NfoDriftKind)
-                    </button>
-                }
-                @if (movie.CleanupBlacklisted)
-                {
-                    <button type="button" class="movie-detail-badge movie-detail-badge-warning" @onclick="RemoveFromCleanupBlacklist" disabled="@(!interactive)" title="Excluded from the Cleanup review queue — click to remove">
-                        Blacklisted from Cleanup
-                    </button>
-                }
-                @if (movie.HasBrokenBFrames && movie.Status != MovieStatus.Missing)
-                {
-                    <button type="button" class="movie-detail-badge movie-detail-badge-danger" @onclick="OpenVideoRepairModal" title="Broken B-frame timestamps detected / marked — click to repair">
-                        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
-                            <path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z" />
-                            <path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z" />
-                        </svg>
-                        Broken B-Frames
-                    </button>
-                }
-                @if (MovieDetailText.UnderageCastTooltip(castEntries) is { } underageCastTooltip)
-                {
-                    <span class="movie-detail-badge movie-detail-badge-underage" title="@underageCastTooltip" aria-label="@underageCastTooltip">⚠ Cast age under @ActorPhysicalAttributesHelper.MinimumActorAge</span>
-                }
-                @if (movie.MetaRuntimeMinutes is not null)
-                {
-                    <span class="movie-detail-badge">@(movie.MetaRuntimeMinutes) Minutes</span>
-                }
-                @if (movie.MetaReleaseDate is not null)
-                {
-                    <span class="movie-detail-badge">@movie.MetaReleaseDate.Value.Year</span>
-                }
-                @if (MovieDetailText.CodePrefix(movie.Code) is { } codePrefix)
-                {
-                    <span class="movie-detail-badge"><button type="button" class="movie-detail-code-prefix" @onclick="() => FilterByCodePrefix(codePrefix)">@codePrefix</button>@movie.Code![codePrefix.Length..]</span>
-                }
-                else
-                {
-                    <span class="movie-detail-badge">@movie.Code</span>
-                }
-                @if (!string.IsNullOrWhiteSpace(movie.MetaStudio))
-                {
-                    <button type="button" class="movie-detail-badge" @onclick="() => FilterByStudio(movie.MetaStudio)">@movie.MetaStudio</button>
-                }
-                @if (!string.IsNullOrWhiteSpace(movie.MetaLabel) && movie.MetaLabel != movie.MetaStudio)
-                {
-                    @if (related.Label is { } catalogLabel)
-                    {
-                        <button type="button" class="movie-detail-badge" title="Browse this label's releases on r18.dev" @onclick="() => BrowseCatalog((null, catalogLabel))">@movie.MetaLabel</button>
-                    }
-                    else
-                    {
-                        <span class="movie-detail-badge">@movie.MetaLabel</span>
-                    }
-                }
-                @if (related.Series is { } catalogSeries)
-                {
-                    <button type="button" class="movie-detail-badge" title="Browse this series' releases on r18.dev" @onclick="() => BrowseCatalog((catalogSeries, null))">@(movie.MetaSeries ?? catalogSeries.Name)</button>
-                }
-                @if (ResolutionDisplay is not null)
-                {
-                    <span class="movie-detail-badge">@ResolutionDisplay</span>
-                }
-                @if (movie.VrType is not null)
-                {
-                    <span class="movie-detail-badge" title="VR / 3D format of the primary version">@movie.VrType</span>
-                }
-                @if (movie.LocalFileSizeDisplay is not null)
-                {
-                    <span class="movie-detail-badge">@movie.LocalFileSizeDisplay</span>
-                }
-                @if (movie.MovieFiles.Count > 1)
-                {
-                    @* Picks the movie's primary version. *@
-                    <span class="movie-detail-version-anchor" @onkeydown="OnVersionMenuKeyDown">
-                        <button type="button" class="movie-detail-badge movie-detail-badge-versions"
-                                aria-haspopup="menu" aria-expanded="@(showPrimaryVersionMenu ? "true" : "false")"
-                                title="Choose the primary version" @onclick="() => ToggleVersionMenu()">
-                            @movie.MovieFiles.Count Versions <span class="movie-detail-versions-caret" aria-hidden="true">▾</span>
-                        </button>
-                        @if (showPrimaryVersionMenu)
-                        {
-                            <div class="movie-detail-version-backdrop" @onclick="CloseVersionMenu"></div>
-                            <div class="movie-detail-version-menu movie-detail-version-menu-end" role="menu" aria-label="Primary version">
-                                <div class="movie-detail-version-heading">Primary version</div>
-                                @foreach (var file in OrderedVersions)
-                                {
-                                    <button type="button" class="movie-detail-version-choice" role="menuitemradio"
-                                            aria-checked="@(file.IsPrimary ? "true" : "false")" disabled="@settingPrimary" title="@file.FileName"
-                                            @onclick="() => SetPrimaryVersionAsync(file.Id)">
-                                        <span class="movie-detail-version-check" aria-hidden="true">@(file.IsPrimary ? "✓" : null)</span>
-                                        <span class="movie-detail-version-label">@MovieVersionParser.FormatVersionLabel(file)</span>
-                                    </button>
-                                }
-                                @if (versionMenuError is not null)
-                                {
-                                    <div class="movie-detail-version-error">@versionMenuError</div>
-                                }
-                            </div>
-                        }
-                    </span>
-                }
-                @if (CanPlay)
-                {
-                    @* Play, with a caret menu for the movie's highlights and apexes when it has any. *@
-                    <span class="movie-detail-version-anchor movie-detail-play-split" @onkeydown="OnPlayMenuKeyDown">
-                        <button type="button" class="movie-detail-badge movie-detail-badge-play @(HasClipMenu ? "movie-detail-split-play-first" : null)" @onclick="OpenVideoPlayerModal" title="Play movie">
-                            <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true" class="me-1">
-                                <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>
-                            </svg>
-                            Play
-                        </button>
-                        @if (HasClipMenu)
-                        {
-                            <button type="button" class="movie-detail-badge movie-detail-badge-play movie-detail-play-caret"
-                                    aria-haspopup="menu" aria-expanded="@(showPlayMenu ? "true" : "false")"
-                                    title="More ways to play" aria-label="More ways to play" @onclick="() => showPlayMenu = !showPlayMenu">
-                                <span aria-hidden="true">▾</span>
-                            </button>
-                            @if (showPlayMenu)
-                            {
-                                <div class="movie-detail-version-backdrop" @onclick="() => showPlayMenu = false"></div>
-                                <div class="movie-detail-version-menu movie-detail-play-menu" role="menu" aria-label="Play">
-                                    <button type="button" class="movie-detail-version-choice" role="menuitem" @onclick="() => PlayFromMenu(null, false)">
-                                        <span class="movie-detail-play-menu-label">Play movie</span>
-                                        @if (movie.MediaDurationSeconds is > 0 and var movieSeconds)
-                                        {
-                                            <span class="movie-detail-play-menu-meta">@SceneTimeFormat.Format(movieSeconds)</span>
-                                        }
-                                    </button>
-                                    @if (highlights.Count > 0)
-                                    {
-                                        <div class="movie-detail-play-menu-rule" role="separator"></div>
-                                        <div class="movie-detail-play-menu-row">
-                                            <button type="button" class="movie-detail-version-choice" role="menuitem" @onclick="() => PlayFromMenu(PlayerClipKind.Highlight, false)">
-                                                <span class="movie-detail-play-menu-highlight"><SparkleIcon Size="12" /></span>
-                                                <span class="movie-detail-play-menu-label">All highlights<br /><span class="movie-detail-play-menu-meta">@ClipSummary(highlights.Count, highlights.Sum(h => h.DurationSeconds))</span></span>
-                                            </button>
-                                            <button type="button" class="movie-detail-play-menu-shuffle" role="menuitem" title="Shuffle highlights" aria-label="Shuffle highlights" @onclick="() => PlayFromMenu(PlayerClipKind.Highlight, true)"><ShuffleIcon Size="10" /> Shuffle</button>
-                                        </div>
-                                    }
-                                    @if (apexes.Count > 0)
-                                    {
-                                        <div class="movie-detail-play-menu-rule" role="separator"></div>
-                                        <div class="movie-detail-play-menu-row">
-                                            <button type="button" class="movie-detail-version-choice" role="menuitem" @onclick="() => PlayFromMenu(PlayerClipKind.Apex, false)">
-                                                <span class="movie-detail-play-menu-apex"><ApexIcon Size="12" /></span>
-                                                <span class="movie-detail-play-menu-label">All apexes<br /><span class="movie-detail-play-menu-meta">@ClipSummary(apexes.Count, ApexRanges.TotalClipSeconds(apexes, movie.MediaDurationSeconds))</span></span>
-                                            </button>
-                                            <button type="button" class="movie-detail-play-menu-shuffle" role="menuitem" title="Shuffle apexes" aria-label="Shuffle apexes" @onclick="() => PlayFromMenu(PlayerClipKind.Apex, true)"><ShuffleIcon Size="10" /> Shuffle</button>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                        }
-                    </span>
-                }
-                @if (!string.IsNullOrWhiteSpace(movie.JellyfinItemId))
-                {
-                    <a class="movie-detail-badge movie-detail-badge-jellyfin" href="@jellyfinWebUrl" target="_blank" rel="noopener noreferrer" title="@MovieDetailText.JellyfinLinkedTooltip(movie)">
-                        <JellyfinIcon Size="14" />
-                        Open in Jellyfin
-                    </a>
-                }
-            </div>
+            <MovieDetailBadges Movie="movie"
+                               CastEntries="castEntries"
+                               Related="related"
+                               Highlights="highlights"
+                               Apexes="apexes"
+                               CanPlay="CanPlay"
+                               JellyfinWebUrl="@jellyfinWebUrl"
+                               Interactive="interactive"
+                               OnOpenDialog="OpenDialog"
+                               OnReload="LoadAsync"
+                               OnPlay="OpenVideoPlayerModal"
+                               OnPlayClips="PlayClips" />
             @if (!string.IsNullOrWhiteSpace(movie.MetaDescription))
             {
                 <p class="movie-detail-overview">@movie.MetaDescription</p>
@@ -382,52 +119,56 @@ else
                                     OnApexesChanged="OnApexesChanged" />
             }
 
-            <MovieImagesSection @ref="imagesSection" Movie="movie" RefreshToken="imagesRefresh" OnGenerateStillsRequested="OpenStillsModal" />
+            <MovieImagesSection @ref="imagesSection" Movie="movie" RefreshToken="imagesRefresh" OnGenerateStillsRequested="() => OpenDialog(MovieDetailDialog.Stills)" />
         </div>
     </div>
-
     @if (movie.Status != MovieStatus.Missing)
     {
-        <NfoEditor @ref="nfoEditorRef" Code="@(movie.Code ?? "")" MovieId="@movie.Id" LoadingChanged="@(v => loadingRawNfo = v)" OnConflictResolved="ReloadAllAsync" />
+        <NfoEditor Code="@(movie.Code ?? "")" MovieId="@movie.Id"
+                   Show="@(IsOpen(MovieDetailDialog.NfoEditor) || IsOpen(MovieDetailDialog.NfoConflictReview))"
+                   ConflictReview="IsOpen(MovieDetailDialog.NfoConflictReview)"
+                   LoadingChanged="@(v => loadingRawNfo = v)"
+                   OnConflictResolved="ReloadAllAsync"
+                   OnClose="CloseNfoEditor" />
 
-        <MediaInfoModal @ref="mediaInfoModalRef" Movie="movie" />
-        <VideoRepairModal @ref="videoRepairModalRef" Movie="movie" OnRepaired="ReloadAllAsync" />
+        <MediaInfoModal Movie="movie" Show="IsOpen(MovieDetailDialog.MediaInfo)" OnClose="() => CloseDialog(MovieDetailDialog.MediaInfo)" />
+        <VideoRepairModal Movie="movie" Show="IsOpen(MovieDetailDialog.VideoRepair)" OnClose="() => CloseDialog(MovieDetailDialog.VideoRepair)" OnRepaired="ReloadAllAsync" />
     }
 
-    <ProwlarrSearchModal Movie="movie" Show="IsOpen(MovieModal.Search)" OnClose="CloseSearchModal" />
+    <ProwlarrSearchModal Movie="movie" Show="IsOpen(MovieDetailDialog.Search)" OnClose="() => CloseDialog(MovieDetailDialog.Search)" />
 
-    <MetadataEditorModal @ref="metadataEditorRef" Movie="movie" OnSaved="OnMetadataEditedAsync" />
+    <MetadataEditorModal Movie="movie" Show="IsOpen(MovieDetailDialog.MetadataEditor)" OnClose="() => CloseDialog(MovieDetailDialog.MetadataEditor)" OnSaved="OnMetadataEditedAsync" />
 
-    <ImageLightboxModal Show="@IsOpen(MovieModal.PosterLightbox)"
+    <ImageLightboxModal Show="@IsOpen(MovieDetailDialog.PosterLightbox)"
                         Title="@movie.DisplayName"
                         ImageUrl="@PosterFullUrl()"
                         AlternateImageUrl="@(HasFetchedMetadata ? BackdropFullUrl() : null)"
                         PrimaryLabel="Poster"
                         AlternateLabel="Full jacket"
                         DefaultToAlternate="true"
-                        OnCropRequested="OpenCoverCropModal"
-                        OnClose="ClosePosterLightbox" />
+                        OnCropRequested="() => OpenDialog(MovieDetailDialog.CoverCrop)"
+                        OnClose="() => CloseDialog(MovieDetailDialog.PosterLightbox)" />
 
-    <MovieStillsGenerateModal Show="@IsOpen(MovieModal.Stills)"
+    <MovieStillsGenerateModal Show="@IsOpen(MovieDetailDialog.Stills)"
                               MovieId="@movie.Id"
                               Code="@(movie.Code ?? "")"
                               IsVr="@IsSideBySideVr"
-                              OnClose="() => CloseModal(MovieModal.Stills)"
+                              OnClose="() => CloseDialog(MovieDetailDialog.Stills)"
                               OnSaved="OnStillsSavedAsync" />
 
-    <MovieCoverCropModal Show="@IsOpen(MovieModal.CoverCrop)"
+    <MovieCoverCropModal Show="@IsOpen(MovieDetailDialog.CoverCrop)"
                          Code="@(movie.Code ?? "")"
                          Title="@movie.DisplayName"
-                         OnClose="CloseCoverCropModal"
+                         OnClose="() => CloseDialog(MovieDetailDialog.CoverCrop)"
                          OnCoverChanged="OnCoverChangedAsync" />
 
-    <MovieMetadataRefreshModal Show="@IsOpen(MovieModal.MetadataRefresh)"
+    <MovieMetadataRefreshModal Show="@IsOpen(MovieDetailDialog.MetadataRefresh)"
                                Movie="movie"
                                CurrentPosterUrl="@(HasFetchedMetadata ? PosterFullUrl() : null)"
-                               OnClose="CloseMetadataRefreshModal"
-                               OnApplied="OnMetadataRefreshAppliedAsync" />
+                               OnClose="() => CloseDialog(MovieDetailDialog.MetadataRefresh)"
+                               OnApplied="ReloadAllAsync" />
 
-    <VideoPlayerModal Show="@IsOpen(MovieModal.VideoPlayer)"
+    <VideoPlayerModal Show="@IsOpen(MovieDetailDialog.VideoPlayer)"
                       Title="@movie.DisplayName"
                       Code="@movie.Code"
                       ExternalWebUrl="@jellyfinWebUrl"
@@ -444,20 +185,7 @@ else
                       OnApexesChanged="OnApexesChanged"
                       OnClose="CloseVideoPlayerModal" />
 
-    @if (IsOpen(MovieModal.DeleteConfirm))
-    {
-        <DeleteConfirmDialog ItemName="@MovieDetailText.DeleteLabel(movie)" Busy="deleting"
-                             Message="@(deleteFiles
-                                 ? "Its metadata, cast and tag links, images, scenes, highlights and apexes are removed from Javbuddy, and its folder is deleted from disk."
-                                 : "Its metadata, cast and tag links, images, scenes, highlights and apexes are removed from Javbuddy. Video files on disk are left alone.")"
-                             OnConfirm="DeleteMovie" OnCancel="() => CloseModal(MovieModal.DeleteConfirm)">
-            <MovieDeleteFilesOption MovieId="@movie.Id" @bind-Checked="deleteFiles" Disabled="deleting" />
-            @if (deleteError is not null)
-            {
-                <div class="alert alert-danger py-2 mt-3 mb-0">@deleteError</div>
-            }
-        </DeleteConfirmDialog>
-    }
+    <MovieDeleteDialog Movie="movie" Show="IsOpen(MovieDetailDialog.DeleteConfirm)" OnClose="() => CloseDialog(MovieDetailDialog.DeleteConfirm)" />
 }
 
 @code {
@@ -465,33 +193,13 @@ else
 
     private Movie? movie;
     private R18DevMovieDetail? preview;
-    private bool addingPreview;
     private bool loaded;
     private List<MovieCastEntry> castEntries = new();
     // The page's dialogs are mutually exclusive (each sits over the whole page and the lightbox closes
-    // itself before it asks for the crop), so one value says which is open. The modal components that
-    // keep their own open state (the .nfo editor, Media Info, Repair Video, the metadata editor) are
-    // opened through their @ref instead.
-    private enum MovieModal
-    {
-        None,
-        Search,
-        PreviewSearch,
-        PosterLightbox,
-        VideoPlayer,
-        CoverCrop,
-        Stills,
-        MetadataRefresh,
-        DeleteConfirm,
-    }
-
-    private MovieModal openModal;
-    // Whether the Versions badge's primary-version picker is open.
-    private bool showPrimaryVersionMenu;
-    private bool showPlayMenu;
+    // itself before it asks for the crop), so one value says which is open. Every dialog component takes
+    // its Show from it and asks to close through its OnClose; each also loads what it needs when Show turns true.
+    private MovieDetailDialog openDialog;
     private MovieScenesSection? scenesSection;
-    private bool settingPrimary;
-    private string? versionMenuError;
     private double? playerStartAt;
     private double? playerEndAt;
     private bool playerEditor;
@@ -508,10 +216,6 @@ else
     private MovieImagesSection? imagesSection;
     // Bumped by a reload that can have changed the extrafanart folder, which the images section lists again.
     private int imagesRefresh;
-    private bool deleting;
-    private bool deleteFiles;
-    private string? deleteError;
-    private string? previewAddError;
     private string? coverSaveNotice;
     private bool coverSaveNoticeIsWarning;
     // Changes only when the poster does, so an unchanged cover is painted straight from the browser's
@@ -519,12 +223,6 @@ else
     private string? posterVersion;
     private string? jellyfinWebUrl;
     private bool loadingRawNfo;
-    private NfoEditor? nfoEditorRef;
-    private MediaInfoModal? mediaInfoModalRef;
-    private VideoRepairModal? videoRepairModalRef;
-    private MetadataEditorModal? metadataEditorRef;
-    private bool rescanning;
-    private bool generatingArtwork;
     private bool interactive;
 
     private R18DevRelatedReleases related = R18DevRelatedReleases.None;
@@ -545,13 +243,13 @@ else
     private const int RelatedReleaseCount = 12;
 
     // Puts every per-movie field back to its initial value, so nothing of the previous movie (an open
-    // dialog, an in-flight busy flag, a notice, a child component reference) is still there for the next.
+    // dialog, a notice, a child component reference) is still there for the next. The state the sections and
+    // dialogs keep themselves (a busy flag, an open menu) goes with them while the loading indicator replaces them.
     private void ResetForNewMovie()
     {
         loaded = false;
         movie = null;
         preview = null;
-        addingPreview = false;
         related = R18DevRelatedReleases.None;
         castEntries = new();
         scenes = [];
@@ -565,36 +263,14 @@ else
         imagesRefresh = 0;
         coverSaveNotice = null;
         coverSaveNoticeIsWarning = false;
-        openModal = MovieModal.None;
+        openDialog = MovieDetailDialog.None;
         playerStartAt = null;
         playerEndAt = null;
         playerEditor = false;
-        showPrimaryVersionMenu = false;
-        showPlayMenu = false;
-        settingPrimary = false;
-        versionMenuError = null;
-        deleting = false;
-        deleteFiles = false;
-        deleteError = null;
-        rescanning = false;
-        generatingArtwork = false;
         loadingRawNfo = false;
         scenesSection = null;
         imagesSection = null;
-        nfoEditorRef = null;
-        mediaInfoModalRef = null;
-        videoRepairModalRef = null;
-        metadataEditorRef = null;
     }
-
-    // Opens the Movies page's r18.dev catalog narrowed to one series or label.
-    private void BrowseCatalog((R18DevCatalogRef? Series, R18DevCatalogRef? Label) target)
-    {
-        FilterNavigationState.SetPendingCatalogFilter(target.Series, target.Label);
-        Nav.NavigateTo("/");
-    }
-
-    private void BrowseRelated() => BrowseCatalog((related.Series, null));
 
     // Prerendered HTML has no live circuit yet, so a click on the toolbar during that window is
     // silently dropped — OnAfterRender's firstRender only fires once the interactive circuit has
@@ -651,51 +327,6 @@ else
 
     private string BackdropFullUrl() => $"/image-cache/{Uri.EscapeDataString(movie!.Code!)}/fanart/full";
 
-    private string? ResolutionDisplay => movie is null
-        ? null
-        : MediaQualityLabelFormatter.FormatDetail(movie.MediaWidth, movie.MediaHeight, movie.MediaScanType);
-
-    private void FilterByStudio(string? studio)
-    {
-        if (string.IsNullOrWhiteSpace(studio)) return;
-        FilterNavigationState.SetPendingFilter(studio: studio);
-        Nav.NavigateTo("/");
-    }
-
-    private void FilterByContentType(MovieContentType contentType)
-    {
-        FilterNavigationState.SetPendingContentTypeFilter(contentType);
-        Nav.NavigateTo("/");
-    }
-
-    private void FilterByCodePrefix(string prefix)
-    {
-        FilterNavigationState.SetPendingFilter(codePrefix: prefix);
-        Nav.NavigateTo("/");
-    }
-
-    // The parts of the page's data an edit can change. A handler reloads only the parts its change can
-    // affect; anything it isn't sure about reloads All (what the first load does too).
-    [Flags]
-    private enum MovieParts
-    {
-        // Nothing beyond the movie row with its files and tags (status, flags, metadata text, NFO drift,
-        // tag chips), which every reload reads.
-        Core = 0,
-        // The poster's cache-busting version (a disk stat and two queries).
-        Poster = 2,
-        // Scenes, highlights and apexes, and their generated media being queued.
-        Clips = 4,
-        // The movie's tracked actors the clips can be assigned to.
-        SceneCast = 8,
-        // The cast chips with their ages and avatars, read from the movie's cast text.
-        Cast = 16,
-        // The Jellyfin link, even when the movie's Jellyfin ids are the same.
-        Jellyfin = 32,
-        // The extrafanart folder listing.
-        Images = 64,
-        All = Poster | Clips | SceneCast | Cast | Jellyfin | Images,
-    }
 
     private Task ReloadAllAsync() => LoadAsync(MovieParts.All);
 
@@ -707,9 +338,7 @@ else
 
         if (movie is null)
         {
-            preview = (await R18DevSettingsService.GetAsync()).Enabled
-                ? await R18DevDumpStore.GetMovieByCodeAsync(RouteCode)
-                : null;
+            preview = await ReleaseBrowseService.GetPreviewAsync(RouteCode);
             return;
         }
 
@@ -731,19 +360,8 @@ else
         if (parts.HasFlag(MovieParts.Clips))
         {
             RecountScenes();
-            if (scenes.Any(s => s.ThumbVersion is null || s.PreviewVersion is null))
-            {
-                // Generated in the background; MovieScenesSection reloads the cards as each is written.
-                await SceneMedia.EnsureQueuedAsync(movie.Id);
-            }
-            if (highlights.Any(h => h.ThumbVersion is null || h.PreviewVersion is null))
-            {
-                await HighlightMedia.EnsureQueuedAsync(movie.Id);
-            }
-            if (apexes.Any(a => Javbuddy.Services.SceneMedia.ApexMediaExtensions.IsMissingMedia(ApexMedia, a.ThumbVersion, a.PreviewVersion)))
-            {
-                await ApexMedia.EnsureQueuedAsync(movie.Id);
-            }
+            // Generated in the background; MovieScenesSection reloads the cards as each is written.
+            await ClipMediaQueue.EnsureQueuedAsync(movie.Id, scenes, highlights, apexes);
         }
 
         // The link only changes with the movie's Jellyfin ids, so an edit that leaves them alone keeps it.
@@ -776,182 +394,38 @@ else
     // The release date changes the cast's ages; creating the .nfo can make the poster appear.
     private Task OnMetadataEditedAsync() => LoadAsync(MovieParts.Cast | MovieParts.Poster);
 
-    private async Task AddPreviewToLibrary()
-    {
-        if (preview is null) return;
+    private bool IsOpen(MovieDetailDialog dialog) => openDialog == dialog;
 
-        addingPreview = true;
-        previewAddError = null;
-        try
-        {
-            await MovieAddService.AddAsync(preview.DvdId);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            previewAddError = $"Couldn't add {preview.DvdId} to the library: {ex.Message}";
-            return;
-        }
-        finally
-        {
-            addingPreview = false;
-        }
+    private void OpenDialog(MovieDetailDialog dialog) => openDialog = dialog;
 
-        // The movie now exists — reload switches this same page from the preview branch to the
-        // normal detail view (ownership/ ownership+metadata already applied by AddAsync).
-        await LoadAsync(MovieParts.All);
-    }
-
-    private async Task RescanMovie()
-    {
-        if (movie is null || string.IsNullOrWhiteSpace(movie.Code) || rescanning) return;
-
-        rescanning = true;
-        try
-        {
-            await MovieRescanService.RescanAsync(movie.Id);
-            await LoadAsync(MovieParts.All);
-        }
-        finally
-        {
-            rescanning = false;
-        }
-    }
-
-    private async Task GeneratePosterAndFanart()
-    {
-        if (movie is null || generatingArtwork) return;
-
-        generatingArtwork = true;
-        coverSaveNotice = null;
-        try
-        {
-            var result = await PosterGeneration.GenerateAsync(movie.Id);
-            coverSaveNotice = result.Success ? "Poster and fanart generated from the video." : result.ErrorMessage;
-            coverSaveNoticeIsWarning = !result.Success;
-            if (result.Success) await LoadAsync(MovieParts.Poster);
-        }
-        finally
-        {
-            generatingArtwork = false;
-        }
-    }
-
-    private async Task CreateNfo()
-    {
-        if (movie is null) return;
-
-        var result = await MovieService.CreateNfoAsync(movie.Id);
-        coverSaveNotice = result.Success ? "Created the .nfo from the stored metadata." : result.ErrorMessage;
-        coverSaveNoticeIsWarning = !result.Success;
-        if (result.Success) await LoadAsync(MovieParts.Poster);
-    }
-
-    private Task OpenNfoEditor() => nfoEditorRef?.OpenAsync() ?? Task.CompletedTask;
-
-    private Task OpenConflictReview() => nfoEditorRef?.OpenConflictReviewAsync() ?? Task.CompletedTask;
-
-    private Task OpenMediaInfoModal() => mediaInfoModalRef?.OpenAsync() ?? Task.CompletedTask;
-
-    private Task OpenVideoRepairModal() => videoRepairModalRef?.OpenAsync() ?? Task.CompletedTask;
-
-    private Task OpenMetadataEditor() => metadataEditorRef?.OpenAsync() ?? Task.CompletedTask;
-
-    private bool IsOpen(MovieModal modal) => openModal == modal;
-
-    private void OpenModal(MovieModal modal) => openModal = modal;
-
-    // Only closes the modal that is open, so a close callback arriving after another modal took over
+    // Only closes the dialog that is open, so a close callback arriving after another dialog took over
     // (the lightbox closing as it hands over to the crop) leaves that one alone.
-    private void CloseModal(MovieModal modal)
+    private void CloseDialog(MovieDetailDialog dialog)
     {
-        if (openModal == modal) openModal = MovieModal.None;
+        if (openDialog == dialog) openDialog = MovieDetailDialog.None;
     }
 
-    private void OpenSearchModal() => OpenModal(MovieModal.Search);
-
-    private void CloseSearchModal() => CloseModal(MovieModal.Search);
-
-    private void OpenPreviewSearchModal() => OpenModal(MovieModal.PreviewSearch);
-
-    private void ClosePreviewSearchModal() => CloseModal(MovieModal.PreviewSearch);
+    // The .nfo editor is one component for its plain and its conflict review mode.
+    private void CloseNfoEditor()
+    {
+        CloseDialog(MovieDetailDialog.NfoEditor);
+        CloseDialog(MovieDetailDialog.NfoConflictReview);
+    }
 
     // The modal's "Add & Download" already created the Movie row (and queued the grab); reload
     // switches this same page from the preview branch to the normal tracked detail view, same as
-    // AddPreviewToLibrary above.
+    // adding the release from the preview's toolbar.
     private async Task OnPreviewMovieAdded(Movie _) => await LoadAsync(MovieParts.All);
-
-    private void OpenPosterLightbox() => OpenModal(MovieModal.PosterLightbox);
-
-    private void ClosePosterLightbox() => CloseModal(MovieModal.PosterLightbox);
 
     private void OpenVideoPlayerModal() => OpenVideoPlayerAt(null);
 
-    private IEnumerable<MovieFile> OrderedVersions => movie!.MovieFiles
-        .OrderByDescending(f => f.IsPrimary)
-        .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase);
-
-    private void ToggleVersionMenu()
+    // The movie's highlights or apexes in the player, in order or shuffled.
+    private void PlayClips((PlayerClipKind Kind, bool Shuffle) request)
     {
-        showPrimaryVersionMenu = !showPrimaryVersionMenu;
-        versionMenuError = null;
-    }
-
-    private void CloseVersionMenu() => showPrimaryVersionMenu = false;
-
-    // Escape closes the open version menu, from wherever focus is inside it.
-    private void OnVersionMenuKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") showPrimaryVersionMenu = false;
-    }
-
-    private static string ClipSummary(int count, double seconds) =>
-        $"{count} {(count == 1 ? "clip" : "clips")} · {SceneTimeFormat.Format(seconds)}";
-
-    // Escape closes the open Play menu, from wherever focus is inside it.
-    private void OnPlayMenuKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape") showPlayMenu = false;
-    }
-
-    private bool HasClipMenu => highlights.Count > 0 || apexes.Count > 0;
-
-    // The Play menu: the whole movie (null kind), or the movie's highlights or apexes in order or shuffled.
-    private void PlayFromMenu(PlayerClipKind? kind, bool shuffle)
-    {
-        showPlayMenu = false;
-        switch (kind)
+        switch (request.Kind)
         {
-            case PlayerClipKind.Highlight: scenesSection?.PlayHighlights(shuffle); break;
-            case PlayerClipKind.Apex: scenesSection?.PlayApexes(shuffle); break;
-            default: OpenVideoPlayerModal(); break;
-        }
-    }
-
-    private async Task SetPrimaryVersionAsync(int fileId)
-    {
-        if (movie is null || settingPrimary) return;
-        if (movie.MovieFiles.Any(f => f.Id == fileId && f.IsPrimary))
-        {
-            CloseVersionMenu();
-            return;
-        }
-        settingPrimary = true;
-        versionMenuError = null;
-        try
-        {
-            var result = await MovieService.SetPrimaryFileAsync(movie.Id, fileId);
-            if (!result.Success)
-            {
-                versionMenuError = result.ErrorMessage;
-                return;
-            }
-            CloseVersionMenu();
-            // A different main file changes the media details, the trickplay and the clips' media.
-            await LoadAsync(MovieParts.All);
-        }
-        finally
-        {
-            settingPrimary = false;
+            case PlayerClipKind.Highlight: scenesSection?.PlayHighlights(request.Shuffle); break;
+            case PlayerClipKind.Apex: scenesSection?.PlayApexes(request.Shuffle); break;
         }
     }
 
@@ -962,7 +436,7 @@ else
         playerStartAt = startAtSeconds;
         playerEndAt = endAtSeconds;
         playerEditor = editor;
-        OpenModal(MovieModal.VideoPlayer);
+        OpenDialog(MovieDetailDialog.VideoPlayer);
     }
 
     // The player streams the local file, so Jellyfin isn't needed to play.
@@ -1012,7 +486,7 @@ else
 
     private async Task CloseVideoPlayerModal()
     {
-        CloseModal(MovieModal.VideoPlayer);
+        CloseDialog(MovieDetailDialog.VideoPlayer);
 
         // The player's Movie tags and Movie actors editors change the
         // movie without telling the page.
@@ -1021,13 +495,14 @@ else
         castEntries = await MovieDetailQuery.GetCastAsync(movie.Id);
     }
 
-    private void OpenStillsModal() => OpenModal(MovieModal.Stills);
-
     private Task OnStillsSavedAsync() => imagesSection?.ReloadAsync() ?? Task.CompletedTask;
 
-    private void OpenCoverCropModal() => OpenModal(MovieModal.CoverCrop);
-
-    private void CloseCoverCropModal() => CloseModal(MovieModal.CoverCrop);
+    // The toolbar's and badges' actions report what they did here.
+    private void OnNotice(MovieNotice? notice)
+    {
+        coverSaveNotice = notice?.Message;
+        if (notice is not null) coverSaveNoticeIsWarning = notice.IsWarning;
+    }
 
     private void DismissCoverSaveNotice() => coverSaveNotice = null;
 
@@ -1036,62 +511,5 @@ else
         coverSaveNotice = result.Message;
         coverSaveNoticeIsWarning = result.IsWarning;
         await LoadAsync(MovieParts.Poster);
-    }
-
-    private void OpenMetadataRefreshModal() => OpenModal(MovieModal.MetadataRefresh);
-
-    private void CloseMetadataRefreshModal() => CloseModal(MovieModal.MetadataRefresh);
-
-    private async Task OnMetadataRefreshAppliedAsync() => await LoadAsync(MovieParts.All);
-
-    private async Task ToggleStatus()
-    {
-        if (movie is null) return;
-        await MovieService.ToggleStatusAsync(movie.Id);
-        await LoadAsync(MovieParts.Core);
-    }
-
-    private async Task ToggleFavorite()
-    {
-        if (movie is null) return;
-        movie.IsFavorite = await MovieService.ToggleFavoriteAsync(movie.Id);
-        movie.FavoritedAt = movie.IsFavorite ? DateTime.UtcNow : null;
-    }
-
-    private async Task RemoveFromCleanupBlacklist()
-    {
-        if (movie is null) return;
-        await MovieCleanupService.UnblacklistAsync(movie.Id);
-        await LoadAsync(MovieParts.Core);
-    }
-
-    private void OpenDeleteConfirm()
-    {
-        deleteFiles = false;
-        deleteError = null;
-        OpenModal(MovieModal.DeleteConfirm);
-    }
-
-    private async Task DeleteMovie()
-    {
-        if (movie is null) return;
-        deleting = true;
-        deleteError = null;
-        OperationResult result;
-        try
-        {
-            result = await MovieService.DeleteAsync(movie.Id, deleteFiles);
-        }
-        finally
-        {
-            deleting = false;
-        }
-        if (!result.Success)
-        {
-            deleteError = result.ErrorMessage;
-            return;
-        }
-        CloseModal(MovieModal.DeleteConfirm);
-        Nav.NavigateTo("/");
     }
 }

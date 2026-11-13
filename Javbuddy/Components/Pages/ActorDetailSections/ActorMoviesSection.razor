@@ -1,0 +1,362 @@
+@using Javbuddy.Models
+@using Javbuddy.Components.Pages.MoviesSections
+@using Javbuddy.Services.Movies
+@inject IMovieService MovieService
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Actor Detail's Movies section: the actor's filmography as a poster grid, with the Movies page's filter toolbar
+   and sort (applied in memory over the movies the page loaded), a heart on each poster, the image
+   observer that loads posters near the viewport, and the remembered scroll position. *@
+<section class="actor-detail-movies card mb-4">
+    <div class="card-body">
+        <div class="actor-detail-movies-header">
+            <h2 class="card-title">Movies <span class="actor-detail-movies-count">(@Movies.Count)</span></h2>
+        </div>
+        @if (Movies.Count == 0)
+        {
+            <p class="text-muted mb-0">No movies in your library are matched to this actor yet.</p>
+        }
+        else
+        {
+            <MovieFilterToolbar State="filters"
+                                OnChanged="OnFiltersChanged"
+                                Choices="FilterChoices"
+                                StatusCounts="@(new MovieStatusCounts(StatusCounts.Total, StatusCounts.Missing, StatusCounts.Got))"
+                                Excludable="true"
+                                OnResetFilters="ResetFilters" />
+
+            @if (!DisplayedMovies.Any())
+            {
+                <p class="text-muted mb-0">No movies match the active filters. <button type="button" class="btn btn-link p-0 align-baseline" @onclick="ResetFilters">Reset filters</button></p>
+            }
+            else
+            {
+                <div @ref="moviesGridRef">
+                    <MoviePosterGrid Movies="DisplayedMovies"
+                                     Options="PosterOptions"
+                                     DownloadingCodes="DownloadingCodes"
+                                     HrefQuery="@($"?actor={Uri.EscapeDataString(RouteName)}")"
+                                     Loading="PosterImageLoading.JsLazy"
+                                     EagerImageCount="EagerImageCount"
+                                     OnToggleFavorite="ToggleMovieFavorite" />
+                </div>
+            }
+        }
+    </div>
+</section>
+
+@code {
+    /// <summary>The actor's route name: the movie links carry it back to this actor, and a new one starts the
+    /// filters, the scroll tracking and the grid observer over.</summary>
+    [Parameter, EditorRequired] public string RouteName { get; set; } = "";
+
+    /// <summary>The actor's movies with their tags, scenes, highlights, apexes and cast. The same list object
+    /// stays in place while the page changes it, so a change to what a movie shows has to bump
+    /// <see cref="RefreshToken"/>.</summary>
+    [Parameter, EditorRequired] public List<Movie> Movies { get; set; } = null!;
+
+    [Parameter] public IReadOnlySet<string> DownloadingCodes { get; set; } = new HashSet<string>();
+
+    /// <summary>The Movies page's poster options, so both grids show the same cards.</summary>
+    [Parameter] public MoviePosterOptions PosterOptions { get; set; } = MoviePosterOptions.Default;
+
+    /// <summary>Changes when something the movies show was changed in place (the actor's favorite flag on the
+    /// movies' cast), so the filtered view runs again.</summary>
+    [Parameter] public int RefreshToken { get; set; }
+
+    // Releases first on an actor page; the Movies page defaults to date added. Not persisted in a cookie like Movies'.
+    private readonly MovieGridFilterState filters = new() { SortField = "release" };
+    private MovieCountOptions countOptions = MovieCountOptions.None;
+    private MovieRangeOptions rangeOptions = MovieRangeOptions.None;
+    private List<string> libraryNames = new();
+    private List<string> availableCodecs = new();
+    private List<string> availableStudios = new();
+    private List<string> availableGenres = new();
+    private ElementReference moviesGridRef;
+    // What the IntersectionObserver last scanned the grid for: the posters rendered by this view version,
+    // with these poster options, inside this grid element (a re-created element gets a new Id).
+    private (int ViewVersion, MoviePosterOptions Options, string? GridId)? observedGrid;
+    private IJSObjectReference? jsModule;
+    private string? scrollTrackedRouteName;
+    private string? seenRouteName;
+    private List<Movie>? seenMovies;
+    private int seenRefreshToken;
+
+    // Rendered as PosterImageLoading.Eager (real src, present from the very first server render)
+    // instead of JsLazy — otherwise even the always-visible first screenful would show blank
+    // placeholders until the interactive circuit connects and the IntersectionObserver JS module
+    // has a chance to run, a regression from how these looked before JsLazy was introduced.
+    // Matches Movies.razor's own EagerImageCount precedent for the same reasoning.
+    private const int EagerImageCount = 30;
+
+    // The page reuses this component for another actor ("/actors/{RouteName}" to "/actors/{RouteName}"), so a new
+    // route name or a newly loaded list starts the filters and the filter choices over from the new movies.
+    protected override void OnParametersSet()
+    {
+        if (seenRouteName != RouteName)
+        {
+            seenRouteName = RouteName;
+            ResetFilters();
+        }
+
+        if (!ReferenceEquals(seenMovies, Movies))
+        {
+            seenMovies = Movies;
+            viewStale = true;
+            if (Movies.Count == 0)
+            {
+                // The page empties the list while it loads an actor; the user's count and range filters are only
+                // matched against the choices once the movies are there.
+                availableCodecs = new();
+                availableStudios = new();
+                availableGenres = new();
+                libraryNames = new();
+            }
+            else
+            {
+                PopulateAvailableOptions();
+            }
+        }
+
+        if (seenRefreshToken != RefreshToken)
+        {
+            seenRefreshToken = RefreshToken;
+            viewStale = true;
+        }
+    }
+
+    private void PopulateAvailableOptions()
+    {
+        availableCodecs = Movies
+            .Where(m => !string.IsNullOrWhiteSpace(m.MediaVideoCodec))
+            .Select(m => m.MediaVideoCodec!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c)
+            .ToList();
+
+        availableStudios = Movies
+            .Where(m => !string.IsNullOrWhiteSpace(m.MetaStudio))
+            .Select(m => m.MetaStudio!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s)
+            .ToList();
+
+        // Sourced from the canonical Tags/MovieTags relation (the movies are loaded with it
+        // included), not MetaGenres's comma-joined cache string — a Tag name containing its own
+        // comma (e.g. "Nasty, hardcore") can't be told apart from two separate genres once
+        // it's been joined into that string. Built like the Movies page's, so a subtag
+        // also offers its parent for rollup filtering.
+        availableGenres = MovieFilterPredicates.BuildGenreOptions(Movies
+            .SelectMany(m => m.MovieTags.Select(mt => (mt.Tag.Name, mt.Tag.ParentTag?.Name))));
+
+        countOptions = MovieCountOptions.FromMaximums(
+            Movies.Select(m => m.Scenes.Count).DefaultIfEmpty().Max(),
+            Movies.Select(m => m.Highlights.Count).DefaultIfEmpty().Max(),
+            Movies.Select(m => m.Apexes.Count).DefaultIfEmpty().Max());
+        filters.Counts = MovieFilterOptions.NormalizeCounts(filters.Counts, countOptions);
+        rangeOptions = MovieRangeOptions.FromMovies(Movies);
+        filters.Ranges = MovieFilterOptions.NormalizeRanges(filters.Ranges, rangeOptions);
+
+        libraryNames = Movies
+            .Where(m => !string.IsNullOrWhiteSpace(m.LocalRootPath))
+            .Select(m => m.LocalRootPath!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(l => l)
+            .ToList();
+    }
+
+    // The filtered, counted and sorted movies are worked out once per change to the filters, sort or loaded
+    // movies, not once per use: the markup reads the counts and the list several times a render, and every
+    // read used to filter and sort the whole filmography again. Everything that changes the view goes through
+    // Change() or the toolbar's OnFiltersChanged (or marks the view stale itself), so no per-read comparison of the filter state is needed.
+    private bool viewStale = true;
+    private int viewVersion;
+    private List<Movie> displayedMovies = new();
+    private (int Total, int Missing, int Got) statusCounts;
+
+    private void Change(Action change)
+    {
+        change();
+        viewStale = true;
+    }
+
+    private void EnsureView()
+    {
+        if (!viewStale) return;
+
+        var withoutStatus = FilteredMoviesWithoutStatus().ToList();
+        statusCounts = (withoutStatus.Count, withoutStatus.Count(m => m.Status == MovieStatus.Missing), withoutStatus.Count(m => m.Status == MovieStatus.Got));
+        displayedMovies = SortMovies(filters.Status is null ? withoutStatus : withoutStatus.Where(m => m.Status == filters.Status)).ToList();
+        viewStale = false;
+        viewVersion++;
+    }
+
+    private IEnumerable<Movie> FilteredMoviesWithoutStatus()
+    {
+        var query = (IEnumerable<Movie>)Movies;
+
+        if (!string.IsNullOrEmpty(filters.Library))
+        {
+            query = query.Where(m => m.LocalRootPath == filters.Library);
+        }
+
+        query = MovieFilterPredicates.WhereResolutions(query.AsQueryable(), filters.Resolutions);
+        query = MovieFilterPredicates.WhereScanTypes(query.AsQueryable(), filters.ScanTypes);
+        query = MovieFilterPredicates.WhereContentTypes(query.AsQueryable(), filters.ContentTypes);
+        query = MovieFilterPredicates.WhereNotContentTypes(query.AsQueryable(), filters.ExcludedContentTypes);
+        query = MovieFilterPredicates.WhereCodecs(query.AsQueryable(), filters.Codecs);
+        query = MovieFilterPredicates.WhereStudios(query.AsQueryable(), filters.Studios);
+        query = MovieFilterPredicates.WhereNotStudios(query.AsQueryable(), filters.ExcludedStudios);
+
+        // Same predicates as the Movies page, evaluated in memory over the
+        // loaded movies (MovieTags → Tag → ParentTag, Scenes, Highlights, Apexes and MovieActors → Actor are included above).
+        query = MovieFilterPredicates.WhereGenres(query.AsQueryable(), filters.Genres);
+        query = MovieFilterPredicates.WhereNotGenres(query.AsQueryable(), filters.ExcludedGenres);
+        query = MovieFilterPredicates.WhereFeatures(query.AsQueryable(), filters.Features);
+        query = MovieFilterPredicates.WhereCounts(query.AsQueryable(), filters.Counts);
+        query = MovieFilterPredicates.WhereRanges(query.AsQueryable(), filters.Ranges);
+
+        query = MovieFilterPredicates.WhereNfoDriftKinds(query.AsQueryable(), filters.NfoDriftKinds);
+
+        if (!string.IsNullOrWhiteSpace(filters.Text))
+        {
+            var term = filters.Text.Trim();
+            query = query.Where(m =>
+                (m.Code != null && m.Code.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (m.MetaTitle != null && m.MetaTitle.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (m.Title != null && m.Title.Contains(term, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        return query;
+    }
+
+    private (int Total, int Missing, int Got) StatusCounts
+    {
+        get
+        {
+            EnsureView();
+            return statusCounts;
+        }
+    }
+
+    private IReadOnlyList<Movie> DisplayedMovies
+    {
+        get
+        {
+            EnsureView();
+            return displayedMovies;
+        }
+    }
+
+    // In memory, so the DateAdded column's own expression, not EF.Property (which only works inside an EF query).
+    private IEnumerable<Movie> SortMovies(IEnumerable<Movie> query) =>
+        MovieSortOrders.Apply(query.AsQueryable(), filters.ToSort(), m => m.FileAddedAt ?? m.CreatedAt);
+
+    private void ResetFilters() => Change(filters.Clear);
+
+    // The toolbar edits the filters and sort in place; only the cached view needs to be told.
+    private void OnFiltersChanged() => viewStale = true;
+
+    private MovieFilterChoices FilterChoices => new()
+    {
+        LibraryNames = libraryNames,
+        Codecs = availableCodecs,
+        Studios = availableStudios,
+        Genres = availableGenres,
+        Counts = countOptions,
+        Ranges = rangeOptions,
+    };
+
+    // Flips the heart from the returned value, like the Movies grid.
+    private async Task ToggleMovieFavorite(Movie movie)
+    {
+        movie.IsFavorite = await MovieService.ToggleFavoriteAsync(movie.Id);
+        // As MovieService stores it, for the Date favorited sort.
+        movie.FavoritedAt = movie.IsFavorite ? DateTime.UtcNow : null;
+        // Changed in place, so the view key can't see it; the Favorites filter and sort have to re-run.
+        viewStale = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // moviesGridRef is only bound by the renderer when the movies grid <div> actually renders
+        // (Movies.Count > 0 && DisplayedMovies.Any()) — otherwise it's still default(ElementReference).
+        // Passing that to JS interop resolves to a bogus, non-element object, so both calls below must
+        // stay behind this same condition rather than risk "container.querySelectorAll is not a
+        // function" crashing the circuit (only JSDisconnectedException was being caught on the
+        // "observe" path, so any other JS-side error there was previously fatal).
+        if (Movies.Count == 0 || !DisplayedMovies.Any())
+        {
+            return;
+        }
+
+        if (jsModule is null)
+        {
+            try
+            {
+                jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/ActorDetailSections/ActorMoviesSection.razor.js");
+                await jsModule.InvokeVoidAsync("init", moviesGridRef);
+                observedGrid = (viewVersion, PosterOptions, moviesGridRef.Id);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (Exception)
+            {
+                // In test or non-browser environments, JS module import may not resolve
+            }
+        }
+        else if (observedGrid != (viewVersion, PosterOptions, moviesGridRef.Id))
+        {
+            // Only a new view, new poster options or a new grid element can bring posters whose images still
+            // need observing; observe() skips images that already loaded (their data-src is gone), so
+            // leaving the other renders (a heart toggle, a modal opening) out loses nothing.
+            observedGrid = (viewVersion, PosterOptions, moviesGridRef.Id);
+            try
+            {
+                await jsModule.InvokeVoidAsync("observe", moviesGridRef);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        // Once per loaded actor (this instance is reused across "/actors/{RouteName}" changes), and
+        // only once the filmography has rendered, so the restored position has a page to land on.
+        if (jsModule is not null && scrollTrackedRouteName != RouteName)
+        {
+            scrollTrackedRouteName = RouteName;
+            try
+            {
+                await jsModule.InvokeVoidAsync("trackScroll", ScrollStorageKey(RouteName));
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (Exception)
+            {
+            }
+        }
+    }
+
+    internal static string ScrollStorageKey(string? routeName) => $"javbuddy-actor-detail-scroll-{routeName}";
+
+    public async ValueTask DisposeAsync()
+    {
+        if (jsModule is not null)
+        {
+            try
+            {
+                await jsModule.InvokeVoidAsync("dispose");
+                await jsModule.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+    }
+}

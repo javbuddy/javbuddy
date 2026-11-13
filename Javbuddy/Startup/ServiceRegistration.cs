@@ -130,6 +130,7 @@ public static class ServiceRegistration
         services.AddScoped<ISceneMediaService, SceneMediaService>();
         services.AddScoped<IHighlightMediaService, HighlightMediaService>();
         services.AddScoped<IApexMediaService, ApexMediaService>();
+        services.AddScoped<IMovieClipMediaQueueService, MovieClipMediaQueueService>();
         services.AddScoped<ISceneChapterWriteService, SceneChapterWriteService>();
         services.AddScoped<ISceneDetectionService, SceneDetectionService>();
         services.AddScoped<ISceneWallQueryService, SceneWallQueryService>();

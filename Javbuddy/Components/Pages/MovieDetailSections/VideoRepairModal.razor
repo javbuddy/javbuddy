@@ -7,7 +7,7 @@
 @inject IMovieCleanupService CleanupService
 @implements IDisposable
 
-@if (show)
+@if (Show && ready)
 {
     <ModalShell Themed="true" Title="Repair Video" MaxWidth="600px" OnClose="Close">
         <ChildContent>
@@ -137,7 +137,14 @@
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
     [Parameter] public EventCallback OnRepaired { get; set; }
 
-    private bool show;
+    /// <summary>Whether the modal is open. The page owns it; the modal asks to close through <see cref="OnClose"/>.</summary>
+    [Parameter] public bool Show { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool wasShown;
+    // Set once the repair candidates are loaded: the modal appears with them, not empty before they arrive.
+    private bool ready;
     private bool starting;
     private bool unmarking;
     private IReadOnlyList<VideoRepairCandidate> candidates = [];
@@ -151,14 +158,31 @@
     private bool IsRunning => JobTracker.IsRunning(Movie.Id) && ActiveJob is { Kind: VideoFileJobKind.Repair };
     private VideoRepairJob? ActiveJob => JobTracker.Get(Movie.Id) is { Kind: VideoFileJobKind.Repair } job ? job : null;
 
-    public async Task OpenAsync()
+    // Opens on the parameter turning true, not on every parameter set; closing from outside (the page moved on to
+    // another movie) stops the polling too.
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Show && !wasShown)
+        {
+            wasShown = true;
+            await OpenAsync();
+        }
+        else if (!Show && wasShown)
+        {
+            wasShown = false;
+            ready = false;
+            StopPolling();
+        }
+    }
+
+    private async Task OpenAsync()
     {
         errorMessage = null;
         successMessage = null;
         starting = false;
         candidates = await RepairService.GetRepairCandidatesAsync(Movie.Id);
         selectedCandidate = candidates.FirstOrDefault(c => c.IsPrimary) ?? candidates.FirstOrDefault();
-        show = true;
+        ready = true;
 
         // A repair may already be running (started from Cleanup, another tab, or before this
         // component was recreated): show the file it targets and follow it to completion.
@@ -168,8 +192,6 @@
             StartPolling();
             MonitorJob(running);
         }
-
-        StateHasChanged();
     }
 
     private void SelectCandidate(VideoRepairCandidate candidate)
@@ -288,7 +310,7 @@
 
             Movie.HasBrokenBFrames = false;
             await OnRepaired.InvokeAsync();
-            Close();
+            await Close();
         }
         finally
         {
@@ -296,10 +318,10 @@
         }
     }
 
-    private void Close()
+    private Task Close()
     {
         StopPolling();
-        show = false;
+        return OnClose.InvokeAsync();
     }
 
     public void Dispose()

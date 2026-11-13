@@ -1,0 +1,80 @@
+@using Javbuddy.Services.Movies
+@using Javbuddy.Services.R18Dev
+@inject IMovieAddService MovieAddService
+@inject MovieFilterNavigationState FilterNavigationState
+@inject NavigationManager Nav
+
+@* Movie Detail for a release that isn't in the library: the toolbar with Add to Library and the Prowlarr search, the
+   r18.dev preview, and the shelf of the series' other releases. Adding the release tells the page, which then
+   shows the movie it has become. *@
+<div class="page-toolbar">
+    <BackButton Href="@BackHref" CssClass="page-toolbar-btn">@BackLabel</BackButton>
+    <span class="page-toolbar-sep"></span>
+    <button class="page-toolbar-btn" @onclick="AddToLibrary" disabled="@addingPreview">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14zm.5-7.5v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0v3h3a.5.5 0 0 1 0 1h-3z" /></svg>
+        @(addingPreview ? "Adding…" : "Add to Library")
+    </button>
+    <button class="page-toolbar-btn" @onclick="OnSearchRequested">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="currentColor" stroke-width="1.3" /><line x1="10.3" y1="10.3" x2="14.5" y2="14.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" /></svg>
+        Search Prowlarr
+    </button>
+</div>
+
+@if (previewAddError is not null)
+{
+    <div class="alert alert-danger py-2 movie-cover-save-notice" role="alert">@previewAddError</div>
+}
+
+<MoviePreviewDetails Preview="Preview" OnBrowseCatalog="BrowseCatalog" />
+<R18DevRelatedReleasesShelf Related="Related" OnSeeAll="BrowseRelated" />
+
+@code {
+    [Parameter, EditorRequired] public R18DevMovieDetail Preview { get; set; } = null!;
+
+    [Parameter] public R18DevRelatedReleases Related { get; set; } = R18DevRelatedReleases.None;
+
+    [Parameter, EditorRequired] public string BackHref { get; set; } = "/";
+
+    [Parameter, EditorRequired] public string BackLabel { get; set; } = "All movies";
+
+    /// <summary>The release was added to the library: the page reloads to show the movie.</summary>
+    [Parameter] public EventCallback OnAdded { get; set; }
+
+    /// <summary>The Search Prowlarr button was clicked: the page opens its dialog.</summary>
+    [Parameter] public EventCallback OnSearchRequested { get; set; }
+
+    private bool addingPreview;
+    private string? previewAddError;
+
+    private async Task AddToLibrary()
+    {
+        addingPreview = true;
+        previewAddError = null;
+        try
+        {
+            await MovieAddService.AddAsync(Preview.DvdId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            previewAddError = $"Couldn't add {Preview.DvdId} to the library: {ex.Message}";
+            return;
+        }
+        finally
+        {
+            addingPreview = false;
+        }
+
+        // The movie now exists — the page's reload switches it from this preview to the normal detail view
+        // (ownership/ ownership+metadata already applied by AddAsync).
+        await OnAdded.InvokeAsync();
+    }
+
+    // Opens the Movies page's r18.dev catalog narrowed to one series or label.
+    private void BrowseCatalog((R18DevCatalogRef? Series, R18DevCatalogRef? Label) target)
+    {
+        FilterNavigationState.SetPendingCatalogFilter(target.Series, target.Label);
+        Nav.NavigateTo("/");
+    }
+
+    private void BrowseRelated() => BrowseCatalog((Related.Series, null));
+}

@@ -32,7 +32,7 @@ public class MetadataEditorModalTests : BunitContext
     }
 
     [Fact]
-    public async Task OpenAsync_PrefillsFieldsFromMovie()
+    public async Task Show_PrefillsFieldsFromMovie()
     {
         SetUpMovieService();
         var movie = new Movie
@@ -45,7 +45,7 @@ public class MetadataEditorModalTests : BunitContext
         };
 
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
         Assert.Equal("Display Title", cut.Find("#metadata-meta-title").GetAttribute("value"));
@@ -54,13 +54,13 @@ public class MetadataEditorModalTests : BunitContext
     }
 
     [Fact]
-    public async Task OpenAsync_HasNoPersonalNotesField()
+    public async Task Show_HasNoPersonalNotesField()
     {
         SetUpMovieService();
         var movie = new Movie { Id = 1, Code = "ABC-123", Notes = "Some notes" };
 
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.Empty(cut.FindAll("#metadata-notes"));
         Assert.DoesNotContain("Personal Notes", cut.Markup);
@@ -72,14 +72,34 @@ public class MetadataEditorModalTests : BunitContext
         var movieService = SetUpMovieService();
         var movie = new Movie { Id = 1, Code = "ABC-123" };
 
-        var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        var closeRequests = 0;
+        var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie).Add(x => x.OnClose, () => closeRequests++));
+        cut.Render(p => p.Add(x => x.Show, true));
 
         var cancelBtn = cut.FindAll("button").First(b => b.TextContent.Trim() == "Cancel");
         await cut.InvokeAsync(() => cancelBtn.Click());
 
+        Assert.Equal(1, closeRequests);
+        cut.Render(p => p.Add(x => x.Show, false));
         Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
         await movieService.DidNotReceive().UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void ReopeningStartsFromTheMoviesValuesAgain_ButARenderWhileOpenKeepsTheEdits()
+    {
+        SetUpMovieService();
+        var movie = new Movie { Id = 1, Code = "ABC-123", MetaTitle = "Original" };
+        var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie).Add(x => x.Show, true));
+        cut.Find("#metadata-meta-title").Change("Edited");
+
+        // The page reloads the movie after a save; that must not wipe what is on screen.
+        cut.Render(p => p.Add(x => x.Movie, movie));
+        Assert.Equal("Edited", cut.Find("#metadata-meta-title").GetAttribute("value"));
+
+        cut.Render(p => p.Add(x => x.Show, false));
+        cut.Render(p => p.Add(x => x.Show, true));
+        Assert.Equal("Original", cut.Find("#metadata-meta-title").GetAttribute("value"));
     }
 
     [Fact]
@@ -90,11 +110,13 @@ public class MetadataEditorModalTests : BunitContext
             .Returns(OperationResult.Ok());
         var movie = new Movie { Id = 42, Code = "ABC-123" };
         var saved = false;
+        var closeRequests = 0;
 
         var cut = Render<MetadataEditorModal>(p => p
             .Add(x => x.Movie, movie)
-            .Add(x => x.OnSaved, () => saved = true));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+            .Add(x => x.OnSaved, () => saved = true)
+            .Add(x => x.OnClose, () => closeRequests++));
+        cut.Render(p => p.Add(x => x.Show, true));
 
         cut.Find("#metadata-meta-title").Change("Updated Title");
         await cut.InvokeAsync(() => cut.Find("form").Submit());
@@ -104,11 +126,13 @@ public class MetadataEditorModalTests : BunitContext
             Arg.Is<MovieMetadataUpdate>(u => u.MetaTitle == "Updated Title"),
             Arg.Any<CancellationToken>());
         Assert.True(saved);
+        Assert.Equal(1, closeRequests);
+        cut.Render(p => p.Add(x => x.Show, false));
         Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 
     [Fact]
-    public async Task OpenAsync_PrefillsTheContentType_AndSaveSendsTheChoice()
+    public async Task Show_PrefillsTheContentType_AndSaveSendsTheChoice()
     {
         var movieService = SetUpMovieService();
         movieService.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>())
@@ -116,7 +140,7 @@ public class MetadataEditorModalTests : BunitContext
         var movie = new Movie { Id = 5, Code = "ABC-123", ContentType = MovieContentType.Uncensored };
 
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.Equal("Uncensored", cut.Find("#metadata-content-type").GetAttribute("value"));
         Assert.Equal(["Censored", "Uncensored", "Decensored"], cut.FindAll("#metadata-content-type option").Select(o => o.TextContent));
@@ -137,16 +161,19 @@ public class MetadataEditorModalTests : BunitContext
         movieService.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>())
             .Returns(new OperationResult(true, "the folder isn't writable"));
         var saved = 0;
+        var closeRequests = 0;
 
         var cut = Render<MetadataEditorModal>(p => p
             .Add(x => x.Movie, new Movie { Id = 42, Code = "ABC-123" })
-            .Add(x => x.OnSaved, () => saved++));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+            .Add(x => x.OnSaved, () => saved++)
+            .Add(x => x.OnClose, () => closeRequests++));
+        cut.Render(p => p.Add(x => x.Show, true));
         await cut.InvokeAsync(() => cut.Find("form").Submit());
 
         Assert.Contains("Your changes were saved, but the .nfo wasn't created: the folder isn't writable", cut.Find(".alert-warning").TextContent);
         Assert.NotEmpty(cut.FindAll(".modal-shell-backdrop"));
         Assert.Equal(1, saved);
+        Assert.Equal(0, closeRequests);
     }
 
     [Fact]
@@ -158,7 +185,7 @@ public class MetadataEditorModalTests : BunitContext
         var movie = new Movie { Id = 1, Code = "ABC-123" };
 
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         await cut.InvokeAsync(() => cut.Find("form").Submit());
 
@@ -180,7 +207,7 @@ public class MetadataEditorModalTests : BunitContext
         SetUpMovieService();
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, VrMovie()));
 
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.Equal("auto", cut.Find("#metadata-vr-70").GetAttribute("value"));
         Assert.Contains("Auto (VR180 SBS)", cut.Find("#metadata-vr-70").TextContent);
@@ -199,7 +226,7 @@ public class MetadataEditorModalTests : BunitContext
         var cut = Render<MetadataEditorModal>(p => p
             .Add(x => x.Movie, VrMovie())
             .Add(x => x.OnSaved, () => saved++));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         cut.Find("#metadata-vr-70").Change("VR180 TB");
         cut.Find("#metadata-vr-71").Change("auto");
@@ -217,7 +244,7 @@ public class MetadataEditorModalTests : BunitContext
         var movieService = SetUpMovieService();
         movieService.UpdateMetadataAsync(default, default!, default).ReturnsForAnyArgs(new OperationResult(true));
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, VrMovie()));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         await cut.InvokeAsync(() => cut.Find("form").Submit());
 
@@ -231,7 +258,7 @@ public class MetadataEditorModalTests : BunitContext
         movieService.UpdateMetadataAsync(default, default!, default).ReturnsForAnyArgs(new OperationResult(true));
         movieService.SetVrTypeAsync(default, default, default, default, default).ReturnsForAnyArgs(new OperationResult(false, "That version no longer exists."));
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, VrMovie()));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         cut.Find("#metadata-vr-70").Change("VR");
         await cut.InvokeAsync(() => cut.Find("form").Submit());
@@ -245,7 +272,7 @@ public class MetadataEditorModalTests : BunitContext
         SetUpMovieService();
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, new Movie { Id = 1, Code = "ABC-123" }));
 
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.DoesNotContain("VR format", cut.Markup, StringComparison.Ordinal);
     }
@@ -258,7 +285,7 @@ public class MetadataEditorModalTests : BunitContext
         movie.MovieFiles.Add(new MovieFile { Id = 10, FileName = "SIVR-059.mp4", VersionTag = "Original", IsPrimary = true });
         var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, movie));
 
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        cut.Render(p => p.Add(x => x.Show, true));
 
         Assert.Single(cut.FindAll("select[id^=metadata-vr-]"));
         Assert.Empty(cut.FindAll(".metadata-editor-vr-version"));
@@ -272,8 +299,11 @@ public class MetadataEditorModalTests : BunitContext
         movieService.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>())
             .Returns(pending.Task);
 
-        var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, new Movie { Id = 1, Code = "ABC-123" }));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        IRenderedComponent<MetadataEditorModal>? cut = null;
+        // The page closes the dialog when it is asked to.
+        cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, new Movie { Id = 1, Code = "ABC-123" })
+            .Add(x => x.OnClose, () => cut!.Render(q => q.Add(x => x.Show, false))));
+        cut.Render(p => p.Add(x => x.Show, true));
         await cut.InvokeAsync(() => cut.Find("form").Submit());
 
         cut.Find(".modal-shell-backdrop").Click();
@@ -290,8 +320,11 @@ public class MetadataEditorModalTests : BunitContext
         var movieService = SetUpMovieService();
         movieService.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException<OperationResult>(new InvalidOperationException("db locked")));
-        var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, new Movie { Id = 42, Code = "ABC-123" }));
-        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+        IRenderedComponent<MetadataEditorModal>? cut = null;
+        // The page closes the dialog when it is asked to.
+        cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, new Movie { Id = 42, Code = "ABC-123" })
+            .Add(x => x.OnClose, () => cut!.Render(q => q.Add(x => x.Show, false))));
+        cut.Render(p => p.Add(x => x.Show, true));
 
         await Record.ExceptionAsync(() => cut.InvokeAsync(() => cut.Find("form").Submit()));
 

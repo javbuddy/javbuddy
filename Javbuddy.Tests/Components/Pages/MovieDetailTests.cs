@@ -52,9 +52,13 @@ public class MovieDetailTests : BunitContext
         Services.AddSingleton(Substitute.For<ISceneChapterImportService>());
         Services.AddSingleton(Substitute.For<ISceneChapterWriteService>());
         Services.AddSingleton(Substitute.For<ISceneDetectionService>());
-        Services.AddSingleton(Substitute.For<Javbuddy.Services.SceneMedia.ISceneMediaService>());
-        Services.AddSingleton(Substitute.For<Javbuddy.Services.SceneMedia.IHighlightMediaService>());
-        Services.AddSingleton(Substitute.For<Javbuddy.Services.SceneMedia.IApexMediaService>());
+        var sceneMedia = Substitute.For<Javbuddy.Services.SceneMedia.ISceneMediaService>();
+        var highlightMedia = Substitute.For<Javbuddy.Services.SceneMedia.IHighlightMediaService>();
+        var apexMedia = Substitute.For<Javbuddy.Services.SceneMedia.IApexMediaService>();
+        Services.AddSingleton(sceneMedia);
+        Services.AddSingleton(highlightMedia);
+        Services.AddSingleton(apexMedia);
+        Services.AddSingleton<Javbuddy.Services.SceneMedia.IMovieClipMediaQueueService>(new Javbuddy.Services.SceneMedia.MovieClipMediaQueueService(sceneMedia, highlightMedia, apexMedia));
         Services.AddSingleton(new Javbuddy.Services.SceneMedia.SceneMediaQueue(Substitute.For<IServiceScopeFactory>(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Javbuddy.Services.SceneMedia.SceneMediaQueue>.Instance));
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Trickplay.IHighlightTrickplayService>());
         Services.AddSingleton(Substitute.For<IJavinizerClient>());
@@ -2387,5 +2391,58 @@ public class MovieDetailTests : BunitContext
 
         cut.WaitForAssertion(() => Assert.Contains("Second movie", cut.Markup));
         Assert.DoesNotContain("Loading…", cut.Find(".page-toolbar").TextContent);
+    }
+
+    [Fact]
+    public void ToolbarDialogs_OpenAndCloseAndOpenAgain_ThroughTheOneDialogValue()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123", Status = MovieStatus.Got, MetaTitle = "A title" });
+            db.SaveChanges();
+        }
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+        cut.WaitForAssertion(() => Assert.False(cut.Find("button[aria-label='Edit metadata']").HasAttribute("disabled")));
+
+        for (var round = 0; round < 2; round++)
+        {
+            cut.Find("button[aria-label='Edit metadata']").Click();
+            Assert.Equal("Edit Metadata", cut.Find(".modal-shell-title").TextContent.Trim());
+            cut.FindAll("button").First(b => b.TextContent.Trim() == "Cancel").Click();
+            Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
+
+            cut.FindAll("button.page-toolbar-btn").Single(b => b.TextContent.Contains("Media Info")).Click();
+            Assert.Equal("Media Info", cut.Find(".modal-shell-title").TextContent.Trim());
+            cut.Find(".modal-shell-close-btn").Click();
+            Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
+
+            ToolbarMenuTrigger(cut, "Tools").Click();
+            cut.FindAll(".toolbar-menu-item").Single(b => b.TextContent.Trim() == "Repair Video").Click();
+            cut.WaitForAssertion(() => Assert.Equal("Repair Video", cut.Find(".modal-shell-title").TextContent.Trim()));
+            cut.Find(".modal-shell-close-btn").Click();
+            Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
+        }
+    }
+
+    [Fact]
+    public void OnlyOneDialogIsOpen_AndOpeningAnotherMovieClosesIt()
+    {
+        using var factory = SetUpServices();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123", Status = MovieStatus.Got, MetaTitle = "First movie" });
+            db.Movies.Add(new Movie { Code = "DEF-456", Status = MovieStatus.Got, MetaTitle = "Second movie" });
+            db.SaveChanges();
+        }
+        var cut = Render<MovieDetail>(p => p.Add(x => x.RouteCode, "ABC-123"));
+        cut.WaitForAssertion(() => Assert.False(cut.Find("button[aria-label='Edit metadata']").HasAttribute("disabled")));
+        cut.Find("button[aria-label='Edit metadata']").Click();
+        Assert.Single(cut.FindAll(".modal-shell-backdrop"));
+
+        cut.Render(p => p.Add(x => x.RouteCode, "DEF-456"));
+
+        cut.WaitForAssertion(() => Assert.Contains("Second movie", cut.Find("h1.movie-detail-title").TextContent));
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
     }
 }
