@@ -471,7 +471,7 @@
                 <ImplicitChips Items="@ImplicitChip.ForTags(node.ImplicitTags)" />
             </span>
         </button>
-        <ClipRowActions ClassPrefix="scene-editor" Label="@scene.DisplayTitle" FavoriteNoun="scenes" IsFavorite="scene.IsFavorite" Busy="busy"
+        <ClipRowActions ClassPrefix="scene-editor" AlignToTitle="true" Label="@scene.DisplayTitle" FavoriteNoun="scenes" IsFavorite="scene.IsFavorite" Busy="busy"
                         OnToggleFavorite="() => ToggleSceneFavoriteAsync(scene)" OnEdit="() => StartEditSceneAsync(scene)" OnDelete="() => pendingDelete = scene" />
     };
 

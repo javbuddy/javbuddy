@@ -29,6 +29,8 @@
 }
 
 .highlight-editor-name {
+    /* Room for the row's floating action buttons (4 x 1.6rem + gaps). */
+    margin-right: 7rem;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;

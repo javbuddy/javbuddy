@@ -22,7 +22,7 @@
         <ImplicitChips Items="@ImplicitChip.ForTags(Node.ImplicitTags)" />
     </span>
 </button>
-<ClipRowActions ClassPrefix="highlight-editor" Label="@Highlight.DisplayTitle" FavoriteNoun="highlights" IsFavorite="Highlight.IsFavorite" Busy="Busy"
+<ClipRowActions ClassPrefix="highlight-editor" AlignToTitle="true" Label="@Highlight.DisplayTitle" FavoriteNoun="highlights" IsFavorite="Highlight.IsFavorite" Busy="Busy"
                 OnPlay="OnPlay" PlayTitle="Play just this highlight" OnToggleFavorite="OnToggleFavorite" OnEdit="OnEdit" OnDelete="OnDelete" />
 
 @code {

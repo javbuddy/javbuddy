@@ -149,6 +149,8 @@
 }
 
 .scene-editor-name {
+    /* Room for the row's floating action buttons (3 x 1.6rem + gaps). */
+    margin-right: 5.3rem;
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -371,6 +373,7 @@
 }
 
 .clip-editor-line {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.15rem;

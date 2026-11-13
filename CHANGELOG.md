@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **The clip editor's scene and highlight rows have their favorite, edit and delete buttons on the title line.** They used to sit in a column beside the whole row, which squeezed the actors and tags into a narrow column that wrapped one tag per line; the tags now use the row's full width.
+
 ### Fixed
 
 - **The Play menu on Movie Detail no longer runs off the right edge of the window.** It now opens leftwards from the Play button's caret.

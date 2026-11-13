@@ -32,3 +32,17 @@
 .clip-row-fav-on:hover:not(:disabled) {
     color: #e03131;
 }
+
+/* The wrapper adds no box of its own unless the buttons float on the row's title line. */
+.clip-row-actions {
+    display: contents;
+}
+
+.clip-row-actions-top {
+    position: absolute;
+    top: 0.1rem;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+}
