@@ -1,0 +1,18 @@
+@* The dashed image drop zone shared by the upload dialogs: a transparent, full-size file input over the whole
+   zone (so a click opens the picker and a file dropped on it is accepted natively), the caller's text and a
+   styled "Browse…" button in place of the browser's own "Choose file" input. *@
+
+<div class="upload-dropzone @(Disabled ? "upload-dropzone-disabled" : null)">
+    <InputFile OnChange="OnChange" multiple="@Multiple" accept="@Accept" class="upload-dropzone-input" disabled="@Disabled" />
+    @ChildContent
+    <span class="page-toolbar-btn upload-dropzone-browse" aria-hidden="true">Browse…</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public EventCallback<InputFileChangeEventArgs> OnChange { get; set; }
+    [Parameter] public bool Multiple { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string Accept { get; set; } = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
+    /// <summary>The zone's text (heading, hint, icon), shown above the Browse button.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

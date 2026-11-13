@@ -1,0 +1,20 @@
+@* Wraps sibling ToolbarMenuButtons so opening one closes the others (the project's dropdown convention).
+   Each button sits above its own backdrop, so a click on another button never reaches that backdrop: the
+   group is what closes the open menu, and the click switches menus in one go. *@
+
+<CascadingValue Value="this" IsFixed="true">@ChildContent</CascadingValue>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private ToolbarMenuButton? open;
+
+    /// <summary>Called by a button as it opens: closes the one that was open before it.</summary>
+    internal void Opened(ToolbarMenuButton button)
+    {
+        var previous = open;
+        open = button;
+        if (previous is not null && previous != button)
+            previous.Close();
+    }
+}

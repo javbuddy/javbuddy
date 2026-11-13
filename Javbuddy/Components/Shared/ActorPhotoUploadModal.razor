@@ -9,12 +9,16 @@
             {
                 <div class="alert alert-danger py-2">@errorMessage</div>
             }
-            <InputFile OnChange="SelectFiles" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="form-control" />
-            <p class="text-muted small mt-2 mb-3">JPEG, PNG, or WebP; up to @UploadSettings.MaxSizeMb MB per image, up to @UploadSettings.MaxBatchFiles photos per batch.</p>
-            @if (files.Count > 0)
-            {
-                <p class="small mb-3">@files.Count image@(files.Count == 1 ? string.Empty : "s") selected.</p>
+            <div class="mb-3">
+                <UploadDropzone OnChange="SelectFiles" Multiple="true" Disabled="@uploading">
+                    <h6 class="mb-1">Choose photos or drag &amp; drop here</h6>
+                    <p class="upload-dropzone-hint small mb-0">JPEG, PNG, or WebP; up to @UploadSettings.MaxSizeMb MB per image, up to @UploadSettings.MaxBatchFiles photos per batch.</p>
+                </UploadDropzone>
+                @if (files.Count > 0)
+                {
+                    <p class="small mt-2 mb-0">@files.Count image@(files.Count == 1 ? string.Empty : "s") selected.</p>
             }
+            </div>
             @if (uploading)
             {
                 <div class="actor-photo-upload-progress" role="status">

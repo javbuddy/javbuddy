@@ -71,4 +71,56 @@ public class R18DevReleaseCardTests : BunitContext
 
         Assert.True(cut.Find("button.missing-poster-add").HasAttribute("disabled"));
     }
+
+    private sealed class RenderCounter : ComponentBase
+    {
+        public int Renders { get; private set; }
+        public R18DevReleaseRow Release { get; set; } = Row("missing");
+        public EventCallback<string> OnSearch { get; set; }
+        public bool AddInProgress { get; set; }
+        public void Refresh() => StateHasChanged();
+
+        protected override void BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder b)
+        {
+            b.OpenComponent<R18DevReleaseCard>(0);
+            b.AddAttribute(1, nameof(R18DevReleaseCard.Release), Release);
+            b.AddAttribute(2, nameof(R18DevReleaseCard.OnSearch), OnSearch);
+            b.AddAttribute(3, nameof(R18DevReleaseCard.AddInProgress), AddInProgress);
+            b.CloseComponent();
+        }
+    }
+
+    private void Noop(string code) { }
+
+    [Fact]
+    public async Task ParentRerender_WithEqualParameters_DoesNotRerenderTheCard()
+    {
+        var host = Render<RenderCounter>();
+        host.Instance.OnSearch = EventCallback.Factory.Create<string>(this, Noop);
+        await host.InvokeAsync(host.Instance.Refresh);
+        var cut = host.FindComponent<R18DevReleaseCard>();
+        var before = cut.RenderCount;
+
+        // What a parent re-render hands over: an equal row (a fresh record instance) and an equivalent callback.
+        host.Instance.Release = Row("missing");
+        host.Instance.OnSearch = EventCallback.Factory.Create<string>(this, Noop);
+        await host.InvokeAsync(host.Instance.Refresh);
+        await host.InvokeAsync(host.Instance.Refresh);
+
+        Assert.Equal(before, cut.RenderCount);
+    }
+
+    [Fact]
+    public async Task ParentRerender_WithChangedRelease_RerendersTheCard()
+    {
+        var host = Render<RenderCounter>();
+        var cut = host.FindComponent<R18DevReleaseCard>();
+        var before = cut.RenderCount;
+
+        host.Instance.Release = Row("got", "Got");
+        await host.InvokeAsync(host.Instance.Refresh);
+
+        Assert.Equal(before + 1, cut.RenderCount);
+        Assert.Equal("Got", cut.Find(".poster-meta").TextContent.Trim());
+    }
 }

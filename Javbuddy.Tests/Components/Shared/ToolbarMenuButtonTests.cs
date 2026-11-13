@@ -93,4 +93,47 @@ public class ToolbarMenuButtonTests : BunitContext
         Assert.False(items[0].HasAttribute("disabled"));
         Assert.True(items[1].HasAttribute("disabled"));
     }
+
+    private IRenderedComponent<ToolbarMenuGroup> RenderGroup() =>
+        Render<ToolbarMenuGroup>(p => p.Add(x => x.ChildContent, (RenderFragment)(b =>
+        {
+            b.OpenComponent<ToolbarMenuButton>(0);
+            b.AddAttribute(1, nameof(ToolbarMenuButton.Label), "Refresh");
+            b.AddAttribute(2, nameof(ToolbarMenuButton.ChildContent), (RenderFragment)(c => c.AddContent(0, "Refresh item")));
+            b.CloseComponent();
+            b.OpenComponent<ToolbarMenuButton>(3);
+            b.AddAttribute(4, nameof(ToolbarMenuButton.Label), "Tools");
+            b.AddAttribute(5, nameof(ToolbarMenuButton.ChildContent), (RenderFragment)(c => c.AddContent(0, "Tools item")));
+            b.CloseComponent();
+        })));
+
+    [Fact]
+    public void InAGroup_OpeningAnotherMenuClosesTheOpenOne_InASingleClick()
+    {
+        var cut = RenderGroup();
+        var buttons = cut.FindAll("button.toolbar-menu-btn");
+
+        buttons[0].Click();
+        Assert.Single(cut.FindAll(".toolbar-menu-list"));
+
+        // The second button is clicked directly (it sits above the first menu's backdrop).
+        buttons[1].Click();
+
+        var lists = cut.FindAll(".toolbar-menu-list");
+        Assert.Single(lists);
+        Assert.Contains("Tools item", lists[0].TextContent);
+        var expanded = cut.FindAll("button.toolbar-menu-btn").Select(b => b.GetAttribute("aria-expanded")).ToArray();
+        Assert.Equal(["false", "true"], expanded);
+    }
+
+    [Fact]
+    public void InAGroup_BackdropClickStillClosesTheMenu()
+    {
+        var cut = RenderGroup();
+
+        cut.FindAll("button.toolbar-menu-btn")[0].Click();
+        cut.Find(".toolbar-menu-backdrop").Click();
+
+        Assert.Empty(cut.FindAll(".toolbar-menu-list"));
+    }
 }

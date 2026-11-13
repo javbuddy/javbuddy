@@ -10,6 +10,13 @@
     color: #ffffff;
 }
 
+/* Above the backdrop, so a click on a sibling menu's button reaches it (and its group closes the open
+   menu) instead of only dismissing the backdrop. */
+.toolbar-menu-btn {
+    position: relative;
+    z-index: 50;
+}
+
 .toolbar-menu-caret {
     margin-left: -0.1rem;
     opacity: 0.8;

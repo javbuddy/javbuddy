@@ -4,8 +4,7 @@
    with them. Size and format of a local file are checked here, before any bytes are read; a URL import is
    delegated to the caller's FetchAsync because each dialog's service owns its own download rules. *@
 
-<div class="upload-dropzone">
-    <InputFile OnChange="HandleFileSelected" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" />
+<UploadDropzone OnChange="HandleFileSelected">
     <div class="upload-icon">
         <svg viewBox="0 0 16 16" width="36" height="36" fill="currentColor" aria-hidden="true">
             <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
@@ -13,8 +12,8 @@
         </svg>
     </div>
     <h6 class="mb-1 text-light">Choose an image or drag & drop here</h6>
-    <p class="text-muted small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
-</div>
+    <p class="upload-dropzone-hint small mb-0">Supports JPEG, PNG, or WebP (up to @UploadSettings.MaxSizeMb MB)</p>
+</UploadDropzone>
 
 <div class="upload-divider" aria-hidden="true">
     <span>OR</span>

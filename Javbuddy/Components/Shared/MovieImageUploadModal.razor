@@ -16,11 +16,10 @@
             {
                 <div class="alert alert-success py-2">Added @addedCount image@(addedCount == 1 ? string.Empty : "s").</div>
             }
-            <div class="upload-dropzone">
-                <InputFile OnChange="SelectFiles" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" class="upload-dropzone-input" disabled="@Busy" />
+            <UploadDropzone OnChange="SelectFiles" Multiple="true" Disabled="@Busy">
                 <h6 class="mb-1">Choose images or drag &amp; drop here</h6>
                 <p class="upload-dropzone-hint small mb-0">JPEG, PNG, or WebP; up to @UploadSettings.MaxSizeMb MB each, @UploadSettings.MaxBatchFiles per batch.</p>
-            </div>
+            </UploadDropzone>
             @if (files.Count > 0)
             {
                 <p class="small mt-2 mb-0">@files.Count image@(files.Count == 1 ? string.Empty : "s") selected.</p>

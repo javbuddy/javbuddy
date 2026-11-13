@@ -76,6 +76,8 @@ One row per product area.
 | `ImageLightboxModal.razor` | Full-screen single-image viewer (Actor Detail's avatar, Movie Detail's poster) | `ImageLightboxModalTests.cs` |
 | `OptionsModal.razor` | Display-options dialog behind a toolbar's **Options** button (Movies, Actors) | `OptionsModalTests.cs` |
 | `ToolbarMenuButton.razor` / `ToolbarMenuItem.razor` | A page-toolbar button that opens a menu of actions (Movie Detail's Refresh / Tools) | `ToolbarMenuButtonTests.cs` |
+| `ToolbarMenuGroup.razor` | Wraps sibling `ToolbarMenuButton`s so opening one closes the other | `ToolbarMenuButtonTests.cs` |
+| `UploadDropzone.razor` | The dashed image drop zone with a Browse… button, shared by the actor photo, movie image and image source dialogs | `UploadDropzoneTests.cs` |
 | `BarList.razor` | Horizontal bar list over `StatRow`s (System > Statistics) | `BarListTests.cs` |
 | `StatusTile.razor` / `SlideOverDrawer.razor` | Settings' clickable status tile and the slide-over drawer it opens | `StatusTileTests.cs`, `SlideOverDrawerTests.cs` |
 | `UptimeClock.razor` (+ `.razor.js`) | Ticking elapsed-time readout (System > Status) | `UptimeClockTests.cs` |
