@@ -1,5 +1,5 @@
 @* The buttons at the end of a scene, highlight or apex row in ClipEditor's tree: play (highlights only),
-   favorite, edit and delete. Renders its buttons as the row's own flex items, no wrapper. ClassPrefix keeps
+   favorite, edit and delete. Renders its buttons in a wrapper that adds no box of its own (display: contents), so they are the row's own flex items. ClassPrefix keeps
    each row's class names ("scene-editor-edit-btn", …) on them, which tests and the E2E suite select on.
    AlignToTitle floats the buttons over the row's top-right corner, level with its number and title, so the
    tag and actor lines below can use the full row width; the host reserves room beside its title. *@

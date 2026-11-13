@@ -25,6 +25,17 @@ public class ClipRowActionsTests : BunitContext
         });
 
     [Fact]
+    public void AlignToTitle_AddsTheFloatingClass_OnlyWhenSet()
+    {
+        Assert.Empty(RenderActions().FindAll(".clip-row-actions-top"));
+
+        var cut = Render<ClipRowActions>(p => p
+            .Add(x => x.ClassPrefix, "scene-editor").Add(x => x.Label, "Scene").Add(x => x.FavoriteNoun, "scenes").Add(x => x.AlignToTitle, true));
+
+        Assert.Equal(3, cut.Find(".clip-row-actions-top").QuerySelectorAll("button").Length);
+    }
+
+    [Fact]
     public void RendersFavoriteEditDelete_WithTheHostsClassNamesAndLabels()
     {
         var cut = RenderActions();
