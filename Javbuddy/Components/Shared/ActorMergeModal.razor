@@ -246,14 +246,21 @@
         // A slower, older response must not overwrite a newer one: only the latest load applies its result.
         var version = ++loadVersion;
         isSearching = true;
-        var loaded = await ActorService.GetMergeCandidatesAsync(SourceActor.Id, searchQuery, ct);
-        if (version != loadVersion) return;
-        candidates = loaded;
-        if (selectedTarget is null && candidates.Count > 0 && candidates[0].IsSuggested)
+        try
         {
-            selectedTarget = candidates[0];
+            var loaded = await ActorService.GetMergeCandidatesAsync(SourceActor.Id, searchQuery, ct);
+            if (version != loadVersion) return;
+            candidates = loaded;
+            if (selectedTarget is null && candidates.Count > 0 && candidates[0].IsSuggested)
+            {
+                selectedTarget = candidates[0];
+            }
         }
-        isSearching = false;
+        finally
+        {
+            // Only the latest load owns the flag; a superseded one leaves it on for its successor.
+            if (version == loadVersion) isSearching = false;
+        }
     }
 
     private async Task OnSearchInput(ChangeEventArgs e)

@@ -137,19 +137,28 @@
         grabSuccessMessage = null;
         StateHasChanged();
 
-        var disabledTask = ProwlarrClient.GetDisabledIndexersAsync();
-        var result = await ProwlarrClient.SearchAsync(SearchCode);
-        disabledIndexers = await disabledTask;
-        if (!result.Success || result.Releases is null)
+        try
         {
-            searchError = result.ErrorMessage ?? "Search failed.";
+            var disabledTask = ProwlarrClient.GetDisabledIndexersAsync();
+            var result = await ProwlarrClient.SearchAsync(SearchCode);
+            disabledIndexers = await disabledTask;
+            if (!result.Success || result.Releases is null)
+            {
+                searchError = result.ErrorMessage ?? "Search failed.";
+            }
+            else
+            {
+                results = result.Releases.OrderByDescending(r => r.Seeders ?? 0).ToList();
+            }
         }
-        else
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            results = result.Releases.OrderByDescending(r => r.Seeders ?? 0).ToList();
+            searchError = ex.Message;
         }
-
-        searching = false;
+        finally
+        {
+            searching = false;
+        }
     }
 
     private static string SeedsBadgeClass(int? seeders) => seeders switch
@@ -173,19 +182,28 @@
         grabSuccessMessage = null;
         StateHasChanged();
 
-        if (Movie is null) return;
-
-        var result = await TorrentGrabService.GrabAsync(Movie, release);
-        if (result.Success)
+        try
         {
-            grabSuccessMessage = $"Grabbed \"{release.Title}\".";
-        }
-        else
-        {
-            grabError = result.ErrorMessage;
-        }
+            if (Movie is null) return;
 
-        grabbingKeys.Remove(key);
+            var result = await TorrentGrabService.GrabAsync(Movie, release);
+            if (result.Success)
+            {
+                grabSuccessMessage = $"Grabbed \"{release.Title}\".";
+            }
+            else
+            {
+                grabError = result.ErrorMessage;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            grabError = ex.Message;
+        }
+        finally
+        {
+            grabbingKeys.Remove(key);
+        }
     }
 
     private async Task AddAndGrab(ReleaseResourceDto release)

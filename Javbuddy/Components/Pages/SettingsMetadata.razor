@@ -370,8 +370,14 @@ else
         importMessage = null;
         StateHasChanged();
 
-        await TaskLauncher.QueueAndWaitUntilRecordedAsync("r18.dev Dump Import");
-        importing = false;
+        try
+        {
+            await TaskLauncher.QueueAndWaitUntilRecordedAsync("r18.dev Dump Import");
+        }
+        finally
+        {
+            importing = false;
+        }
         await LoadAsync();
         importMessage = "Import queued — see System → Tasks for progress and the result.";
     }

@@ -283,4 +283,22 @@ public class MetadataEditorModalTests : BunitContext
         pending.SetResult(OperationResult.Ok());
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".modal-shell-backdrop")));
     }
+
+    [Fact]
+    public async Task Submit_WhenTheSaveThrows_ReleasesTheSavingFlag_SoTheDialogCanClose()
+    {
+        var movieService = SetUpMovieService();
+        movieService.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<OperationResult>(new InvalidOperationException("db locked")));
+        var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, new Movie { Id = 42, Code = "ABC-123" }));
+        await cut.InvokeAsync(() => cut.Instance.OpenAsync());
+
+        await Record.ExceptionAsync(() => cut.InvokeAsync(() => cut.Find("form").Submit()));
+
+        var save = cut.FindAll("button").First(b => b.TextContent.Trim() == "Save");
+        Assert.False(save.HasAttribute("disabled"));
+        var cancel = cut.FindAll("button").First(b => b.TextContent.Trim() == "Cancel");
+        await cut.InvokeAsync(() => cancel.Click());
+        Assert.Empty(cut.FindAll(".modal-shell-backdrop"));
+    }
 }

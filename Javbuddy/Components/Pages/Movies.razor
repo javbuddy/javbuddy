@@ -756,24 +756,33 @@ else
         reloading = true;
         _ = SaveViewStateAsync();
 
-        // Against the cached library options, before counting, so the counts use the corrected filter.
-        NormalizeFiltersToLibrary();
+        try
+        {
+            // Against the cached library options, before counting, so the counts use the corrected filter.
+            NormalizeFiltersToLibrary();
 
-        window.FilteredCount = await GridQueries.CountAsync(filters.ToFilter());
-        if (!window.IsCurrent(generation)) return;
+            window.FilteredCount = await GridQueries.CountAsync(filters.ToFilter());
+            if (!window.IsCurrent(generation)) return;
 
-        // Keeps "All/Missing/Got (N)" matching whatever the other active filters (resolution,
-        // library, text) currently narrow the grid down to, not just the library's global totals.
-        await LoadStatusCountsAsync();
-        if (!window.IsCurrent(generation)) return;
+            // Keeps "All/Missing/Got (N)" matching whatever the other active filters (resolution,
+            // library, text) currently narrow the grid down to, not just the library's global totals.
+            await LoadStatusCountsAsync();
+            if (!window.IsCurrent(generation)) return;
 
-        var filteredCount = window.FilteredCount;
-        var start = filteredCount > 0 ? window.AlignDown(Math.Clamp(startAt, 0, filteredCount - 1)) : 0;
-        var page = await window.FetchAsync(start, Math.Min(MovieGridWindow.InitialSize, filteredCount - start));
-        if (!window.IsCurrent(generation)) return;
+            var filteredCount = window.FilteredCount;
+            var start = filteredCount > 0 ? window.AlignDown(Math.Clamp(startAt, 0, filteredCount - 1)) : 0;
+            var page = await window.FetchAsync(start, Math.Min(MovieGridWindow.InitialSize, filteredCount - start));
+            if (!window.IsCurrent(generation)) return;
 
-        window.Replace(page, start);
-        reloading = false;
+            window.Replace(page, start);
+            reloading = false;
+        }
+        catch
+        {
+            // A superseded load leaves the flag to its successor; a failed current one must not leave the skeleton up.
+            if (window.IsCurrent(generation)) reloading = false;
+            throw;
+        }
         scrollToTopPending |= scrollToTop;
     }
 

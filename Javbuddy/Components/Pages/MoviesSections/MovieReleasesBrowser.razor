@@ -172,6 +172,11 @@ else
         {
             // A newer filter change started its own load — leave loading on for that one.
         }
+        finally
+        {
+            // A failed load must not leave the skeleton up for good; a cancelled one belongs to its successor.
+            if (!ct.IsCancellationRequested) loading = false;
+        }
     }
 
     private async Task LoadCountsAsync(R18DevCatalogFilter filter, CancellationToken ct)

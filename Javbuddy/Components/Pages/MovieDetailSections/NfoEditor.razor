@@ -265,8 +265,14 @@
             if (rawNfoContent is null)
             {
                 await SetLoadingAsync(true);
-                rawNfoContent = await LocalLibraryClient.GetRawNfoAsync(Code);
-                await SetLoadingAsync(false);
+                try
+                {
+                    rawNfoContent = await LocalLibraryClient.GetRawNfoAsync(Code);
+                }
+                finally
+                {
+                    await SetLoadingAsync(false);
+                }
             }
 
             if (!await monacoLoad) return;
@@ -509,8 +515,15 @@
         restoring = true;
         nfoSaveError = null;
 
-        var restored = await HistoryService.RestoreAsync(MovieId, generation.Id);
-        restoring = false;
+        string? restored;
+        try
+        {
+            restored = await HistoryService.RestoreAsync(MovieId, generation.Id);
+        }
+        finally
+        {
+            restoring = false;
+        }
         if (restored is null)
         {
             nfoSaveError = "Failed to restore — the local .nfo file could not be found or written.";
@@ -561,20 +574,25 @@
         savingNfo = true;
         StateHasChanged();
 
-        var ok = await HistoryService.SaveAsync(MovieId, content);
-        if (ok)
+        try
         {
-            rawNfoContent = content;
-            diffModifiedSeed = null;
-            nfoDirty = false;
-            nfoSaved = true;
+            var ok = await HistoryService.SaveAsync(MovieId, content);
+            if (ok)
+            {
+                rawNfoContent = content;
+                diffModifiedSeed = null;
+                nfoDirty = false;
+                nfoSaved = true;
+            }
+            else
+            {
+                nfoSaveError = "Failed to save — the local .nfo file could not be found or written.";
+            }
         }
-        else
+        finally
         {
-            nfoSaveError = "Failed to save — the local .nfo file could not be found or written.";
+            savingNfo = false;
         }
-
-        savingNfo = false;
     }
 
     private async Task SaveNfoAndClose()
@@ -612,41 +630,46 @@
         savingNfo = true;
         StateHasChanged();
 
-        if (isConflictReview && MovieId > 0)
+        try
         {
-            var result = await NfoSyncService.ResolveMovieNfoConflictAsync(MovieId, rawNfoContent ?? string.Empty, content);
-            if (result.Success)
+            if (isConflictReview && MovieId > 0)
             {
-                rawNfoContent = content;
-                diffModifiedSeed = null;
-                nfoDirty = false;
-                await ReleaseEditorsAsync();
-                showRawNfo = false;
-                savingNfo = false;
-                await OnConflictResolved.InvokeAsync();
-                return;
+                var result = await NfoSyncService.ResolveMovieNfoConflictAsync(MovieId, rawNfoContent ?? string.Empty, content);
+                if (result.Success)
+                {
+                    rawNfoContent = content;
+                    diffModifiedSeed = null;
+                    nfoDirty = false;
+                    await ReleaseEditorsAsync();
+                    showRawNfo = false;
+                    savingNfo = false;
+                    await OnConflictResolved.InvokeAsync();
+                    return;
+                }
+                nfoSaveError = result.FileChanged
+                    ? "The on-disk .nfo changed while you were reviewing it. Reopen the conflict to review the latest version."
+                    : "Failed to resolve conflict — the local .nfo file could not be written.";
             }
-            nfoSaveError = result.FileChanged
-                ? "The on-disk .nfo changed while you were reviewing it. Reopen the conflict to review the latest version."
-                : "Failed to resolve conflict — the local .nfo file could not be written.";
+            else
+            {
+                var ok = await HistoryService.SaveAsync(MovieId, content);
+                if (ok)
+                {
+                    rawNfoContent = content;
+                    diffModifiedSeed = null;
+                    nfoDirty = false;
+                    await ReleaseEditorsAsync();
+                    showRawNfo = false;
+                    savingNfo = false;
+                    return;
+                }
+                nfoSaveError = "Failed to save — the local .nfo file could not be found or written.";
+            }
         }
-        else
+        finally
         {
-            var ok = await HistoryService.SaveAsync(MovieId, content);
-            if (ok)
-            {
-                rawNfoContent = content;
-                diffModifiedSeed = null;
-                nfoDirty = false;
-                await ReleaseEditorsAsync();
-                showRawNfo = false;
-                savingNfo = false;
-                return;
-            }
-            nfoSaveError = "Failed to save — the local .nfo file could not be found or written.";
+            savingNfo = false;
         }
-
-        savingNfo = false;
     }
 
     private async Task ImportFromNfo()
@@ -656,22 +679,28 @@
         nfoSaveError = null;
         savingNfo = true;
 
-        var result = await NfoSyncService.ImportMovieNfoAsync(MovieId, rawNfoContent);
-        if (result.Success)
+        try
         {
-            diffModifiedSeed = null;
-            nfoDirty = false;
-            await ReleaseEditorsAsync();
-            showRawNfo = false;
-            savingNfo = false;
-            await OnConflictResolved.InvokeAsync();
-            return;
-        }
+            var result = await NfoSyncService.ImportMovieNfoAsync(MovieId, rawNfoContent);
+            if (result.Success)
+            {
+                diffModifiedSeed = null;
+                nfoDirty = false;
+                await ReleaseEditorsAsync();
+                showRawNfo = false;
+                savingNfo = false;
+                await OnConflictResolved.InvokeAsync();
+                return;
+            }
 
-        nfoSaveError = result.FileChanged
-            ? "The on-disk .nfo changed while you were reviewing it. Reopen the conflict to review the latest version."
-            : "Failed to import — the local .nfo file could not be read or isn't valid XML.";
-        savingNfo = false;
+            nfoSaveError = result.FileChanged
+                ? "The on-disk .nfo changed while you were reviewing it. Reopen the conflict to review the latest version."
+                : "Failed to import — the local .nfo file could not be read or isn't valid XML.";
+        }
+        finally
+        {
+            savingNfo = false;
+        }
     }
 
     private async Task DiscardNfoChanges()
