@@ -3,6 +3,7 @@ using Javbuddy.Components.Pages.TorrentSortSections;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Torrents;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -11,6 +12,8 @@ namespace Javbuddy.Tests.Components.Pages.TorrentSortSections;
 /// <summary>The sort editor's 2:3 poster crop dialog.</summary>
 public class SortPosterCropModalTests : BunitContext
 {
+    public SortPosterCropModalTests() => JSInterop.AllowModalShell();
+
     [Fact]
     public void Save_SendsNormalizedRectWithSourceSize_AndRaisesOnCropped()
     {
@@ -97,7 +100,26 @@ public class SortPosterCropModalTests : BunitContext
 
         var cut = Render<SortPosterCropModal>(p => p.Add(x => x.Show, true).Add(x => x.ResultId, "r").Add(x => x.MovieId, "A"));
 
-        Assert.Contains("onkeydown:stopPropagation", string.Join(",", cut.Find(".spc-backdrop").Attributes.Select(a => a.Name)), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("onkeydown:stopPropagation", string.Join(",", cut.Find(".modal-shell-backdrop").Attributes.Select(a => a.Name)), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EscapeAndBackdropClose_UnlessASaveIsRunning_AndSitsAboveTheDrawer()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        var svc = Substitute.For<ITorrentSortService>();
+        svc.GetPosterCropSourceAsync(default, default!, default).ReturnsForAnyArgs(((PosterCropSource?)null, "x"));
+        Services.AddSingleton(svc);
+        var closed = 0;
+
+        var cut = Render<SortPosterCropModal>(p => p.Add(x => x.Show, true).Add(x => x.ResultId, "r").Add(x => x.MovieId, "A")
+            .Add(x => x.OnClose, () => closed++));
+
+        Assert.Contains("z-index: 1060", cut.Find(".modal-shell-backdrop").GetAttribute("style"));
+        Assert.Equal("Crop poster · A", cut.Find(".modal-shell-title").TextContent);
+        cut.Find(".modal-shell-backdrop").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
+        cut.Find(".modal-shell-backdrop").Click();
+        Assert.Equal(2, closed);
     }
 
     [Fact]

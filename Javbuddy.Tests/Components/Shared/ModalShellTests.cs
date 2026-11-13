@@ -163,4 +163,31 @@ public class ModalShellTests : BunitContext
 
         Assert.Contains("--modal-shell-height: 85vh", cut.Find(".modal-shell-panel").GetAttribute("style"));
     }
+
+    [Fact]
+    public void ZIndexAndBackdropClass_AreAppliedToTheBackdrop_OnlyWhenGiven()
+    {
+        var plain = RenderShell().Find(".modal-shell-backdrop");
+        Assert.DoesNotContain("z-index", plain.GetAttribute("style") ?? "");
+
+        var cut = Render<ModalShell>(p => p.Add(x => x.Title, "t").Add(x => x.ZIndex, 1060).Add(x => x.BackdropClass, "my-backdrop"));
+        var backdrop = cut.Find(".modal-shell-backdrop");
+
+        Assert.Contains("z-index: 1060", backdrop.GetAttribute("style"));
+        Assert.Contains("my-backdrop", backdrop.ClassName);
+    }
+
+    [Fact]
+    public void StopPropagation_StopsBackdropClicksAndKeysBubbling_OnlyWhenAsked()
+    {
+        static string Attrs(IRenderedComponent<ModalShell> c) => string.Join(",", c.Find(".modal-shell-backdrop").Attributes.Select(a => a.Name));
+
+        var off = Attrs(RenderShell());
+        Assert.DoesNotContain("onkeydown:stopPropagation", off, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("onclick:stopPropagation", off, StringComparison.OrdinalIgnoreCase);
+
+        var on = Attrs(Render<ModalShell>(p => p.Add(x => x.Title, "t").Add(x => x.StopPropagation, true)));
+        Assert.Contains("onkeydown:stopPropagation", on, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("onclick:stopPropagation", on, StringComparison.OrdinalIgnoreCase);
+    }
 }

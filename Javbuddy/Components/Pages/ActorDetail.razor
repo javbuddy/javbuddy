@@ -316,7 +316,7 @@ else
     @if (showDeleteConfirmation)
     {
         <div class="actor-delete-theme">
-            <DeleteConfirmDialog Title="@($"Delete {actor!.DisplayName}?")"
+            <DeleteConfirmDialog Title="@($"Delete {actor!.DisplayName}?")" Themed="true"
                                  Message="This will unlink the actor from linked movies, delete custom aliases, and remove cached portraits."
                                  ConfirmText="@(deleting ? "Deleting…" : "Delete Actor")"
                                  Busy="deleting"

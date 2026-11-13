@@ -59,6 +59,7 @@ public abstract class ClipEditorTestBase : BunitContext
         module = JSInterop.SetupModule(ModulePath);
         module.Mode = JSRuntimeMode.Loose;
         hoverModule = JSInterop.SetupModule("./Components/Shared/ClipCard.razor.js");
+        JSInterop.AllowModalShell();
         hoverModule.Mode = JSRuntimeMode.Loose;
 
         using var db = factory.CreateDbContext();

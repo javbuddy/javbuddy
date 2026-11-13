@@ -143,13 +143,14 @@ public class ClipEditorHighlightTests : ClipEditorTestBase
 
         cut.WaitForAssertion(() => Assert.False(cut.Find(".highlight-editor-delete-btn").HasAttribute("disabled")));
         cut.Find(".highlight-editor-delete-btn").Click();
-        cut.WaitForAssertion(() => Assert.Equal("Delete \"Highlight 1\"?", cut.Find(".delete-confirm-dialog h2").TextContent));
+        cut.WaitForAssertion(() => Assert.Equal("Delete \"Highlight 1\"?", cut.Find(".delete-confirm-backdrop .modal-shell-title").TextContent));
         Assert.Single(await StoredAsync());
+        Assert.Equal("Its screenshot and preview are deleted too.", cut.Find(".delete-confirm-backdrop .delete-confirm-message").TextContent);
 
         cut.Find(".delete-confirm-confirm-btn").Click();
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+            Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
             Assert.Empty(cut.FindAll(".highlight-editor-item"));
         });
         Assert.Empty(await StoredAsync());
@@ -163,15 +164,15 @@ public class ClipEditorHighlightTests : ClipEditorTestBase
 
         cut.Find(".highlight-editor-delete-btn").Click();
         cut.Find(".delete-confirm-cancel-btn").Click();
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
 
         cut.Find(".highlight-editor-delete-btn").Click();
         cut.Find(".delete-confirm-backdrop").KeyDown(new KeyboardEventArgs { Key = "Escape" });
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
 
         cut.Find(".highlight-editor-delete-btn").Click();
         cut.Find(".delete-confirm-backdrop").Click();
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
 
         Assert.Single(await StoredAsync());
     }

@@ -177,7 +177,7 @@ public class ClipEditorSceneTests : ClipEditorTestBase
         cut.Find(".scene-editor-delete-btn").Click();
 
         Assert.Single(await StoredScenesAsync());
-        Assert.Equal("Delete \"Interview\"?", cut.Find(".delete-confirm-dialog h2").TextContent);
+        Assert.Equal("Delete \"Interview\"?", cut.Find(".delete-confirm-backdrop .modal-shell-title").TextContent);
 
         cut.Find(".delete-confirm-confirm-btn").Click();
 
@@ -186,7 +186,7 @@ public class ClipEditorSceneTests : ClipEditorTestBase
         Assert.Empty(await StoredScenesAsync());
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+            Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
             Assert.NotNull(cut.Find(".scene-editor-empty"));
         });
     }
@@ -199,15 +199,15 @@ public class ClipEditorSceneTests : ClipEditorTestBase
 
         cut.Find(".scene-editor-delete-btn").Click();
         cut.Find(".delete-confirm-cancel-btn").Click();
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
 
         cut.Find(".scene-editor-delete-btn").Click();
         cut.Find(".delete-confirm-backdrop").KeyDown(new KeyboardEventArgs { Key = "Escape" });
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
 
         cut.Find(".scene-editor-delete-btn").Click();
         cut.Find(".delete-confirm-backdrop").Click();
-        Assert.Empty(cut.FindAll(".delete-confirm-dialog"));
+        Assert.Empty(cut.FindAll(".delete-confirm-backdrop"));
 
         Assert.Single(await StoredScenesAsync());
     }

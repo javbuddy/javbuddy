@@ -160,10 +160,12 @@
                                  Busy="busy" OnConfirm="ConfirmDeleteAsync" OnCancel="CancelDelete" />
             break;
         case HighlightItem toDelete:
-            <DeleteConfirmDialog @key="toDelete" ItemName="@toDelete.DisplayTitle" Busy="busy" OnConfirm="ConfirmDeleteAsync" OnCancel="CancelDelete" />
+            <DeleteConfirmDialog @key="toDelete" ItemName="@toDelete.DisplayTitle" Message="Its screenshot and preview are deleted too."
+                                 Busy="busy" OnConfirm="ConfirmDeleteAsync" OnCancel="CancelDelete" />
             break;
         case ApexItem toDelete:
-            <DeleteConfirmDialog @key="toDelete" ItemName="@($"Apex at {SceneTimeFormat.Format(toDelete.Seconds)}")" Busy="busy" OnConfirm="ConfirmDeleteAsync" OnCancel="CancelDelete" />
+            <DeleteConfirmDialog @key="toDelete" ItemName="@($"Apex at {SceneTimeFormat.Format(toDelete.Seconds)}")" Message="Its hover preview is deleted too."
+                                 Busy="busy" OnConfirm="ConfirmDeleteAsync" OnCancel="CancelDelete" />
             break;
     }
 </div>

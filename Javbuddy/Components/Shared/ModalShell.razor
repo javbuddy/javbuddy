@@ -5,7 +5,7 @@
    a panel with a header (title + close button), a scrolling body and an optional footer.
    The host renders it only while open and supplies the body (and footer) as child content. It focuses
    itself when it opens so Escape works at once (unless a control inside already has focus). *@
-<div @ref="backdrop" class="modal-shell-backdrop @(Themed ? "modal-shell-themed" : "")" data-backdrop-dismiss @onclick="CloseAsync" @onkeydown="HandleKeyDown" tabindex="0">
+<div @ref="backdrop" class="modal-shell-backdrop @(Themed ? "modal-shell-themed" : "") @BackdropClass" style="@(ZIndex is null ? null : $"z-index: {ZIndex};")" data-backdrop-dismiss @onclick="CloseAsync" @onclick:stopPropagation="StopPropagation" @onkeydown="HandleKeyDown" @onkeydown:stopPropagation="StopPropagation" tabindex="0">
     <div class="modal-shell-panel" role="dialog" aria-modal="true" aria-labelledby="@titleId" style="max-width: @MaxWidth;@(Height is null ? "" : $" --modal-shell-height: {Height};")" @onclick:stopPropagation="true">
         <div class="modal-shell-header">
             <h5 id="@titleId" class="modal-shell-title">@(TitleContent ?? (builder => builder.AddContent(0, Title)))</h5>
@@ -64,6 +64,17 @@
     /// <summary>A fixed panel height as a CSS length (e.g. "85vh") for content that needs a sized box, like an editor;
     /// by default the panel fits its content. Full-screen on a phone regardless.</summary>
     [Parameter] public string? Height { get; set; }
+
+    /// <summary>Extra class(es) on the backdrop, for code that has to find the open dialog (e.g. key guards).</summary>
+    [Parameter] public string? BackdropClass { get; set; }
+
+    /// <summary>The backdrop's z-index, for a dialog that opens above another layer (a drawer or player modal at 1050);
+    /// the stylesheet's default when omitted.</summary>
+    [Parameter] public int? ZIndex { get; set; }
+
+    /// <summary>Stops the dialog's clicks and key presses bubbling to the page or modal it is rendered inside, so Esc
+    /// or a backdrop click closes only this dialog and shortcuts behind it stay quiet.</summary>
+    [Parameter] public bool StopPropagation { get; set; }
 
     private readonly string titleId = "modal-shell-title-" + Guid.NewGuid().ToString("N");
 

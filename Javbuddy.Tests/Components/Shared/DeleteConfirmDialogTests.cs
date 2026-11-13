@@ -24,13 +24,13 @@ public class DeleteConfirmDialogTests : BunitContext
     {
         var cut = RenderDialog("Its screenshot is deleted too.");
 
-        var heading = cut.Find(".delete-confirm-dialog h2");
+        var heading = cut.Find(".modal-shell-title");
         Assert.Equal("Delete \"Interview\"?", heading.TextContent);
         Assert.Equal(heading.Id, cut.Find("[role=dialog]").GetAttribute("aria-labelledby"));
-        Assert.Equal("Its screenshot is deleted too.", cut.Find(".delete-confirm-dialog p").TextContent);
+        Assert.Equal("Its screenshot is deleted too.", cut.Find(".delete-confirm-message").TextContent);
         JSInterop.VerifyFocusAsyncInvoke();
 
-        Assert.Empty(RenderDialog().FindAll(".delete-confirm-dialog p"));
+        Assert.Empty(RenderDialog().FindAll(".delete-confirm-message"));
     }
 
     [Fact]
@@ -40,9 +40,8 @@ public class DeleteConfirmDialogTests : BunitContext
             .Add(x => x.ItemName, "Interview")
             .AddChildContent("<label class=\"extra-option\">Delete files from disk</label>"));
 
-        var dialog = cut.Find(".delete-confirm-dialog");
-        Assert.Equal("Delete files from disk", cut.Find(".extra-option").TextContent);
-        Assert.Equal("delete-confirm-actions", dialog.LastElementChild!.ClassName);
+        Assert.Equal("Delete files from disk", cut.Find(".modal-shell-body .extra-option").TextContent);
+        Assert.NotNull(cut.Find(".modal-shell-footer .delete-confirm-confirm-btn"));
     }
 
     [Fact]
@@ -80,13 +79,35 @@ public class DeleteConfirmDialogTests : BunitContext
     }
 
     [Fact]
+    public void SitsAboveTheDrawerAndKeepsClicksAndKeysToItself()
+    {
+        var backdrop = RenderDialog().Find(".modal-shell-backdrop");
+
+        Assert.Contains("z-index: 1060", backdrop.GetAttribute("style"));
+        Assert.Contains("delete-confirm-backdrop", backdrop.ClassName);
+        var attrs = string.Join(",", backdrop.Attributes.Select(a => a.Name));
+        Assert.Contains("onkeydown:stopPropagation", attrs, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("onclick:stopPropagation", attrs, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Themed_FollowsTheSiteTheme_OnlyWhenAsked()
+    {
+        Assert.Empty(RenderDialog().FindAll(".modal-shell-themed"));
+
+        var cut = Render<DeleteConfirmDialog>(p => p.Add(x => x.ItemName, "x").Add(x => x.Themed, true));
+
+        Assert.Single(cut.FindAll(".delete-confirm-backdrop.modal-shell-themed"));
+    }
+
+    [Fact]
     public void TitleAndConfirmText_ReplaceTheDefaults()
     {
         var cut = Render<DeleteConfirmDialog>(p => p
             .Add(x => x.Title, "Delete Remu?")
             .Add(x => x.ConfirmText, "Delete Actor"));
 
-        Assert.Equal("Delete Remu?", cut.Find("h2").TextContent);
+        Assert.Equal("Delete Remu?", cut.Find(".modal-shell-title").TextContent);
         Assert.Equal("Delete Actor", cut.Find(".delete-confirm-confirm-btn").TextContent);
     }
 }
