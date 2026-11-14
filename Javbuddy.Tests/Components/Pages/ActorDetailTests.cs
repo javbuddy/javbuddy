@@ -21,7 +21,7 @@ using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Pages;
 
-public class ActorDetailTests : BunitContext
+public class ActorDetailTests : InteractiveBunitContext
 {
     private readonly ISceneWallQueryService sceneWall = Substitute.For<ISceneWallQueryService>();
 
