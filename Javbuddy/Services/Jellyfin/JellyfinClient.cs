@@ -25,19 +25,34 @@ public static class JellyfinEnvConfig
     public static bool IsSet(IConfiguration configuration) => EnvConfig.AllSet(GetBaseUrl(configuration), GetApiKey(configuration));
 }
 
+/// <summary>The Jellyfin server's id, kept for the app's lifetime (registered as a singleton). JellyfinClient is
+/// scoped, so a per-instance cache only lasted one request or circuit: every Actor Detail load asked
+/// /System/Info again, once for the prerender and once for the circuit, before the page could finish.</summary>
+public sealed class JellyfinServerIdCache
+{
+    // One immutable reference, so concurrent circuits read either the old or the new pair, never a torn mix.
+    private volatile Entry? entry;
+
+    private sealed record Entry(string BaseUrl, string ServerId);
+
+    public string? Get(string baseUrl) => entry is { } e && e.BaseUrl == baseUrl ? e.ServerId : null;
+
+    public void Set(string baseUrl, string serverId) => entry = new Entry(baseUrl, serverId);
+}
+
 public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
     private readonly EffectiveSettingsResolver<JellyfinSettings> settingsResolver;
-    private string? cachedServerId;
-    private string? cachedServerIdBaseUrl;
+    private readonly JellyfinServerIdCache serverIdCache;
 
     protected override string ServiceName => "Jellyfin";
 
-    public JellyfinClient(IHttpClientFactory httpClientFactory, IDbContextFactory<AppDbContext> dbFactory, IConfiguration configuration)
+    public JellyfinClient(IHttpClientFactory httpClientFactory, IDbContextFactory<AppDbContext> dbFactory, IConfiguration configuration, JellyfinServerIdCache? serverIdCache = null)
         : base(httpClientFactory, dbFactory, configuration)
     {
+        this.serverIdCache = serverIdCache ?? new JellyfinServerIdCache();
         settingsResolver = new EffectiveSettingsResolver<JellyfinSettings>(
             dbFactory,
             configuration,
@@ -114,7 +129,7 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
         var settings = await GetSettingsAsync(ct);
         if (settings is null || string.IsNullOrWhiteSpace(settings.BaseUrl)) return null;
 
-        if (cachedServerId is not null && cachedServerIdBaseUrl == settings.BaseUrl)
+        if (serverIdCache.Get(settings.BaseUrl) is { } cachedServerId)
         {
             return cachedServerId;
         }
@@ -143,8 +158,7 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
 
         if (!string.IsNullOrWhiteSpace(result))
         {
-            cachedServerId = result;
-            cachedServerIdBaseUrl = settings.BaseUrl;
+            serverIdCache.Set(settings.BaseUrl, result);
             return result;
         }
 
@@ -237,8 +251,7 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
                         var info = await response.Content.ReadFromJsonAsync<JellyfinSystemInfoDto>(cancellationToken: token);
                         if (!string.IsNullOrWhiteSpace(info?.Id))
                         {
-                            cachedServerId = info.Id;
-                            cachedServerIdBaseUrl = settings.BaseUrl;
+                            serverIdCache.Set(settings.BaseUrl!, info.Id);
                             serverId = info.Id;
                         }
                         if (!string.IsNullOrWhiteSpace(info?.Version))

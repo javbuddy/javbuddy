@@ -91,6 +91,7 @@ public static class ServiceRegistration
         services.AddScoped<IJavinizerClient, JavinizerClient>();
         services.AddScoped<IProwlarrClient, ProwlarrClient>();
         services.AddScoped<IChallengeSolverClient, FlareSolverrClient>();
+        services.AddSingleton<JellyfinServerIdCache>();
         services.AddScoped<IJellyfinClient, JellyfinClient>();
         services.AddScoped<IMediaServerClient>(sp => sp.GetRequiredService<IJellyfinClient>());
         services.AddScoped<ILocalLibraryClient, LocalLibraryClient>();

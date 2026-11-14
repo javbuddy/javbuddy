@@ -26,7 +26,12 @@
                                 Excludable="true"
                                 OnResetFilters="ResetFilters" />
 
-            @if (!DisplayedMovies.Any())
+            @if (!RendererInfo.IsInteractive)
+            {
+                @* The posters render once the circuit is up: they are the bulk of the prerendered HTML. *@
+                <PosterGridSkeleton />
+            }
+            else if (!DisplayedMovies.Any())
             {
                 <p class="text-muted mb-0">No movies match the active filters. <button type="button" class="btn btn-link p-0 align-baseline" @onclick="ResetFilters">Reset filters</button></p>
             }

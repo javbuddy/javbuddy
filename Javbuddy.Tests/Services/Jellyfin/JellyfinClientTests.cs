@@ -123,6 +123,43 @@ public class JellyfinClientTests
     }
 
     [Fact]
+    public async Task GetServerIdAsync_SharedCache_AsksSystemInfoOnceAcrossClientInstances()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.JellyfinSettings.Add(new JellyfinSettings { BaseUrl = "http://localhost:8096", ApiKey = "testkey", Enabled = true });
+            await db.SaveChangesAsync();
+        }
+        var calls = 0;
+        var handler = new FakeHttpMessageHandler((_, _) =>
+        {
+            calls++;
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent("{\"Id\":\"server-guid-1234\"}") });
+        });
+        var cache = new JellyfinServerIdCache();
+        var config = new ConfigurationBuilder().Build();
+
+        // Two scopes (a prerender and its circuit) each get their own client.
+        var first = await new JellyfinClient(new FakeHttpClientFactory(handler), factory, config, cache).GetServerIdAsync();
+        var second = await new JellyfinClient(new FakeHttpClientFactory(handler), factory, config, cache).GetServerIdAsync();
+
+        Assert.Equal("server-guid-1234", first);
+        Assert.Equal("server-guid-1234", second);
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public void ServerIdCache_IsPerBaseUrl()
+    {
+        var cache = new JellyfinServerIdCache();
+        cache.Set("http://a:8096", "id-a");
+
+        Assert.Equal("id-a", cache.Get("http://a:8096"));
+        Assert.Null(cache.Get("http://b:8096"));
+    }
+
+    [Fact]
     public async Task GetServerIdAsync_ReturnsNull_WhenSystemInfoFails()
     {
         using var factory = new TestDbContextFactory();

@@ -21,3 +21,26 @@ internal static class BunitJSInteropExtensions
     internal static void AllowModalShell(this BunitJSInterop jsInterop) =>
         jsInterop.SetupModule("./Components/Shared/ModalShell.razor.js").Mode = JSRuntimeMode.Loose;
 }
+
+/// <summary>A BunitContext whose components render as the interactive circuit does. bUnit renders as a static
+/// (prerender-like) page by default, where Actor Detail's heavy sections show only a skeleton; a test of their
+/// loaded content uses this base, and one of the prerender sets <see cref="Interactive"/> to false before rendering.
+/// The renderer info can only be set once the Services provider is built, so it is applied on the first render,
+/// after the test has registered its services.</summary>
+public abstract class InteractiveBunitContext : BunitContext
+{
+    private bool rendererInfoSet;
+
+    protected bool Interactive { get; set; } = true;
+
+    public new IRenderedComponent<TComponent> Render<TComponent>(Action<ComponentParameterCollectionBuilder<TComponent>>? parameterBuilder = null)
+        where TComponent : Microsoft.AspNetCore.Components.IComponent
+    {
+        if (!rendererInfoSet)
+        {
+            rendererInfoSet = true;
+            SetRendererInfo(new Microsoft.AspNetCore.Components.RendererInfo("Server", Interactive));
+        }
+        return base.Render(parameterBuilder);
+    }
+}

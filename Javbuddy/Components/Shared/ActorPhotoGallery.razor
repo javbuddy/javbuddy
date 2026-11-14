@@ -3,12 +3,30 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-@if (photoService is not null)
+@if (photoService is not null && !isLoaded)
+{
+@* Only while the circuit loads an actor's photos without the prerender's snapshot (e.g. navigating from one
+   actor to another): a page load prerenders the first batch, and the circuit starts from that snapshot. *@
+<section class="actor-photo-gallery card mb-4" aria-busy="true">
+    <div class="card-body">
+        <div class="actor-photo-gallery-header">
+            <h2 class="card-title">Photos</h2>
+        </div>
+        <div class="actor-photo-skeleton" aria-hidden="true">
+            @for (var i = 0; i < SkeletonTileCount; i++)
+            {
+                <div class="actor-photo-skeleton-tile"></div>
+            }
+        </div>
+    </div>
+</section>
+}
+else if (photoService is not null)
 {
 <section class="actor-photo-gallery card mb-4 @(isGalleryExpanded ? "actor-photo-gallery-expanded" : null)">
     <div class="card-body">
         <div class="actor-photo-gallery-header">
-            <h2 class="card-title">Photos <span class="actor-photo-count">(@gallery.Photos.Count)</span></h2>
+            <h2 class="card-title">Photos <span class="actor-photo-count">(@TotalPhotoCount)</span></h2>
             <div class="actor-photo-gallery-header-actions">
                 <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="ToggleAlbumEditor">Albums</button>
                 <button type="button" class="btn btn-primary btn-sm" @onclick="() => showUploadModal = true">Add photos</button>
@@ -39,7 +57,7 @@
         }
 
         <div class="actor-photo-album-pills" role="group" aria-label="Photo album filter">
-            <button class="actor-photo-album-pill @(activeAlbumId is null && !showUncategorized ? "active" : "")" @onclick="ShowAll">All (@gallery.Photos.Count)</button>
+            <button class="actor-photo-album-pill @(activeAlbumId is null && !showUncategorized ? "active" : "")" @onclick="ShowAll">All (@TotalPhotoCount)</button>
             @if (UncategorizedCount > 0)
             {
                 <button class="actor-photo-album-pill @(showUncategorized ? "active" : "")" @onclick="ShowUncategorized">Uncategorized (@UncategorizedCount)</button>
@@ -58,7 +76,7 @@
         {
             <div class="actor-photo-grid-preview" @ref="galleryGridRef">
                 <div class="actor-photos-justified-grid">
-                    @for (var i = 0; i < filteredPhotos.Count; i++)
+                    @for (var i = 0; i < VisibleTileCount; i++)
                     {
                         var index = i;
                         var photo = filteredPhotos[index];
@@ -67,37 +85,45 @@
                              style="--ar: @(photo.AspectRatio.ToString("0.####", CultureInfo.InvariantCulture));"
                              @onclick="() => OpenLightbox(index)">
                             <img class="actor-photo-tile-img js-lazy-gallery-img"
-                                 data-src="@PhotoUrl(photo.Id, "thumb")"
+                                 src="@(index < EagerTileCount ? PhotoUrl(photo, "thumb") : null)"
+                                 data-src="@PhotoUrl(photo, "thumb")"
                                  alt="@(!string.IsNullOrEmpty(ActorName) ? ActorName : "Photo") @(index + 1)"
                                  decoding="async" />
                         </div>
                     }
                 </div>
+                @if (isGalleryExpanded && VisibleTileCount < filteredPhotos.Count)
+                {
+                    <div class="actor-photo-gallery-sentinel" data-generation="@gridGeneration" aria-hidden="true"></div>
+                }
             </div>
-            @* Plain inline <script>, not JS-interop: runs synchronously as the browser parses this
-               HTML, before the interactive circuit connects (matching App.razor's theme/sidebar
-               flicker-prevention scripts). Loads whichever thumbnails the "show 5 rows" CSS
-               collapse (ActorPhotoGallery.razor.css) currently renders within the visible grid
-               height, so visible photos never wait on the circuit/JS module. *@
-            <script>
-                (function () {
-                    var grid = document.querySelector('.actor-photo-grid-preview .actor-photos-justified-grid');
-                    if (!grid) return;
-                    var maxHeight = grid.offsetHeight || 1120;
-                    grid.querySelectorAll('.actor-photo-tile').forEach(function (tile) {
-                        if (tile.offsetTop >= maxHeight) return;
-                        var img = tile.querySelector('img[data-src]');
-                        if (img && !img.src) {
-                            img.src = img.dataset.src;
-                            img.classList.add('loaded');
-                        }
-                    });
-                })();
-            </script>
-            @if (filteredPhotos.Count > 5)
+            @if (!RendererInfo.IsInteractive)
+            {
+                @* Plain inline <script>, not JS-interop: runs synchronously as the browser parses the
+                   prerendered HTML, before the interactive circuit connects (matching App.razor's
+                   theme/sidebar flicker-prevention scripts). Loads whichever thumbnails the "show 5 rows"
+                   CSS collapse (ActorPhotoGallery.razor.css) shows, so the first rows never wait on the
+                   circuit or the JS module. Blazor doesn't run a script it inserts, so it's prerender-only. *@
+                <script>
+                    (function () {
+                        var grid = document.querySelector('.actor-photo-grid-preview .actor-photos-justified-grid');
+                        if (!grid) return;
+                        var maxHeight = grid.offsetHeight || 1120;
+                        grid.querySelectorAll('.actor-photo-tile').forEach(function (tile) {
+                            if (tile.offsetTop >= maxHeight) return;
+                            var img = tile.querySelector('img[data-src]');
+                            if (img && !img.src) {
+                                img.src = img.dataset.src;
+                                img.classList.add('loaded');
+                            }
+                        });
+                    })();
+                </script>
+            }
+            @if (FilteredPhotoCount > 5)
             {
                 <button type="button" class="btn btn-outline-secondary btn-sm actor-photo-gallery-expand" @onclick="ToggleGalleryExpansion">
-                    @(isGalleryExpanded ? "Show fewer photos" : $"Show all {filteredPhotos.Count} photos")
+                    @(isGalleryExpanded ? "Show fewer photos" : $"Show all {FilteredPhotoCount} photos")
                 </button>
             }
         }
@@ -108,8 +134,8 @@
 {
     <GalleryLightbox Count="filteredPhotos.Count"
                      @bind-Index="activeLightboxIndex"
-                     ImageUrl="@(i => PhotoUrl(filteredPhotos[i].Id, "full"))"
-                     OriginalUrl="@(i => filteredPhotos[i].HasOriginal ? PhotoUrl(filteredPhotos[i].Id, "original") : null)"
+                     ImageUrl="@(i => PhotoUrl(filteredPhotos[i], "full"))"
+                     OriginalUrl="@(i => filteredPhotos[i].HasOriginal ? PhotoUrl(filteredPhotos[i], "original") : null)"
                      ImageAlt="@(i => $"Photo {i + 1}")"
                      ItemName="photo"
                      OnClose="CloseLightbox">
@@ -157,23 +183,102 @@
 
     private int activeLightboxIndex = -1;
 
-    private int UncategorizedCount => gallery.Photos.Count(photo => photo.AlbumId is null);
+    private const int PhotoBatchSize = 150;
+    private const int SkeletonTileCount = 20;
+    // The first tiles carry their src in the markup, so the preview's first rows load straight from the HTML and
+    // keep it when the circuit re-renders them (the lazy loader only sets src on the browser's copy, which that
+    // re-render replaces). About five rows on a 2560px-wide window; the rest load through the lazy loader.
+    private const int EagerTileCount = 60;
+    private int visibleCount = PhotoBatchSize;
+    // Bumped whenever the rendered batch restarts (filter change, collapse), so a load-more call the sentinel
+    // fired for the previous batch is dropped when it arrives.
+    private int gridGeneration;
+    private bool isLoaded;
+    private bool disposed;
+    private DotNetObjectReference<ActorPhotoGallery>? dotNetRef;
+
+    // The tiles rendered so far: a prefix of filteredPhotos, so a tile's index is its lightbox index. An album
+    // opened in the expanded view renders whole, as it always has; All and Uncategorized, which can hold
+    // thousands of photos, grow a batch at a time.
+    private int VisibleTileCount => isGalleryExpanded && activeAlbumId is not null
+        ? filteredPhotos.Count
+        : Math.Min(visibleCount, filteredPhotos.Count);
+
+    // While the circuit still shows the prerender's snapshot (only the first batch of photos), the counts come
+    // from the snapshot; the full list replaces it as soon as it has loaded.
+    private GalleryInitialView? snapshot;
+    private PersistentComponentState? applicationState;
+    private PersistingComponentStateSubscription? persistingSubscription;
+    private const string PersistStateKey = "actor-photo-gallery";
+
+    /// <summary>What the prerender showed, handed to the circuit so its first render matches it.</summary>
+    private sealed record GalleryInitialView(int ActorId, List<ActorPhotoAlbumSummary> Albums, List<ActorPhotoSummary> Photos, int TotalCount, int UncategorizedCount);
+
+    private int TotalPhotoCount => snapshot?.TotalCount ?? gallery.Photos.Count;
+
+    private int UncategorizedCount => snapshot?.UncategorizedCount ?? gallery.Photos.Count(photo => photo.AlbumId is null);
+
+    // The snapshot only holds All's first batch; any other view is the (partial) filtered list until the full one lands.
+    private int FilteredPhotoCount => snapshot is not null && activeAlbumId is null && !showUncategorized
+        ? snapshot.TotalCount
+        : filteredPhotos.Count;
 
     private ActorPhotoSummary? ActiveLightboxPhoto =>
         activeLightboxIndex >= 0 && activeLightboxIndex < filteredPhotos.Count ? filteredPhotos[activeLightboxIndex] : null;
 
-    protected override void OnInitialized() => photoService = ServiceProvider.GetService<IActorPhotoService>();
+    // Resolved optionally, like Missing.razor: bUnit doesn't register PersistentComponentState by default.
+    protected override void OnInitialized()
+    {
+        photoService = ServiceProvider.GetService<IActorPhotoService>();
+        applicationState = ServiceProvider.GetService<PersistentComponentState>();
+        if (applicationState is null) return;
+        if (!RendererInfo.IsInteractive)
+        {
+            persistingSubscription = applicationState.RegisterOnPersisting(PersistInitialView);
+        }
+        else if (applicationState.TryTakeFromJson<GalleryInitialView>(PersistStateKey, out var persisted)
+            && persisted is not null && persisted.ActorId == ActorId)
+        {
+            // Start from exactly what the prerender showed, so the circuit's first render doesn't flash a skeleton.
+            snapshot = persisted;
+            gallery = new ActorPhotoGalleryData(persisted.Albums, persisted.Photos);
+            ApplyFilter();
+            isLoaded = true;
+        }
+    }
+
+    private Task PersistInitialView()
+    {
+        if (isLoaded && snapshot is null)
+        {
+            applicationState!.PersistAsJson(PersistStateKey, new GalleryInitialView(
+                ActorId,
+                gallery.Albums.ToList(),
+                gallery.Photos.Take(PhotoBatchSize).ToList(),
+                gallery.Photos.Count,
+                gallery.Photos.Count(photo => photo.AlbumId is null)));
+        }
+        return Task.CompletedTask;
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         if (ActorId != loadedActorId)
         {
+            var keepSnapshot = snapshot is not null && snapshot.ActorId == ActorId && loadedActorId == 0;
             loadedActorId = ActorId;
             activeAlbumId = null;
             showUncategorized = false;
             isGalleryExpanded = false;
+            ResetVisibleTiles();
             CloseLightbox();
+            if (!keepSnapshot)
+            {
+                snapshot = null;
+                isLoaded = false;
+            }
             await ReloadAsync();
+            isLoaded = true;
         }
     }
 
@@ -182,6 +287,7 @@
         if (ActorId <= 0) return;
         if (photoService is null) return;
         gallery = await photoService.GetGalleryAsync(ActorId);
+        snapshot = null;
         ApplyFilter();
     }
 
@@ -200,6 +306,7 @@
         activeAlbumId = null;
         showUncategorized = false;
         renameAlbumName = string.Empty;
+        ResetVisibleTiles();
         CloseLightbox();
         ApplyFilter();
     }
@@ -209,6 +316,7 @@
         activeAlbumId = null;
         showUncategorized = true;
         renameAlbumName = string.Empty;
+        ResetVisibleTiles();
         CloseLightbox();
         ApplyFilter();
     }
@@ -224,6 +332,7 @@
         activeAlbumId = album.Id;
         showUncategorized = false;
         renameAlbumName = album.Name;
+        ResetVisibleTiles();
         CloseLightbox();
         ApplyFilter();
     }
@@ -239,7 +348,27 @@
             : photos.OrderBy(photo => photo.UploadedAt).ThenBy(photo => photo.Id).ToList();
     }
 
-    private void ToggleGalleryExpansion() => isGalleryExpanded = !isGalleryExpanded;
+    private void ToggleGalleryExpansion()
+    {
+        isGalleryExpanded = !isGalleryExpanded;
+        ResetVisibleTiles();
+    }
+
+    private void ResetVisibleTiles()
+    {
+        visibleCount = PhotoBatchSize;
+        gridGeneration++;
+    }
+
+    /// <summary>Called by the grid's sentinel (see ActorPhotoGallery.razor.js) when it scrolls into view:
+    /// renders the next batch of tiles. Ignored when it was fired for an earlier batch.</summary>
+    [JSInvokable]
+    public void LoadMorePhotos(int generation)
+    {
+        if (disposed || generation != gridGeneration || !isGalleryExpanded || VisibleTileCount >= filteredPhotos.Count) return;
+        visibleCount = Math.Min(visibleCount + PhotoBatchSize, filteredPhotos.Count);
+        StateHasChanged();
+    }
 
     private void ToggleAlbumEditor() => showAlbumEditor = !showAlbumEditor;
 
@@ -350,7 +479,7 @@
         await OnPortraitEditorRequested.InvokeAsync(imageBytes);
     }
 
-    private static string PhotoUrl(int photoId, string variant) => $"/actor-photo/{photoId}/{variant}";
+    private static string PhotoUrl(ActorPhotoSummary photo, string variant) => ActorPhotoUrls.Url(photo.Id, variant, photo.Version);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -361,7 +490,8 @@
                 try
                 {
                     jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ActorPhotoGallery.razor.js");
-                    await jsModule.InvokeVoidAsync("init", galleryGridRef);
+                    dotNetRef ??= DotNetObjectReference.Create(this);
+                    await jsModule.InvokeVoidAsync("init", galleryGridRef, dotNetRef);
                 }
                 catch (JSDisconnectedException)
                 {
@@ -389,6 +519,9 @@
 
     public async ValueTask DisposeAsync()
     {
+        disposed = true;
+        persistingSubscription?.Dispose();
+        dotNetRef?.Dispose();
         if (jsModule is not null)
         {
             try

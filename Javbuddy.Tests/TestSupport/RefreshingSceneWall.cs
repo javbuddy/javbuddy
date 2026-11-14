@@ -49,4 +49,22 @@ public sealed class RefreshingSceneWall(IDbContextFactory<AppDbContext> factory,
         await RefreshAsync(ct);
         return await inner.GetApexOptionsAsync(ct);
     }
+
+    public async Task<int> CountScenesAsync(SceneWallFilter filter, CancellationToken ct = default)
+    {
+        await RefreshAsync(ct);
+        return await inner.CountScenesAsync(filter, ct);
+    }
+
+    public async Task<int> CountHighlightsAsync(SceneWallFilter filter, CancellationToken ct = default)
+    {
+        await RefreshAsync(ct);
+        return await inner.CountHighlightsAsync(filter, ct);
+    }
+
+    public async Task<int> CountApexesAsync(SceneWallFilter filter, CancellationToken ct = default)
+    {
+        await RefreshAsync(ct);
+        return await inner.CountApexesAsync(filter, ct);
+    }
 }

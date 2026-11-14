@@ -111,7 +111,7 @@ else
                                  style="--ar: @(current.AspectRatio.ToString("0.####", CultureInfo.InvariantCulture));"
                                  @onclick="() => OpenLightbox(current)">
                                 <img class="actor-photo-tile-img"
-                                     data-src="@($"/actor-photo/{current.Id}/thumb")"
+                                     data-src="@ActorPhotoUrls.Url(current.Id, "thumb", current.Version)"
                                      alt="@current.ActorDisplayName"
                                      decoding="async" />
                                 <div class="actor-photo-tile-overlay" @onclick:stopPropagation="true">
@@ -151,8 +151,8 @@ else
 {
     <GalleryLightbox Count="FilteredPhotos.Count"
                      @bind-Index="activeLightboxIndex"
-                     ImageUrl="@(i => $"/actor-photo/{FilteredPhotos[i].Id}/full")"
-                     OriginalUrl="@(i => FilteredPhotos[i].HasOriginal ? $"/actor-photo/{FilteredPhotos[i].Id}/original" : null)"
+                     ImageUrl="@(i => ActorPhotoUrls.Url(FilteredPhotos[i].Id, "full", FilteredPhotos[i].Version))"
+                     OriginalUrl="@(i => FilteredPhotos[i].HasOriginal ? ActorPhotoUrls.Url(FilteredPhotos[i].Id, "original", FilteredPhotos[i].Version) : null)"
                      ImageAlt="@(i => FilteredPhotos[i].ActorDisplayName)"
                      ItemName="photo"
                      OnClose="CloseLightbox">

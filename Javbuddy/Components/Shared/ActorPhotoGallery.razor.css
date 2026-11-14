@@ -60,6 +60,37 @@
     transform: scale(1.02);
 }
 
+/* Placeholder shown until the gallery's photos load: the collapsed grid's five rows of tiles. */
+.actor-photo-skeleton {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-height: calc(5 * 220px + 4 * 4px);
+    overflow: hidden;
+}
+
+.actor-photo-skeleton-tile {
+    position: relative;
+    flex: 1 0 300px;
+    height: 220px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: #e9ecef;
+}
+
+.actor-photo-skeleton-tile::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+    animation: actor-photo-skeleton-wave 1.5s infinite;
+}
+
+@keyframes actor-photo-skeleton-wave {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
 /* Limit unexpanded gallery to five complete rows */
 .actor-photo-gallery:not(.actor-photo-gallery-expanded) .actor-photos-justified-grid {
     max-height: calc(5 * 220px + 4 * 4px);
@@ -67,6 +98,8 @@
 }
 
 :root[data-theme="dark"] .actor-photo-gallery { color: #e3e5e8; background: var(--jb-dark-surface); border-color: var(--jb-dark-border-strong); }
+:root[data-theme="dark"] .actor-photo-skeleton-tile { background: var(--jb-dark-raised-cool); }
+:root[data-theme="dark"] .actor-photo-skeleton-tile::after { background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.09) 50%, transparent 100%); }
 :root[data-theme="dark"] .actor-photo-album-pill { color: #cfd3de; background: var(--jb-dark-raised-cool); border-color: var(--jb-dark-control); }
 :root[data-theme="dark"] .actor-photo-album-pill:hover { color: #fff; border-color: var(--jb-accent); }
 :root[data-theme="dark"] .actor-photo-album-pill.active { color: #fff; background: var(--jb-accent); border-color: var(--jb-accent); }
@@ -84,4 +117,7 @@
     .actor-photo-gallery:not(.actor-photo-gallery-expanded) .actor-photos-justified-grid {
         max-height: calc(5 * 160px + 4 * 4px);
     }
+
+    .actor-photo-skeleton { max-height: calc(5 * 160px + 4 * 4px); }
+    .actor-photo-skeleton-tile { height: 160px; flex-basis: 140px; }
 }

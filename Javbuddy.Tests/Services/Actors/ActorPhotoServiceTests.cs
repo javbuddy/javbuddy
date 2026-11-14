@@ -51,6 +51,28 @@ public class ActorPhotoServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetGalleryAsync_ReturnsEachPhotosUrlVersion_FromItsStoredThumbnail()
+    {
+        using var factory = new TestDbContextFactory();
+        var thumbStorageId = Guid.Parse("0a1b2c3d-4e5f-6789-abcd-ef0123456789");
+        int actorId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Yua", LastName = "Mikami" };
+            db.Actors.Add(actor);
+            await db.SaveChangesAsync();
+            actorId = actor.Id;
+            db.ActorPhotos.Add(new ActorPhoto { ActorId = actorId, ThumbStorageId = thumbStorageId, FullStorageId = Guid.NewGuid() });
+            await db.SaveChangesAsync();
+        }
+
+        var service = CreateService(factory);
+
+        Assert.Equal("0a1b2c3d", Assert.Single((await service.GetGalleryAsync(actorId)).Photos).Version);
+        Assert.Equal("0a1b2c3d", Assert.Single(await service.GetGlobalPhotosAsync()).Version);
+    }
+
+    [Fact]
     public async Task GetGalleryAsync_BreaksUploadTimeTiesByNewestId()
     {
         using var factory = new TestDbContextFactory();

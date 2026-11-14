@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **Actor Detail loads much faster for actors with many photos (#166).** The Photos card now renders 150 photos at a time (the next 150 load as you scroll once "Show all" is open; an album opened there still shows all its photos) instead of every tile at once, and the Movies and Scenes/Highlights/Apexes sections show a placeholder while the page connects and then fill in, instead of being part of the first page load. The Photos card still arrives with the page, its first rows of thumbnails loading straight away, and a Scenes, Highlights or Apexes section with nothing in it stays hidden throughout. The photo count, albums and viewer still cover every photo.
+- **Actor Detail does less work per load, and images are revalidated less (#166).** The page's independent reads (portrait, movies, photo count, settings, Jellyfin link) run side by side, and the Jellyfin server id is fetched once per app run instead of on every page load. Actor photos are cached by the browser for good (their URLs now carry a version), cached posters are shown from the browser's cache while it rechecks them in the background, and the favorite heart on poster and clip cards is drawn from one shared icon instead of being repeated in every card's markup.
+
 ## [0.6.4] - 2026-11-13
 
 ### Changed

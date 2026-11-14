@@ -1,4 +1,6 @@
-// Owns viewport-proximity image loading for the actor detail page's photo gallery preview grid.
+// Owns viewport-proximity image loading for the actor detail page's photo gallery preview grid,
+// and (once the gallery is expanded) asks Blazor for the next batch of tiles when the sentinel after
+// the grid comes into view. The first visible rows load as soon as init()/observe() runs, without a scroll.
 //
 // Native `loading="lazy"` on these <img> tags only defers correctly on the page's initial static
 // parse. Once Blazor Server's interactive circuit connects, the whole grid is re-inserted as
@@ -7,9 +9,13 @@
 // IntersectionObserver instead sidesteps that.
 
 let observer = null;
+let moreObserver = null;
+let dotNetRef = null;
+let pending = false;
 
-export function init(container) {
+export function init(container, ref) {
     dispose();
+    dotNetRef = ref ?? null;
     if (!container || typeof container.querySelectorAll !== 'function') return;
 
     if (!('IntersectionObserver' in window)) {
@@ -28,13 +34,47 @@ export function init(container) {
         rootMargin: '800px 0px 800px 0px'
     });
 
+    if (dotNetRef) {
+        // The sentinel after the expanded grid asks Blazor for the next batch of tiles, like /actors/photos.
+        moreObserver = new IntersectionObserver((entries) => {
+            if (pending || !entries.some(entry => entry.isIntersecting && entry.target.isConnected)) return;
+            requestMore(container);
+        }, { rootMargin: '1600px 0px 1600px 0px' });
+    }
+
     observe(container);
+}
+
+async function requestMore(container) {
+    const current = moreObserver;
+    const sentinel = container.querySelector('.actor-photo-gallery-sentinel');
+    if (!current || !sentinel) return;
+    pending = true;
+    current.disconnect();
+    try {
+        await dotNetRef.invokeMethodAsync('LoadMorePhotos', Number(sentinel.dataset.generation));
+    } catch {
+        // A disconnected circuit can reconnect; the next render observes the sentinel again.
+    } finally {
+        pending = false;
+        if (moreObserver === current) observeSentinel(container);
+    }
+}
+
+function observeSentinel(container) {
+    if (!moreObserver || pending) return;
+    const sentinel = container.querySelector('.actor-photo-gallery-sentinel');
+    if (sentinel?.isConnected) {
+        // Re-observing delivers a fresh intersection entry, so a sentinel still in range loads the next batch.
+        moreObserver.unobserve(sentinel);
+        moreObserver.observe(sentinel);
+    }
 }
 
 export function observe(container) {
     if (!container || typeof container.querySelectorAll !== 'function') return;
     if (!observer) {
-        init(container);
+        init(container, dotNetRef);
         return;
     }
 
@@ -59,6 +99,8 @@ export function observe(container) {
         observer.unobserve(tile);
         observer.observe(tile);
     }
+
+    observeSentinel(container);
 }
 
 function loadImage(tile) {
@@ -86,4 +128,10 @@ export function dispose() {
         observer.disconnect();
         observer = null;
     }
+    if (moreObserver) {
+        moreObserver.disconnect();
+        moreObserver = null;
+    }
+    dotNetRef = null;
+    pending = false;
 }
