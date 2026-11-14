@@ -232,20 +232,26 @@ else
 
         if (actor is not null)
         {
-            var info = await ActorService.GetPortraitInfoAsync(actor.Id);
-            portraitInfo = info ?? new(false, false, false);
+            // Independent reads, each on its own DbContext (or HTTP call), so they run side by side instead of
+            // the page waiting for each in turn.
+            var portraitTask = ActorService.GetPortraitInfoAsync(actor.Id);
+            var moviesTask = ActorDetailQuery.GetMoviesAsync(actor.Id);
+            var downloadingTask = ActorDetailQuery.GetDownloadingCodesAsync();
+            var photoCountTask = ActorDetailQuery.GetPhotoCountAsync(actor.Id);
+            var r18DevTask = R18DevSettingsService.GetAsync();
+            var jellyfinTask = !string.IsNullOrWhiteSpace(actor.JellyfinPersonId)
+                ? JellyfinClient.GetWebUrlAsync(actor.JellyfinPersonId)
+                : Task.FromResult<string?>(null);
+            await Task.WhenAll(portraitTask, moviesTask, downloadingTask, photoCountTask, r18DevTask, jellyfinTask);
+
+            portraitInfo = portraitTask.Result ?? new(false, false, false);
             hasImage = portraitInfo.HasImage;
             imageVersion = portraitInfo.ImageVersion;
-
-            allMovies = await ActorDetailQuery.GetMoviesAsync(actor.Id);
-            downloadingCodes = await ActorDetailQuery.GetDownloadingCodesAsync();
-
-            imageCount = await ActorDetailQuery.GetPhotoCountAsync(actor.Id);
-            r18DevEnabled = (await R18DevSettingsService.GetAsync()).Enabled;
-
-            jellyfinWebUrl = !string.IsNullOrWhiteSpace(actor.JellyfinPersonId)
-                ? await JellyfinClient.GetWebUrlAsync(actor.JellyfinPersonId)
-                : null;
+            allMovies = moviesTask.Result;
+            downloadingCodes = downloadingTask.Result;
+            imageCount = photoCountTask.Result;
+            r18DevEnabled = r18DevTask.Result.Enabled;
+            jellyfinWebUrl = jellyfinTask.Result;
         }
     }
 

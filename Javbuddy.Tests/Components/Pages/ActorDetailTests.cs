@@ -55,6 +55,36 @@ public class ActorDetailTests : InteractiveBunitContext
     }
 
     [Fact]
+    public void ActorDetail_StartsItsIndependentLoadsTogether()
+    {
+        using var factory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        var query = Substitute.For<IActorDetailQueryService>();
+        var movies = new TaskCompletionSource<List<Movie>>();
+        query.GetMoviesAsync(1, Arg.Any<CancellationToken>()).Returns(movies.Task);
+        query.GetDownloadingCodesAsync(Arg.Any<CancellationToken>()).Returns(new HashSet<string>());
+        query.GetPhotoCountAsync(1, Arg.Any<CancellationToken>()).Returns(3);
+        Services.AddSingleton(query);
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" });
+        actorService.GetPortraitInfoAsync(1, Arg.Any<CancellationToken>()).Returns(new ActorPortraitInfo(false, false, false));
+        Services.AddSingleton(actorService);
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>());
+        Services.AddSingleton(Substitute.For<INfoSyncService>());
+
+        var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Mikami Yua"));
+
+        // The movies are still loading, yet the photo count and portrait were already asked for.
+        query.Received(1).GetPhotoCountAsync(1, Arg.Any<CancellationToken>());
+        actorService.Received(1).GetPortraitInfoAsync(1, Arg.Any<CancellationToken>());
+
+        cut.InvokeAsync(() => movies.SetResult([]));
+
+        cut.WaitForAssertion(() => Assert.Contains("0 movies · 3 images", cut.Find(".actor-hero-meta").TextContent));
+    }
+
+    [Fact]
     public async Task ActorDetail_RendersEditButton_AndHeroDetails()
     {
         using var factory = new TestDbContextFactory();
