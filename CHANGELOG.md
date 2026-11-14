@@ -6,7 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Changed
 
-- **Actor Detail loads much faster for actors with many photos (#166).** The Photos card now renders 150 photos at a time (the next 150 load as you scroll once "Show all" is open; an album opened there still shows all its photos) instead of every tile at once, and the Photos, Movies and Scenes/Highlights/Apexes sections show a placeholder while the page connects and then fill in, instead of being part of the first page load. A Scenes, Highlights or Apexes section with nothing in it stays hidden throughout. The photo count, albums and viewer still cover every photo.
+- **Actor Detail loads much faster for actors with many photos (#166).** The Photos card now renders 150 photos at a time (the next 150 load as you scroll once "Show all" is open; an album opened there still shows all its photos) instead of every tile at once, and the Movies and Scenes/Highlights/Apexes sections show a placeholder while the page connects and then fill in, instead of being part of the first page load. The Photos card still arrives with the page, its first rows of thumbnails loading straight away, and a Scenes, Highlights or Apexes section with nothing in it stays hidden throughout. The photo count, albums and viewer still cover every photo.
 
 ## [0.6.4] - 2026-11-13
 

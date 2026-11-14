@@ -495,20 +495,128 @@ public class ActorPhotoGalleryTests : InteractiveBunitContext
         Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
     }
 
+    private sealed record InitialView(int ActorId, List<ActorPhotoAlbumSummary> Albums, List<ActorPhotoSummary> Photos, int TotalCount, int UncategorizedCount);
+
+    private static List<ActorPhotoSummary> Photos(int count, int albumPhotoCount = 0) =>
+        Enumerable.Range(1, count).Select(id => new ActorPhotoSummary(id, id <= albumPhotoCount ? 3 : null, new DateTime(2026, 1, 1))).ToList();
+
     [Fact]
-    public void WhenNotInteractive_ShowsASkeleton_AndDoesNotLoadThePhotos()
+    public void WhenNotInteractive_PrerendersTheFirstBatch_WithTheEagerThumbnailScript()
     {
         Interactive = false;
         var service = Substitute.For<IActorPhotoService>();
+        service.GetGalleryAsync(7, Arg.Any<CancellationToken>()).Returns(new ActorPhotoGalleryData([], Photos(400)));
         Services.AddSingleton(service);
 
         var cut = Render<ActorPhotoGallery>(parameters => parameters
             .Add(component => component.ActorId, 7)
             .Add(component => component.ActorName, "Mikami Yua"));
 
+        Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
+        Assert.Empty(cut.FindAll(".actor-photo-skeleton-tile"));
+        Assert.Single(cut.FindAll("script"));
+        Assert.Equal("Show all 400 photos", cut.Find(".actor-photo-gallery-expand").TextContent.Trim());
+    }
+
+    [Fact]
+    public void TheFirstTiles_CarryTheirThumbnailSrc_TheRestOnlyDataSrc()
+    {
+        var cut = RenderLargeGallery(400);
+
+        var images = cut.FindAll(".actor-photo-tile-img");
+        Assert.Equal("/actor-photo/1/thumb", images[0].GetAttribute("src"));
+        Assert.Equal("/actor-photo/60/thumb", images[59].GetAttribute("src"));
+        Assert.Null(images[60].GetAttribute("src"));
+        Assert.Equal("/actor-photo/61/thumb", images[60].GetAttribute("data-src"));
+    }
+
+    [Fact]
+    public void Interactive_DoesNotRenderTheInlineScript()
+    {
+        var cut = RenderLargeGallery(400);
+
+        Assert.Empty(cut.FindAll("script"));
+    }
+
+    [Fact]
+    public void WhenNotInteractive_PersistsTheFirstBatchAndTheCounts_ForTheCircuit()
+    {
+        Interactive = false;
+        var state = AddBunitPersistentComponentState();
+        var albums = new List<ActorPhotoAlbumSummary> { new(3, "Events", 20) };
+        var service = Substitute.For<IActorPhotoService>();
+        service.GetGalleryAsync(7, Arg.Any<CancellationToken>()).Returns(new ActorPhotoGalleryData(albums, Photos(400, albumPhotoCount: 20)));
+        Services.AddSingleton(service);
+        Render<ActorPhotoGallery>(parameters => parameters.Add(component => component.ActorId, 7));
+
+        state.TriggerOnPersisting();
+
+        Assert.True(state.TryTake<InitialView>("actor-photo-gallery", out var persisted));
+        Assert.Equal(7, persisted!.ActorId);
+        Assert.Equal(150, persisted.Photos.Count);
+        Assert.Equal(400, persisted.TotalCount);
+        Assert.Equal(380, persisted.UncategorizedCount);
+        Assert.Equal("Events", Assert.Single(persisted.Albums).Name);
+    }
+
+    [Fact]
+    public void Interactive_WithTheSnapshot_RendersItAtOnce_ThenSwapsInTheFullList()
+    {
+        var state = AddBunitPersistentComponentState();
+        var albums = new List<ActorPhotoAlbumSummary> { new(3, "Events", 20) };
+        var all = Photos(400, albumPhotoCount: 20);
+        var full = new TaskCompletionSource<ActorPhotoGalleryData>();
+        var service = Substitute.For<IActorPhotoService>();
+        service.GetGalleryAsync(7, Arg.Any<CancellationToken>()).Returns(full.Task);
+        Services.AddSingleton(service);
+        state.Persist("actor-photo-gallery", new InitialView(7, albums, all.Take(150).ToList(), 400, 380));
+
+        var cut = Render<ActorPhotoGallery>(parameters => parameters.Add(component => component.ActorId, 7));
+
+        // No skeleton while the full list loads: the snapshot's tiles and counts are on screen.
+        Assert.Empty(cut.FindAll(".actor-photo-skeleton-tile"));
+        Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
+        Assert.Equal("(400)", cut.Find(".actor-photo-count").TextContent.Trim());
+        Assert.Contains(cut.FindAll(".actor-photo-album-pill"), pill => pill.TextContent.Trim() == "Uncategorized (380)");
+        Assert.Equal("Show all 400 photos", cut.Find(".actor-photo-gallery-expand").TextContent.Trim());
+
+        cut.InvokeAsync(() => full.SetResult(new ActorPhotoGalleryData(albums, all)));
+
+        cut.Find(".actor-photo-gallery-expand").Click();
+        cut.InvokeAsync(() => cut.Instance.LoadMorePhotos(SentinelGeneration(cut)));
+        Assert.Equal(300, cut.FindAll(".actor-photo-tile").Count);
+    }
+
+    [Fact]
+    public void Interactive_WithoutASnapshot_ShowsTheSkeletonUntilThePhotosLoad()
+    {
+        var full = new TaskCompletionSource<ActorPhotoGalleryData>();
+        var service = Substitute.For<IActorPhotoService>();
+        service.GetGalleryAsync(7, Arg.Any<CancellationToken>()).Returns(full.Task);
+        Services.AddSingleton(service);
+
+        var cut = Render<ActorPhotoGallery>(parameters => parameters.Add(component => component.ActorId, 7));
+        Assert.NotEmpty(cut.FindAll(".actor-photo-skeleton-tile"));
+
+        cut.InvokeAsync(() => full.SetResult(new ActorPhotoGalleryData([], Photos(10))));
+
+        cut.WaitForAssertion(() => Assert.Equal(10, cut.FindAll(".actor-photo-tile").Count));
+        Assert.Empty(cut.FindAll(".actor-photo-skeleton-tile"));
+    }
+
+    [Fact]
+    public void Interactive_ASnapshotForAnotherActor_IsIgnored()
+    {
+        var state = AddBunitPersistentComponentState();
+        var full = new TaskCompletionSource<ActorPhotoGalleryData>();
+        var service = Substitute.For<IActorPhotoService>();
+        service.GetGalleryAsync(7, Arg.Any<CancellationToken>()).Returns(full.Task);
+        Services.AddSingleton(service);
+        state.Persist("actor-photo-gallery", new InitialView(99, [], Photos(5), 5, 5));
+
+        var cut = Render<ActorPhotoGallery>(parameters => parameters.Add(component => component.ActorId, 7));
+
         Assert.NotEmpty(cut.FindAll(".actor-photo-skeleton-tile"));
         Assert.Empty(cut.FindAll(".actor-photo-tile"));
-        Assert.Empty(cut.FindAll(".actor-photo-album-pill"));
-        service.DidNotReceiveWithAnyArgs().GetGalleryAsync(default, default);
     }
 }
