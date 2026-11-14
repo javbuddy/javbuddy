@@ -28,7 +28,7 @@ public static class MediaEndpoints
             var result = await imageServingService.GetPosterOrFanartAsync(code, role, variant, ct);
             return result.Kind switch
             {
-                ImageServingResultKind.LocalFile => ImageFile(http, result.FilePath!, imageCache.IsCachedFile(result.FilePath!) ? "private, max-age=300" : null),
+                ImageServingResultKind.LocalFile => ImageFile(http, result.FilePath!, imageCache.IsCachedFile(result.FilePath!) ? PosterCacheControl(http) : null),
                 ImageServingResultKind.Redirect => Results.Redirect(result.RedirectUrl!),
                 _ => Results.NotFound(),
             };
@@ -117,9 +117,20 @@ public static class MediaEndpoints
             HttpContext http, int photoId, string variant, IActorPhotoService actorPhotoService, CancellationToken ct) =>
         {
             var result = await actorPhotoService.GetImageAsync(photoId, variant, ct);
-            return ServeImage(http, result, "private, max-age=300");
+            return ServeImage(http, result, http.Request.Query.ContainsKey("v") ? ImmutableCacheControl : "private, max-age=300");
         });
     }
+
+    // A versioned /actor-photo URL (see ActorPhotoUrls) only ever serves the same bytes.
+    public const string ImmutableCacheControl = "private, max-age=31536000, immutable";
+
+    // A versioned poster URL (PosterVersion's ?v=) changes with a crop or a metadata refresh, but not when the
+    // poster file in the library folder is rewritten (e.g. javinizer re-scraping the movie): only a request
+    // reaches the conversion that notices that. So rather than immutable, a cached poster is painted straight
+    // from the browser's cache for a day while the browser revalidates it in the background past the 5 minutes
+    // — a rewritten poster shows up a view later instead of each revisit waiting on ~150 revalidations.
+    public static string PosterCacheControl(HttpContext http) =>
+        http.Request.Query.ContainsKey("v") ? "private, max-age=300, stale-while-revalidate=86400" : "private, max-age=300";
 
     // Every image endpoint above serves bytes straight out of the on-disk WebP cache, and those bytes
     // only change when their source does. Without an explicit Cache-Control the browser revalidates

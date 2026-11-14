@@ -9,7 +9,8 @@ namespace Javbuddy.Services.Actors;
 
 public sealed record ActorPhotoAlbumSummary(int Id, string Name, int PhotoCount);
 
-public sealed record ActorPhotoSummary(int Id, int? AlbumId, DateTime UploadedAt, double AspectRatio = 1.0, bool HasOriginal = false);
+/// <param name="Version">The photo's <see cref="ActorPhotoUrls.Version"/> token for its /actor-photo URLs.</param>
+public sealed record ActorPhotoSummary(int Id, int? AlbumId, DateTime UploadedAt, double AspectRatio = 1.0, bool HasOriginal = false, string? Version = null);
 
 public sealed record ActorPhotoGalleryData(
     IReadOnlyList<ActorPhotoAlbumSummary> Albums,
@@ -24,7 +25,8 @@ public sealed record GlobalActorPhotoItem(
     double AspectRatio,
     DateTime UploadedAt,
     bool IsFavorite = false,
-    bool HasOriginal = false);
+    bool HasOriginal = false,
+    string? Version = null);
 
 public sealed record ActorWithPhotoCountSummary(
     int Id,
@@ -89,7 +91,7 @@ public sealed class ActorPhotoService(
             .Where(photo => photo.ActorId == actorId)
             .OrderByDescending(photo => photo.UploadedAt)
             .ThenByDescending(photo => photo.Id)
-            .Select(photo => new ActorPhotoSummary(photo.Id, photo.AlbumId, photo.UploadedAt, photo.AspectRatio ?? 1.0, photo.SourceStorageId != null))
+            .Select(photo => new ActorPhotoSummary(photo.Id, photo.AlbumId, photo.UploadedAt, photo.AspectRatio ?? 1.0, photo.SourceStorageId != null, ActorPhotoUrls.Version(photo.ThumbStorageId)))
             .ToListAsync(ct);
         return new ActorPhotoGalleryData(albums, photos);
     }
@@ -158,7 +160,8 @@ public sealed class ActorPhotoService(
                 p.AspectRatio,
                 p.UploadedAt,
                 IsFavorite = p.Actor != null && p.Actor.IsFavorite,
-                HasOriginal = p.SourceStorageId != null
+                HasOriginal = p.SourceStorageId != null,
+                p.ThumbStorageId
             })
             .ToListAsync(ct);
 
@@ -172,7 +175,8 @@ public sealed class ActorPhotoService(
                 p.AspectRatio ?? 1.0,
                 p.UploadedAt,
                 p.IsFavorite,
-                p.HasOriginal))
+                p.HasOriginal,
+                ActorPhotoUrls.Version(p.ThumbStorageId)))
             .ToList();
     }
 

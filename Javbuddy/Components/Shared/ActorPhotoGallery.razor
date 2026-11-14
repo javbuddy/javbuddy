@@ -85,8 +85,8 @@ else if (photoService is not null)
                              style="--ar: @(photo.AspectRatio.ToString("0.####", CultureInfo.InvariantCulture));"
                              @onclick="() => OpenLightbox(index)">
                             <img class="actor-photo-tile-img js-lazy-gallery-img"
-                                 src="@(index < EagerTileCount ? PhotoUrl(photo.Id, "thumb") : null)"
-                                 data-src="@PhotoUrl(photo.Id, "thumb")"
+                                 src="@(index < EagerTileCount ? PhotoUrl(photo, "thumb") : null)"
+                                 data-src="@PhotoUrl(photo, "thumb")"
                                  alt="@(!string.IsNullOrEmpty(ActorName) ? ActorName : "Photo") @(index + 1)"
                                  decoding="async" />
                         </div>
@@ -134,8 +134,8 @@ else if (photoService is not null)
 {
     <GalleryLightbox Count="filteredPhotos.Count"
                      @bind-Index="activeLightboxIndex"
-                     ImageUrl="@(i => PhotoUrl(filteredPhotos[i].Id, "full"))"
-                     OriginalUrl="@(i => filteredPhotos[i].HasOriginal ? PhotoUrl(filteredPhotos[i].Id, "original") : null)"
+                     ImageUrl="@(i => PhotoUrl(filteredPhotos[i], "full"))"
+                     OriginalUrl="@(i => filteredPhotos[i].HasOriginal ? PhotoUrl(filteredPhotos[i], "original") : null)"
                      ImageAlt="@(i => $"Photo {i + 1}")"
                      ItemName="photo"
                      OnClose="CloseLightbox">
@@ -479,7 +479,7 @@ else if (photoService is not null)
         await OnPortraitEditorRequested.InvokeAsync(imageBytes);
     }
 
-    private static string PhotoUrl(int photoId, string variant) => $"/actor-photo/{photoId}/{variant}";
+    private static string PhotoUrl(ActorPhotoSummary photo, string variant) => ActorPhotoUrls.Url(photo.Id, variant, photo.Version);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
