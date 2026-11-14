@@ -2,12 +2,13 @@ using Bunit;
 using Javbuddy.Components.Pages.ActorDetailSections;
 using Javbuddy.Models;
 using Javbuddy.Services.Movies;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Pages.ActorDetailSections;
 
-public class ActorMoviesSectionTests : BunitContext
+public class ActorMoviesSectionTests : InteractiveBunitContext
 {
     private const string ScrollModule = "./Components/Pages/ActorDetailSections/ActorMoviesSection.razor.js";
 
@@ -141,5 +142,17 @@ public class ActorMoviesSectionTests : BunitContext
 
         cut.WaitForAssertion(() => Assert.Contains(module.Invocations, i => i.Identifier == "trackScroll"));
         Assert.Equal("javbuddy-actor-detail-scroll-Mikami Yua", Assert.Single(module.Invocations, i => i.Identifier == "trackScroll").Arguments[0]);
+    }
+
+    [Fact]
+    public void WhenNotInteractive_ShowsTheSkeletonInsteadOfThePosters()
+    {
+        Interactive = false;
+
+        var cut = RenderSection([MovieOf(1), MovieOf(2)]);
+
+        Assert.Equal("Movies (2)", cut.Find("section.actor-detail-movies h2.card-title").TextContent);
+        Assert.NotEmpty(cut.FindAll(".skeleton-card"));
+        Assert.Empty(cut.FindAll(".poster-card"));
     }
 }

@@ -5,6 +5,7 @@
 @inject IApexMediaService ApexMedia
 @inject SceneMediaQueue SceneMediaQueue
 @inject IJSRuntime JS
+@inject IServiceProvider ServiceProvider
 @implements IAsyncDisposable
 
 @* One of Actor Detail's Scenes, Highlights and Apexes sections: the actor's clips as the
@@ -12,7 +13,26 @@
    apexes the actor is tagged in — newest release first. A page at a time, with Show more for the next;
    hidden while there are none. A card plays its clip in the ClipPlayerModal. *@
 <div class="actor-clips-host" @ref="hostRef">
-    @if (total > 0)
+    @if (!loadedOnce && knownTotal > 0)
+    {
+        @* The prerender only counts the clips; this placeholder stands in for them until the circuit's first
+           page lands. A section with none (or whose count isn't known, e.g. after in-app navigation between
+           actors) renders nothing until then, like a loaded section with none. *@
+        <section class="actor-clips card mb-4" aria-busy="true">
+            <div class="card-body">
+                <div class="actor-clips-header">
+                    <h2 class="card-title">@Title</h2>
+                </div>
+                <div class="actor-clips-skeleton" aria-hidden="true">
+                    @for (var i = 0; i < Math.Min(knownTotal ?? 0, SkeletonCardCount); i++)
+                    {
+                        <div class="actor-clips-skeleton-card"></div>
+                    }
+                </div>
+            </div>
+        </section>
+    }
+    else if (loadedOnce && total > 0)
     {
         <section class="actor-clips card mb-4" data-kind="@Kind.ToString().ToLowerInvariant()">
             <div class="card-body">
@@ -59,6 +79,7 @@
 
 @code {
     public const int PageSize = 24;
+    private const int SkeletonCardCount = 4;
 
     [Parameter, EditorRequired] public int ActorId { get; set; }
 
@@ -69,7 +90,14 @@
     private List<ApexWallCard> apexCards = [];
     private int total;
     private bool loading;
+    // Set once the first page of this actor's clips has loaded (false again while another actor's loads).
+    private bool loadedOnce;
     private bool disposed;
+    // The clip count from the prerender's count query, handed to the circuit through PersistentComponentState,
+    // so both passes know whether to show the placeholder before the first page has loaded.
+    private int? knownTotal;
+    private PersistentComponentState? applicationState;
+    private PersistingComponentStateSubscription? persistingSubscription;
     // Bumped by every reload, so a page still loading for the previous actor is dropped when it lands.
     private int generation;
     private (int ActorId, PlayerClipKind Kind)? loadedFor;
@@ -94,12 +122,55 @@
 
     private SceneWallFilter Filter => new(ActorIds: [ActorId]);
 
-    protected override void OnInitialized() => SceneMediaQueue.Generated += OnMediaGenerated;
+    private string PersistStateKey => $"actor-clips-{Kind}";
+
+    private sealed record PrerenderedClipCount(int ActorId, int Total);
+
+    // Resolved optionally, like Missing.razor: bUnit doesn't register PersistentComponentState by default.
+    protected override void OnInitialized()
+    {
+        SceneMediaQueue.Generated += OnMediaGenerated;
+        applicationState = ServiceProvider.GetService<PersistentComponentState>();
+        if (applicationState is null) return;
+        if (!RendererInfo.IsInteractive)
+        {
+            persistingSubscription = applicationState.RegisterOnPersisting(PersistCount);
+        }
+        else if (applicationState.TryTakeFromJson<PrerenderedClipCount>(PersistStateKey, out var persisted)
+            && persisted is not null && persisted.ActorId == ActorId)
+        {
+            knownTotal = persisted.Total;
+        }
+    }
+
+    private Task PersistCount()
+    {
+        if (knownTotal is { } count) applicationState!.PersistAsJson(PersistStateKey, new PrerenderedClipCount(ActorId, count));
+        return Task.CompletedTask;
+    }
+
+    private Task<int> CountAsync() => Kind switch
+    {
+        PlayerClipKind.Highlight => SceneWall.CountHighlightsAsync(Filter),
+        PlayerClipKind.Apex => SceneWall.CountApexesAsync(Filter),
+        _ => SceneWall.CountScenesAsync(Filter),
+    };
 
     // Actor Detail reuses its instance when navigating between two actors, so a new ActorId reloads.
     protected override async Task OnParametersSetAsync()
     {
+        // The prerender only counts (no cards, no media queueing): the interactive pass is a new instance and
+        // loads then.
+        if (!RendererInfo.IsInteractive)
+        {
+            if (loadedFor == (ActorId, Kind)) return;
+            loadedFor = (ActorId, Kind);
+            knownTotal = await CountAsync();
+            return;
+        }
         if (loadedFor == (ActorId, Kind)) return;
+        // A count handed over from the prerender is only for the actor it was taken for.
+        if (loadedFor is not null) knownTotal = null;
         loadedFor = (ActorId, Kind);
         generation++;
         sceneCards = [];
@@ -107,7 +178,8 @@
         apexCards = [];
         total = 0;
         playingClip = null;
-        await LoadAsync(0, PageSize, append: false);
+        loadedOnce = false;
+        if (await LoadAsync(0, PageSize, append: false)) loadedOnce = true;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -224,6 +296,7 @@
     {
         disposed = true;
         SceneMediaQueue.Generated -= OnMediaGenerated;
+        persistingSubscription?.Dispose();
         if (clipCardModule is null) return;
         try
         {

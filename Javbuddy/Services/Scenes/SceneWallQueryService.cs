@@ -183,6 +183,15 @@ public interface ISceneWallQueryService
 
     /// <summary>Actors of apexes and studios of movies with apexes; the apex tags are in ApexTags, Tags is empty.</summary>
     Task<SceneWallOptions> GetApexOptionsAsync(CancellationToken ct = default);
+
+    /// <summary>How many scenes GetPageAsync would page through for the filter, without loading any.</summary>
+    Task<int> CountScenesAsync(SceneWallFilter filter, CancellationToken ct = default);
+
+    /// <summary>How many highlights GetHighlightPageAsync would page through for the filter, without loading any.</summary>
+    Task<int> CountHighlightsAsync(SceneWallFilter filter, CancellationToken ct = default);
+
+    /// <summary>How many apexes GetApexPageAsync would page through for the filter, without loading any.</summary>
+    Task<int> CountApexesAsync(SceneWallFilter filter, CancellationToken ct = default);
 }
 
 /// <summary>The library-wide scene wall's query. Filtering, ordering and paging run in
@@ -203,6 +212,24 @@ public sealed class SceneWallQueryService(
 
     // Same seeded shuffle as the Movies grid's "random" sort (MovieGridQueryService).
     private const long RandomSortModulus = int.MaxValue;
+
+    public async Task<int> CountScenesAsync(SceneWallFilter filter, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await Filter(db, filter).CountAsync(ct);
+    }
+
+    public async Task<int> CountHighlightsAsync(SceneWallFilter filter, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await FilterHighlights(db, filter).CountAsync(ct);
+    }
+
+    public async Task<int> CountApexesAsync(SceneWallFilter filter, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await FilterApexes(db, filter).CountAsync(ct);
+    }
 
     public async Task<SceneWallPage> GetPageAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, int skip, int take, CancellationToken ct = default)
     {

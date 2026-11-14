@@ -11,6 +11,34 @@
     gap: 1rem;
 }
 
+/* Placeholder cards while the clips load. */
+.actor-clips-skeleton {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+}
+
+.actor-clips-skeleton-card {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-radius: 4px;
+    background: #e9ecef;
+}
+
+.actor-clips-skeleton-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+    animation: actor-clips-skeleton-wave 1.5s infinite;
+}
+
+@keyframes actor-clips-skeleton-wave {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
 .actor-clips-more {
     display: flex;
     justify-content: center;
@@ -19,3 +47,5 @@
 
 :root[data-theme="dark"] .actor-clips { color: #e3e5e8; background: var(--jb-dark-surface); border-color: var(--jb-dark-border-strong); }
 :root[data-theme="dark"] .actor-clips ::deep .scene-wall-card { --scene-wall-card-bg: var(--jb-dark-raised-cool); }
+:root[data-theme="dark"] .actor-clips-skeleton-card { background: var(--jb-dark-raised-cool); }
+:root[data-theme="dark"] .actor-clips-skeleton-card::after { background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.09) 50%, transparent 100%); }

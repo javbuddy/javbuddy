@@ -12,7 +12,7 @@ using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Pages.ActorDetailSections;
 
-public class ActorClipsSectionTests : BunitContext
+public class ActorClipsSectionTests : InteractiveBunitContext
 {
     private readonly ISceneWallQueryService wall = Substitute.For<ISceneWallQueryService>();
     private readonly ISceneMediaService media = Substitute.For<ISceneMediaService>();
@@ -54,6 +54,7 @@ public class ActorClipsSectionTests : BunitContext
         var cut = RenderSection(PlayerClipKind.Highlight);
 
         Assert.Empty(cut.FindAll(".actor-clips"));
+        Assert.Empty(cut.FindAll(".actor-clips-skeleton-card"));
         Assert.Empty(cut.FindComponents<ClipPlayerModal>());
     }
 
@@ -170,5 +171,103 @@ public class ActorClipsSectionTests : BunitContext
         await cut.Instance.DisposeAsync();
 
         Assert.Single(binding.Invocations, i => i.Identifier == "unbind");
+    }
+
+    private void ReturnCount(PlayerClipKind kind, int count)
+    {
+        switch (kind)
+        {
+            case PlayerClipKind.Highlight: wall.CountHighlightsAsync(default!, default).ReturnsForAnyArgs(count); break;
+            case PlayerClipKind.Apex: wall.CountApexesAsync(default!, default).ReturnsForAnyArgs(count); break;
+            default: wall.CountScenesAsync(default!, default).ReturnsForAnyArgs(count); break;
+        }
+    }
+
+    private sealed record PersistedCount(int ActorId, int Total);
+
+    [Theory]
+    [InlineData(PlayerClipKind.Scene)]
+    [InlineData(PlayerClipKind.Highlight)]
+    [InlineData(PlayerClipKind.Apex)]
+    public void WhenNotInteractive_WithClips_OnlyCountsThem_AndShowsASkeleton(PlayerClipKind kind)
+    {
+        Interactive = false;
+        ReturnCount(kind, 2);
+
+        var cut = RenderSection(kind);
+
+        Assert.Equal(2, cut.FindAll(".actor-clips-skeleton-card").Count);
+        Assert.Empty(cut.FindAll(".actor-clips-grid"));
+        Assert.All(wall.ReceivedCalls(), call => Assert.StartsWith("Count", call.GetMethodInfo().Name));
+        Assert.Single(wall.ReceivedCalls());
+        media.ReceivedCalls().ToList().ForEach(call => Assert.Fail($"Unexpected call {call.GetMethodInfo().Name}"));
+        highlightMedia.ReceivedCalls().ToList().ForEach(call => Assert.Fail($"Unexpected call {call.GetMethodInfo().Name}"));
+        apexMedia.ReceivedCalls().ToList().ForEach(call => Assert.Fail($"Unexpected call {call.GetMethodInfo().Name}"));
+    }
+
+    [Fact]
+    public void WhenNotInteractive_WithoutClips_RendersNothing()
+    {
+        Interactive = false;
+        ReturnCount(PlayerClipKind.Highlight, 0);
+
+        var cut = RenderSection(PlayerClipKind.Highlight);
+
+        Assert.Empty(cut.FindAll(".actor-clips"));
+    }
+
+    [Fact]
+    public void WhenNotInteractive_PersistsTheCount_ForTheCircuit()
+    {
+        Interactive = false;
+        var state = AddBunitPersistentComponentState();
+        ReturnCount(PlayerClipKind.Scene, 5);
+        RenderSection(PlayerClipKind.Scene);
+
+        state.TriggerOnPersisting();
+
+        Assert.True(state.TryTake<PersistedCount>("actor-clips-Scene", out var persisted));
+        Assert.Equal(new PersistedCount(7, 5), persisted);
+    }
+
+    [Fact]
+    public void Interactive_WithAPersistedCount_ShowsTheSkeletonUntilTheFirstPageLands()
+    {
+        var state = AddBunitPersistentComponentState();
+        state.Persist("actor-clips-Scene", new PersistedCount(7, 3));
+        var page = new TaskCompletionSource<SceneWallPage>();
+        wall.GetPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(page.Task);
+
+        var cut = RenderSection(PlayerClipKind.Scene);
+        Assert.Equal(3, cut.FindAll(".actor-clips-skeleton-card").Count);
+
+        cut.InvokeAsync(() => page.SetResult(new SceneWallPage([Scene(1)], 1)));
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".actor-clips-grid")));
+        Assert.Empty(cut.FindAll(".actor-clips-skeleton-card"));
+    }
+
+    [Fact]
+    public void Interactive_WithoutAPersistedCount_ShowsNoSkeletonWhileLoading()
+    {
+        var page = new TaskCompletionSource<SceneWallPage>();
+        wall.GetPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(page.Task);
+
+        var cut = RenderSection(PlayerClipKind.Scene);
+
+        Assert.Empty(cut.FindAll(".actor-clips"));
+    }
+
+    [Fact]
+    public void Interactive_APersistedCountForAnotherActor_IsIgnored()
+    {
+        var state = AddBunitPersistentComponentState();
+        state.Persist("actor-clips-Scene", new PersistedCount(99, 3));
+        var page = new TaskCompletionSource<SceneWallPage>();
+        wall.GetPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(page.Task);
+
+        var cut = RenderSection(PlayerClipKind.Scene);
+
+        Assert.Empty(cut.FindAll(".actor-clips-skeleton-card"));
     }
 }

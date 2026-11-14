@@ -8,7 +8,7 @@ using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Shared;
 
-public class ActorPhotoGalleryTests : BunitContext
+public class ActorPhotoGalleryTests : InteractiveBunitContext
 {
     public ActorPhotoGalleryTests()
     {
@@ -393,5 +393,122 @@ public class ActorPhotoGalleryTests : BunitContext
             Assert.Contains("actor-photo-gallery-expanded", cut.Find(".actor-photo-gallery").ClassList);
             Assert.Equal("Show fewer photos", cut.Find(".actor-photo-gallery-expand").TextContent.Trim());
         });
+    }
+
+    private IRenderedComponent<ActorPhotoGallery> RenderLargeGallery(int photoCount, int albumPhotoCount = 0)
+    {
+        var service = Substitute.For<IActorPhotoService>();
+        var photos = Enumerable.Range(1, photoCount)
+            .Select(id => new ActorPhotoSummary(id, id <= albumPhotoCount ? 3 : null, DateTime.UtcNow))
+            .ToList();
+        var albums = albumPhotoCount > 0 ? [new ActorPhotoAlbumSummary(3, "Events", albumPhotoCount)] : new List<ActorPhotoAlbumSummary>();
+        service.GetGalleryAsync(7, Arg.Any<CancellationToken>()).Returns(new ActorPhotoGalleryData(albums, photos));
+        Services.AddSingleton(service);
+        var cut = Render<ActorPhotoGallery>(parameters => parameters
+            .Add(component => component.ActorId, 7)
+            .Add(component => component.ActorName, "Mikami Yua"));
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".actor-photo-tile")));
+        return cut;
+    }
+
+    private static int SentinelGeneration(IRenderedComponent<ActorPhotoGallery> cut) =>
+        int.Parse(cut.Find(".actor-photo-gallery-sentinel").GetAttribute("data-generation")!);
+
+    [Fact]
+    public void LargeGallery_RendersOnlyTheFirstBatchOfTiles_WithTheFullCountOnTheButton()
+    {
+        var cut = RenderLargeGallery(400);
+
+        Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
+        Assert.Equal("Show all 400 photos", cut.Find(".actor-photo-gallery-expand").TextContent.Trim());
+        Assert.Empty(cut.FindAll(".actor-photo-gallery-sentinel"));
+    }
+
+    [Fact]
+    public void Expanded_LoadMorePhotos_GrowsByABatchUntilEverythingIsRendered()
+    {
+        var cut = RenderLargeGallery(400);
+        cut.Find(".actor-photo-gallery-expand").Click();
+        Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
+
+        cut.InvokeAsync(() => cut.Instance.LoadMorePhotos(SentinelGeneration(cut)));
+        Assert.Equal(300, cut.FindAll(".actor-photo-tile").Count);
+
+        cut.InvokeAsync(() => cut.Instance.LoadMorePhotos(SentinelGeneration(cut)));
+        Assert.Equal(400, cut.FindAll(".actor-photo-tile").Count);
+        Assert.Empty(cut.FindAll(".actor-photo-gallery-sentinel"));
+    }
+
+    [Fact]
+    public void LoadMorePhotos_IgnoresAStaleGeneration_AndACollapsedGallery()
+    {
+        var cut = RenderLargeGallery(400);
+        cut.InvokeAsync(() => cut.Instance.LoadMorePhotos(0));
+        Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
+
+        cut.Find(".actor-photo-gallery-expand").Click();
+        var generation = SentinelGeneration(cut);
+        cut.InvokeAsync(() => cut.Instance.LoadMorePhotos(generation - 1));
+        Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
+
+        cut.InvokeAsync(() => cut.Instance.LoadMorePhotos(generation));
+        Assert.Equal(300, cut.FindAll(".actor-photo-tile").Count);
+    }
+
+    [Fact]
+    public void ExpandedAlbum_RendersWhole_WhileAllAndCollapsingStartTheBatchesOver()
+    {
+        var cut = RenderLargeGallery(400, albumPhotoCount: 200);
+        cut.Find(".actor-photo-gallery-expand").Click();
+        cut.InvokeAsync(() => cut.Instance.LoadMorePhotos(SentinelGeneration(cut)));
+        Assert.Equal(300, cut.FindAll(".actor-photo-tile").Count);
+
+        // An album opened in the expanded view renders all its photos at once, with nothing left to load.
+        cut.FindAll(".actor-photo-album-pill").Single(button => button.TextContent.Contains("Events")).Click();
+        Assert.Equal(200, cut.FindAll(".actor-photo-tile").Count);
+        Assert.Empty(cut.FindAll(".actor-photo-gallery-sentinel"));
+        Assert.Equal("Show fewer photos", cut.Find(".actor-photo-gallery-expand").TextContent.Trim());
+
+        // Back to All: the batches start over.
+        cut.FindAll(".actor-photo-album-pill").Single(button => button.TextContent.StartsWith("All")).Click();
+        Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
+        Assert.NotEmpty(cut.FindAll(".actor-photo-gallery-sentinel"));
+
+        cut.FindAll(".actor-photo-album-pill").Single(button => button.TextContent.Contains("Events")).Click();
+        cut.Find(".actor-photo-gallery-expand").Click();
+        Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
+        Assert.Equal("Show all 200 photos", cut.Find(".actor-photo-gallery-expand").TextContent.Trim());
+    }
+
+    [Fact]
+    public void Lightbox_NavigatesPastTheRenderedTiles_ToAnyPhotoOfTheFilteredList()
+    {
+        var cut = RenderLargeGallery(400);
+
+        cut.FindAll(".actor-photo-tile")[149].Click();
+        Assert.Equal("150 / 400", cut.Find(".gallery-index").TextContent.Trim());
+
+        cut.Find(".gallery-nav-next").Click();
+
+        Assert.Equal("151 / 400", cut.Find(".gallery-index").TextContent.Trim());
+        Assert.Contains("/actor-photo/151/full", cut.Find(".gallery-image").GetAttribute("src"));
+        Assert.Equal(150, cut.FindAll(".actor-photo-tile").Count);
+    }
+
+    [Fact]
+    public void WhenNotInteractive_ShowsASkeleton_AndDoesNotLoadThePhotos()
+    {
+        Interactive = false;
+        var service = Substitute.For<IActorPhotoService>();
+        Services.AddSingleton(service);
+
+        var cut = Render<ActorPhotoGallery>(parameters => parameters
+            .Add(component => component.ActorId, 7)
+            .Add(component => component.ActorName, "Mikami Yua"));
+
+        Assert.NotEmpty(cut.FindAll(".actor-photo-skeleton-tile"));
+        Assert.Empty(cut.FindAll(".actor-photo-tile"));
+        Assert.Empty(cut.FindAll(".actor-photo-album-pill"));
+        service.DidNotReceiveWithAnyArgs().GetGalleryAsync(default, default);
     }
 }

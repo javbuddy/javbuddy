@@ -753,4 +753,27 @@ public sealed class SceneWallQueryServiceTests : IDisposable
         Assert.Equal(options.ApexTags, (await wall.GetOptionsAsync()).ApexTags);
         Assert.Equal(options.ApexTags, (await wall.GetHighlightOptionsAsync()).ApexTags);
     }
+
+    // --- Counts ---
+
+    [Fact]
+    public async Task Counts_MatchWhatThePagesPageThrough_ForTheSameFilter()
+    {
+        await SeedAsync();
+        await AddHighlightAsync(oldMovieId, 30, 45, "Bare"); // in Intro, inheriting Aika
+        await AddHighlightAsync(oldMovieId, 700, 710); // in Scene 2, inheriting Rin
+        await AddApexAsync(oldMovieId, 100, actorIds: [aikaId]);
+
+        foreach (var filter in new[] { new SceneWallFilter(), new SceneWallFilter(ActorIds: [aikaId]), new SceneWallFilter(ActorIds: [yuaId]) })
+        {
+            Assert.Equal((await wall.GetPageAsync(filter, SceneWallSort.ReleaseDate, 1, 0, 50)).TotalCount, await wall.CountScenesAsync(filter));
+            Assert.Equal((await wall.GetHighlightPageAsync(filter, SceneWallSort.ReleaseDate, 1, 0, 50)).TotalCount, await wall.CountHighlightsAsync(filter));
+            Assert.Equal((await wall.GetApexPageAsync(filter, SceneWallSort.ReleaseDate, 1, 0, 50)).TotalCount, await wall.CountApexesAsync(filter));
+        }
+
+        Assert.Equal(1, await wall.CountScenesAsync(new SceneWallFilter(ActorIds: [aikaId])));
+        Assert.Equal(1, await wall.CountHighlightsAsync(new SceneWallFilter(ActorIds: [aikaId])));
+        Assert.Equal(1, await wall.CountApexesAsync(new SceneWallFilter(ActorIds: [aikaId])));
+        Assert.Equal(0, await wall.CountApexesAsync(new SceneWallFilter(ActorIds: [yuaId])));
+    }
 }
