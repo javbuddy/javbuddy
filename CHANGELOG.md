@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **Repairing a video no longer waits behind other ffmpeg jobs.** The repair remux used to queue behind a running full-movie trickplay, scene detection, chapter remux or VR merge; it now starts right away.
+
 ## [0.6.5] - 2026-11-15
 
 ### Added

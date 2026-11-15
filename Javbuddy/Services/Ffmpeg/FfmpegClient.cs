@@ -668,8 +668,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        using var slot = await longGate.EnterAsync(ct);
-
+        // Deliberately not gated: a repair is user-initiated and shouldn't queue behind hours of background trickplay or scene detection.
         var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
         {
             RedirectStandardError = true,
