@@ -55,6 +55,37 @@ public class ActorDetailTests : BunitContext
     }
 
     [Fact]
+    public async Task ActorDetail_ForAnUnidentifiedPerformer_MarksThem_AndOffersOnlyWhatAppliesToThem()
+    {
+        using var factory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        var actor = new Actor { Id = 1, FirstName = "Redhead", LastName = "ABC-123", PlaceholderMovieId = 7 };
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetByRouteNameAsync("Redhead (ABC-123)", Arg.Any<CancellationToken>()).Returns(actor);
+        Services.AddSingleton(actorService);
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>());
+        Services.AddSingleton(Substitute.For<INfoSyncService>());
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Actors.Add(new Actor { Id = actor.Id, FirstName = actor.FirstName, LastName = actor.LastName });
+            await db.SaveChangesAsync();
+        }
+
+        var cut = Render<ActorDetail>(parameters => parameters.Add(p => p.RouteName, "Redhead (ABC-123)"));
+
+        Assert.Equal("Unidentified", cut.Find(".actor-badge-unidentified").TextContent);
+        var buttons = cut.FindAll(".page-toolbar-btn").Select(b => b.TextContent.Trim()).ToList();
+        Assert.Contains(buttons, b => b.Contains("Identify..."));
+        Assert.DoesNotContain(buttons, b => b.Contains("Merge..."));
+        Assert.DoesNotContain(buttons, b => b.Contains("Sync .nfo"));
+        Assert.DoesNotContain(buttons, b => b.Contains("Refresh"));
+        Assert.DoesNotContain(buttons, b => b == "Search");
+        Assert.Contains(buttons, b => b.Contains("Change Photo"));
+    }
+
+    [Fact]
     public async Task ActorDetail_RendersEditButton_AndHeroDetails()
     {
         using var factory = new TestDbContextFactory();

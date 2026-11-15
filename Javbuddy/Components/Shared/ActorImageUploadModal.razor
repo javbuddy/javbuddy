@@ -107,15 +107,15 @@
     [Parameter]
     public EventCallback OnPhotoChanged { get; set; }
 
-    /// <summary>Optional WebP image bytes from an actor gallery photo, opened directly in the
-    /// same crop/editor workflow as a newly selected portrait file.</summary>
+    /// <summary>Optional image bytes (an actor gallery photo's WebP, or a movie's own image in its own format),
+    /// opened directly in the same crop/editor workflow as a newly selected portrait file.</summary>
     [Parameter]
     public InitialImageSource? InitialImage { get; set; }
 
     // Wraps the bytes rather than taking a byte[] parameter: an array-typed component parameter
     // crashes the SDK's BL0014 for-loop analyzer (AD0001 build warning) in any parent whose
     // markup also has a @for loop, as ActorDetail's does.
-    public sealed record InitialImageSource(byte[] Bytes);
+    public sealed record InitialImageSource(byte[] Bytes, string ContentType = "image/webp");
 
     [Inject] private IServiceProvider Sp { get; set; } = default!;
     private ImageUploadSettings UploadSettings => Sp.GetService<ImageUploadSettings>() ?? ImageUploadSettings.Default;
@@ -152,7 +152,7 @@
             if (InitialImage is not null && !ReferenceEquals(InitialImage, loadedInitialImage))
             {
                 loadedInitialImage = InitialImage;
-                LoadSelectedImage(InitialImage.Bytes, "image/webp");
+                LoadSelectedImage(InitialImage.Bytes, InitialImage.ContentType);
             }
         }
         else if (!Show)

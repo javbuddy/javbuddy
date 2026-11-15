@@ -85,7 +85,8 @@ public record ActorCardModel(
     bool IsTransgender = false,
     int CensoredCount = 0,
     int UncensoredCount = 0,
-    int DecensoredCount = 0)
+    int DecensoredCount = 0,
+    bool IsPlaceholder = false)
 {
     public int MissingCount => Math.Max(0, MovieCount - OwnedCount);
 
@@ -125,6 +126,13 @@ public interface IActorService
     Task<bool> IsJellyfinEnabledAsync(CancellationToken ct = default);
     Task<ActorEnrichmentResult> RefreshMetadataAsync(int actorId, CancellationToken ct = default);
     Task<ActorOperationResult> CreateAsync(string firstName, string? lastName, CancellationToken ct = default);
+
+    /// <summary>Adds an unidentified performer ("amateur") to a movie's cast so actor tags and a photo can go on
+    /// someone with no actor of their own. It is an actor local to that movie (see <see cref="Actor.PlaceholderMovieId"/>),
+    /// linked directly rather than through the cast text, so it is never written to the .nfo or synced to Jellyfin.
+    /// Named "<paramref name="label"/> (CODE)", or "Unidentified N (CODE)" without a label.</summary>
+    Task<ActorOperationResult> CreatePlaceholderAsync(int movieId, string? label = null, CancellationToken ct = default);
+
     Task<ActorOperationResult> AddAliasAsync(int actorId, string aliasName, CancellationToken ct = default);
     Task<ActorOperationResult> RemoveAliasAsync(int actorId, int aliasId, CancellationToken ct = default);
     Task<Actor?> FindMatchingActorAsync(string name, string? japaneseName = null, IReadOnlyList<string>? aliases = null, CancellationToken ct = default);
@@ -138,7 +146,8 @@ public class ActorService(
     IActorEnrichmentService? actorEnrichmentService = null,
     IActorPhotoService? actorPhotoService = null,
     IActorImageDataStore? dataStore = null,
-    IJellyfinClient? jellyfinClient = null) : IActorService
+    IJellyfinClient? jellyfinClient = null,
+    MovieChangeNotifier? movieChangeNotifier = null) : IActorService
 {
     public async Task<Actor?> GetByRouteNameAsync(string routeName, CancellationToken ct = default)
     {
@@ -157,7 +166,8 @@ public class ActorService(
             .Include(a => a.CupSizePeriods)
             .FirstOrDefaultAsync(a => a.FirstName != null
                 && ((a.LastName == null && a.FirstName == route)
-                    || (a.LastName != null && EF.Functions.Collate(a.LastName + " " + a.FirstName, "NOCASE") == route)
+                    || (a.PlaceholderMovieId == null && a.LastName != null && EF.Functions.Collate(a.LastName + " " + a.FirstName, "NOCASE") == route)
+                    || (a.PlaceholderMovieId != null && EF.Functions.Collate(a.FirstName + " (" + a.LastName + ")", "NOCASE") == route)
                     || a.Aliases.Any(al => al.Name == route)), ct);
     }
 
@@ -184,9 +194,27 @@ public class ActorService(
 
         var firstName = model.FirstName.Trim();
         var lastName = model.LastName.TrimToNull();
-        var proposedDisplayName = ActorDisplayName.Format(firstName, lastName);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        var actor = await db.Actors
+            .Include(a => a.Aliases)
+            .Include(a => a.CupSizePeriods)
+            .FirstOrDefaultAsync(a => a.Id == model.Id, ct);
+        if (actor is null)
+        {
+            return ActorOperationResult.Fail("Actor not found.");
+        }
+
+        // An unidentified placeholder's last name is its movie's code: only the label can change.
+        if (actor.IsPlaceholder)
+        {
+            lastName = actor.LastName;
+            firstName = ActorDisplayName.SanitizePlaceholderLabel(firstName) ?? firstName;
+        }
+        var proposedDisplayName = actor.IsPlaceholder
+            ? ActorDisplayName.Placeholder(firstName, lastName)
+            : ActorDisplayName.Format(firstName, lastName);
 
         var duplicate = await db.Actors.AnyAsync(a =>
             a.Id != model.Id
@@ -196,15 +224,6 @@ public class ActorService(
         if (duplicate)
         {
             return ActorOperationResult.Fail($"An actor named \"{proposedDisplayName}\" already exists.");
-        }
-
-        var actor = await db.Actors
-            .Include(a => a.Aliases)
-            .Include(a => a.CupSizePeriods)
-            .FirstOrDefaultAsync(a => a.Id == model.Id, ct);
-        if (actor is null)
-        {
-            return ActorOperationResult.Fail("Actor not found.");
         }
 
         // Only standard sizes can be picked, but a non-standard value already stored is kept as-is.
@@ -238,7 +257,8 @@ public class ActorService(
 
         var displayNameChanged = !string.Equals(oldDisplayName, proposedDisplayName, StringComparison.Ordinal);
 
-        if (displayNameChanged && !string.IsNullOrWhiteSpace(oldDisplayName))
+        // A placeholder's name is only a label: not kept as an alias, and never put into a movie's cast text.
+        if (displayNameChanged && !string.IsNullOrWhiteSpace(oldDisplayName) && !actor.IsPlaceholder)
         {
             // 1. Preserve former display name as alias so external references and movie matching continue working
             if (!actor.Aliases.Any(a => string.Equals(a.Name, oldDisplayName, StringComparison.OrdinalIgnoreCase)))
@@ -320,7 +340,8 @@ public class ActorService(
 
         await db.SaveChangesAsync(ct);
 
-        if (namesChanged)
+        // A placeholder's label is never matched against cast text, so renaming one changes no movie's cast.
+        if (namesChanged && !actor.IsPlaceholder)
         {
             await MovieActorAssociation.SynchronizeAllAsync(db, ct);
             await db.SaveChangesAsync(ct);
@@ -402,6 +423,58 @@ public class ActorService(
         await db.SaveChangesAsync(ct);
         await MovieActorAssociation.SynchronizeAllAsync(db, ct);
         await db.SaveChangesAsync(ct);
+        return ActorOperationResult.Ok(actor);
+    }
+
+    public async Task<ActorOperationResult> CreatePlaceholderAsync(int movieId, string? label = null, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var movie = await db.Movies.AsNoTracking().FirstOrDefaultAsync(m => m.Id == movieId, ct);
+        if (movie is null)
+        {
+            return ActorOperationResult.Fail("Movie not found.");
+        }
+        if (string.IsNullOrWhiteSpace(movie.Code))
+        {
+            return ActorOperationResult.Fail("The movie has no code to name an unidentified performer by.");
+        }
+
+        // The name is a route and has a unique index, so it carries the movie's code and, without a label of the
+        // user's own, the lowest number not yet used on this movie.
+        // A "/" would split the actor's page route.
+        var custom = ActorDisplayName.SanitizePlaceholderLabel(label);
+        var taken = (await db.Actors
+            .Where(a => a.PlaceholderMovieId == movieId)
+            .Select(a => a.FirstName)
+            .ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var name = custom;
+        if (name is null || taken.Contains(name))
+        {
+            var baseLabel = custom ?? "Unidentified";
+            for (var number = 1; ; number++)
+            {
+                name = $"{baseLabel} {number}";
+                if (!taken.Contains(name)) break;
+            }
+        }
+
+        // The movie's code is the last name: it keeps the name unique across movies and isn't something to edit away.
+        var actor = new Actor { FirstName = name, LastName = movie.Code, PlaceholderMovieId = movieId };
+        db.Actors.Add(actor);
+        db.MovieActors.Add(new MovieActor { MovieId = movieId, Actor = actor });
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // The name was taken between the check above and the insert (two requests at once), or by a real actor
+            // whose name happens to match: the unique name index refuses it either way.
+            return ActorOperationResult.Fail("That name is already in use. Try a different label.");
+        }
+        // Open Movies grids carry whether a movie has one.
+        movieChangeNotifier?.NotifyChanged();
         return ActorOperationResult.Ok(actor);
     }
 
@@ -562,6 +635,13 @@ public class ActorService(
             db.Actors.Remove(tracked);
             await db.SaveChangesAsync(ct);
 
+            // A placeholder was never in any movie's cast text, so there is nothing to re-sync.
+            if (tracked.IsPlaceholder)
+            {
+                movieChangeNotifier?.NotifyChanged();
+                return;
+            }
+
             // The MovieActor links to this actor cascade-delete automatically (FK), but that
             // doesn't recompute HasUnmatchedActors/UnmatchedActorNames on the movies that
             // referenced it — those still list the deleted actor's name in MetaActresses, which
@@ -620,7 +700,7 @@ public class ActorService(
 
         var query = db.Actors
             .AsNoTracking()
-            .Where(a => a.Id != sourceActorId && a.FirstName != null);
+            .Where(a => a.Id != sourceActorId && a.FirstName != null && a.PlaceholderMovieId == null);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -654,7 +734,8 @@ public class ActorService(
         {
             var displayName = ActorDisplayName.Format(a.FirstName!, a.LastName);
             var hasImage = a.HasCustomOrCachedImage;
-            var isSuggested = IsSuggestedMatch(sourceTokens, a.FirstName!, a.LastName, a.JapaneseNameKanji, a.JapaneseNameKana);
+            // A placeholder's label and movie code say nothing about who they are, so nobody is suggested for them.
+            var isSuggested = !source.IsPlaceholder && IsSuggestedMatch(sourceTokens, a.FirstName!, a.LastName, a.JapaneseNameKanji, a.JapaneseNameKana);
             return new ActorMergeCandidate(
                 a.Id,
                 displayName,
@@ -679,7 +760,7 @@ public class ActorService(
         var searchUpper = search.Trim().ToUpper();
         var actors = await db.Actors
             .AsNoTracking()
-            .Where(a => a.FirstName != null
+            .Where(a => a.FirstName != null && a.PlaceholderMovieId == null
                 && ((a.FirstName != null && a.FirstName.ToUpper().Contains(searchUpper))
                     || (a.LastName != null && a.LastName.ToUpper().Contains(searchUpper))
                     || (a.JapaneseNameKanji != null && a.JapaneseNameKanji.ToUpper().Contains(searchUpper))
@@ -727,51 +808,56 @@ public class ActorService(
 
         if (source is null) return ActorOperationResult.Fail("Source actor not found.");
         if (target is null) return ActorOperationResult.Fail("Target actor not found.");
+        if (target.IsPlaceholder) return ActorOperationResult.Fail("Cannot merge into an unidentified placeholder.");
 
-        // 1. Consolidate metadata into target where target fields are missing
-        if (string.IsNullOrWhiteSpace(target.JapaneseNameKanji) && !string.IsNullOrWhiteSpace(source.JapaneseNameKanji))
+        // 1. Consolidate metadata into target where target fields are missing. An unidentified performer carries only
+        // tags and a photo, so there is nothing of theirs to copy over (and nothing they might wrongly overwrite).
+        if (!source.IsPlaceholder)
         {
-            target.JapaneseNameKanji = source.JapaneseNameKanji.Trim();
-        }
-        if (string.IsNullOrWhiteSpace(target.JapaneseNameKana) && !string.IsNullOrWhiteSpace(source.JapaneseNameKana))
-        {
-            target.JapaneseNameKana = source.JapaneseNameKana.Trim();
-        }
-        if (string.IsNullOrWhiteSpace(target.R18DevName) && !string.IsNullOrWhiteSpace(source.R18DevName))
-        {
-            target.R18DevName = source.R18DevName.Trim();
-        }
-        target.R18DevId ??= source.R18DevId;
-        if (string.IsNullOrWhiteSpace(target.JellyfinPersonId) && !string.IsNullOrWhiteSpace(source.JellyfinPersonId))
-        {
-            target.JellyfinPersonId = source.JellyfinPersonId.Trim();
-        }
-        if (!target.IsFavorite && source.IsFavorite)
-        {
-            target.IsFavorite = true;
-            target.FavoritedAt = source.FavoritedAt ?? DateTime.UtcNow;
-        }
-        target.HeightCm ??= source.HeightCm;
-        if (string.IsNullOrWhiteSpace(target.CupSize) && ActorPhysicalAttributesHelper.StandardCupSizeOrNull(source.CupSize) is { } sourceCupSize)
-        {
-            target.CupSize = sourceCupSize;
-        }
-        if (target.CupSizePeriods.Count == 0)
-        {
-            foreach (var period in source.CupSizePeriods)
+            if (string.IsNullOrWhiteSpace(target.JapaneseNameKanji) && !string.IsNullOrWhiteSpace(source.JapaneseNameKanji))
             {
-                target.CupSizePeriods.Add(new ActorCupSizePeriod { EffectiveFrom = period.EffectiveFrom, CupSize = period.CupSize });
+                target.JapaneseNameKanji = source.JapaneseNameKanji.Trim();
             }
+            if (string.IsNullOrWhiteSpace(target.JapaneseNameKana) && !string.IsNullOrWhiteSpace(source.JapaneseNameKana))
+            {
+                target.JapaneseNameKana = source.JapaneseNameKana.Trim();
+            }
+            if (string.IsNullOrWhiteSpace(target.R18DevName) && !string.IsNullOrWhiteSpace(source.R18DevName))
+            {
+                target.R18DevName = source.R18DevName.Trim();
+            }
+            target.R18DevId ??= source.R18DevId;
+            if (string.IsNullOrWhiteSpace(target.JellyfinPersonId) && !string.IsNullOrWhiteSpace(source.JellyfinPersonId))
+            {
+                target.JellyfinPersonId = source.JellyfinPersonId.Trim();
+            }
+            if (!target.IsFavorite && source.IsFavorite)
+            {
+                target.IsFavorite = true;
+                target.FavoritedAt = source.FavoritedAt ?? DateTime.UtcNow;
+            }
+            target.HeightCm ??= source.HeightCm;
+            if (string.IsNullOrWhiteSpace(target.CupSize) && ActorPhysicalAttributesHelper.StandardCupSizeOrNull(source.CupSize) is { } sourceCupSize)
+            {
+                target.CupSize = sourceCupSize;
+            }
+            if (target.CupSizePeriods.Count == 0)
+            {
+                foreach (var period in source.CupSizePeriods)
+                {
+                    target.CupSizePeriods.Add(new ActorCupSizePeriod { EffectiveFrom = period.EffectiveFrom, CupSize = period.CupSize });
+                }
+            }
+            target.Bust ??= source.Bust;
+            target.Waist ??= source.Waist;
+            target.Hips ??= source.Hips;
+            if (ActorPhysicalAttributesHelper.IsAllowedBirthDate(source.BirthDate))
+            {
+                target.BirthDate ??= source.BirthDate;
+            }
+            target.IsRetired |= source.IsRetired;
+            target.IsTransgender |= source.IsTransgender;
         }
-        target.Bust ??= source.Bust;
-        target.Waist ??= source.Waist;
-        target.Hips ??= source.Hips;
-        if (ActorPhysicalAttributesHelper.IsAllowedBirthDate(source.BirthDate))
-        {
-            target.BirthDate ??= source.BirthDate;
-        }
-        target.IsRetired |= source.IsRetired;
-        target.IsTransgender |= source.IsTransgender;
 
         // 2. Consolidate and create aliases on target
         var targetKnownNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -802,6 +888,9 @@ public class ActorService(
         {
             if (!string.IsNullOrWhiteSpace(a.Name)) sourceCandidateNames.Add(a.Name);
         }
+
+        // A placeholder's name is only a label, so it isn't kept as an alias of the real actor.
+        if (source.IsPlaceholder) sourceCandidateNames.Clear();
 
         foreach (var name in sourceCandidateNames)
         {
@@ -840,10 +929,37 @@ public class ActorService(
         // Actor tags hang off the cast links too; the target keeps its own and gains the source's.
         await RepointActorTagsAsync(db, source.Id, target.Id, ct);
 
+        // A placeholder is linked outside the cast text, so the real actor has to be named there or the sync below
+        // drops their link.
+        Movie? placeholderMovie = null;
+        if (source.PlaceholderMovieId is { } placeholderMovieId)
+        {
+            placeholderMovie = await db.Movies.FindAsync([placeholderMovieId], ct);
+            if (placeholderMovie is not null)
+            {
+                NfoActorMatching.UpdateMovieMetaActresses(placeholderMovie, NfoActorMatching.CreateNameMatcher(target, null), target.DisplayName);
+            }
+        }
+
         // 4. Transfer cached and custom images
+        var discardPlaceholderPortrait = false;
         if (imageCacheService is not null)
         {
-            await imageCacheService.TransferImagesAsync(source.Id, target.Id, ct);
+            // An unidentified performer's photo only fills a gap: a target who has an image keeps theirs.
+            if (source.IsPlaceholder && await HasImageAsync(target.Id, ct))
+            {
+                discardPlaceholderPortrait = true;
+            }
+            else
+            {
+                await imageCacheService.TransferImagesAsync(source.Id, target.Id, ct);
+            }
+        }
+
+        // An unidentified performer's gallery is handed to the real actor, the albums that share a name merged.
+        if (source.IsPlaceholder)
+        {
+            await MoveGalleryAsync(db, source.Id, target.Id, ct);
         }
 
         // 5. Remove source actor (ActorAliases cascades delete)
@@ -851,17 +967,63 @@ public class ActorService(
 
         await db.SaveChangesAsync(ct);
 
-        // 6. Synchronize movie-actor associations
-        await MovieActorAssociation.SynchronizeAllAsync(db, ct);
+        // Their portrait is only discarded once the merge is saved, so a failed merge leaves them as they were.
+        if (discardPlaceholderPortrait && imageCacheService is not null)
+        {
+            await imageCacheService.DeleteAllForActorAsync(source.Id, ct);
+        }
+
+        // 6. Synchronize movie-actor associations. An unidentified performer changed one movie's cast and nothing else.
+        if (placeholderMovie is not null)
+        {
+            await MovieActorAssociation.SynchronizeAsync(db, placeholderMovie, ct);
+        }
+        else
+        {
+            await MovieActorAssociation.SynchronizeAllAsync(db, ct);
+        }
         await db.SaveChangesAsync(ct);
 
+        // The movie's cast text now names the target, which its .nfo may not: flag the drift now, as adding an actor does.
+        if (placeholderMovie is not null && nfoSyncService is not null)
+        {
+            await nfoSyncService.CheckMovieNfoConflictAsync(placeholderMovie.Id, ct);
+        }
+        if (placeholderMovie is not null) movieChangeNotifier?.NotifyChanged();
+
         // 7. Synchronize actor name in linked movie .nfo files if requested
-        if (updateNfoOnDisk && nfoSyncService is not null)
+        if (updateNfoOnDisk && !source.IsPlaceholder && nfoSyncService is not null)
         {
             await nfoSyncService.SyncActorAsync(target.Id, sourceCandidateNames, ct);
         }
 
         return ActorOperationResult.Ok(target);
+    }
+
+    private static async Task MoveGalleryAsync(AppDbContext db, int sourceActorId, int targetActorId, CancellationToken ct)
+    {
+        var targetAlbums = await db.ActorAlbums.Where(album => album.ActorId == targetActorId).ToListAsync(ct);
+        var albumIds = new Dictionary<int, int>();
+        foreach (var album in await db.ActorAlbums.Where(album => album.ActorId == sourceActorId).ToListAsync(ct))
+        {
+            // The (actor, name) pair is unique, so an album the target already has absorbs this one.
+            var same = targetAlbums.FirstOrDefault(other => string.Equals(other.Name, album.Name, StringComparison.OrdinalIgnoreCase));
+            if (same is null)
+            {
+                album.ActorId = targetActorId;
+            }
+            else
+            {
+                albumIds[album.Id] = same.Id;
+                db.ActorAlbums.Remove(album);
+            }
+        }
+
+        foreach (var photo in await db.ActorPhotos.Where(photo => photo.ActorId == sourceActorId).ToListAsync(ct))
+        {
+            photo.ActorId = targetActorId;
+            if (photo.AlbumId is { } albumId && albumIds.TryGetValue(albumId, out var merged)) photo.AlbumId = merged;
+        }
     }
 
     public async Task<IReadOnlyList<ActorCardModel>> GetActorCardsAsync(CancellationToken ct = default)
@@ -897,13 +1059,14 @@ public class ActorService(
                 a.BirthDate,
                 a.IsRetired,
                 a.IsTransgender,
-                a.HeightCm
+                a.HeightCm,
+                a.PlaceholderMovieId
             })
             .ToListAsync(ct);
 
         return raw.Select(a => new ActorCardModel(
             a.Id,
-            ActorDisplayName.Format(a.FirstName, a.LastName),
+            ActorDisplayName.For(a.FirstName, a.LastName, a.PlaceholderMovieId),
             a.MovieCount,
             a.ImageUpdatedAt.HasValue,
             a.IsFavorite,
@@ -922,7 +1085,8 @@ public class ActorService(
             a.IsTransgender,
             a.CensoredCount,
             a.UncensoredCount,
-            a.DecensoredCount
+            a.DecensoredCount,
+            a.PlaceholderMovieId != null
         )).ToList();
     }
 
@@ -936,7 +1100,8 @@ public class ActorService(
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var actor = await db.Actors.FindAsync([actorId], ct);
-        if (actor is null) return false;
+        // An unidentified performer isn't someone to follow: favorites drive the "favorite actor" filters and Cleanup.
+        if (actor is null || actor.IsPlaceholder) return false;
 
         actor.IsFavorite = !actor.IsFavorite;
         actor.FavoritedAt = actor.IsFavorite ? DateTime.UtcNow : null;
@@ -1011,7 +1176,7 @@ public class ActorService(
             var kanjiMatch = await db.Actors
                 .AsNoTracking()
                 .Include(a => a.Aliases)
-                .FirstOrDefaultAsync(a => a.JapaneseNameKanji != null && a.JapaneseNameKanji.Replace(" ", "").Replace("　", "").ToLower() == compact.ToLower(), ct);
+                .FirstOrDefaultAsync(a => a.PlaceholderMovieId == null && a.JapaneseNameKanji != null && a.JapaneseNameKanji.Replace(" ", "").Replace("　", "").ToLower() == compact.ToLower(), ct);
             if (kanjiMatch is not null) return kanjiMatch;
         }
 
@@ -1019,6 +1184,7 @@ public class ActorService(
         // Only the names matching needs, not whole actor rows; the match is then loaded by ID.
         var identities = await db.Actors
             .AsNoTracking()
+            .Where(a => a.PlaceholderMovieId == null)
             .OrderBy(a => a.Id)
             .Select(a => new { a.Id, a.FirstName, a.LastName, Aliases = a.Aliases.Select(al => al.Name).ToList() })
             .ToListAsync(ct);

@@ -59,6 +59,7 @@ else
                     <DropdownToggleItem Label="Linked to Jellyfin" Active="@(filter.JellyfinLinkedOnly)" OnClick="() => ApplyFilterAsync(() => filter.JellyfinLinkedOnly = !filter.JellyfinLinkedOnly)" />
                 }
                 <DropdownToggleItem Label="Favorites only" Active="@(filter.FavoritesOnly)" OnClick="() => ApplyFilterAsync(() => filter.FavoritesOnly = !filter.FavoritesOnly)" />
+                <DropdownToggleItem Label="Show unidentified" Active="@(filter.ShowUnidentified)" OnClick="() => ApplyFilterAsync(() => filter.ShowUnidentified = !filter.ShowUnidentified)" />
                 <DropdownToggleItem Label="@filter.StatusFilterLabel" Active="@(filter.Status != ActorStatusFilter.All)" OnClick="() => ApplyFilterAsync(filter.CycleStatus)" />
                 <div class="sort-dropdown-divider"></div>
                 <MultiSelectFilterGroup GroupLabel="Content Type" Options="@ContentTypeFilterOptions" Excludable="true" />
@@ -146,6 +147,10 @@ else
         {
             <p class="text-muted">No favorite actors yet. Mark an actor with the heart icon to add them to your favorites.</p>
         }
+        else if (!filter.ShowUnidentified && !filter.HasActiveFilters && actors.All(a => a.IsPlaceholder))
+        {
+            <p class="text-muted">No actors yet. The unidentified performers on your movies are hidden: tick <strong>Show unidentified</strong> in Filter to list them.</p>
+        }
         else
         {
             <p class="text-muted">No actors match the selected filters.</p>
@@ -195,11 +200,19 @@ else
                         @* Distinct key from the grid card's (actor.Id): when the view mode flips, Blazor must not reuse a card's
                              element for a row, since the two live at different points in the render tree. *@
                         <div class="actor-row" role="row" @key="@($"row-{actor.Id}")" style="grid-template-columns: @tableTemplate">
-                            <button type="button"
-                                    class="actor-row-favorite @(actor.IsFavorite ? "active" : "")"
-                                    @onclick="() => ToggleFavorite(actor)"
-                                    title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")"
-                                    aria-label="@(actor.IsFavorite ? $"Unfavorite {actor.DisplayName}" : $"Favorite {actor.DisplayName}")">@(actor.IsFavorite ? "♥" : "♡")</button>
+                            @if (actor.IsPlaceholder)
+                            {
+                                @* An unidentified performer can't be favorited; the cell keeps the columns lined up. *@
+                                <span></span>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="actor-row-favorite @(actor.IsFavorite ? "active" : "")"
+                                        @onclick="() => ToggleFavorite(actor)"
+                                        title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")"
+                                        aria-label="@(actor.IsFavorite ? $"Unfavorite {actor.DisplayName}" : $"Favorite {actor.DisplayName}")">@(actor.IsFavorite ? "♥" : "♡")</button>
+                            }
                             <a class="actor-row-name" href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}")" title="@actor.DisplayName">
                                 @if (actor.HasImage)
                                 {
@@ -227,13 +240,16 @@ else
                     else
                     {
                         <div class="actor-card" @key="actor.Id">
-                            <button type="button"
-                                    class="actor-card-favorite @(actor.IsFavorite ? "active" : "")"
-                                    @onclick="() => ToggleFavorite(actor)"
-                                    title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")"
-                                    aria-label="@(actor.IsFavorite ? $"Unfavorite {actor.DisplayName}" : $"Favorite {actor.DisplayName}")">
-                                <FavoriteHeartIcon Filled="actor.IsFavorite" Size="16" />
-                            </button>
+                            @if (!actor.IsPlaceholder)
+                            {
+                                <button type="button"
+                                        class="actor-card-favorite @(actor.IsFavorite ? "active" : "")"
+                                        @onclick="() => ToggleFavorite(actor)"
+                                        title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")"
+                                        aria-label="@(actor.IsFavorite ? $"Unfavorite {actor.DisplayName}" : $"Favorite {actor.DisplayName}")">
+                                    <FavoriteHeartIcon Filled="actor.IsFavorite" Size="16" />
+                                </button>
+                            }
                             @if (ActorCardText.NeedsAttention(actor))
                             {
                                 <span class="actor-attention-dot" title="Needs attention"></span>
@@ -256,6 +272,10 @@ else
                                         @if (actor.IsRetired)
                                         {
                                             <span class="actor-retired-pill" title="Retired">Retired</span>
+                                        }
+                                        @if (actor.IsPlaceholder)
+                                        {
+                                            <span class="actor-unidentified-pill" title="Not a known actor: only on one movie, to carry tags and a photo">Unidentified</span>
                                         }
                                     </div>
                                     @* Rendered on every card while sorting by an attribute, even one without a value,
@@ -325,8 +345,31 @@ else
         visibleActors = filteredActors.Skip(EffectiveWindowStart).Take(windowCount).ToList();
     }
 
+    // What the attention chips and the height and cup filters offer comes from the actors the list can show: an
+    // unidentified placeholder has no metadata or filmography to chase, so it only counts once it is shown.
+    private bool? facetsShowUnidentified;
+
+    private void UpdateListFacets()
+    {
+        var pool = actors is null ? [] : filter.ShowUnidentified ? actors : actors.Where(a => !a.IsPlaceholder).ToList();
+        attentionCounts = (
+            pool.Count(a => !a.HasImage),
+            pool.Count(a => !a.HasMetadata),
+            pool.Count(a => a.MovieCount == 0),
+            pool.Count(a => a.MissingCount > 0));
+        filter.HeightBounds = ActorCardText.HeightBounds(pool);
+        availableCupSizes = ActorCardText.AvailableCupSizes(pool);
+    }
+
     private void UpdateFilteredAndVisibleActors()
     {
+        // The facets (height bounds above all) come first: a height range restored from the saved view only filters once
+        // the bounds it is measured against are known.
+        if (facetsShowUnidentified != filter.ShowUnidentified)
+        {
+            facetsShowUnidentified = filter.ShowUnidentified;
+            UpdateListFacets();
+        }
         filteredActors = actors is null ? [] : filter.Apply(actors).ToList();
         UpdateVisibleActors();
     }
@@ -358,14 +401,6 @@ else
         jellyfinEnabled = await ActorService.IsJellyfinEnabledAsync();
         var items = await ActorService.GetActorCardsAsync();
         actors = items.ToList();
-        attentionCounts = (
-            actors.Count(a => !a.HasImage),
-            actors.Count(a => !a.HasMetadata),
-            actors.Count(a => a.MovieCount == 0),
-            actors.Count(a => a.MissingCount > 0));
-        // Neither changes while the page is open: only the favorite flag of a loaded actor does.
-        filter.HeightBounds = ActorCardText.HeightBounds(actors);
-        availableCupSizes = ActorCardText.AvailableCupSizes(actors);
         UpdateFilteredAndVisibleActors();
     }
 

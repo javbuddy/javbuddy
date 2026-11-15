@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Javbuddy.Services.Movies;
 
 /// <summary>One name from a movie's cast text, with the tracked actor it resolved to (if any).</summary>
-public sealed record MovieCastEntry(string Name, int? ActorId, bool HasImage, long? ImageVersion = null, int? Age = null, DateTime? BirthDate = null)
+public sealed record MovieCastEntry(string Name, int? ActorId, bool HasImage, long? ImageVersion = null, int? Age = null, DateTime? BirthDate = null, bool IsPlaceholder = false)
 {
     // Performers are at least MinimumActorAge, so an age at release below it means bad metadata:
     // a wrong release date, a wrong birthdate, or the name matched the wrong actor.
@@ -68,11 +68,19 @@ public class MovieDetailQueryService(IDbContextFactory<AppDbContext> dbFactory) 
     public async Task<List<MovieCastEntry>> GetCastAsync(Movie movie, CancellationToken ct = default)
     {
         var castNames = ActorMatching.SplitNames(movie.MetaActresses).ToList();
-        if (castNames.Count == 0) return [];
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        // Unidentified placeholders aren't in the cast text; they come after the named cast.
+        var placeholders = await db.Actors.AsNoTracking()
+            .Where(actor => actor.PlaceholderMovieId == movie.Id)
+            .OrderBy(actor => actor.Id)
+            .Select(actor => new { actor.Id, actor.FirstName, actor.LastName })
+            .ToListAsync(ct);
+        if (castNames.Count == 0 && placeholders.Count == 0) return [];
+
         var linkedActors = (await db.MovieActors
-            .Where(link => link.MovieId == movie.Id)
+            .Where(link => link.MovieId == movie.Id && link.Actor.PlaceholderMovieId == null)
             .Select(link => new
             {
                 link.Actor.Id,
@@ -98,13 +106,13 @@ public class MovieDetailQueryService(IDbContextFactory<AppDbContext> dbFactory) 
             })
             .ToList();
 
-        var linkedIds = linkedActors.Select(a => a.Id).ToList();
+        var linkedIds = linkedActors.Select(a => a.Id).Concat(placeholders.Select(p => p.Id)).ToList();
         var actorThumbnails = await db.ActorImages
             .Where(ai => ai.Variant == "thumb" && linkedIds.Contains(ai.ActorId))
             .Select(ai => new { ai.ActorId, ai.UpdatedAt })
             .ToDictionaryAsync(ai => ai.ActorId, ai => ai.UpdatedAt.Ticks, ct);
 
-        return castNames.Select(name =>
+        var entries = castNames.Select(name =>
         {
             var compactName = name.CompactName();
             var match = linkedActors.FirstOrDefault(actor =>
@@ -119,5 +127,12 @@ public class MovieDetailQueryService(IDbContextFactory<AppDbContext> dbFactory) 
             var age = ActorPhysicalAttributesHelper.CalculateAgeAtRelease(match?.BirthDate, movie.MetaReleaseDate);
             return new MovieCastEntry(name, match?.Id, hasImage, imageVersion, age, match?.BirthDate);
         }).ToList();
+        entries.AddRange(placeholders.Select(placeholder => new MovieCastEntry(
+            ActorDisplayName.Placeholder(placeholder.FirstName ?? string.Empty, placeholder.LastName),
+            placeholder.Id,
+            actorThumbnails.ContainsKey(placeholder.Id),
+            actorThumbnails.TryGetValue(placeholder.Id, out var version) ? version : null,
+            IsPlaceholder: true)));
+        return entries;
     }
 }

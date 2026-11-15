@@ -205,7 +205,7 @@ public class ActorDiscoveryService(
         var movies = await db.Movies
             .Select(movie => new { movie.Code, movie.MetaActresses })
             .ToListAsync(ct);
-        var existingActors = await db.Actors.Include(a => a.Aliases).ToListAsync(ct);
+        var existingActors = await db.Actors.Where(a => a.PlaceholderMovieId == null).Include(a => a.Aliases).ToListAsync(ct);
 
         // 1. Gather all candidates across all movies (.nfo files first, then MetaActresses string fallback)
         var candidates = new List<DiscoveredActorCandidate>();
@@ -348,7 +348,7 @@ public class ActorDiscoveryService(
         }
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var initialExistingActors = await db.Actors.AsNoTracking().Include(a => a.Aliases).ToListAsync(ct);
+        var initialExistingActors = await db.Actors.AsNoTracking().Where(a => a.PlaceholderMovieId == null).Include(a => a.Aliases).ToListAsync(ct);
 
         var addedCandidates = new List<(int ActorId, DiscoveredActorCandidate Candidate)>();
         var addedActorIds = new List<int>();
@@ -476,7 +476,7 @@ public class ActorDiscoveryService(
         var importResult = await ImportCandidatesAsync(scanResult.Candidates, progress, ct);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var allActorsCount = await db.Actors.CountAsync(ct);
+        var allActorsCount = await db.Actors.CountAsync(a => a.PlaceholderMovieId == null, ct);
 
         return new ActorDiscoveryResult(
             scanResult.TotalFound,

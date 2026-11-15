@@ -76,7 +76,7 @@ public sealed class DeoVrService(
 
         // MetaActresses is the full cast in metadata order; MovieActors only has the tracked ones.
         var actors = SplitNames(movie.MetaActresses);
-        if (actors.Count == 0) actors = movie.MovieActors.Select(a => a.Actor.DisplayName).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+        if (actors.Count == 0) actors = movie.MovieActors.Where(a => !a.Actor.IsPlaceholder).Select(a => a.Actor.DisplayName).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
         var tags = movie.MovieTags.Select(t => t.Tag.Name).Where(n => !string.IsNullOrWhiteSpace(n))
             .Order(StringComparer.OrdinalIgnoreCase).ToList();
         if (tags.Count == 0) tags = SplitNames(movie.MetaGenres);

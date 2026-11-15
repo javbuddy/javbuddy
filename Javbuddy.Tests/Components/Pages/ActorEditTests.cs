@@ -25,6 +25,28 @@ public class ActorEditTests : BunitContext
     }
 
     [Fact]
+    public void ActorEdit_ForAnUnidentifiedPerformer_EditsOnlyTheLabel_AndShowsTheMovieCodeReadOnly()
+    {
+        var actor = new Actor { Id = 42, FirstName = "Redhead", LastName = "ABC-123", PlaceholderMovieId = 7 };
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetByRouteNameAsync("Redhead (ABC-123)", Arg.Any<CancellationToken>()).Returns(actor);
+        Services.AddSingleton(actorService);
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.Images.IActorImageCacheService>());
+
+        var cut = Render<ActorEdit>(parameters => parameters.Add(p => p.RouteName, "Redhead (ABC-123)"));
+
+        Assert.Equal("Redhead", cut.Find("#actor-first-name").GetAttribute("value"));
+        var code = cut.Find("#actor-movie-code");
+        Assert.Equal("ABC-123", code.GetAttribute("value"));
+        Assert.NotNull(code.GetAttribute("disabled"));
+        Assert.Empty(cut.FindAll("#actor-last-name"));
+        Assert.Empty(cut.FindAll("#actor-japanese-kanji"));
+        Assert.Empty(cut.FindAll("#actor-r18dev-name"));
+        Assert.Empty(cut.FindAll("#actor-jellyfin-id"));
+        Assert.DoesNotContain("Manage Aliases", cut.Markup);
+    }
+
+    [Fact]
     public void ActorEdit_PopulatesFieldsFromExistingActor()
     {
         var actor = new Actor

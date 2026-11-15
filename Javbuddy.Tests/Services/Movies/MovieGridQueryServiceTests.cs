@@ -46,6 +46,25 @@ public sealed class MovieGridQueryServiceTests : IDisposable
     private static MovieGridFilter Attr(ActorAttributeSelection selection) => new(ActorAttributes: selection);
 
     [Fact]
+    public async Task GetRangeAsync_FlagsMoviesWithAnUnidentifiedPerformer()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            var withPlaceholder = new Movie { Code = "PH-001" };
+            var movie = db.Movies.Add(withPlaceholder).Entity;
+            db.Movies.Add(new Movie { Code = "PH-002" });
+            db.SaveChanges();
+            var placeholder = new Actor { FirstName = "Unidentified 1", LastName = "PH-001", PlaceholderMovieId = movie.Id };
+            db.MovieActors.Add(new MovieActor { MovieId = movie.Id, Actor = placeholder });
+            db.SaveChanges();
+        }
+
+        var movies = await service.GetRangeAsync(new MovieGridFilter(), CodeAscending, 0, 10);
+
+        Assert.Equal([("PH-001", true), ("PH-002", false)], movies.Select(m => (m.Code!, m.HasPlaceholderActors)));
+    }
+
+    [Fact]
     public async Task ActorAttributeFilter_NarrowsMoviesAndCount_ByTheSameActress()
     {
         using (var db = factory.CreateDbContext())
@@ -773,6 +792,21 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         Assert.Equal(["CST-003"], await FilteredCodes(new(Ranges: new() { CastSize = new(null, 0) })));
         Assert.Equal(["CST-001"], await FilteredCodes(new(Features: [MovieFeatureFilterOption.HasFavoriteActor])));
         Assert.Equal(["CST-002"], await FilteredCodes(new(Features: [MovieFeatureFilterOption.HasRetiredActor])));
+    }
+
+    [Fact]
+    public async Task HasUnidentifiedActorFeature_FindsMoviesWithAnUnidentifiedPerformer_InTheDatabase()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            var with = db.Movies.Add(new Movie { Code = "UID-001" }).Entity;
+            db.Movies.Add(new Movie { Code = "UID-002" });
+            db.SaveChanges();
+            db.MovieActors.Add(new MovieActor { MovieId = with.Id, Actor = new Actor { FirstName = "Unidentified 1", LastName = "UID-001", PlaceholderMovieId = with.Id } });
+            db.SaveChanges();
+        }
+
+        Assert.Equal(["UID-001"], await FilteredCodes(new(Features: [MovieFeatureFilterOption.HasUnidentifiedActor])));
     }
 
     [Fact]

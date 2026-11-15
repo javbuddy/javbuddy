@@ -68,13 +68,26 @@ public class Actor
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-    /// <summary>Whether the actor has a usable name. A first name is required (a one-name actor is stored
-    /// as a first name only); a last name alone is not enough. The .nfo writers, the drift check and the
-    /// actor sync all skip an actor without one, so they agree on who is written and compared.</summary>
-    public bool HasName => !string.IsNullOrWhiteSpace(FirstName);
+    /// <summary>Set when this is an unidentified performer ("amateur") that exists only to carry actor tags and a
+    /// photo within one movie: the movie it belongs to. Its FirstName is a label the user can change; its LastName is
+    /// the movie's code, which they can't, and is shown in brackets after the label (see DisplayName). Such an actor is linked to that movie directly (never through
+    /// the movie's cast text), is never written to the .nfo or synced to Jellyfin, is hidden from the actor list unless
+    /// asked for, and goes away with the movie or when removed from it.</summary>
+    public int? PlaceholderMovieId { get; set; }
+
+    /// <summary>Whether this is an unidentified performer local to one movie (see <see cref="PlaceholderMovieId"/>).</summary>
+    public bool IsPlaceholder => PlaceholderMovieId is not null;
+
+    /// <summary>Whether the actor has a usable name that belongs in the .nfo. A first name is required (a one-name
+    /// actor is stored as a first name only); a last name alone is not enough. An unidentified placeholder has no real
+    /// name, so it never counts. The .nfo writers, the drift check and the actor sync all skip an actor without one,
+    /// so they agree on who is written and compared.</summary>
+    public bool HasName => !IsPlaceholder && !string.IsNullOrWhiteSpace(FirstName);
 
     /// <summary>LastName FirstName, matching the established cast-linking and route convention.</summary>
-    public string DisplayName => Services.Actors.ActorDisplayName.Format(FirstName ?? string.Empty, LastName);
+    public string DisplayName => IsPlaceholder
+        ? Services.Actors.ActorDisplayName.Placeholder(FirstName ?? string.Empty, LastName)
+        : Services.Actors.ActorDisplayName.Format(FirstName ?? string.Empty, LastName);
 
     /// <summary>FirstName LastName, the Western order (trimmed; empty when neither is set) — the name the same
     /// actor is credited under by sources that list her that way.</summary>

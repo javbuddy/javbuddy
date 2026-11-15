@@ -45,6 +45,11 @@ public sealed class ActorListFilter
     public bool FavoritesOnly { get; set; }
     public bool NoMetadataOnly { get; set; }
     public bool MissingMoviesOnly { get; set; }
+
+    /// <summary>Includes unidentified placeholders (<see cref="ActorCardModel.IsPlaceholder"/>), which the list hides
+    /// otherwise. A display option, not a filter (it adds rows), so it isn't counted as one. Not saved with the view: they
+    /// are hidden again the next time the page opens.</summary>
+    public bool ShowUnidentified { get; set; }
     public HashSet<string> CupSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
     public int? HeightMin { get; private set; }
     public int? HeightMax { get; private set; }
@@ -174,6 +179,7 @@ public sealed class ActorListFilter
         FavoritesOnly = false;
         NoMetadataOnly = false;
         MissingMoviesOnly = false;
+        ShowUnidentified = false;
         CupSizes.Clear();
         HeightMin = null;
         HeightMax = null;
@@ -223,6 +229,11 @@ public sealed class ActorListFilter
     public IEnumerable<ActorCardModel> Apply(IEnumerable<ActorCardModel> actors)
     {
         var query = actors;
+
+        if (!ShowUnidentified)
+        {
+            query = query.Where(a => !a.IsPlaceholder);
+        }
 
         if (!string.IsNullOrWhiteSpace(Text))
         {

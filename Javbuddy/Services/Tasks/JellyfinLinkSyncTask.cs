@@ -90,7 +90,7 @@ public class JellyfinLinkSyncTask(
             unlinkedActors = await db.Actors
                 .AsNoTracking()
                 .Include(a => a.Aliases)
-                .Where(a => a.JellyfinPersonId == null || a.JellyfinPersonId == "")
+                .Where(a => a.PlaceholderMovieId == null && (a.JellyfinPersonId == null || a.JellyfinPersonId == ""))
                 .ToListAsync(ct);
         }
 

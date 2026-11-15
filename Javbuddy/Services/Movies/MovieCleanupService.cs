@@ -2,6 +2,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Common;
+using Javbuddy.Services.Images;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Tags;
 using Microsoft.EntityFrameworkCore;
@@ -28,7 +29,7 @@ public enum CleanupMode
 }
 
 /// <summary>One actor entry for a movie shown in the Cleanup review flow.</summary>
-public sealed record CleanupActorItem(string Name, int? ActorId, bool HasImage);
+public sealed record CleanupActorItem(string Name, int? ActorId, bool HasImage, bool IsPlaceholder = false);
 
 /// <summary>One tag on the review card. ParentName is set for a subtag; NeedsReview marks a tag not
 /// yet approved in the tag library.</summary>
@@ -139,7 +140,9 @@ public class MovieCleanupService(
     IDbContextFactory<AppDbContext> dbFactory,
     ILocalLibraryClient localLibraryClient,
     MovieChangeNotifier? movieChangeNotifier = null,
-    IMovieCleanupSessionTracker? sessionTracker = null) : IMovieCleanupService
+    IMovieCleanupSessionTracker? sessionTracker = null,
+    IActorImageCacheService? actorImageCache = null,
+    IActorPhotoService? actorPhotos = null) : IMovieCleanupService
 {
     private readonly IMovieCleanupSessionTracker sessionTracker = sessionTracker ?? new MovieCleanupSessionTracker();
 
@@ -174,11 +177,11 @@ public class MovieCleanupService(
         var actor = await db.Actors
             .AsNoTracking()
             .Where(a => a.Id == actorId)
-            .Select(a => new { a.FirstName, a.LastName })
+            .Select(a => new { a.FirstName, a.LastName, a.PlaceholderMovieId })
             .FirstOrDefaultAsync(ct);
         if (actor is null) return;
 
-        var name = ActorDisplayName.Format(actor.FirstName ?? string.Empty, actor.LastName);
+        var name = ActorDisplayName.For(actor.FirstName, actor.LastName, actor.PlaceholderMovieId);
         sessionTracker.RecordEdit(CleanupEdit.Actor(movieId, actorId, name, added));
     }
 
@@ -303,6 +306,7 @@ public class MovieCleanupService(
                 ma.Actor.JapaneseNameKanji,
                 ma.Actor.JapaneseNameKana,
                 ma.Actor.R18DevName,
+                ma.Actor.PlaceholderMovieId,
                 Aliases = ma.Actor.Aliases.Select(a => a.Name).ToList()
             })
             .ToListAsync(ct);
@@ -310,8 +314,10 @@ public class MovieCleanupService(
         var linkedLookups = linkedActors.Select(a => new
         {
             a.Id,
-            DisplayName = ActorDisplayName.Format(a.FirstName ?? string.Empty, a.LastName),
-            ReversedName = !string.IsNullOrWhiteSpace(a.LastName) ? $"{a.FirstName} {a.LastName}" : null,
+            DisplayName = ActorDisplayName.For(a.FirstName, a.LastName, a.PlaceholderMovieId),
+            IsPlaceholder = a.PlaceholderMovieId != null,
+            // A placeholder is never in the cast text, so it has no other name to match by.
+            ReversedName = a.PlaceholderMovieId == null && !string.IsNullOrWhiteSpace(a.LastName) ? $"{a.FirstName} {a.LastName}" : null,
             a.JapaneseNameKanji,
             a.JapaneseNameKana,
             a.R18DevName,
@@ -328,7 +334,7 @@ public class MovieCleanupService(
         if (castNames.Count == 0)
         {
             return linkedLookups.Select(a =>
-                new CleanupActorItem(a.DisplayName, a.Id, actorImages.Contains(a.Id))).ToList();
+                new CleanupActorItem(a.DisplayName, a.Id, actorImages.Contains(a.Id), a.IsPlaceholder)).ToList();
         }
 
         var result = new List<CleanupActorItem>();
@@ -360,7 +366,7 @@ public class MovieCleanupService(
         {
             if (!includedActorIds.Contains(actor.Id))
             {
-                result.Add(new CleanupActorItem(actor.DisplayName, actor.Id, actorImages.Contains(actor.Id)));
+                result.Add(new CleanupActorItem(actor.DisplayName, actor.Id, actorImages.Contains(actor.Id), actor.IsPlaceholder));
             }
         }
 
@@ -382,6 +388,7 @@ public class MovieCleanupService(
         }
 
         await DeletedMovieHistory.RecordAsync(db, movie, ct);
+        await PlaceholderActorCleanup.DeleteImagesAsync(db, movieId, actorImageCache, actorPhotos, ct);
         db.Movies.Remove(movie);
         await db.SaveChangesAsync(ct);
         movieChangeNotifier?.NotifyChanged();

@@ -384,6 +384,20 @@ public class MovieFilterPredicatesTests
     }
 
     [Fact]
+    public void HasUnidentifiedActor_KeepsMoviesWithAnUnidentifiedPerformer_AndTheyAreNotNoCast()
+    {
+        var unidentified = new Movie { Code = "U-001", MetaFetchedAt = DateTime.UtcNow };
+        unidentified.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "Unidentified 1", LastName = "U-001", PlaceholderMovieId = 1 } });
+        var named = new Movie { Code = "U-002", MetaFetchedAt = DateTime.UtcNow, MetaActresses = "A" };
+        named.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "A" } });
+        var empty = new Movie { Code = "U-003", MetaFetchedAt = DateTime.UtcNow };
+        var movies = new[] { unidentified, named, empty }.AsQueryable();
+
+        Assert.Equal(["U-001"], Codes(MovieFilterPredicates.WhereFeatures(movies, [MovieFeatureFilterOption.HasUnidentifiedActor])));
+        Assert.Equal(["U-003"], Codes(MovieFilterPredicates.WhereFeatures(movies, [MovieFeatureFilterOption.MissingCast])));
+    }
+
+    [Fact]
     public void SortOrders_InMemory_SortCodesNaturally_AndCountsWithCodeBreakingTies()
     {
         var many = new Movie { Code = "B-1" };

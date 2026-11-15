@@ -50,6 +50,29 @@ public class ActorImageCacheServiceTests
     }
 
     [Fact]
+    public async Task GetOrCreateBothAsync_AnUnidentifiedPerformerWithoutAnUploadedPortrait_IsNeverLookedUpByName()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = new Movie { Code = "ABC-123" };
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+            var placeholder = new Actor { FirstName = "Redhead", LastName = "ABC-123", PlaceholderMovieId = movie.Id };
+            db.MovieActors.Add(new MovieActor { MovieId = movie.Id, Actor = placeholder });
+            await db.SaveChangesAsync();
+        }
+        var client = Substitute.For<ILocalLibraryClient>();
+        var service = new ActorImageCacheService(client, Substitute.For<ILocalImageCache>(), factory, Substitute.For<IImageCacheMaintenanceService>());
+
+        var (thumb, full) = await service.GetOrCreateBothAsync(1);
+
+        Assert.Null(thumb);
+        Assert.Null(full);
+        await client.DidNotReceiveWithAnyArgs().ResolveActorImagePathAsync(default!, Arg.Any<IReadOnlyList<string>>(), default);
+    }
+
+    [Fact]
     public async Task GetOrCreateBothAsync_GeneratesSwappedCandidateWhenLastNameEmpty()
     {
         using var factory = new TestDbContextFactory();

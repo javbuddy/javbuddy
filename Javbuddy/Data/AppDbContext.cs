@@ -149,6 +149,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(a => a.CupSize);
             entity.HasIndex(a => a.HeightCm);
             entity.HasIndex(a => a.IsRetired).HasFilter("\"IsRetired\"");
+            // An unidentified placeholder belongs to one movie and goes with it.
+            entity.HasIndex(a => a.PlaceholderMovieId).HasFilter("\"PlaceholderMovieId\" IS NOT NULL");
+            entity.HasOne<Movie>()
+                .WithMany()
+                .HasForeignKey(a => a.PlaceholderMovieId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ActorAlias>(entity =>

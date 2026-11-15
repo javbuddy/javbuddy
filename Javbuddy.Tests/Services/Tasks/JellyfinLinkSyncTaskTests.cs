@@ -185,5 +185,26 @@ public class JellyfinLinkSyncTaskTests
             Assert.Equal("jf-1", movie.JellyfinItemId);
         }
     }
-}
 
+    [Fact]
+    public async Task RunAsync_NeverLooksUpAnUnidentifiedPerformer_InJellyfin()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = new Movie { Code = "AAA-001" };
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+            db.Actors.Add(new Actor { FirstName = "Redhead", LastName = "AAA-001", PlaceholderMovieId = movie.Id });
+            await db.SaveChangesAsync();
+        }
+        var jellyfinClient = Substitute.For<IJellyfinClient>();
+        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new MediaServerLookupResult(true, new List<MediaServerItemDto>(), null));
+
+        await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
+
+        await jellyfinClient.DidNotReceive().LookupPersonAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+}

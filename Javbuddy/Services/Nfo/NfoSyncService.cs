@@ -487,7 +487,7 @@ public class NfoSyncService(
         var actors = await db.Actors
             .AsNoTracking()
             .Include(a => a.Aliases)
-            .Where(a => a.FirstName != null)
+            .Where(a => a.FirstName != null && a.PlaceholderMovieId == null)
             .ToListAsync(ct);
 
         var actorMatchers = actors

@@ -122,6 +122,7 @@ public class LibraryStatisticsService(IDbContextFactory<AppDbContext> dbFactory,
             .ToListAsync(ct);
 
         var topActors = await db.MovieActors.AsNoTracking()
+            .Where(ma => ma.Actor.PlaceholderMovieId == null)
             .GroupBy(ma => new { ma.Actor.FirstName, ma.Actor.LastName })
             .Select(g => new { g.Key.FirstName, g.Key.LastName, Count = g.Count() })
             .OrderByDescending(r => r.Count)
@@ -148,8 +149,8 @@ public class LibraryStatisticsService(IDbContextFactory<AppDbContext> dbFactory,
             MoviesFavorite: movies.Count(m => m.IsFavorite),
             TotalBytes: local.Sum(m => m.LocalFileSizeBytes ?? 0),
             TotalRuntimeHours: local.Sum(m => m.MediaDurationSeconds ?? 0) / 3600.0,
-            Actors: await db.Actors.CountAsync(ct),
-            ActorsFavorite: await db.Actors.CountAsync(a => a.IsFavorite, ct),
+            Actors: await db.Actors.CountAsync(a => a.PlaceholderMovieId == null, ct),
+            ActorsFavorite: await db.Actors.CountAsync(a => a.PlaceholderMovieId == null && a.IsFavorite, ct),
             Tags: await db.Tags.CountAsync(ct),
             TagsNeedingReview: await db.Tags.CountAsync(t => t.NeedsReview, ct),
             Scenes: await db.Scenes.CountAsync(ct),

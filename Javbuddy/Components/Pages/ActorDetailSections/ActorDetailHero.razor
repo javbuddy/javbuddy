@@ -23,6 +23,10 @@
             {
                 <span class="actor-hero-favorite" title="Favorite">♥</span>
             }
+            @if (Actor.IsPlaceholder)
+            {
+                <span class="actor-badge actor-badge-unidentified" title="Not a known actor: only on one movie, to carry tags and a photo. Use Identify to say who they are.">Unidentified</span>
+            }
             @if (Actor.IsRetired)
             {
                 <span class="actor-badge actor-badge-retired" title="Retired from the industry">Retired</span>

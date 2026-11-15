@@ -122,3 +122,66 @@ a.movie-detail-cast-avatar {
     font-weight: 600;
     cursor: help;
 }
+
+.movie-detail-cast-unidentified {
+    font-size: 0.72rem;
+    line-height: 1.25;
+    color: #d9a441;
+    font-style: italic;
+}
+
+.movie-detail-cast-unidentified-add {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.movie-detail-cast-unidentified-label {
+    flex: 1 1 10rem;
+    max-width: 16rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    border: 1px solid #3a3f4d;
+    background: #1b1e27;
+    color: #d8dae0;
+    font-size: 0.85rem;
+}
+
+.movie-detail-cast-unidentified-btn {
+    padding: 0.35rem 0.8rem;
+    border-radius: 6px;
+    border: 1px dashed #5a6070;
+    background: transparent;
+    color: #b6bac6;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+    .movie-detail-cast-unidentified-btn:hover {
+        color: #5eb4ec;
+        border-color: #5eb4ec;
+    }
+
+.movie-detail-cast-photo-btn {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid #3a3f4d;
+    background: #1b1e27;
+    color: #b6bac6;
+    cursor: pointer;
+}
+
+    .movie-detail-cast-photo-btn:hover {
+        color: #5eb4ec;
+        border-color: #5eb4ec;
+    }

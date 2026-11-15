@@ -31,6 +31,19 @@ public class ActorsTests : BunitContext
     }
 
     [Fact]
+    public void OnlyUnidentifiedPerformers_AreHidden_WithAHintToShowThem_AndTheFilterMenuStillThere()
+    {
+        actorService.GetActorCardsAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<ActorCardModel> { new(5, "Redhead (ABC-123)", 1, false, IsPlaceholder: true) });
+
+        var cut = Render<Actors>();
+
+        Assert.Empty(cut.FindAll(".actor-card"));
+        Assert.Contains("unidentified performers on your movies are hidden", cut.Markup);
+        Assert.NotEmpty(cut.FindAll(".sort-dropdown-wrapper"));
+    }
+
+    [Fact]
     public void ActorsPresent_RendersActorCards_WithPhotosAndInitials()
     {
         var items = new List<ActorCardModel>
@@ -1109,5 +1122,57 @@ public class ActorsTests : BunitContext
         Assert.Equal(2, cut.FindAll(".actor-row:not(.actor-table-header)").Count);
         var template = Assert.Single(templates);
         Assert.Equal("grid-template-columns: 32px minmax(180px, 2fr) 75px 80px 75px 110px minmax(160px, 1.5fr)", template);
+    }
+
+    [Fact]
+    public void TheAttentionChipCounts_CountUnidentifiedPerformersOnlyWhileTheyAreShown()
+    {
+        actorService.GetActorCardsAsync(Arg.Any<CancellationToken>()).Returns(new List<ActorCardModel>
+        {
+            new(1, "Mikami Yua", 1, false),
+            new(2, "Redhead (ABC-123)", 1, false, IsPlaceholder: true),
+        });
+        var cut = Render<Actors>();
+
+        Assert.Equal("1", cut.Find(".actor-attention-chip b").TextContent);
+
+        ToggleFilter(cut, "Show unidentified");
+
+        Assert.Equal("2", cut.Find(".actor-attention-chip b").TextContent);
+        Assert.Equal(2, cut.FindAll(".actor-card").Count);
+    }
+
+    [Fact]
+    public void AHeightRangeRestoredFromTheSavedView_FiltersOnTheFirstLoad()
+    {
+        var short1 = new ActorCardModel(1, "Short One", 1, false, HeightCm: 150);
+        var tall = new ActorCardModel(2, "Tall One", 1, false, HeightCm: 180);
+        actorService.GetActorCardsAsync(Arg.Any<CancellationToken>()).Returns(new List<ActorCardModel> { short1, tall });
+        var httpContextAccessor = Substitute.For<IHttpContextAccessor>();
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers.Cookie = "javbuddy-actors-view=" + Uri.EscapeDataString("""{"HeightMin":170}""");
+        httpContextAccessor.HttpContext.Returns(httpContext);
+        Services.AddSingleton(httpContextAccessor);
+
+        var cut = Render<Actors>();
+
+        Assert.Equal(["Tall One"], cut.FindAll(".actor-card .actor-name-text").Select(n => n.TextContent.Trim()));
+    }
+
+    [Fact]
+    public void TheTableViewHasNoFavoriteHeartForAnUnidentifiedPerformer()
+    {
+        actorService.GetActorCardsAsync(Arg.Any<CancellationToken>()).Returns(new List<ActorCardModel>
+        {
+            new(1, "Mikami Yua", 1, false),
+            new(2, "Redhead (ABC-123)", 1, false, IsPlaceholder: true),
+        });
+        var cut = Render<Actors>();
+        ToggleFilter(cut, "Show unidentified");
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Table").Click();
+
+        var rows = cut.FindAll(".actor-row").Where(r => !r.ClassList.Contains("actor-table-header")).ToList();
+        Assert.Equal(2, rows.Count);
+        Assert.Single(rows, r => r.QuerySelector(".actor-row-favorite") is not null);
     }
 }

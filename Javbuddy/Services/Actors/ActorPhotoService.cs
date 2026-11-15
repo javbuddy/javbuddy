@@ -153,6 +153,7 @@ public sealed class ActorPhotoService(
                 p.ActorId,
                 FirstName = p.Actor != null ? p.Actor.FirstName : null,
                 LastName = p.Actor != null ? p.Actor.LastName : null,
+                PlaceholderMovieId = p.Actor != null ? p.Actor.PlaceholderMovieId : null,
                 p.AlbumId,
                 AlbumName = p.Album != null ? p.Album.Name : null,
                 p.AspectRatio,
@@ -166,7 +167,7 @@ public sealed class ActorPhotoService(
             .Select(p => new GlobalActorPhotoItem(
                 p.Id,
                 p.ActorId,
-                ActorDisplayName.Format(p.FirstName ?? string.Empty, p.LastName),
+                ActorDisplayName.For(p.FirstName, p.LastName, p.PlaceholderMovieId),
                 p.AlbumId,
                 p.AlbumName,
                 p.AspectRatio ?? 1.0,
@@ -182,12 +183,13 @@ public sealed class ActorPhotoService(
         var groups = await db.ActorPhotos
             .AsNoTracking()
             .Where(p => p.Actor != null)
-            .GroupBy(p => new { p.ActorId, p.Actor!.FirstName, p.Actor!.LastName })
+            .GroupBy(p => new { p.ActorId, p.Actor!.FirstName, p.Actor!.LastName, p.Actor!.PlaceholderMovieId })
             .Select(g => new
             {
                 g.Key.ActorId,
                 g.Key.FirstName,
                 g.Key.LastName,
+                g.Key.PlaceholderMovieId,
                 Count = g.Count()
             })
             .ToListAsync(ct);
@@ -195,7 +197,7 @@ public sealed class ActorPhotoService(
         return groups
             .Select(g => new ActorWithPhotoCountSummary(
                 g.ActorId,
-                ActorDisplayName.Format(g.FirstName ?? string.Empty, g.LastName),
+                ActorDisplayName.For(g.FirstName, g.LastName, g.PlaceholderMovieId),
                 g.Count))
             .OrderBy(a => a.DisplayName)
             .ToList();

@@ -183,4 +183,25 @@ public class ActorListFilterTests
 
         Assert.Equal("AA", cups[ActorPhysicalAttributesHelper.StandardCupSizes.Count]);
     }
+
+    [Fact]
+    public void UnidentifiedPlaceholders_AreHiddenUnlessAskedFor_AndAreNotCountedAsAFilter()
+    {
+        var actors = new[]
+        {
+            new ActorCardModel(1, "A", 1, false),
+            new ActorCardModel(2, "Unidentified 1 (X-1)", 1, false, IsPlaceholder: true),
+        };
+        var filter = new ActorListFilter();
+
+        Assert.Equal([1], filter.Apply(actors).Select(a => a.Id).ToList());
+        Assert.False(filter.HasActiveFilters);
+
+        filter.ShowUnidentified = true;
+        Assert.Equal([1, 2], filter.Apply(actors).Select(a => a.Id).ToList());
+        Assert.Equal(0, filter.ActiveFilterCount);
+
+        filter.Clear();
+        Assert.Equal([1], filter.Apply(actors).Select(a => a.Id).ToList());
+    }
 }

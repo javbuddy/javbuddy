@@ -41,9 +41,11 @@ public class SearchService(IDbContextFactory<AppDbContext> dbFactory) : ISearchS
         // Same poster versions as the Movies grid, so a cropped cover isn't the browser's cached old one.
         await PosterVersion.ApplyAsync(db, matches, ct);
 
+        // An unidentified placeholder is shown on its own movie only, not found by search.
         var actorMatches = await db.Actors
-            .Where(a => EF.Functions.Like(a.FirstName!, $"%{term}%")
-                     || (a.LastName != null && EF.Functions.Like(a.LastName + " " + a.FirstName, $"%{term}%")))
+            .Where(a => a.PlaceholderMovieId == null
+                     && (EF.Functions.Like(a.FirstName!, $"%{term}%")
+                         || (a.LastName != null && EF.Functions.Like(a.LastName + " " + a.FirstName, $"%{term}%"))))
             .OrderByDescending(a => EF.Functions.Like(a.FirstName!, $"{term}%")
                                   || (a.LastName != null && EF.Functions.Like(a.LastName + " " + a.FirstName, $"{term}%")))
             .ThenBy(a => a.LastName)

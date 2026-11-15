@@ -13,6 +13,16 @@ public class MoviePosterTextTests
     }
 
     [Fact]
+    public void ActorWarningTooltip_DoesNotCallAMovieWithAnUnidentifiedPerformerCastless()
+    {
+        Assert.Null(MoviePosterText.ActorWarningTooltip(new Movie { MetaFetchedAt = DateTime.UtcNow, HasPlaceholderActors = true }));
+
+        var loaded = new Movie { MetaFetchedAt = DateTime.UtcNow };
+        loaded.MovieActors.Add(new MovieActor { Actor = new Actor { FirstName = "Unidentified 1", PlaceholderMovieId = 1 } });
+        Assert.Null(MoviePosterText.ActorWarningTooltip(loaded));
+    }
+
+    [Fact]
     public void ActorWarningTooltip_FlagsMissingCastOnlyOnceMetadataWasFetched()
     {
         Assert.Equal("No actors listed", MoviePosterText.ActorWarningTooltip(new Movie { MetaFetchedAt = DateTime.UtcNow }));
