@@ -10,10 +10,13 @@
 const PREVIEW_WIDTH_PX = 200;
 const CONTROLS_STRIP_PX = 48;
 
-const instances = new WeakMap();
+// Keyed by a per-component string, not the root element: the component is disposed after its element has left
+// the DOM, where Blazor can no longer resolve the ElementReference, so a lookup by root would find nothing and
+// leave the Space/mute listeners on window bound to the old video, claiming Space for every later player.
+const instances = new Map();
 
-export function init(root, config, videoSelector) {
-    dispose(root);
+export function init(root, config, videoSelector, key) {
+    dispose(key);
     if (!root || !config || !(config.durationSeconds > 0)) return;
 
     const track = root.querySelector('.scrub-bar-track');
@@ -119,7 +122,7 @@ export function init(root, config, videoSelector) {
     // Without native controls there's no strip at the video's bottom that a double-click must skip.
     const unbindFullscreen = bindFullscreen(root, container, video, fullscreenBtn, 'scrub-bar-is-fullscreen', transport ? 0 : CONTROLS_STRIP_PX);
 
-    instances.set(root, () => {
+    instances.set(key, () => {
         scrubBar.removeEventListener('pointerenter', preloadSheets);
         scrubBar.removeEventListener('pointermove', showPreview);
         scrubBar.removeEventListener('pointerleave', hidePreview);
@@ -130,11 +133,11 @@ export function init(root, config, videoSelector) {
     });
 }
 
-export function dispose(root) {
-    const teardown = root && instances.get(root);
+export function dispose(key) {
+    const teardown = instances.get(key);
     if (teardown) {
         teardown();
-        instances.delete(root);
+        instances.delete(key);
     }
 }
 

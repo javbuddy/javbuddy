@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **Space plays and pauses again after you switch movies in the scene editor.** Closing a movie's player left its Space shortcut running on the page, which swallowed Space for the next movie's player until you reloaded.
+
 ### Changed
 
 - **Repairing a video no longer waits behind other ffmpeg jobs.** The repair remux used to queue behind a running full-movie trickplay, scene detection, chapter remux or VR merge; it now starts right away.

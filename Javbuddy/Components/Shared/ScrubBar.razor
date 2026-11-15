@@ -119,6 +119,7 @@
     private double? Duration => Trickplay?.DurationSeconds ?? DurationSeconds;
 
     private ElementReference root;
+    private readonly string key = Guid.NewGuid().ToString("N");
     private IJSObjectReference? jsModule;
     private bool initialised;
     private TrickplayLayout? initialisedWith;
@@ -141,7 +142,7 @@
         try
         {
             jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ScrubBar.razor.js");
-            await jsModule.InvokeVoidAsync("init", root, (object?)trickplay ?? new { durationSeconds = DurationSeconds }, VideoSelector);
+            await jsModule.InvokeVoidAsync("init", root, (object?)trickplay ?? new { durationSeconds = DurationSeconds }, VideoSelector, key);
         }
         catch (JSDisconnectedException)
         {
@@ -156,7 +157,7 @@
 
         try
         {
-            await jsModule.InvokeVoidAsync("dispose", root);
+            await jsModule.InvokeVoidAsync("dispose", key);
             await jsModule.DisposeAsync();
         }
         catch (JSDisconnectedException)

@@ -81,7 +81,7 @@ public class ScrubBarTests : BunitContext
             .Add(x => x.VideoSelector, "video.cleanup-video"));
 
         var init = Assert.Single(module.Invocations, i => i.Identifier == "init");
-        Assert.Equal(3, init.Arguments.Count);
+        Assert.Equal(4, init.Arguments.Count);
         Assert.Equal(Trickplay, init.Arguments[1]);
         Assert.Equal("video.cleanup-video", init.Arguments[2]);
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".scrub-bar")));
@@ -129,6 +129,11 @@ public class ScrubBarTests : BunitContext
 
         await cut.Instance.DisposeAsync();
 
-        Assert.Single(module.Invocations, i => i.Identifier == "dispose");
+        // Keyed by a string, not the element: the element is already gone from the DOM when this runs, where
+        // Blazor can't resolve it, so the listeners would stay bound and swallow Space for the next player.
+        var init = Assert.Single(module.Invocations, i => i.Identifier == "init");
+        var dispose = Assert.Single(module.Invocations, i => i.Identifier == "dispose");
+        Assert.IsType<string>(dispose.Arguments[0]);
+        Assert.Equal(init.Arguments[3], dispose.Arguments[0]);
     }
 }
