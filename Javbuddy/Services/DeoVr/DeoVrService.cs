@@ -27,7 +27,8 @@ public sealed class DeoVrService(
     IDeoVrSettingsService settingsService,
     IDeoVrGroupService groupService,
     IMovieGridQueryService gridQuery,
-    ITrickplayStore trickplayStore) : IDeoVrService
+    ITrickplayStore trickplayStore,
+    IMovieSubtitleService subtitleService) : IDeoVrService
 {
     public async Task<DeoVrSettings?> GetEnabledSettingsAsync(CancellationToken ct = default)
     {
@@ -51,7 +52,11 @@ public sealed class DeoVrService(
     public async Task<DeoVrVideoResponse?> GetVideoAsync(int movieId, string baseUrl, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var movie = await db.Movies.AsNoTracking().Include(m => m.MovieFiles).FirstOrDefaultAsync(m => m.Id == movieId, ct);
+        var movie = await db.Movies.AsNoTracking()
+            .Include(m => m.MovieFiles)
+            .Include(m => m.MovieActors).ThenInclude(a => a.Actor)
+            .Include(m => m.MovieTags).ThenInclude(t => t.Tag)
+            .FirstOrDefaultAsync(m => m.Id == movieId, ct);
         if (movie is null || movie.MovieFiles.Count == 0) return null;
 
         var scenes = await db.Scenes.AsNoTracking().Where(s => s.MovieId == movieId).ToListAsync(ct);
@@ -69,6 +74,16 @@ public sealed class DeoVrService(
             ? DeoVrUrls.Timeline(baseUrl, movie.Id, identity)
             : null;
 
+        // MetaActresses is the full cast in metadata order; MovieActors only has the tracked ones.
+        var actors = SplitNames(movie.MetaActresses);
+        if (actors.Count == 0) actors = movie.MovieActors.Select(a => a.Actor.DisplayName).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+        var tags = movie.MovieTags.Select(t => t.Tag.Name).Where(n => !string.IsNullOrWhiteSpace(n))
+            .Order(StringComparer.OrdinalIgnoreCase).ToList();
+        if (tags.Count == 0) tags = SplitNames(movie.MetaGenres);
+        var subtitles = (await subtitleService.GetTracksAsync(movie.Id, null, ct))
+            .Select((t, i) => new DeoVrSubtitle(t.Label, t.Language, DeoVrUrls.Subtitle(baseUrl, movie.Id, i)))
+            .ToList();
+
         return new DeoVrVideoResponse(
             Id: movie.Id,
             Title: Title(movie),
@@ -79,12 +94,20 @@ public sealed class DeoVrService(
             Encodings: files
                 .Select(f => new DeoVrEncoding(
                     MovieVersionParser.FormatVersionLabel(f),
-                    [new DeoVrVideoSource(f.Height ?? 0, DeoVrUrls.Stream(baseUrl, movie.Id, f.Id, f.FileName))]))
+                    [new DeoVrVideoSource(f.Height ?? 0, DeoVrUrls.Stream(baseUrl, movie.Id, f.Id, f.FileName), f.Width, f.Height, f.FileSizeBytes > 0 ? f.FileSizeBytes : null)]))
                 .ToList(),
             TimeStamps: SceneRanges.ResolveEffectiveRanges(scenes, null)
                 .Select(s => new DeoVrTimestamp((int)s.Scene.StartSeconds, s.DisplayTitle))
                 .ToList(),
-            TimelinePreview: timeline);
+            TimelinePreview: timeline,
+            Description: string.IsNullOrWhiteSpace(movie.MetaDescription) ? null : movie.MetaDescription,
+            // Unix seconds, the form DeoVR's own documents use (an ISO string is only read by some players).
+            Date: movie.MetaReleaseDate is { } released ? new DateTimeOffset(DateTime.SpecifyKind(released.Date, DateTimeKind.Utc)).ToUnixTimeSeconds() : null,
+            Paysite: string.IsNullOrWhiteSpace(movie.MetaStudio) ? null : new DeoVrNamed(movie.MetaStudio),
+            Actors: actors.Count == 0 ? null : actors.Select(n => new DeoVrNamed(n)).ToList(),
+            Categories: tags.Count == 0 ? null : tags.Select(n => new DeoVrCategory(new DeoVrNamed(n))).ToList(),
+            IsFavorite: movie.IsFavorite ? true : null,
+            Subtitles: subtitles.Count == 0 ? null : subtitles);
     }
 
     private static List<DeoVrListItem> ToListItems(IEnumerable<Movie> movies, string baseUrl) =>
@@ -101,6 +124,9 @@ public sealed class DeoVrService(
             ? name
             : $"{movie.Code} {name}";
     }
+
+    private static List<string> SplitNames(string? joined) =>
+        (joined ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
     private static double LengthSeconds(Movie movie) =>
         movie.MediaDurationSeconds ?? (movie.MetaRuntimeMinutes ?? 0) * 60.0;

@@ -14,6 +14,7 @@ public class DeoVrServiceTests : IDisposable
 
     private readonly TestDbContextFactory dbFactory = new();
     private readonly IDeoVrSettingsService settings = Substitute.For<IDeoVrSettingsService>();
+    private readonly IMovieSubtitleService subtitles = Substitute.For<IMovieSubtitleService>();
     private readonly InMemoryObjectStoreProvider stores = new();
     private int midePrimaryFileId;
     private int mideRifeFileId;
@@ -21,7 +22,7 @@ public class DeoVrServiceTests : IDisposable
     public void Dispose() => dbFactory.Dispose();
 
     private DeoVrService Service() =>
-        new(dbFactory, settings, new DeoVrGroupService(dbFactory), new MovieGridQueryService(dbFactory), new TrickplayStore(dbFactory, stores));
+        new(dbFactory, settings, new DeoVrGroupService(dbFactory), new MovieGridQueryService(dbFactory), new TrickplayStore(dbFactory, stores), subtitles);
 
     private async Task<(Movie Mide, Movie Sivr, Movie Missing)> SeedAsync()
     {
@@ -116,8 +117,8 @@ public class DeoVrServiceTests : IDisposable
         Assert.Equal(2, video.Encodings.Count);
         Assert.StartsWith("Original", video.Encodings[0].Name, StringComparison.Ordinal);
         Assert.StartsWith("RIFE", video.Encodings[1].Name, StringComparison.Ordinal);
-        Assert.Equal(new DeoVrVideoSource(1080, $"{Base}/deovr/stream/{mide.Id}/{midePrimaryFileId}/MIDE-400.mkv"), Assert.Single(video.Encodings[0].VideoSources));
-        Assert.Equal(new DeoVrVideoSource(1080, $"{Base}/deovr/stream/{mide.Id}/{mideRifeFileId}/MIDE-400-RIFE.mkv"), Assert.Single(video.Encodings[1].VideoSources));
+        Assert.Equal(new DeoVrVideoSource(1080, $"{Base}/deovr/stream/{mide.Id}/{midePrimaryFileId}/MIDE-400.mkv", 1920, 1080), Assert.Single(video.Encodings[0].VideoSources));
+        Assert.Equal(new DeoVrVideoSource(1080, $"{Base}/deovr/stream/{mide.Id}/{mideRifeFileId}/MIDE-400-RIFE.mkv", 1920, 1080), Assert.Single(video.Encodings[1].VideoSources));
         Assert.Equal([new DeoVrTimestamp(0, "Scene 1"), new DeoVrTimestamp(125, "Kiss")], video.TimeStamps);
     }
 
@@ -200,5 +201,85 @@ public class DeoVrServiceTests : IDisposable
 
         Assert.Null(await Service().GetEnabledSettingsAsync());
         Assert.NotNull(await Service().GetEnabledSettingsAsync());
+    }
+
+    [Fact]
+    public async Task GetVideoAsync_IncludesMetadataAndSubtitles_AndOmitsEmptyValues()
+    {
+        var (mide, sivr, _) = await SeedAsync();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            var movie = await db.Movies.FindAsync(sivr.Id);
+            movie!.MetaDescription = "Plot";
+            movie.MetaReleaseDate = new DateTime(2024, 6, 1);
+            movie.MetaActresses = "Remu Suzumori, Other";
+            movie.MetaGenres = "Beach";
+            movie.IsFavorite = true;
+            await db.SaveChangesAsync();
+        }
+        subtitles.GetTracksAsync(sivr.Id, null, Arg.Any<CancellationToken>())
+            .Returns([new SubtitleTrack("/x", "English", "en")]);
+
+        var full = JsonSerializer.Serialize((await Service().GetVideoAsync(sivr.Id, Base))!);
+        Assert.Contains("\"description\":\"Plot\"", full);
+        Assert.Contains("\"date\":1717200000", full);
+        Assert.Contains("\"paysite\":{\"name\":\"S1\"}", full);
+        Assert.Contains("\"actors\":[{\"name\":\"Remu Suzumori\"},{\"name\":\"Other\"}]", full);
+        Assert.Contains("\"categories\":[{\"tag\":{\"name\":\"Beach\"}}]", full);
+        Assert.Contains("\"isFavorite\":true", full);
+        Assert.Contains($"\"url\":\"{Base}/deovr/subtitles/{sivr.Id}/0\"", full);
+        Assert.Contains("\"width\":3840,\"height\":1920", full);
+        Assert.DoesNotContain("rating", full);
+
+        var bare = JsonSerializer.Serialize((await Service().GetVideoAsync(mide.Id, Base))!);
+        foreach (var key in new[] { "description", "date", "paysite", "actors", "categories", "isFavorite", "subtitles" })
+        {
+            Assert.DoesNotContain($"\"{key}\"", bare);
+        }
+    }
+
+    [Fact]
+    public async Task GetVideoAsync_ActorsKeepAnUntrackedCastMember_AndTagsAreSortedByName()
+    {
+        var (mide, _, _) = await SeedAsync();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            var movie = await db.Movies.FindAsync(mide.Id);
+            movie!.MetaActresses = "Tracked One, Untracked Two";
+            var actor = new Actor { FirstName = "One", LastName = "Tracked" };
+            var zebra = new Tag { Name = "zebra" };
+            var apple = new Tag { Name = "Apple" };
+            var mango = new Tag { Name = "mango" };
+            db.AddRange(actor, zebra, apple, mango);
+            await db.SaveChangesAsync();
+            db.MovieActors.Add(new MovieActor { MovieId = mide.Id, ActorId = actor.Id });
+            db.MovieTags.AddRange(
+                new MovieTag { MovieId = mide.Id, TagId = zebra.Id },
+                new MovieTag { MovieId = mide.Id, TagId = apple.Id },
+                new MovieTag { MovieId = mide.Id, TagId = mango.Id });
+            await db.SaveChangesAsync();
+        }
+
+        var video = (await Service().GetVideoAsync(mide.Id, Base))!;
+
+        Assert.Equal(["Tracked One", "Untracked Two"], video.Actors!.Select(a => a.Name));
+        Assert.Equal(["Apple", "mango", "zebra"], video.Categories!.Select(c => c.Tag.Name));
+    }
+
+    [Fact]
+    public async Task GetVideoAsync_NumbersEachSubtitleByItsPosition()
+    {
+        var (_, sivr, _) = await SeedAsync();
+        subtitles.GetTracksAsync(sivr.Id, null, Arg.Any<CancellationToken>())
+            .Returns([new SubtitleTrack("/a", "English", "en"), new SubtitleTrack("/b", "Japanese", null)]);
+
+        var video = (await Service().GetVideoAsync(sivr.Id, Base))!;
+
+        Assert.Equal(
+            [
+                new DeoVrSubtitle("English", "en", $"{Base}/deovr/subtitles/{sivr.Id}/0"),
+                new DeoVrSubtitle("Japanese", null, $"{Base}/deovr/subtitles/{sivr.Id}/1"),
+            ],
+            video.Subtitles);
     }
 }

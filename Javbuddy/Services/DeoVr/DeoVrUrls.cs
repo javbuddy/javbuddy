@@ -32,4 +32,8 @@ public static class DeoVrUrls
     /// <summary>One version's stream; the file name ends the URL so a player sees its extension.</summary>
     public static string Stream(string baseUrl, int movieId, int fileId, string fileName) =>
         $"{baseUrl}{Root}/stream/{movieId}/{fileId}/{Uri.EscapeDataString(fileName)}";
+
+    /// <summary>One of the movie's subtitles, by its index among the main file's siblings.</summary>
+    public static string Subtitle(string baseUrl, int movieId, int index) =>
+        $"{baseUrl}{Root}/subtitles/{movieId}/{index}";
 }

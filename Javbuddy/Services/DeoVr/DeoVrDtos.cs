@@ -30,7 +30,14 @@ public sealed record DeoVrVideoResponse(
     [property: JsonPropertyName("thumbnailUrl")] string ThumbnailUrl,
     [property: JsonPropertyName("encodings")] IReadOnlyList<DeoVrEncoding> Encodings,
     [property: JsonPropertyName("timeStamps")] IReadOnlyList<DeoVrTimestamp> TimeStamps,
-    [property: JsonPropertyName("timelinePreview"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TimelinePreview = null)
+    [property: JsonPropertyName("timelinePreview"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TimelinePreview = null,
+    [property: JsonPropertyName("description"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Description = null,
+    [property: JsonPropertyName("date"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Date = null,
+    [property: JsonPropertyName("paysite"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DeoVrNamed? Paysite = null,
+    [property: JsonPropertyName("actors"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DeoVrNamed>? Actors = null,
+    [property: JsonPropertyName("categories"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DeoVrCategory>? Categories = null,
+    [property: JsonPropertyName("isFavorite"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsFavorite = null,
+    [property: JsonPropertyName("subtitles"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<DeoVrSubtitle>? Subtitles = null)
 {
     /// <summary>Always true: DeoVR's docs say false forces every video to play monoscopic. Flat and
     /// mono video are described by screenType "flat" and stereoMode "off" instead.</summary>
@@ -44,6 +51,20 @@ public sealed record DeoVrEncoding(
 
 public sealed record DeoVrVideoSource(
     [property: JsonPropertyName("resolution")] int Resolution,
+    [property: JsonPropertyName("url")] string Url,
+    [property: JsonPropertyName("width"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Width = null,
+    [property: JsonPropertyName("height"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Height = null,
+    [property: JsonPropertyName("size"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? Size = null);
+
+public sealed record DeoVrNamed(
+    [property: JsonPropertyName("name")] string Name);
+
+public sealed record DeoVrCategory(
+    [property: JsonPropertyName("tag")] DeoVrNamed Tag);
+
+public sealed record DeoVrSubtitle(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("language"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Language,
     [property: JsonPropertyName("url")] string Url);
 
 /// <summary>A chapter: its start in whole seconds and its name.</summary>

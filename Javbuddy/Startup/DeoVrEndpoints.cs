@@ -48,6 +48,15 @@ public static class DeoVrEndpoints
             return Results.Stream(mosaic.Content, "image/jpeg", lastModified: mosaic.LastModified, entityTag: new EntityTagHeaderValue(mosaic.ETag));
         });
 
+        // A subtitle beside the movie's main file, as WebVTT. Unlike /api/movies/{id}/subtitles this one
+        // answers 404 while the integration is off.
+        routes.MapGet("/subtitles/{movieId:int}/{index:int}", async (int movieId, int index, IDeoVrService deoVr, IMovieSubtitleService subtitles, CancellationToken ct) =>
+        {
+            if (await deoVr.GetEnabledSettingsAsync(ct) is null) return Results.NotFound();
+            var vtt = await subtitles.GetWebVttAsync(movieId, null, index, ct);
+            return vtt is null ? Results.NotFound() : Results.Text(vtt, "text/vtt", System.Text.Encoding.UTF8);
+        });
+
         // A JPEG, since DeoVR doesn't show WebP; see IDeoVrThumbnailService.
         routes.MapGet("/thumb/{movieId:int}", async (HttpContext http, int movieId, IDeoVrService deoVr, IDeoVrThumbnailService thumbnails, CancellationToken ct) =>
         {

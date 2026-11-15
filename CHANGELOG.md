@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **DeoVR's video documents carry more of a movie's metadata.** Each now includes the description, release date, studio, actors, tags, favorite flag and subtitles, plus the width, height and file size of every source, so DeoVR-compatible players such as FramePlayerX can search, filter and sort by them. Subtitles are served from a new `/deovr/subtitles/{movieId}/{index}` route, which answers 404 while DeoVR is off. Empty values are left out of the JSON.
+
 ## [0.6.4] - 2026-11-13
 
 ### Changed
