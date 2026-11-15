@@ -210,7 +210,7 @@ public class ActorService(
         if (actor.IsPlaceholder)
         {
             lastName = actor.LastName;
-            firstName = firstName.Replace('/', '-').Replace('\\', '-');
+            firstName = ActorDisplayName.SanitizePlaceholderLabel(firstName) ?? firstName;
         }
         var proposedDisplayName = actor.IsPlaceholder
             ? ActorDisplayName.Placeholder(firstName, lastName)
@@ -442,8 +442,7 @@ public class ActorService(
         // The name is a route and has a unique index, so it carries the movie's code and, without a label of the
         // user's own, the lowest number not yet used on this movie.
         // A "/" would split the actor's page route.
-        var custom = label?.Replace('/', '-').Replace('\\', '-').TrimToNull();
-        if (custom is { Length: > 100 }) custom = custom[..100].TrimEnd();
+        var custom = ActorDisplayName.SanitizePlaceholderLabel(label);
         var taken = (await db.Actors
             .Where(a => a.PlaceholderMovieId == movieId)
             .Select(a => a.FirstName)
@@ -943,12 +942,13 @@ public class ActorService(
         }
 
         // 4. Transfer cached and custom images
+        var discardPlaceholderPortrait = false;
         if (imageCacheService is not null)
         {
             // An unidentified performer's photo only fills a gap: a target who has an image keeps theirs.
             if (source.IsPlaceholder && await HasImageAsync(target.Id, ct))
             {
-                await imageCacheService.DeleteAllForActorAsync(source.Id, ct);
+                discardPlaceholderPortrait = true;
             }
             else
             {
@@ -956,17 +956,22 @@ public class ActorService(
             }
         }
 
-        // The gallery rows of an unidentified performer go with them, and so should their files: a merge never moves a
-        // gallery.
-        if (source.IsPlaceholder && actorPhotoService is not null)
+        // An unidentified performer's gallery is handed to the real actor, the albums that share a name merged.
+        if (source.IsPlaceholder)
         {
-            await actorPhotoService.DeleteAllForActorAsync(source.Id, ct);
+            await MoveGalleryAsync(db, source.Id, target.Id, ct);
         }
 
         // 5. Remove source actor (ActorAliases cascades delete)
         db.Actors.Remove(source);
 
         await db.SaveChangesAsync(ct);
+
+        // Their portrait is only discarded once the merge is saved, so a failed merge leaves them as they were.
+        if (discardPlaceholderPortrait && imageCacheService is not null)
+        {
+            await imageCacheService.DeleteAllForActorAsync(source.Id, ct);
+        }
 
         // 6. Synchronize movie-actor associations. An unidentified performer changed one movie's cast and nothing else.
         if (placeholderMovie is not null)
@@ -993,6 +998,32 @@ public class ActorService(
         }
 
         return ActorOperationResult.Ok(target);
+    }
+
+    private static async Task MoveGalleryAsync(AppDbContext db, int sourceActorId, int targetActorId, CancellationToken ct)
+    {
+        var targetAlbums = await db.ActorAlbums.Where(album => album.ActorId == targetActorId).ToListAsync(ct);
+        var albumIds = new Dictionary<int, int>();
+        foreach (var album in await db.ActorAlbums.Where(album => album.ActorId == sourceActorId).ToListAsync(ct))
+        {
+            // The (actor, name) pair is unique, so an album the target already has absorbs this one.
+            var same = targetAlbums.FirstOrDefault(other => string.Equals(other.Name, album.Name, StringComparison.OrdinalIgnoreCase));
+            if (same is null)
+            {
+                album.ActorId = targetActorId;
+            }
+            else
+            {
+                albumIds[album.Id] = same.Id;
+                db.ActorAlbums.Remove(album);
+            }
+        }
+
+        foreach (var photo in await db.ActorPhotos.Where(photo => photo.ActorId == sourceActorId).ToListAsync(ct))
+        {
+            photo.ActorId = targetActorId;
+            if (photo.AlbumId is { } albumId && albumIds.TryGetValue(albumId, out var merged)) photo.AlbumId = merged;
+        }
     }
 
     public async Task<IReadOnlyList<ActorCardModel>> GetActorCardsAsync(CancellationToken ct = default)

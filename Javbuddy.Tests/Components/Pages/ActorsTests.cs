@@ -1141,4 +1141,38 @@ public class ActorsTests : BunitContext
         Assert.Equal("2", cut.Find(".actor-attention-chip b").TextContent);
         Assert.Equal(2, cut.FindAll(".actor-card").Count);
     }
+
+    [Fact]
+    public void AHeightRangeRestoredFromTheSavedView_FiltersOnTheFirstLoad()
+    {
+        var short1 = new ActorCardModel(1, "Short One", 1, false, HeightCm: 150);
+        var tall = new ActorCardModel(2, "Tall One", 1, false, HeightCm: 180);
+        actorService.GetActorCardsAsync(Arg.Any<CancellationToken>()).Returns(new List<ActorCardModel> { short1, tall });
+        var httpContextAccessor = Substitute.For<IHttpContextAccessor>();
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers.Cookie = "javbuddy-actors-view=" + Uri.EscapeDataString("""{"HeightMin":170}""");
+        httpContextAccessor.HttpContext.Returns(httpContext);
+        Services.AddSingleton(httpContextAccessor);
+
+        var cut = Render<Actors>();
+
+        Assert.Equal(["Tall One"], cut.FindAll(".actor-card .actor-name-text").Select(n => n.TextContent.Trim()));
+    }
+
+    [Fact]
+    public void TheTableViewHasNoFavoriteHeartForAnUnidentifiedPerformer()
+    {
+        actorService.GetActorCardsAsync(Arg.Any<CancellationToken>()).Returns(new List<ActorCardModel>
+        {
+            new(1, "Mikami Yua", 1, false),
+            new(2, "Redhead (ABC-123)", 1, false, IsPlaceholder: true),
+        });
+        var cut = Render<Actors>();
+        ToggleFilter(cut, "Show unidentified");
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Table").Click();
+
+        var rows = cut.FindAll(".actor-row").Where(r => !r.ClassList.Contains("actor-table-header")).ToList();
+        Assert.Equal(2, rows.Count);
+        Assert.Single(rows, r => r.QuerySelector(".actor-row-favorite") is not null);
+    }
 }

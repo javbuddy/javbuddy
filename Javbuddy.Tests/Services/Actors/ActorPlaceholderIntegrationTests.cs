@@ -308,23 +308,66 @@ public class ActorPlaceholderIntegrationTests
     }
 
     [Fact]
-    public async Task MergeAsync_ForAPlaceholder_AlsoDeletesTheirGalleryPhotoFiles()
+    public async Task MergeAsync_ForAPlaceholder_MovesTheirGalleryToTheTarget_MergingAlbumsThatShareAName()
     {
         using var factory = new TestDbContextFactory();
         var (_, placeholderId) = await SeedAsync(factory);
-        int targetId;
+        int targetId, sharedAlbumId;
         await using (var db = await factory.CreateDbContextAsync())
         {
             var target = new Actor { FirstName = "Yui", LastName = "Hatano" };
             db.Actors.Add(target);
             await db.SaveChangesAsync();
             targetId = target.Id;
+            var shared = new ActorAlbum { ActorId = targetId, Name = "Shoot" };
+            var sharedFromPlaceholder = new ActorAlbum { ActorId = placeholderId, Name = "shoot" };
+            var own = new ActorAlbum { ActorId = placeholderId, Name = "Beach" };
+            db.ActorAlbums.AddRange(shared, sharedFromPlaceholder, own);
+            await db.SaveChangesAsync();
+            sharedAlbumId = shared.Id;
+            db.ActorPhotos.AddRange(
+                new ActorPhoto { ActorId = placeholderId, AlbumId = sharedFromPlaceholder.Id, ThumbStorageId = Guid.NewGuid(), FullStorageId = Guid.NewGuid() },
+                new ActorPhoto { ActorId = placeholderId, AlbumId = own.Id, ThumbStorageId = Guid.NewGuid(), FullStorageId = Guid.NewGuid() },
+                new ActorPhoto { ActorId = placeholderId, ThumbStorageId = Guid.NewGuid(), FullStorageId = Guid.NewGuid() });
+            await db.SaveChangesAsync();
         }
-        var photos = Substitute.For<IActorPhotoService>();
 
-        await new ActorService(factory, actorPhotoService: photos).MergeAsync(placeholderId, targetId);
+        var result = await new ActorService(factory).MergeAsync(placeholderId, targetId);
 
-        await photos.Received(1).DeleteAllForActorAsync(placeholderId, Arg.Any<CancellationToken>());
+        Assert.True(result.Success);
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.All(await check.ActorPhotos.ToListAsync(), p => Assert.Equal(targetId, p.ActorId));
+        Assert.Equal(3, await check.ActorPhotos.CountAsync());
+        Assert.Equal(["Beach", "Shoot"], (await check.ActorAlbums.Select(a => a.Name).ToListAsync()).Order().ToList());
+        Assert.Equal(2, await check.ActorPhotos.CountAsync(p => p.AlbumId != null));
+        Assert.Equal(1, await check.ActorPhotos.CountAsync(p => p.AlbumId == sharedAlbumId));
+    }
+
+    [Fact]
+    public async Task MergeAsync_ForAPlaceholder_KeepsTheirPortraitUntilTheMergeIsSaved()
+    {
+        using var factory = new TestDbContextFactory();
+        var (_, placeholderId) = await SeedAsync(factory);
+        var images = Substitute.For<IActorImageCacheService>();
+        var service = new ActorService(factory, images);
+
+        // The target doesn't exist, so the merge fails before anything is saved.
+        var result = await service.MergeAsync(placeholderId, 9999);
+
+        Assert.False(result.Success);
+        await images.DidNotReceiveWithAnyArgs().DeleteAllForActorAsync(default, default);
+    }
+
+    [Fact]
+    public async Task RenamingAPlaceholder_CapsItsLabelAt100Characters_LikeCreatingOne()
+    {
+        using var factory = new TestDbContextFactory();
+        var (_, placeholderId) = await SeedAsync(factory);
+
+        await new ActorService(factory).UpdateAsync(new ActorUpdateModel { Id = placeholderId, FirstName = new string('x', 150) });
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(100, (await db.Actors.SingleAsync()).FirstName!.Length);
     }
 
     [Fact]

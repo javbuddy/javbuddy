@@ -200,11 +200,19 @@ else
                         @* Distinct key from the grid card's (actor.Id): when the view mode flips, Blazor must not reuse a card's
                              element for a row, since the two live at different points in the render tree. *@
                         <div class="actor-row" role="row" @key="@($"row-{actor.Id}")" style="grid-template-columns: @tableTemplate">
-                            <button type="button"
-                                    class="actor-row-favorite @(actor.IsFavorite ? "active" : "")"
-                                    @onclick="() => ToggleFavorite(actor)"
-                                    title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")"
-                                    aria-label="@(actor.IsFavorite ? $"Unfavorite {actor.DisplayName}" : $"Favorite {actor.DisplayName}")">@(actor.IsFavorite ? "♥" : "♡")</button>
+                            @if (actor.IsPlaceholder)
+                            {
+                                @* An unidentified performer can't be favorited; the cell keeps the columns lined up. *@
+                                <span></span>
+                            }
+                            else
+                            {
+                                <button type="button"
+                                        class="actor-row-favorite @(actor.IsFavorite ? "active" : "")"
+                                        @onclick="() => ToggleFavorite(actor)"
+                                        title="@(actor.IsFavorite ? "Remove from favorites" : "Add to favorites")"
+                                        aria-label="@(actor.IsFavorite ? $"Unfavorite {actor.DisplayName}" : $"Favorite {actor.DisplayName}")">@(actor.IsFavorite ? "♥" : "♡")</button>
+                            }
                             <a class="actor-row-name" href="@($"/actors/{Uri.EscapeDataString(actor.DisplayName)}")" title="@actor.DisplayName">
                                 @if (actor.HasImage)
                                 {
@@ -355,12 +363,14 @@ else
 
     private void UpdateFilteredAndVisibleActors()
     {
-        filteredActors = actors is null ? [] : filter.Apply(actors).ToList();
+        // The facets (height bounds above all) come first: a height range restored from the saved view only filters once
+        // the bounds it is measured against are known.
         if (facetsShowUnidentified != filter.ShowUnidentified)
         {
             facetsShowUnidentified = filter.ShowUnidentified;
             UpdateListFacets();
         }
+        filteredActors = actors is null ? [] : filter.Apply(actors).ToList();
         UpdateVisibleActors();
     }
 

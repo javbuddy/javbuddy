@@ -5,6 +5,15 @@ public static class ActorDisplayName
     public static string Format(string firstName, string? lastName) =>
         string.IsNullOrWhiteSpace(lastName) ? firstName : $"{lastName} {firstName}";
 
+    /// <summary>A placeholder's label as it is stored: a "/" or "\" (which would split the actor's page route) becomes a
+    /// "-", and it is cut to 100 characters. Null when nothing is left.</summary>
+    public static string? SanitizePlaceholderLabel(string? label)
+    {
+        var cleaned = label?.Replace('/', '-').Replace('\\', '-').Trim();
+        if (string.IsNullOrEmpty(cleaned)) return null;
+        return cleaned.Length > 100 ? cleaned[..100].TrimEnd() : cleaned;
+    }
+
     /// <summary>The name to show for an actor read as plain columns (a projection that doesn't build an Actor):
     /// a placeholder's label with its movie code in brackets, anyone else's "Last First".</summary>
     public static string For(string? firstName, string? lastName, int? placeholderMovieId) =>
