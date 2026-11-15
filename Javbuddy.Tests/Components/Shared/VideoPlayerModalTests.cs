@@ -83,7 +83,7 @@ public class VideoPlayerModalTests : BunitContext
         // and A for highlights and apexes — all on the one ClipEditor.
         Assert.True(cut.FindComponent<ClipEditor>().Instance.EnableShortcuts);
         var keys = cut.FindAll(".shortcuts-info-keys").Select(k => k.QuerySelector("kbd")!.TextContent);
-        Assert.Equal(["M", "Shift+M", "H", "Shift+H", "A", "←", ",", "Esc"], keys);
+        Assert.Equal(["M", "Shift+M", "H", "Shift+H", "A", "Shift+A", "←", ",", "Esc"], keys);
     }
 
     [Fact]

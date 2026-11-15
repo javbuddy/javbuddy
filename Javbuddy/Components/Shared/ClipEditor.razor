@@ -18,7 +18,7 @@
    flow down and show grayed on the highlights and apexes inheriting them. Its highlight and apex rows and
    forms are ClipHighlightRow, ClipHighlightForm, ClipApexRow and ClipApexForm. Shared by Review mode's card and the player modal's side
    panel; talks to the host's <video> through ClipEditor.razor.js (current time, seek, play-clip, and — when
-   EnableShortcuts — the m / Shift+M, h / Shift+H and a keys) and reports every (re)load through the three
+   EnableShortcuts — the m / Shift+M, h / Shift+H and a / Shift+A keys) and reports every (re)load through the three
    On…Changed callbacks so the host can draw its timeline. *@
 <div class="scene-editor clip-editor" @ref="editorRef">
     @* Header, add buttons and the open add forms; the player's side panel pins this while the clip list
@@ -180,7 +180,7 @@
     /// browser's duration can run a fraction of a second past MediaInfo's.</summary>
     [Parameter] public double? DurationSeconds { get; set; }
 
-    /// <summary>Enables the m / Shift+M, h / Shift+H and a keyboard shortcuts.</summary>
+    /// <summary>Enables the m / Shift+M, h / Shift+H and a / Shift+A keyboard shortcuts.</summary>
     [Parameter] public bool EnableShortcuts { get; set; }
 
     [Parameter] public EventCallback<IReadOnlyList<SceneItem>> OnScenesChanged { get; set; }
@@ -242,7 +242,8 @@
         ["shift+m"] = nameof(EndSceneAtAsync),
         ["h"] = nameof(StartHighlightAtAsync),
         ["shift+h"] = nameof(EndHighlightAtAsync),
-        ["a"] = nameof(StartApexAtAsync)
+        ["a"] = nameof(StartApexAtAsync),
+        ["shift+a"] = nameof(EndApexAtAsync)
     };
     private bool disposed;
     private bool mediaReloading;
@@ -984,6 +985,31 @@
         }
         StateHasChanged();
         return Task.CompletedTask;
+    }
+
+    /// <summary>Shift+A: closes the apex being added — sets its tail so the window ends at the player's
+    /// current time, and saves it. Needs the Mark apex form opened with A first, and the playhead after the apex.</summary>
+    [JSInvokable]
+    public async Task EndApexAtAsync(double seconds)
+    {
+        if (apexForm is not { ApexId: null } adding)
+        {
+            error = "Press A to start an apex first.";
+            StateHasChanged();
+            return;
+        }
+        if (!SceneTimeFormat.TryParse(adding.Time, out var apexSeconds)
+            || ApexRanges.OffsetFromPlayhead(apexSeconds, Clamp(seconds), true) is not { } offset)
+        {
+            error = "Move the player after the apex to set its tail.";
+            StateHasChanged();
+            return;
+        }
+
+        error = null;
+        adding.Tail = ApexWindowText.Format(offset);
+        await SaveApexAsync();
+        StateHasChanged();
     }
 
     // --- Deleting ---

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **Shift+A closes an apex in the scene editor.** After A opens the Mark apex form, Shift+A sets the apex's tail so its window ends at the playhead and saves it, like Shift+H for a highlight.
+
 ### Fixed
 
 - **Space plays and pauses again after you switch movies in the scene editor.** Closing a movie's player left its Space shortcut running on the page, which swallowed Space for the next movie's player until you reloaded.

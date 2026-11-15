@@ -1725,7 +1725,7 @@ public class MovieCleanupTests : BunitContext
         // The shortcuts are listed in an info icon; no player yet, so no F.
         Assert.NotNull(cut.Find(".cleanup-shortcuts .shortcuts-info"));
         var shortcuts = cut.FindComponent<ShortcutsInfo>().Instance.Shortcuts;
-        Assert.Equal(["Space", "←", ",", "N", "M", "Shift+M", "H", "Shift+H", "A"], shortcuts.Select(s => s.Keys[0]));
+        Assert.Equal(["Space", "←", ",", "N", "M", "Shift+M", "H", "Shift+H", "A", "Shift+A"], shortcuts.Select(s => s.Keys[0]));
     }
 
     [Fact]

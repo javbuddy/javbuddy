@@ -75,10 +75,10 @@
 
     private bool EditorShown => ShowEditor && MovieId is not null;
 
-    // The scene editor's M / Shift+M and the highlight and apex editors' H / Shift+H / A
+    // The scene editor's M / Shift+M and the highlight and apex editors' H / Shift+H / A / Shift+A
     //, on whenever they're shown.
     private static readonly IReadOnlyList<KeyboardShortcut> SceneShortcuts =
-        [KeyboardShortcut.NewScene, KeyboardShortcut.EndScene, KeyboardShortcut.StartHighlight, KeyboardShortcut.EndHighlight, KeyboardShortcut.MarkApex];
+        [KeyboardShortcut.NewScene, KeyboardShortcut.EndScene, KeyboardShortcut.StartHighlight, KeyboardShortcut.EndHighlight, KeyboardShortcut.MarkApex, KeyboardShortcut.EndApex];
 
     private IReadOnlyList<Javbuddy.Services.Scenes.SceneItem> scenes = [];
     private IReadOnlyList<double> suggestions = [];

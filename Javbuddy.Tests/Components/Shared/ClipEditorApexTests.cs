@@ -117,7 +117,7 @@ public class ClipEditorApexTests : ClipEditorTestBase
     }
 
     [Fact]
-    public void Shortcuts_AreOnlyRegisteredWhenEnabled_BindingAllFiveKeysOnce()
+    public void Shortcuts_AreOnlyRegisteredWhenEnabled_BindingAllSixKeysOnce()
     {
         RenderEditor(shortcuts: false);
         Assert.DoesNotContain(module.Invocations, i => i.Identifier == "initShortcuts");
@@ -133,6 +133,7 @@ public class ClipEditorApexTests : ClipEditorTestBase
             ["h"] = nameof(ClipEditor.StartHighlightAtAsync),
             ["shift+h"] = nameof(ClipEditor.EndHighlightAtAsync),
             ["a"] = nameof(ClipEditor.StartApexAtAsync),
+            ["shift+a"] = nameof(ClipEditor.EndApexAtAsync),
         }, bindings);
     }
 
@@ -153,6 +154,43 @@ public class ClipEditorApexTests : ClipEditorTestBase
         Assert.Equal(125.5, apex.Seconds);
         Assert.Empty(apex.Tags);
         Assert.Empty(cut.FindAll(".apex-editor-form"));
+    }
+
+    [Fact]
+    public async Task ShortcutShiftA_SetsTheTailToThePlayhead_AndSavesTheApex()
+    {
+        var cut = RenderEditor(shortcuts: true);
+        await cut.InvokeAsync(() => cut.Instance.StartApexAtAsync(100));
+
+        await cut.InvokeAsync(() => cut.Instance.EndApexAtAsync(112.5));
+
+        var apex = Assert.Single(await apexService.GetApexesAsync(movieId));
+        Assert.Equal((100d, (double?)null, (double?)12.5), (apex.Seconds, apex.OwnLeadInSeconds, apex.OwnTailSeconds));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".apex-editor-form")));
+    }
+
+    [Fact]
+    public async Task ShortcutShiftA_WithoutAStartedApex_ShowsError()
+    {
+        var cut = RenderEditor(shortcuts: true);
+
+        await cut.InvokeAsync(() => cut.Instance.EndApexAtAsync(150));
+
+        cut.WaitForAssertion(() => Assert.Equal("Press A to start an apex first.", cut.Find(".scene-editor-error").TextContent));
+        Assert.Empty(await apexService.GetApexesAsync(movieId));
+    }
+
+    [Fact]
+    public async Task ShortcutShiftA_BeforeTheApex_ShowsError_AndKeepsTheForm()
+    {
+        var cut = RenderEditor(shortcuts: true);
+        await cut.InvokeAsync(() => cut.Instance.StartApexAtAsync(100));
+
+        await cut.InvokeAsync(() => cut.Instance.EndApexAtAsync(90));
+
+        cut.WaitForAssertion(() => Assert.Contains("after the apex", cut.Find(".scene-editor-error").TextContent));
+        Assert.Single(cut.FindAll(".apex-editor-form"));
+        Assert.Empty(await apexService.GetApexesAsync(movieId));
     }
 
     [Fact]
