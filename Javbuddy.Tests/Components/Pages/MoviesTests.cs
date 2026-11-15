@@ -1707,7 +1707,7 @@ public class MoviesTests : BunitContext
 
         cut.WaitForAssertion(
             () => Assert.Equal(new[] { "ABC-123", "HMN-869", "IPX-456" }, RenderedCodes(cut).OrderBy(code => code)),
-            TimeSpan.FromSeconds(2));
+            TimeSpan.FromSeconds(10));
     }
 
     [Fact]

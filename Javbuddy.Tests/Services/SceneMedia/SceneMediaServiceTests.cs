@@ -388,7 +388,8 @@ public sealed class SceneMediaServiceTests : IDisposable
         var services = new ServiceCollection().AddSingleton(media).BuildServiceProvider();
         using var backgroundQueue = new SceneMediaQueue(services.GetRequiredService<IServiceScopeFactory>(), NullLogger<SceneMediaQueue>.Instance)
         {
-            SettleDelay = TimeSpan.FromMilliseconds(600)
+            // Long enough that a stalled CI runner can't let the first edit settle before the second one.
+            SettleDelay = TimeSpan.FromSeconds(2)
         };
         var generated = new TaskCompletionSource<int>();
         backgroundQueue.Generated += id => generated.TrySetResult(id);
@@ -396,15 +397,15 @@ public sealed class SceneMediaServiceTests : IDisposable
         var window = new SceneMediaWindow(600_000, 3_600_000);
 
         backgroundQueue.NoteScenesChanged(movieId);
-        var started = DateTime.UtcNow;
         backgroundQueue.Enqueue(sceneId, movieId, window);
         await Task.Delay(200);
         // Another edit restarts the wait; a repeat request while deferred doesn't queue it twice.
         backgroundQueue.NoteScenesChanged(movieId);
+        var restarted = DateTime.UtcNow;
         backgroundQueue.Enqueue(sceneId, movieId, window);
 
-        Assert.Equal(movieId, await generated.Task.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.True(DateTime.UtcNow - started >= TimeSpan.FromMilliseconds(750), "generation ran before the scenes settled");
+        Assert.Equal(movieId, await generated.Task.WaitAsync(TimeSpan.FromSeconds(15)));
+        Assert.True(DateTime.UtcNow - restarted >= TimeSpan.FromMilliseconds(1900), "generation ran before the scenes settled");
         await Task.Delay(300);
         await media.Received(1).GenerateAsync(sceneId, Arg.Any<CancellationToken>());
         await backgroundQueue.StopAsync(CancellationToken.None);
