@@ -15,12 +15,12 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261109173851_AddCachedImageBlurHash";
+    public override string LastMigrationId => "20261115143215_AddActorPlaceholder";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
 #pragma warning disable 612, 618
-        modelBuilder.HasAnnotation("ProductVersion", "11.0.0-rc.3.26522.148");
+        modelBuilder.HasAnnotation("ProductVersion", "11.0.0");
 
         modelBuilder.Entity("Javbuddy.Models.Actor", b =>
             {
@@ -82,6 +82,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("TEXT")
                     .UseCollation("NOCASE");
 
+                b.Property<int?>("PlaceholderMovieId")
+                    .HasColumnType("INTEGER");
+
                 b.Property<int?>("R18DevId")
                     .HasColumnType("INTEGER");
 
@@ -103,6 +106,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
 
                 b.HasIndex("IsRetired")
                     .HasFilter("\"IsRetired\"");
+
+                b.HasIndex("PlaceholderMovieId")
+                    .HasFilter("\"PlaceholderMovieId\" IS NOT NULL");
 
                 b.HasIndex("FirstName", "LastName")
                     .IsUnique();
@@ -435,15 +441,15 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                     .ValueGeneratedOnAdd()
                     .HasColumnType("INTEGER");
 
+                b.Property<string>("BlurHash")
+                    .HasMaxLength(40)
+                    .HasColumnType("TEXT");
+
                 b.Property<string>("Code")
                     .IsRequired()
                     .HasMaxLength(50)
                     .HasColumnType("TEXT")
                     .UseCollation("NOCASE");
-
-                b.Property<string>("BlurHash")
-                    .HasMaxLength(40)
-                    .HasColumnType("TEXT");
 
                 b.Property<int>("Index")
                     .HasColumnType("INTEGER");
@@ -2270,6 +2276,14 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.HasKey("Id");
 
                 b.ToTable("TrickplaySettings");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.Actor", b =>
+            {
+                b.HasOne("Javbuddy.Models.Movie", null)
+                    .WithMany()
+                    .HasForeignKey("PlaceholderMovieId")
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
         modelBuilder.Entity("Javbuddy.Models.ActorAlbum", b =>

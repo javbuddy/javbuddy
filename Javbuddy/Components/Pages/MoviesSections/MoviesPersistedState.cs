@@ -60,7 +60,8 @@ public sealed record MoviesPersistedState(
         bool IsFavorite = false,
         string? VrType = null,
         string? PosterVersion = null,
-        string? PosterBlurHash = null)
+        string? PosterBlurHash = null,
+        bool HasPlaceholderActors = false)
     {
         public Movie ToMovie() => new()
         {
@@ -79,6 +80,7 @@ public sealed record MoviesPersistedState(
             MetaFetchedAt = MetaFetchedAt,
             HasUnmatchedActors = HasUnmatchedActors,
             UnmatchedActorNames = UnmatchedActorNames,
+            HasPlaceholderActors = HasPlaceholderActors,
             IsFavorite = IsFavorite,
             VrType = VrType,
             PosterVersion = PosterVersion,
@@ -87,6 +89,6 @@ public sealed record MoviesPersistedState(
 
         public static PersistedMovie FromMovie(Movie m) =>
             new(m.Id, m.Code, m.Status, m.MetaSourceName, m.MetaTitle, m.Title, m.LocalFileSizeBytes, m.MediaWidth, m.MediaHeight, m.MediaScanType, m.FileCount,
-                m.MetaActresses, m.MetaFetchedAt, m.HasUnmatchedActors, m.UnmatchedActorNames, m.IsFavorite, m.VrType, m.PosterVersion, m.PosterBlurHash);
+                m.MetaActresses, m.MetaFetchedAt, m.HasUnmatchedActors, m.UnmatchedActorNames, m.IsFavorite, m.VrType, m.PosterVersion, m.PosterBlurHash, m.HasPlaceholderActors);
     }
 }

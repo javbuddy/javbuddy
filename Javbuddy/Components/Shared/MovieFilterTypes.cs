@@ -51,6 +51,8 @@ public enum MovieFeatureFilterOption
     HasRetiredActor,
     //; appended for the same cookie reason. A movie whose folder has no .nfo (MetaSourceName "Generated").
     MetadataIncomplete,
+    //; appended for the same cookie reason. A movie with an unidentified performer (Actor.PlaceholderMovieId).
+    HasUnidentifiedActor,
 }
 
 /// <summary>What <see cref="MovieFilterToolbar"/> offers to pick from: the library's names, codecs, studios, genres, the
@@ -247,6 +249,7 @@ public static class MovieFilterOptions
         MovieFeatureFilterOption.HasFavoriteActor => "Has favorite actor",
         MovieFeatureFilterOption.HasRetiredActor => "Has retired actor",
         MovieFeatureFilterOption.MetadataIncomplete => "Metadata incomplete",
+        MovieFeatureFilterOption.HasUnidentifiedActor => "Has unidentified actor",
         _ => option.ToString(),
     };
 

@@ -322,6 +322,7 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
                     MetaFetchedAt = m.MetaFetchedAt,
                     HasUnmatchedActors = m.HasUnmatchedActors,
                     UnmatchedActorNames = m.UnmatchedActorNames,
+                    HasPlaceholderActors = db.Actors.Any(a => a.PlaceholderMovieId == m.Id),
                     IsFavorite = m.IsFavorite,
                 },
                 PosterCachedAt = db.CachedImages
@@ -374,13 +375,13 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
     }
 
     private static Task<List<MovieActorOption>> LoadLinkedActorOptionsAsync(AppDbContext db, CancellationToken ct) =>
-        LoadActorOptionsAsync(db.Actors.Where(a => db.MovieActors.Any(ma => ma.ActorId == a.Id)), ct);
+        LoadActorOptionsAsync(db.Actors.Where(a => a.PlaceholderMovieId == null && db.MovieActors.Any(ma => ma.ActorId == a.Id)), ct);
 
     public async Task<List<MovieActorOption>> GetActorOptionsWithFilesAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         return await LoadActorOptionsAsync(
-            db.Actors.Where(a => db.MovieActors.Any(ma => ma.ActorId == a.Id && ma.Movie.Status == MovieStatus.Got && ma.Movie.MovieFiles.Any())), ct);
+            db.Actors.Where(a => a.PlaceholderMovieId == null && db.MovieActors.Any(ma => ma.ActorId == a.Id && ma.Movie.Status == MovieStatus.Got && ma.Movie.MovieFiles.Any())), ct);
     }
 
     // DisplayName is computed in C#, so the actors are loaded first and named and sorted here.

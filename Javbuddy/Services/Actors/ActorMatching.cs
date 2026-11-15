@@ -18,6 +18,9 @@ public static class ActorMatching
     public static string Initials(string? name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "?";
+        // An unidentified performer's name ends in their movie's code in brackets, which isn't part of who they are.
+        var bracket = name.LastIndexOf(" (", StringComparison.Ordinal);
+        if (bracket > 0 && name.EndsWith(')')) name = name[..bracket];
         var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length switch
         {
@@ -166,7 +169,7 @@ public static class ActorMatching
 
     public static async Task<List<ActorLookup>> LoadActorLookupsAsync(AppDbContext db, CancellationToken ct = default) =>
         (await db.Actors
-            .Where(actor => actor.FirstName != null)
+            .Where(actor => actor.FirstName != null && actor.PlaceholderMovieId == null)
             .Select(actor => new
             {
                 actor.Id,

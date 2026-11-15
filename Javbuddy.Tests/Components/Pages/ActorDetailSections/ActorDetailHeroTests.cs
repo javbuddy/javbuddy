@@ -80,6 +80,16 @@ public class ActorDetailHeroTests : BunitContext
     }
 
     [Fact]
+    public void AnUnidentifiedPerformer_IsMarkedAsSuch_AndARealActorIsNot()
+    {
+        var placeholder = new Actor { Id = 9, FirstName = "Redhead", LastName = "ABC-123", PlaceholderMovieId = 5 };
+
+        Assert.Equal("Unidentified", RenderHero(placeholder).Find(".actor-badge-unidentified").TextContent);
+        Assert.Contains("Redhead (ABC-123)", RenderHero(placeholder).Find(".actor-hero-title").TextContent);
+        Assert.Empty(RenderHero(MikamiYua()).FindAll(".actor-badge-unidentified"));
+    }
+
+    [Fact]
     public void ShowsTheCupSizeChainFromTheActorsPeriods_ThePlainCupWithoutAny()
     {
         var plain = MikamiYua();

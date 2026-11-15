@@ -25,7 +25,8 @@ public static class MoviePosterText
     /// <summary>Tooltip text for PosterCard's warning badge — unmatched cast names take priority
     /// over "no cast" since HasUnmatchedActors already implies MetaActresses is non-empty.
     /// MetaFetchedAt gates the "no cast" case so a movie that simply hasn't had metadata fetched
-    /// yet (MetaActresses null for an unrelated reason) isn't flagged.</summary>
+    /// yet (MetaActresses null for an unrelated reason) isn't flagged. A movie with an unidentified performer isn't
+    /// "no cast" either.</summary>
     public static string? ActorWarningTooltip(Movie movie)
     {
         if (movie.HasUnmatchedActors && !string.IsNullOrWhiteSpace(movie.UnmatchedActorNames))
@@ -35,7 +36,9 @@ public static class MoviePosterText
                 ? $"1 unmatched actor: {movie.UnmatchedActorNames}"
                 : $"{count} unmatched actors: {movie.UnmatchedActorNames}";
         }
-        if (movie.MetaFetchedAt is not null && string.IsNullOrWhiteSpace(movie.MetaActresses))
+        // An unidentified performer is cast too, just not one the metadata names.
+        var hasPlaceholder = movie.HasPlaceholderActors || movie.MovieActors.Any(link => link.Actor?.IsPlaceholder == true);
+        if (movie.MetaFetchedAt is not null && string.IsNullOrWhiteSpace(movie.MetaActresses) && !hasPlaceholder)
         {
             return "No actors listed";
         }

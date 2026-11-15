@@ -251,4 +251,29 @@ public class ActorMergeModalTests : BunitContext
         Assert.DoesNotContain("Loading", cut.Find(".candidate-list").TextContent);
         Assert.Contains("No candidate actors found.", cut.Find(".candidate-list").TextContent);
     }
+
+    [Fact]
+    public async Task MergeModal_ForAnUnidentifiedPerformer_ClaimsNoAlias_OffersNoNfoUpdate_AndNeverAsksForOne()
+    {
+        var actorService = Substitute.For<IActorService>();
+        actorService.GetMergeCandidatesAsync(1, Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns([new ActorMergeCandidate(2, "Target Canonical", null, null, 3, false, true)]);
+        actorService.MergeAsync(1, 2, Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Returns(ActorOperationResult.Ok(new Actor { Id = 2, FirstName = "Canonical", LastName = "Target" }));
+        Services.AddSingleton(actorService);
+        var source = new Actor { Id = 1, FirstName = "Redhead", LastName = "ABC-123", PlaceholderMovieId = 5 };
+        var cut = Render<ActorMergeModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.SourceActor, source));
+
+        Assert.DoesNotContain("registered as an alias", cut.Markup);
+        Assert.DoesNotContain("saved as an alias", cut.Markup);
+        Assert.Contains("not kept as an alias", cut.Markup);
+        Assert.Empty(cut.FindAll("#updateNfoCheckbox"));
+        Assert.Contains("Identify", cut.Find(".btn-danger").TextContent);
+
+        await cut.InvokeAsync(() => cut.Find(".btn-danger").Click());
+
+        await actorService.Received(1).MergeAsync(1, 2, false, Arg.Any<CancellationToken>());
+    }
 }

@@ -81,6 +81,27 @@ public class MovieActorsEditorTests : BunitContext
     }
 
     [Fact]
+    public async Task AnUnidentifiedPerformer_IsListedWithNoRemoveButton_AsTheyAreDeletedFromMovieDetail()
+    {
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var placeholder = new Actor { FirstName = "Redhead", LastName = "ABC-123", PlaceholderMovieId = movieId };
+            db.MovieActors.Add(new MovieActor { MovieId = movieId, Actor = placeholder });
+            await db.SaveChangesAsync();
+        }
+        var cut = RenderEditor();
+
+        await cut.Find(".movie-actors-toggle").ClickAsync();
+
+        var items = cut.FindAll(".movie-actors-item");
+        Assert.Contains("Redhead (ABC-123)", items.Select(ItemName));
+        var placeholderItem = items.Single(i => ItemName(i) == "Redhead (ABC-123)");
+        Assert.Empty(placeholderItem.QuerySelectorAll(".movie-actors-remove-btn"));
+        Assert.Empty(placeholderItem.QuerySelectorAll(".movie-actors-warning-badge"));
+        Assert.All(items.Where(i => i != placeholderItem), i => Assert.NotEmpty(i.QuerySelectorAll(".movie-actors-remove-btn")));
+    }
+
+    [Fact]
     public async Task Avatars_ShowThePortraitWhenThereIsOne_AndInitialsOtherwise()
     {
         await using (var db = await factory.CreateDbContextAsync())

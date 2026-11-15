@@ -153,6 +153,14 @@
     border-radius: 3px;
 }
 
+.actor-badge-unidentified {
+    background-color: #3a331f;
+    color: #d9a441;
+    border-color: #5c4f2a;
+    vertical-align: middle;
+    margin-left: 0.5rem;
+}
+
 .actor-badge-retired {
     background-color: #3b2a2d;
     color: #e2858b;

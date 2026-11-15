@@ -2,6 +2,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Common;
+using Javbuddy.Services.Images;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.Nfo;
@@ -140,7 +141,9 @@ public class MovieService(
     INfoSyncService? nfoSyncService = null,
     IJavinizerClient? javinizerClient = null,
     ITrickplayTrigger? trickplayTrigger = null,
-    ILocalLibraryClient? localLibraryClient = null) : IMovieService
+    ILocalLibraryClient? localLibraryClient = null,
+    IActorImageCacheService? actorImageCache = null,
+    IActorPhotoService? actorPhotos = null) : IMovieService
 {
     private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
     private readonly MovieChangeNotifier? movieChangeNotifier = movieChangeNotifier;
@@ -238,6 +241,7 @@ public class MovieService(
         }
 
         await DeletedMovieHistory.RecordAsync(db, tracked, ct);
+        await PlaceholderActorCleanup.DeleteImagesAsync(db, movieId, actorImageCache, actorPhotos, ct);
         db.Movies.Remove(tracked);
         await db.SaveChangesAsync(ct);
         movieChangeNotifier?.NotifyChanged();
@@ -286,6 +290,12 @@ public class MovieService(
             return OperationResult.Fail("Actor not found.");
         }
 
+        // An unidentified performer exists for one movie only.
+        if (actor.IsPlaceholder)
+        {
+            return OperationResult.Fail($"\"{actor.DisplayName}\" is an unidentified performer and can't be added to another movie.");
+        }
+
         var alreadyLinked = await db.MovieActors.AnyAsync(ma => ma.MovieId == movieId && ma.ActorId == actorId, ct);
         if (alreadyLinked)
         {
@@ -326,6 +336,11 @@ public class MovieService(
         }
 
         var actor = await db.Actors.Include(a => a.Aliases).FirstAsync(a => a.Id == actorId, ct);
+        if (actor.IsPlaceholder)
+        {
+            return OperationResult.Fail("An unidentified performer is removed by deleting them, from Movie Detail's Cast section.");
+        }
+
         var matcher = NfoActorMatching.CreateNameMatcher(actor, null);
         var remainingNames = ActorMatching.SplitNames(movie.MetaActresses)
             .Where(name => !NfoActorMatching.Matches(name, matcher))

@@ -206,6 +206,20 @@
     flex-shrink: 0;
 }
 
+.actor-unidentified-pill {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.15rem 0.35rem;
+    border-radius: 3px;
+    background-color: #3a331f;
+    color: #d9a441;
+    border: 1px solid #5c4f2a;
+    margin-left: 0.35rem;
+    flex-shrink: 0;
+}
+
 .actor-sort-value-row {
     display: flex;
     justify-content: center;

@@ -15,10 +15,14 @@ public static class MovieActorAssociation
         var cast = ResolveCast(movie.MetaActresses, actors);
         ApplyCast(movie, cast);
 
-        var existingLinks = await db.MovieActors
+        var links = await db.MovieActors
             .Where(link => link.MovieId == movie.Id)
+            .Select(link => new { Link = link, IsPlaceholder = link.Actor.PlaceholderMovieId != null })
             .ToListAsync(ct);
-        db.MovieActors.RemoveRange(existingLinks.Where(link => !cast.ActorIds.Contains(link.ActorId)));
+        var existingLinks = links.Select(row => row.Link).ToList();
+        // An unidentified placeholder is linked directly, not through the cast text, so the text never names it.
+        var placeholderIds = links.Where(row => row.IsPlaceholder).Select(row => row.Link.ActorId).ToHashSet();
+        db.MovieActors.RemoveRange(existingLinks.Where(link => !cast.ActorIds.Contains(link.ActorId) && !placeholderIds.Contains(link.ActorId)));
 
         var existingActorIds = existingLinks.Select(link => link.ActorId).ToHashSet();
         foreach (var actorId in cast.ActorIds.Where(actorId => !existingActorIds.Contains(actorId)))
@@ -53,6 +57,10 @@ public static class MovieActorAssociation
             .GroupBy(link => link.MovieId)
             .ToDictionary(group => group.Key, group => group.ToList());
         var changedCasts = new Dictionary<int, ResolvedCast>();
+        var placeholderIds = (await db.Actors
+            .Where(actor => actor.PlaceholderMovieId != null)
+            .Select(actor => actor.Id)
+            .ToListAsync(ct)).ToHashSet();
 
         foreach (var row in movies)
         {
@@ -70,7 +78,7 @@ public static class MovieActorAssociation
             }
 
             var existingLinks = linksByMovie.GetValueOrDefault(row.Id, []);
-            db.MovieActors.RemoveRange(existingLinks.Where(link => !cast.ActorIds.Contains(link.ActorId)));
+            db.MovieActors.RemoveRange(existingLinks.Where(link => !cast.ActorIds.Contains(link.ActorId) && !placeholderIds.Contains(link.ActorId)));
 
             var existingActorIds = existingLinks.Select(link => link.ActorId).ToHashSet();
             foreach (var actorId in cast.ActorIds.Where(actorId => !existingActorIds.Contains(actorId)))

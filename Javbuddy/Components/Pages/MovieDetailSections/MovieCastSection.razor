@@ -2,6 +2,7 @@
    plus adding and removing cast. OnChanged asks the page to reload the movie. *@
 @using Javbuddy.Models
 @inject IMovieService MovieService
+@inject IActorService ActorService
 @inject IActorTagService ActorTagService
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -32,10 +33,20 @@
                             </a>
                             @if (editingCast)
                             {
-                                <button type="button" class="movie-detail-cast-remove-btn" @onclick="() => RemoveCastActorAsync(cast.ActorId!.Value)" aria-label="Remove @cast.Name">×</button>
+                                <button type="button" class="movie-detail-cast-remove-btn" @onclick="() => RemoveCastActorAsync(cast)" aria-label="Remove @cast.Name">×</button>
+                                @if (cast.IsPlaceholder)
+                                {
+                                    <button type="button" class="movie-detail-cast-photo-btn" @onclick="() => OpenPhotoPicker(cast)" title="Set their photo from one of this movie's images" aria-label="Set photo for @cast.Name from a movie image">
+                                        <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/><path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2zm9.5 4.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/></svg>
+                                    </button>
+                                }
                             }
                         </div>
                         <a class="movie-detail-cast-name" href="@($"/actors/{Uri.EscapeDataString(cast.Name)}")">@cast.Name<BirthdayIndicator BirthDate="cast.BirthDate" /></a>
+                        @if (cast.IsPlaceholder)
+                        {
+                            <span class="movie-detail-cast-unidentified" title="Not a known actor: only here to carry tags and a photo">Unidentified</span>
+                        }
                         @if (cast.IsUnderage)
                         {
                             <span class="movie-detail-cast-age movie-detail-cast-age-underage" title="@MovieDetailText.UnderageAgeTooltip" aria-label="Age @cast.Age. @MovieDetailText.UnderageAgeTooltip">⚠ Age @cast.Age</span>
@@ -81,8 +92,42 @@
     @if (editingCast)
     {
         <CastSearchAdd ExcludedActorIds="@Cast.Where(c => c.ActorId is not null).Select(c => c.ActorId!.Value).ToHashSet()" OnAdd="AddCastActorAsync" />
+        <form class="movie-detail-cast-unidentified-add" @onsubmit="AddPlaceholderAsync">
+            <input type="text" class="movie-detail-cast-unidentified-label" placeholder="Label (optional)" maxlength="100" aria-label="Label for an unidentified performer" @bind="placeholderLabel" />
+            <button type="submit" class="movie-detail-cast-unidentified-btn" disabled="@addingPlaceholder" title="For someone with no actor in the library: tag and photo them without naming them">+ Unidentified performer</button>
+        </form>
     }
 </DetailSection>
+
+@if (placeholderPendingDelete is not null)
+{
+    <DeleteConfirmDialog ItemName="@placeholderPendingDelete.Name"
+                         Message="They are deleted from this movie along with their actor tags and photo."
+                         Busy="deletingPlaceholder"
+                         OnConfirm="ConfirmDeletePlaceholderAsync"
+                         OnCancel="() => placeholderPendingDelete = null" />
+}
+
+@* Only while a photo is being set: the dialogs aren't rendered, and their services not resolved, the rest of the time. *@
+@if (photoActor is not null)
+{
+    @if (portrait is null)
+    {
+        <MovieImagePickerModal Code="@(Movie.Code ?? "")"
+                               ActorName="@photoActor.Name"
+                               OnClose="ClosePhotoDialogs"
+                               OnPicked="OnImagePicked" />
+    }
+    else
+    {
+        <ActorImageUploadModal Show="true"
+                               ActorId="@photoActor.ActorId!.Value"
+                               ActorName="@photoActor.Name"
+                               InitialImage="@portrait"
+                               OnClose="BackToPicker"
+                               OnPhotoChanged="OnPhotoChanged" />
+    }
+}
 
 @code {
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
@@ -90,6 +135,33 @@
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private bool editingCast;
+    private string? placeholderLabel;
+    // The unidentified performer whose photo is being set from a movie image, and the image picked for it.
+    private MovieCastEntry? photoActor;
+    private ActorImageUploadModal.InitialImageSource? portrait;
+
+    private void OpenPhotoPicker(MovieCastEntry entry)
+    {
+        photoActor = entry;
+        portrait = null;
+    }
+
+    private void OnImagePicked(ActorImageUploadModal.InitialImageSource image) => portrait = image;
+
+    // Closing the crop dialog goes back to the images, to pick another one; closing the picker ends it.
+    private void BackToPicker() => portrait = null;
+
+    private void ClosePhotoDialogs()
+    {
+        photoActor = null;
+        portrait = null;
+    }
+
+    private async Task OnPhotoChanged()
+    {
+        ClosePhotoDialogs();
+        await OnChanged.InvokeAsync();
+    }
     // The one cast member whose add-tag search is open, if any.
     private int? addingActorId;
     private IJSObjectReference? module;
@@ -178,15 +250,60 @@
     private Task AddCastActorAsync(int actorId) =>
         ApplyAsync(MovieService.AddActorToMovieAsync(Movie.Id, actorId));
 
-    private Task RemoveCastActorAsync(int actorId) =>
-        ApplyAsync(MovieService.RemoveActorFromMovieAsync(Movie.Id, actorId));
+    // Removing a real actor only unlinks them, which can be undone. An unidentified performer exists only on this movie,
+    // so removing them deletes them with their tags and photo, and that asks first.
+    private MovieCastEntry? placeholderPendingDelete;
+    private bool deletingPlaceholder;
+
+    private Task RemoveCastActorAsync(MovieCastEntry entry)
+    {
+        if (!entry.IsPlaceholder) return ApplyAsync(MovieService.RemoveActorFromMovieAsync(Movie.Id, entry.ActorId!.Value));
+        placeholderPendingDelete = entry;
+        return Task.CompletedTask;
+    }
+
+    private async Task ConfirmDeletePlaceholderAsync()
+    {
+        if (placeholderPendingDelete?.ActorId is not { } actorId) return;
+        deletingPlaceholder = true;
+        try
+        {
+            await ActorService.DeleteAsync(actorId);
+            placeholderPendingDelete = null;
+            await ApplyAsync(OperationResult.Ok());
+        }
+        finally
+        {
+            deletingPlaceholder = false;
+        }
+    }
+
+    private bool addingPlaceholder;
+
+    private async Task AddPlaceholderAsync()
+    {
+        // A double click or Enter then click would otherwise start two adds that pick the same name.
+        if (addingPlaceholder) return;
+        addingPlaceholder = true;
+        try
+        {
+            var result = await ActorService.CreatePlaceholderAsync(Movie.Id, placeholderLabel);
+            if (result.Success) placeholderLabel = null;
+            await ApplyAsync(result.Success ? OperationResult.Ok() : OperationResult.Fail(result.ErrorMessage ?? "Could not add the performer."));
+        }
+        finally
+        {
+            addingPlaceholder = false;
+        }
+    }
 
     private Task RemoveCastActorByNameAsync(string actorName) =>
         ApplyAsync(MovieService.RemoveActorFromMovieAsync(Movie.Id, actorName));
 
-    private async Task ApplyAsync(Task<OperationResult> change)
+    private async Task ApplyAsync(Task<OperationResult> change) => await ApplyAsync(await change);
+
+    private async Task ApplyAsync(OperationResult result)
     {
-        var result = await change;
         castEditError = result.Success ? null : result.ErrorMessage;
         await OnChanged.InvokeAsync();
     }

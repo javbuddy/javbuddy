@@ -108,4 +108,26 @@ public class SortEditorLookupServiceTests
 
         Assert.Equal(id, Assert.Single(matches)!.ActorId);
     }
+
+    [Fact]
+    public async Task MatchTrackedActorsAsync_NeverMatchesAnUnidentifiedPerformer()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = new Movie { Code = "ABC-123" };
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+            db.Actors.Add(new Actor { FirstName = "Redhead", LastName = "ABC-123", PlaceholderMovieId = movie.Id, JapaneseNameKanji = "素人" });
+            await db.SaveChangesAsync();
+        }
+
+        var matches = await Create(factory).MatchTrackedActorsAsync(
+        [
+            new ActressViewDto { FirstName = "Redhead" },
+            new ActressViewDto { JapaneseName = "素人" }
+        ]);
+
+        Assert.All(matches, Assert.Null);
+    }
 }

@@ -277,4 +277,73 @@ public class ActorTagsFlowTests
         await using var check = await fixture.DbFactory.CreateDbContextAsync();
         Assert.Empty(check.MovieTags.Where(mt => mt.MovieId == movie.Id).ToList());
     }
+
+    [Fact]
+    public async Task AnUnidentifiedPerformer_CanBeAdded_Tagged_ShownOnTheActorsPageOnRequest_AndRemoved()
+    {
+        var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-ATAG-9", MovieStatus.Got);
+        await using (var db = await fixture.DbFactory.CreateDbContextAsync())
+        {
+            db.Tags.Add(new Tag { Name = "E2E Amateur Tag", IsActorTag = true });
+            // The only cast is the unidentified performer: the seed's own named cast is dropped.
+            var seeded = (await db.Movies.FindAsync(movie.Id))!;
+            seeded.MetaActresses = null;
+            seeded.HasUnmatchedActors = false;
+            seeded.UnmatchedActorNames = null;
+            seeded.MetaFetchedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        var page = await fixture.NewPageAsync();
+        await page.GotoInteractiveAsync($"/movies/{movie.Code}");
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Edit Cast" }).ClickAsync();
+        await page.Locator("input.movie-detail-cast-unidentified-label").FillAsync("Redhead");
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "+ Unidentified performer" }).ClickAsync();
+
+        var pills = page.Locator(".actor-pills", new() { Has = page.Locator("[aria-label='Add an actor tag to Redhead (E2E-ATAG-9)']") });
+        await pills.Locator(".actor-pill-add").ClickAsync();
+        await pills.Locator("input.tag-search-input").FillAsync("E2E Amateur");
+        await pills.Locator(".tag-search-candidate", new() { HasText = "E2E Amateur Tag" }).ClickAsync();
+        await Expect(pills.Locator(".actor-pills-row .actor-pill").First).ToHaveTextAsync("E2E Amateur Tag");
+
+        // They and their tag survive a reload, and are marked as unidentified.
+        await page.GotoInteractiveAsync($"/movies/{movie.Code}");
+        await Expect(page.Locator(".movie-detail-cast-unidentified")).ToHaveCountAsync(1);
+
+        // Nothing on the movie page warns about them: no unmatched-cast mark, age or .nfo drift badge.
+        await Expect(page.Locator(".movie-detail-cast-warning-badge")).ToHaveCountAsync(0);
+        await Expect(page.Locator(".movie-detail-badge-underage")).ToHaveCountAsync(0);
+        await Expect(page.Locator(".movie-detail-badge-warning")).ToHaveCountAsync(0);
+
+        // Their photo can be set from one of the movie's own images (this movie has none locally).
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Edit Cast" }).ClickAsync();
+        await page.Locator("button[aria-label='Set photo for Redhead (E2E-ATAG-9) from a movie image']").ClickAsync();
+        await Expect(page.GetByText("This movie has no images to pick from.")).ToBeVisibleAsync();
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Close" }).ClickAsync();
+        await Expect(page.GetByText("This movie has no images to pick from.")).ToHaveCountAsync(0);
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Done" }).ClickAsync();
+        await Expect(page.Locator(".actor-pills-row .actor-pill").First).ToHaveTextAsync("E2E Amateur Tag");
+
+        // Nor does the movie grid: a cast of only unidentified performers isn't "No actors listed".
+        await page.GotoInteractiveAsync("/");
+        await page.Locator("main input[type=search]").First.FillAsync(movie.Code!);
+        await Expect(page.Locator(".poster-card", new() { HasText = movie.Code })).ToBeVisibleAsync();
+        await Expect(page.Locator(".poster-card", new() { HasText = movie.Code }).Locator("[title='No actors listed']")).ToHaveCountAsync(0);
+
+        // The Actors page hides them until asked.
+        await page.GotoInteractiveAsync("/actors");
+        await Expect(page.GetByText("Redhead (E2E-ATAG-9)")).ToHaveCountAsync(0);
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Filter" }).First.ClickAsync();
+        await page.Locator(".sort-dropdown-item", new() { HasText = "Show unidentified" }).ClickAsync();
+        await Expect(page.GetByText("Redhead (E2E-ATAG-9)")).ToBeVisibleAsync();
+
+        // Removing them from the cast deletes them.
+        await page.GotoInteractiveAsync($"/movies/{movie.Code}");
+        await page.GetByRole(Microsoft.Playwright.AriaRole.Button, new() { Name = "Edit Cast" }).ClickAsync();
+        await page.Locator("button[aria-label='Remove Redhead (E2E-ATAG-9)']").ClickAsync();
+        await page.Locator(".delete-confirm-confirm-btn").ClickAsync();
+        await Expect(page.Locator(".movie-detail-cast-unidentified")).ToHaveCountAsync(0);
+        await using var check = await fixture.DbFactory.CreateDbContextAsync();
+        Assert.DoesNotContain(check.Actors, a => a.PlaceholderMovieId == movie.Id);
+    }
 }

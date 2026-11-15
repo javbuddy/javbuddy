@@ -211,7 +211,9 @@ public static class MovieFilterPredicates
         {
             // Gated on MetaFetchedAt so a movie that simply hasn't had metadata fetched yet
             // (MetaActresses null for an unrelated reason) doesn't count as "no cast".
-            query = query.Where(m => m.MetaFetchedAt != null && (m.MetaActresses == null || m.MetaActresses == ""));
+            // An unidentified performer is cast too, just not one the metadata names.
+            query = query.Where(m => m.MetaFetchedAt != null && (m.MetaActresses == null || m.MetaActresses == "")
+                && !m.MovieActors.Any(ma => ma.Actor.PlaceholderMovieId != null));
         }
         if (features.Contains(MovieFeatureFilterOption.MetadataIncomplete))
         {
@@ -236,6 +238,10 @@ public static class MovieFilterPredicates
         if (features.Contains(MovieFeatureFilterOption.HasRetiredActor))
         {
             query = query.Where(m => m.MovieActors.Any(ma => ma.Actor.IsRetired));
+        }
+        if (features.Contains(MovieFeatureFilterOption.HasUnidentifiedActor))
+        {
+            query = query.Where(m => m.MovieActors.Any(ma => ma.Actor.PlaceholderMovieId != null));
         }
         return query;
     }

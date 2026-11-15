@@ -1,0 +1,36 @@
+.movie-image-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.6rem;
+}
+
+.movie-image-picker-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0;
+    border: 1px solid #3a3f4d;
+    border-radius: 6px;
+    background: #1b1e27;
+    color: #b6bac6;
+    font-size: 0.75rem;
+    cursor: pointer;
+    overflow: hidden;
+    text-align: center;
+}
+
+    .movie-image-picker-item img {
+        width: 100%;
+        aspect-ratio: 16 / 10;
+        object-fit: cover;
+        background: #0f1117;
+    }
+
+    .movie-image-picker-item span {
+        padding: 0 0.25rem 0.3rem;
+    }
+
+    .movie-image-picker-item:hover:not(:disabled) {
+        border-color: #5eb4ec;
+        color: #5eb4ec;
+    }

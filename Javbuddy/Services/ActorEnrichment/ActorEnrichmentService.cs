@@ -326,7 +326,7 @@ public class ActorEnrichmentService(
         CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var actors = await db.Actors.Select(a => new { a.Id, a.DisplayName }).ToListAsync(ct);
+        var actors = await db.Actors.Where(a => a.PlaceholderMovieId == null).Select(a => new { a.Id, a.DisplayName }).ToListAsync(ct);
         var total = actors.Count;
 
         var succeeded = 0;

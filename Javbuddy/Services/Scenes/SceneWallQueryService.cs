@@ -539,9 +539,11 @@ public sealed class SceneWallQueryService(
         tags.Select(t => new SceneWallOption(t.Id, TagLabel.Format(t.Parent, t.Name)))
             .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
-    /// <summary>The distinct actors behind a set of (owner, actor) rows.</summary>
+    /// <summary>The distinct actors behind a set of (owner, actor) rows, for the walls' actor filter. An unidentified
+    /// performer belongs to one movie, so filtering every movie's clips by them means nothing: they are left out, as
+    /// the Movies grid's actor filter leaves them out.</summary>
     private static IQueryable<Actor> ActorsOf(AppDbContext db, IQueryable<OwnerActor> rows) =>
-        db.Actors.Where(a => rows.Select(r => r.ActorId).Contains(a.Id));
+        db.Actors.Where(a => a.PlaceholderMovieId == null && rows.Select(r => r.ActorId).Contains(a.Id));
 
     /// <summary>Ids of the actors meeting the measurement criteria, or null when there are none. Cup size and
     /// age need the scene's movie, so the filters below add them per owner: one actress must meet everything.</summary>

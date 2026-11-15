@@ -57,7 +57,7 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
         {
             var got = await db.Movies.CountAsync(m => m.Status == MovieStatus.Got, ct);
             var missing = await db.Movies.CountAsync(m => m.Status == MovieStatus.Missing, ct);
-            var actors = await db.Actors.CountAsync(ct);
+            var actors = await db.Actors.CountAsync(a => a.PlaceholderMovieId == null, ct);
             metrics.UpdateLibraryStats(got, missing, actors);
         }
 

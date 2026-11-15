@@ -125,6 +125,12 @@ public class Movie : IMediaTechnicalInfo
     /// case, not an unmatched-name case.</summary>
     public bool HasUnmatchedActors { get; set; }
 
+    /// <summary>Whether the movie has an unidentified performer (see Actor.PlaceholderMovieId). They aren't in
+    /// MetaActresses, so without this a movie whose only cast is unidentified would read as "no actors listed". Not
+    /// stored: a list query that wants the grid's cast warning sets it, and one that loads MovieActors needn't.</summary>
+    [NotMapped]
+    public bool HasPlaceholderActors { get; set; }
+
     /// <summary>Comma-joined names from MetaActresses that didn't match any tracked Actor, for
     /// the Movies page's unmatched-actor tooltip. Null when HasUnmatchedActors is false.</summary>
     [StringLength(1000)]

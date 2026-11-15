@@ -161,6 +161,9 @@ public class ActorImageCacheService(
             }
         }
 
+        // An unidentified placeholder has no real name to look a portrait up by; only an uploaded one counts.
+        if (actor.IsPlaceholder) return (null, null);
+
         var candidateNames = new List<string> { actor.DisplayName };
         if (!string.IsNullOrWhiteSpace(actor.LastName))
         {

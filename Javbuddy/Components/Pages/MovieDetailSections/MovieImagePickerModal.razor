@@ -1,0 +1,88 @@
+@* Pick one of a movie's own images (poster, backdrop, gallery) to use as a portrait: the choice is handed to the host,
+   which opens it in the portrait crop dialog. Rendered only while a pick is under way. *@
+@using Javbuddy.Services.Images
+@inject IMovieCoverCropService CoverCropService
+
+<ModalShell MaxWidth="780px" OnClose="CloseAsync" Busy="@loading">
+    <TitleContent>Photo from a movie image — @ActorName</TitleContent>
+    <ChildContent>
+        @if (error is not null)
+        {
+            <div class="alert alert-danger py-2 mb-3" role="alert">@error</div>
+        }
+        @if (!loaded)
+        {
+            <p class="text-muted mb-0">Loading images…</p>
+        }
+        else if (sources.Count == 0)
+        {
+            <p class="text-muted mb-0">This movie has no images to pick from.</p>
+        }
+        else
+        {
+            <div class="movie-image-picker-grid">
+                @foreach (var source in sources)
+                {
+                    <button type="button" class="movie-image-picker-item" disabled="@loading" title="@source.Label" aria-label="Use @source.Label" @onclick="() => PickAsync(source)">
+                        <img src="@(source.ThumbnailUrl ?? source.Url)" alt="@source.Label" loading="lazy" />
+                        <span>@source.Label</span>
+                    </button>
+                }
+            </div>
+        }
+    </ChildContent>
+</ModalShell>
+
+@code {
+    [Parameter, EditorRequired] public string Code { get; set; } = "";
+    [Parameter] public string ActorName { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>The chosen image, as the portrait dialog takes it.</summary>
+    [Parameter] public EventCallback<ActorImageUploadModal.InitialImageSource> OnPicked { get; set; }
+
+    private IReadOnlyList<MovieCropSource> sources = [];
+    private bool loaded;
+    private bool loading;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            sources = (await CoverCropService.GetCropSourcesAsync(Code)).Sources;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A library root that is offline.
+            error = "The movie's images could not be listed.";
+        }
+        loaded = true;
+    }
+
+    private async Task PickAsync(MovieCropSource source)
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            var bytes = await CoverCropService.GetSourceBytesAsync(Code, source.Key);
+            if (bytes is null)
+            {
+                error = "That image is not available.";
+                return;
+            }
+            await OnPicked.InvokeAsync(new ActorImageUploadModal.InitialImageSource(bytes, ImageContentType.Sniff(bytes)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException)
+        {
+            error = "That image could not be read.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+}

@@ -51,8 +51,8 @@ public class SortEditorLookupService(IDbContextFactory<AppDbContext> dbFactory, 
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var candidates = await db.Actors.AsNoTracking()
-            .Where(a => (a.JapaneseNameKanji != null && kanji.Contains(a.JapaneseNameKanji.Replace(" ", "").Replace("　", "")))
-                || (a.FirstName != null && firstNames.Contains(a.FirstName)))
+            .Where(a => a.PlaceholderMovieId == null && ((a.JapaneseNameKanji != null && kanji.Contains(a.JapaneseNameKanji.Replace(" ", "").Replace("　", "")))
+                || (a.FirstName != null && firstNames.Contains(a.FirstName))))
             .Select(a => new
             {
                 a.Id,

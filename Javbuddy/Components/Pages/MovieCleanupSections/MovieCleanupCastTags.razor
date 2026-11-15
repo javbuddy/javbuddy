@@ -31,7 +31,8 @@
                             <span class="cleanup-actor-initials">@ActorMatching.Initials(actor.Name)</span>
                         </div>
                     }
-                    @if (editingCast)
+                    @* An unidentified performer is deleted from Movie Detail's Cast section, not unlinked here. *@
+                    @if (editingCast && !actor.IsPlaceholder)
                     {
                         <button type="button" class="cleanup-actor-remove-btn" @onclick="() => RemoveCastActorAsync(actor)" aria-label="Remove @actor.Name">×</button>
                     }

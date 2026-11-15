@@ -5,7 +5,7 @@
 @if (Show && SourceActor is not null)
 {
     <ModalShell MaxWidth="680px" OnClose="CloseAsync" Busy="@isMerging">
-        <TitleContent>Merge Actor — @SourceActor.DisplayName</TitleContent>
+        <TitleContent>@(SourceActor.IsPlaceholder ? "Identify Actor" : "Merge Actor") — @SourceActor.DisplayName</TitleContent>
         <ChildContent>
             @if (errorMessage is not null)
             {
@@ -13,15 +13,25 @@
             }
 
             <div class="merge-notice mb-3">
-                <p class="mb-0 small">
-                    Merging re-points all linked movies, metadata, external IDs, and cached photos to the target canonical actor.
-                    <strong>@SourceActor.DisplayName</strong> will be permanently deleted and saved as an alias on the target.
-                </p>
+                @if (SourceActor.IsPlaceholder)
+                {
+                    <p class="mb-0 small">
+                        Choose who <strong>@SourceActor.DisplayName</strong> is. Their tags move to that actor, who is added to this movie's cast.
+                        The unidentified performer is then deleted.
+                    </p>
+                }
+                else
+                {
+                    <p class="mb-0 small">
+                        Merging re-points all linked movies, metadata, external IDs, and cached photos to the target canonical actor.
+                        <strong>@SourceActor.DisplayName</strong> will be permanently deleted and saved as an alias on the target.
+                    </p>
+                }
             </div>
 
             <div class="row g-3">
                 <div class="col-md-6">
-                    <label class="form-label text-muted small text-uppercase fw-semibold mb-1">Source (Will be deleted)</label>
+                    <label class="form-label text-muted small text-uppercase fw-semibold mb-1">@(SourceActor.IsPlaceholder ? "Unidentified (Will be deleted)" : "Source (Will be deleted)")</label>
                     <div class="actor-card source-card">
                         @if (sourceHasImage)
                         {
@@ -42,7 +52,7 @@
                                 </div>
                             }
                             <div class="actor-card-meta">
-                                <span class="badge bg-danger">Duplicate source</span>
+                                <span class="badge bg-danger">@(SourceActor.IsPlaceholder ? "Unidentified" : "Duplicate source")</span>
                             </div>
                         </div>
                     </div>
@@ -156,15 +166,28 @@
                 <div class="merge-preview-summary mt-3">
                     <h6 class="fw-semibold text-light mb-2">Merge Summary</h6>
                     <ul class="list-unstyled mb-0 small text-muted">
-                        <li><span class="text-success me-1">✓</span> <strong>@SourceActor.DisplayName</strong> will be registered as an alias on <strong>@selectedTarget.DisplayName</strong>.</li>
-                        <li><span class="text-success me-1">✓</span> Associated movies from @SourceActor.DisplayName will be transferred to @selectedTarget.DisplayName.</li>
-                        <li><span class="text-success me-1">✓</span> Missing Japanese names, external IDs, and photos will be merged.</li>
-                        <li><span class="text-danger me-1">✕</span> Duplicate actor record #@SourceActor.Id will be deleted.</li>
+                        @if (SourceActor.IsPlaceholder)
+                        {
+                            <li><span class="text-success me-1">✓</span> <strong>@selectedTarget.DisplayName</strong> will be added to this movie's cast, with the tags given to @SourceActor.DisplayName.</li>
+                            <li><span class="text-success me-1">✓</span> Their photo is only used when @selectedTarget.DisplayName has none.</li>
+                            <li><span class="text-danger me-1">✕</span> The unidentified performer will be deleted; their name is not kept as an alias.</li>
+                        }
+                        else
+                        {
+                            <li><span class="text-success me-1">✓</span> <strong>@SourceActor.DisplayName</strong> will be registered as an alias on <strong>@selectedTarget.DisplayName</strong>.</li>
+                            <li><span class="text-success me-1">✓</span> Associated movies from @SourceActor.DisplayName will be transferred to @selectedTarget.DisplayName.</li>
+                            <li><span class="text-success me-1">✓</span> Missing Japanese names, external IDs, and photos will be merged.</li>
+                            <li><span class="text-danger me-1">✕</span> Duplicate actor record #@SourceActor.Id will be deleted.</li>
+                        }
                     </ul>
-                    <div class="form-check form-switch mt-2">
-                        <input class="form-check-input" type="checkbox" id="updateNfoCheckbox" @bind="updateNfoOnDisk" disabled="@isMerging" />
-                        <label class="form-check-label text-light small" for="updateNfoCheckbox">Update actor name in linked movie .nfo files on disk</label>
-                    </div>
+                    @* An unidentified performer was never written to an .nfo, so there is no name on disk to update. *@
+                    @if (!SourceActor.IsPlaceholder)
+                    {
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="updateNfoCheckbox" @bind="updateNfoOnDisk" disabled="@isMerging" />
+                            <label class="form-check-label text-light small" for="updateNfoCheckbox">Update actor name in linked movie .nfo files on disk</label>
+                        </div>
+                    }
                 </div>
             }
         </ChildContent>
@@ -174,7 +197,7 @@
                     class="btn btn-danger"
                     @onclick="ConfirmMergeAsync"
                     disabled="@(selectedTarget is null || isMerging)">
-                @(isMerging ? "Merging…" : $"Merge into {selectedTarget?.DisplayName ?? "Target"}")
+                @(isMerging ? (SourceActor.IsPlaceholder ? "Identifying…" : "Merging…") : $"{(SourceActor.IsPlaceholder ? "Identify as" : "Merge into")} {selectedTarget?.DisplayName ?? "Target"}")
             </button>
         </FooterContent>
     </ModalShell>
@@ -288,7 +311,7 @@
         ActorOperationResult result;
         try
         {
-            result = await ActorService.MergeAsync(SourceActor.Id, selectedTarget.Id, updateNfoOnDisk);
+            result = await ActorService.MergeAsync(SourceActor.Id, selectedTarget.Id, updateNfoOnDisk && !SourceActor.IsPlaceholder);
         }
         finally
         {

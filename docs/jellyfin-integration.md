@@ -7,7 +7,7 @@ Jellyfin is used, read-only, for one thing: the **"Open in Jellyfin" links** on 
 - **Movie link**: a movie is looked up by its code across the whole Jellyfin server (`JellyfinClient.LookupMovieAsync`, a single `/Items?searchTerm=…` request for Movie items), and the first result is stored as `JellyfinItemId`/`JellyfinServerId`. `MovieDetail.razor` then shows an "Open in Jellyfin" badge built from `JellyfinClient.GetWebUrlAsync`. The lookup runs when a movie is added, on a rescan and in the background (below).
 - **A match never changes the movie's status.** Whether a movie is Got comes only from the local library, so a Jellyfin match neither marks a movie Got nor keeps one Got after its files are gone.
 - **Actor link**: `JellyfinLinkSyncTask` looks an actor up by name and stores `JellyfinPersonId`, which the actor page uses for its "Open in Jellyfin" badge.
-- **Background sync**: `JellyfinLinkSyncTask` (default every 6 h, `Jellyfin__LinkSyncIntervalHours`) looks up every movie and actor that isn't linked yet.
+- **Background sync**: `JellyfinLinkSyncTask` (default every 6 h, `Jellyfin__LinkSyncIntervalHours`) looks up every movie and actor that isn't linked yet (not an unidentified performer, which has no real name to look up).
 
 ## What it is not used for
 

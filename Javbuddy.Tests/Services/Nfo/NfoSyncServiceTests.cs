@@ -2338,4 +2338,31 @@ public class NfoSyncServiceTests
             new FileInfo(nfoPath).IsReadOnly = false;
         }
     }
+
+    [Fact]
+    public async Task SyncAllActorsAsync_LeavesAnUnidentifiedPerformersNameOutOfEveryNfo()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var client = CreateClientFor(factory, root);
+        var service = new NfoSyncService(factory, client, NullLogger<NfoSyncService>.Instance);
+        var folder = root.AddMovieFolder("MOV-009");
+        // The name on disk is one the placeholder answers to: a real actor would be renamed to their canonical name.
+        await File.WriteAllTextAsync(Path.Combine(folder, "MOV-009.nfo"), "<movie><actor><name>Alt</name></actor></movie>");
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "MOV-009", MetaActresses = "Alt" };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            var placeholder = new Actor { FirstName = "Redhead", LastName = "MOV-009", PlaceholderMovieId = movie.Id };
+            placeholder.Aliases.Add(new ActorAlias { Name = "Alt" });
+            db.Actors.Add(placeholder);
+            db.SaveChanges();
+        }
+
+        var result = await service.SyncAllActorsAsync();
+
+        Assert.Equal(0, result.TotalActorsUpdated);
+        Assert.DoesNotContain("Redhead", await File.ReadAllTextAsync(Path.Combine(folder, "MOV-009.nfo")));
+    }
 }
