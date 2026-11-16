@@ -26,6 +26,11 @@ public class Actor
     [StringLength(200)]
     public string? JellyfinPersonId { get; set; }
 
+    /// <summary>The Jellyfin server the person lives on, stored by the link sync so "Open in Jellyfin"
+    /// is built from stored data without asking Jellyfin on a page load.</summary>
+    [StringLength(200)]
+    public string? JellyfinServerId { get; set; }
+
     public int? R18DevId { get; set; }
 
     /// <summary>Overrides the name used to look up this actor's filmography on r18.dev (Missing

@@ -253,7 +253,7 @@ else
             r18DevEnabled = (await R18DevSettingsService.GetAsync()).Enabled;
 
             jellyfinWebUrl = !string.IsNullOrWhiteSpace(actor.JellyfinPersonId)
-                ? await JellyfinClient.GetWebUrlAsync(actor.JellyfinPersonId)
+                ? await JellyfinClient.GetWebUrlAsync(actor.JellyfinPersonId, actor.JellyfinServerId)
                 : null;
         }
     }

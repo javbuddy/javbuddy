@@ -84,6 +84,42 @@ public class JellyfinLinkSyncTask(
             movieChangeNotifier?.NotifyChanged();
         }
 
+        // The server id is only read when an actor needs it, and at most once per scan.
+        string? serverId = null;
+        var serverIdRead = false;
+        async Task<string?> GetServerIdOnceAsync()
+        {
+            if (!serverIdRead)
+            {
+                serverIdRead = true;
+                serverId = await jellyfinClient.GetServerIdAsync(ct);
+            }
+            return serverId;
+        }
+
+        // Actors linked before the server id was stored (or by hand) get it filled in here.
+        List<int> missingServerIdActorIds;
+        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+        {
+            missingServerIdActorIds = await db.Actors
+                .Where(a => a.JellyfinPersonId != null && a.JellyfinPersonId != ""
+                    && (a.JellyfinServerId == null || a.JellyfinServerId == ""))
+                .Select(a => a.Id)
+                .ToListAsync(ct);
+        }
+
+        if (missingServerIdActorIds.Count > 0 && !ct.IsCancellationRequested)
+        {
+            var backfillServerId = await GetServerIdOnceAsync();
+            if (!string.IsNullOrWhiteSpace(backfillServerId))
+            {
+                await using var db = await dbFactory.CreateDbContextAsync(ct);
+                await db.Actors
+                    .Where(a => missingServerIdActorIds.Contains(a.Id) && (a.JellyfinServerId == null || a.JellyfinServerId == ""))
+                    .ExecuteUpdateAsync(s => s.SetProperty(a => a.JellyfinServerId, backfillServerId), ct);
+            }
+        }
+
         List<Actor> unlinkedActors;
         await using (var db = await dbFactory.CreateDbContextAsync(ct))
         {
@@ -129,12 +165,14 @@ public class JellyfinLinkSyncTask(
             }
 
             string? foundPersonId = null;
+            string? foundServerId = null;
             foreach (var candidate in candidateNames)
             {
                 var person = await jellyfinClient.LookupPersonAsync(candidate, ct);
                 if (person is not null && !string.IsNullOrWhiteSpace(person.Id))
                 {
                     foundPersonId = person.Id;
+                    foundServerId = person.ServerId;
                     break;
                 }
             }
@@ -146,6 +184,7 @@ public class JellyfinLinkSyncTask(
             if (trackedActor is null) continue;
 
             trackedActor.JellyfinPersonId = foundPersonId;
+            trackedActor.JellyfinServerId = !string.IsNullOrWhiteSpace(foundServerId) ? foundServerId : await GetServerIdOnceAsync();
             await db.SaveChangesAsync(ct);
             actorMatched++;
         }

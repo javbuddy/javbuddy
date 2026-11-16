@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **Actor Detail no longer contacts Jellyfin when it loads.** Its "Open in Jellyfin" link used to ask Jellyfin for its server id on a load (waiting up to 15 s when Jellyfin was slow or down). The server id is now stored on each actor, so the link is built from stored data and no page load connects to Jellyfin. The Jellyfin link sync stores it when it links an actor, and on its next run fills it in for actors that were already linked; until then those actors, and any actor whose Jellyfin person id you enter by hand, show the plain "Jellyfin" badge instead of a link. Jellyfin is now contacted only by the link sync, the link lookup when a movie is added or rescanned, and the connection checks.
+
 ## [0.7.0] - 2026-11-15
 
 ### Added

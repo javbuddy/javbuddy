@@ -830,6 +830,7 @@ public class ActorService(
             if (string.IsNullOrWhiteSpace(target.JellyfinPersonId) && !string.IsNullOrWhiteSpace(source.JellyfinPersonId))
             {
                 target.JellyfinPersonId = source.JellyfinPersonId.Trim();
+                target.JellyfinServerId = source.JellyfinServerId;
             }
             if (!target.IsFavorite && source.IsFavorite)
             {

@@ -560,6 +560,28 @@ public class ActorServiceTests
     }
 
     [Fact]
+    public async Task MergeAsync_CopiesTheJellyfinServerId_WithThePersonId()
+    {
+        using var factory = new TestDbContextFactory();
+        int sourceId, targetId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var source = new Actor { FirstName = "Source", JellyfinPersonId = "person-1", JellyfinServerId = "server-1" };
+            var target = new Actor { FirstName = "Target" };
+            db.Actors.AddRange(source, target);
+            await db.SaveChangesAsync();
+            (sourceId, targetId) = (source.Id, target.Id);
+        }
+
+        Assert.True((await new ActorService(factory).MergeAsync(sourceId, targetId)).Success);
+
+        await using var check = await factory.CreateDbContextAsync();
+        var merged = await check.Actors.SingleAsync();
+        Assert.Equal("person-1", merged.JellyfinPersonId);
+        Assert.Equal("server-1", merged.JellyfinServerId);
+    }
+
+    [Fact]
     public async Task MergeAsync_ConsolidatesMetadata_Aliases_Relations_AndDeletesSource()
     {
         using var factory = new TestDbContextFactory();

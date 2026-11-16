@@ -974,7 +974,8 @@ public class ActorDetailTests : BunitContext
             Id = 1,
             FirstName = "Yua",
             LastName = "Mikami",
-            JellyfinPersonId = "jf-person-12345"
+            JellyfinPersonId = "jf-person-12345",
+            JellyfinServerId = "server-999"
         };
 
         var actorService = Substitute.For<IActorService>();
@@ -985,7 +986,7 @@ public class ActorDetailTests : BunitContext
         Services.AddSingleton(Substitute.For<INfoSyncService>());
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
-        jellyfinClient.GetWebUrlAsync("jf-person-12345", null, Arg.Any<CancellationToken>())
+        jellyfinClient.GetWebUrlAsync("jf-person-12345", "server-999", Arg.Any<CancellationToken>())
             .Returns("https://jellyfin.local/web/index.html#!/details?id=jf-person-12345&serverId=server-999");
         Services.AddSingleton(jellyfinClient);
 
@@ -1013,7 +1014,8 @@ public class ActorDetailTests : BunitContext
             Id = 1,
             FirstName = "Yua",
             LastName = "Mikami",
-            JellyfinPersonId = "jf-person-12345"
+            JellyfinPersonId = "jf-person-12345",
+            JellyfinServerId = "server-999"
         };
 
         var actorService = Substitute.For<IActorService>();
@@ -1024,7 +1026,7 @@ public class ActorDetailTests : BunitContext
         Services.AddSingleton(Substitute.For<INfoSyncService>());
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
-        jellyfinClient.GetWebUrlAsync("jf-person-12345", null, Arg.Any<CancellationToken>())
+        jellyfinClient.GetWebUrlAsync("jf-person-12345", "server-999", Arg.Any<CancellationToken>())
             .Returns((string?)null);
         Services.AddSingleton(jellyfinClient);
 

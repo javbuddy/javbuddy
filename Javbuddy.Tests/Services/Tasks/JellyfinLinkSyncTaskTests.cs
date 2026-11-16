@@ -115,6 +115,103 @@ public class JellyfinLinkSyncTaskTests
     }
 
     [Fact]
+    public async Task RunAsync_StoresThePersonsServerId_WhenLinkingAnActor()
+    {
+        using var factory = new TestDbContextFactory();
+        int actorId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Mikami Yua" };
+            db.Actors.Add(actor);
+            await db.SaveChangesAsync();
+            actorId = actor.Id;
+        }
+
+        var jellyfinClient = Substitute.For<IJellyfinClient>();
+        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.LookupPersonAsync("Mikami Yua", Arg.Any<CancellationToken>())
+            .Returns(new JellyfinPersonDto { Id = "jf-person-123", ServerId = "server-from-person" });
+
+        await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
+
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Equal("server-from-person", (await verify.Actors.FindAsync(actorId))!.JellyfinServerId);
+        await jellyfinClient.DidNotReceive().GetServerIdAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_FallsBackToTheServersId_WhenThePersonHasNoServerId()
+    {
+        using var factory = new TestDbContextFactory();
+        int actorId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Mikami Yua" };
+            db.Actors.Add(actor);
+            await db.SaveChangesAsync();
+            actorId = actor.Id;
+        }
+
+        var jellyfinClient = Substitute.For<IJellyfinClient>();
+        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.GetServerIdAsync(Arg.Any<CancellationToken>()).Returns("server-from-system-info");
+        jellyfinClient.LookupPersonAsync("Mikami Yua", Arg.Any<CancellationToken>())
+            .Returns(new JellyfinPersonDto { Id = "jf-person-123" });
+
+        await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
+
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Equal("server-from-system-info", (await verify.Actors.FindAsync(actorId))!.JellyfinServerId);
+    }
+
+    [Fact]
+    public async Task RunAsync_BackfillsTheServerId_OfLinkedActorsMissingOne_WithASingleServerIdRead()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Actors.AddRange(
+                new Actor { FirstName = "A", JellyfinPersonId = "p-a" },
+                new Actor { FirstName = "B", JellyfinPersonId = "p-b" },
+                new Actor { FirstName = "C", JellyfinPersonId = "p-c", JellyfinServerId = "kept-server" },
+                new Actor { FirstName = "D" });
+            await db.SaveChangesAsync();
+        }
+
+        var jellyfinClient = Substitute.For<IJellyfinClient>();
+        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.GetServerIdAsync(Arg.Any<CancellationToken>()).Returns("server-1");
+
+        await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var byName = await verify.Actors.ToDictionaryAsync(a => a.FirstName!, a => a.JellyfinServerId);
+        Assert.Equal("server-1", byName["A"]);
+        Assert.Equal("server-1", byName["B"]);
+        Assert.Equal("kept-server", byName["C"]);
+        Assert.Null(byName["D"]);
+        await jellyfinClient.Received(1).GetServerIdAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_DoesNotReadTheServerId_WhenNoLinkedActorNeedsOne()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Actors.Add(new Actor { FirstName = "C", JellyfinPersonId = "p-c", JellyfinServerId = "s" });
+            await db.SaveChangesAsync();
+        }
+
+        var jellyfinClient = Substitute.For<IJellyfinClient>();
+        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+
+        await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
+
+        await jellyfinClient.DidNotReceive().GetServerIdAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task RunAsync_MatchesActorByAlias_WhenDisplayNameNotFound()
     {
         using var factory = new TestDbContextFactory();

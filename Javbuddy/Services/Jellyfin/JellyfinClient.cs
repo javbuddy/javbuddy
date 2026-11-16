@@ -9,6 +9,9 @@ namespace Javbuddy.Services.Jellyfin;
 public interface IJellyfinClient : IMediaServerClient
 {
     Task<JellyfinPersonDto?> LookupPersonAsync(string name, CancellationToken ct = default);
+
+    /// <summary>The server's id, read from <c>/System/Info</c> (cached per base URL). Contacts Jellyfin, so only the link sync should call it.</summary>
+    Task<string?> GetServerIdAsync(CancellationToken ct = default);
 }
 
 /// <summary>Reads Jellyfin connection settings from environment variables /
@@ -151,15 +154,16 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
         return null;
     }
 
+    /// <summary>Builds the "Open in Jellyfin" URL from stored ids only; never contacts Jellyfin.
+    /// Null when the integration is off or no <paramref name="serverId"/> is stored.</summary>
     public async Task<string?> GetWebUrlAsync(string itemId, string? serverId = null, CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(serverId)) return null;
         if (!await IsEnabledAsync(ct)) return null;
         var settings = await GetSettingsAsync(ct);
         if (settings is null) return null;
         var webBase = !string.IsNullOrWhiteSpace(settings.ExternalUrl) ? settings.ExternalUrl : settings.BaseUrl;
-        var resolvedServerId = !string.IsNullOrWhiteSpace(serverId) ? serverId : await GetServerIdAsync(ct);
-        if (string.IsNullOrWhiteSpace(resolvedServerId)) return null;
-        return $"{webBase!.TrimEnd('/')}/web/index.html#!/details?id={Uri.EscapeDataString(itemId)}&serverId={Uri.EscapeDataString(resolvedServerId)}";
+        return $"{webBase!.TrimEnd('/')}/web/index.html#!/details?id={Uri.EscapeDataString(itemId)}&serverId={Uri.EscapeDataString(serverId)}";
     }
 
     public async Task<JellyfinPersonDto?> LookupPersonAsync(string name, CancellationToken ct = default)

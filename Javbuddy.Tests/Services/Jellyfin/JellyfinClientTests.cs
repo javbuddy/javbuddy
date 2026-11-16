@@ -141,55 +141,26 @@ public class JellyfinClientTests
     }
 
     [Fact]
-    public async Task GetWebUrlAsync_ResolvesServerIdDynamically_WhenOmitted()
+    public async Task GetWebUrlAsync_ReturnsNull_WithoutContactingJellyfin_WhenServerIdOmitted()
     {
         using var factory = new TestDbContextFactory();
         await using (var db = await factory.CreateDbContextAsync())
         {
-            db.JellyfinSettings.Add(new JellyfinSettings
-            {
-                BaseUrl = "http://localhost:8096",
-                ExternalUrl = "https://jellyfin.example.com",
-                ApiKey = "testkey",
-                Enabled = true
-            });
+            db.JellyfinSettings.Add(new JellyfinSettings { BaseUrl = "http://localhost:8096", ApiKey = "testkey", Enabled = true });
             await db.SaveChangesAsync();
         }
 
+        var calls = 0;
         var handler = new FakeHttpMessageHandler((_, _) =>
-            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
-            {
-                Content = new StringContent("{\"Id\":\"server-dynamic-999\"}")
-            }));
-
-        var client = new JellyfinClient(new FakeHttpClientFactory(handler), factory, new ConfigurationBuilder().Build());
-
-        var url = await client.GetWebUrlAsync("person-abc");
-
-        Assert.Equal("https://jellyfin.example.com/web/index.html#!/details?id=person-abc&serverId=server-dynamic-999", url);
-    }
-
-    [Fact]
-    public async Task GetWebUrlAsync_ReturnsNull_WhenServerIdCannotBeResolved()
-    {
-        using var factory = new TestDbContextFactory();
-        await using (var db = await factory.CreateDbContextAsync())
         {
-            db.JellyfinSettings.Add(new JellyfinSettings
-            {
-                BaseUrl = "http://localhost:8096",
-                ApiKey = "testkey",
-                Enabled = true
-            });
-            await db.SaveChangesAsync();
-        }
-
-        var handler = FakeHttpMessageHandler.ReturningStatus(System.Net.HttpStatusCode.InternalServerError);
+            calls++;
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
+        });
         var client = new JellyfinClient(new FakeHttpClientFactory(handler), factory, new ConfigurationBuilder().Build());
 
-        var url = await client.GetWebUrlAsync("person-abc");
-
-        Assert.Null(url);
+        Assert.Null(await client.GetWebUrlAsync("person-abc"));
+        Assert.Null(await client.GetWebUrlAsync("person-abc", "  "));
+        Assert.Equal(0, calls);
     }
 
     [Fact]
