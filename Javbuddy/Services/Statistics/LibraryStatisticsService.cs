@@ -35,8 +35,7 @@ public interface ILibraryStatisticsService
     Task<LibraryStatistics> GetAsync(CancellationToken ct = default);
 }
 
-/// <summary>Holds the last computed statistics for a few minutes. Singleton, because the per-root breakdown
-/// walks the filesystem (see LibraryStatisticsService) and the service itself is scoped.</summary>
+/// <summary>Holds the last computed statistics for a few minutes. Singleton, because the service itself is scoped.</summary>
 public class LibraryStatisticsCache
 {
     private static readonly TimeSpan Ttl = TimeSpan.FromMinutes(5);
@@ -63,9 +62,8 @@ public class LibraryStatisticsCache
     }
 }
 
-/// <summary>Aggregates counts across movies, scenes, highlights, apexes, actors and tags for the Statistics page
-///. The per-root breakdown resolves each local movie's root on the filesystem (not from
-/// Movie.LocalRootPath, which is only filled in by a rescan), so the result is cached briefly.</summary>
+/// <summary>Aggregates counts across movies, scenes, highlights, apexes, actors and tags for the Statistics page,
+/// in SQL. The per-root breakdown reads Movie.LocalRootPath (no filesystem access), and the result is cached briefly.</summary>
 public class LibraryStatisticsService(IDbContextFactory<AppDbContext> dbFactory, ILocalLibraryClient localLibrary, LibraryStatisticsCache cache) : ILibraryStatisticsService
 {
     public Task<LibraryStatistics> GetAsync(CancellationToken ct = default) =>
@@ -75,42 +73,40 @@ public class LibraryStatisticsService(IDbContextFactory<AppDbContext> dbFactory,
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var movies = await db.Movies.AsNoTracking()
-            .Select(m => new
-            {
-                m.Code,
-                m.Status,
-                m.VrType,
-                m.IsFavorite,
-                m.LocalFileSizeBytes,
-                m.MediaDurationSeconds,
-                m.MediaHeight,
-                m.MediaVideoCodec,
-            })
+        var movies = db.Movies.AsNoTracking();
+        var local = movies.Where(m => m.LocalFileSizeBytes != null);
+
+        // The root comes from the indexed Movie.LocalRootPath (filled in by a scan), not a filesystem lookup per
+        // movie. A local movie that was never scanned since that column was added has none yet: "(unknown)".
+        var rootGroups = await local
+            .GroupBy(m => m.LocalRootPath ?? "")
+            .Select(g => new { Root = g.Key, Count = g.Count(), Bytes = g.Sum(m => m.LocalFileSizeBytes!.Value) })
             .ToListAsync(ct);
-
-        var local = movies.Where(m => m.LocalFileSizeBytes != null).ToList();
-
-        var roots = await localLibrary.GetRootPathsAsync(ct);
         var rootCounts = new Dictionary<string, (int Count, long Bytes)>();
-        foreach (var m in local)
+        foreach (var g in rootGroups)
         {
-            var root = await localLibrary.ResolveRootForCodeAsync(m.Code!, ct) ?? "(not found on disk)";
+            var root = string.IsNullOrWhiteSpace(g.Root) ? UnknownRoot : g.Root;
             var (c, b) = rootCounts.GetValueOrDefault(root);
-            rootCounts[root] = (c + 1, b + m.LocalFileSizeBytes!.Value);
+            rootCounts[root] = (c + g.Count, b + g.Bytes);
         }
-        foreach (var r in roots)
+        foreach (var r in await localLibrary.GetRootPathsAsync(ct))
             rootCounts.TryAdd(r, (0, 0));
 
-        var byResolution = local
-            .GroupBy(m => ResolutionBucket(m.MediaHeight))
-            .Select(g => new StatRow(g.Key, g.Count()))
+        var byResolution = (await local
+                .GroupBy(m => m.MediaHeight)
+                .Select(g => new { Height = g.Key, Count = g.Count() })
+                .ToListAsync(ct))
+            .GroupBy(r => ResolutionBucket(r.Height))
+            .Select(g => new StatRow(g.Key, g.Sum(r => r.Count)))
             .OrderByDescending(r => ResolutionOrder(r.Label))
             .ToList();
 
-        var byCodec = local
-            .GroupBy(m => string.IsNullOrWhiteSpace(m.MediaVideoCodec) ? "Unknown" : m.MediaVideoCodec!)
-            .Select(g => new StatRow(g.Key, g.Count()))
+        var byCodec = (await local
+                .GroupBy(m => m.MediaVideoCodec ?? "")
+                .Select(g => new { Codec = g.Key, Count = g.Count() })
+                .ToListAsync(ct))
+            .GroupBy(r => string.IsNullOrWhiteSpace(r.Codec) ? "Unknown" : r.Codec)
+            .Select(g => new StatRow(g.Key, g.Sum(r => r.Count)))
             .OrderByDescending(r => r.Count)
             .ToList();
 
@@ -129,26 +125,26 @@ public class LibraryStatisticsService(IDbContextFactory<AppDbContext> dbFactory,
             .Take(10)
             .ToListAsync(ct);
 
-        var addedDates = await db.MovieFiles.AsNoTracking()
-            .Where(f => f.FileAddedAt != null)
-            .Select(f => f.FileAddedAt!.Value)
-            .ToListAsync(ct);
-        var addedPerMonth = addedDates
-            .GroupBy(d => new DateTime(d.Year, d.Month, 1))
-            .OrderByDescending(g => g.Key)
-            .Take(12)
-            .OrderBy(g => g.Key)
-            .Select(g => new StatRow(g.Key.ToString("yyyy-MM"), g.Count()))
+        var now = DateTime.UtcNow;
+        var since = new DateTime(now.Year, now.Month, 1).AddMonths(-11);
+        var until = since.AddMonths(12); // a file with a future creation time must not add a 13th month
+        var addedPerMonth = (await db.MovieFiles.AsNoTracking()
+                .Where(f => f.FileAddedAt != null && f.FileAddedAt >= since && f.FileAddedAt < until)
+                .GroupBy(f => new { f.FileAddedAt!.Value.Year, f.FileAddedAt!.Value.Month })
+                .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+                .ToListAsync(ct))
+            .OrderBy(r => r.Year).ThenBy(r => r.Month)
+            .Select(r => new StatRow(new DateTime(r.Year, r.Month, 1).ToString("yyyy-MM"), r.Count))
             .ToList();
 
         return new LibraryStatistics(
-            Movies: movies.Count,
-            MoviesGot: movies.Count(m => m.Status == MovieStatus.Got),
-            MoviesMissing: movies.Count(m => m.Status == MovieStatus.Missing),
-            MoviesVr: movies.Count(m => !string.IsNullOrEmpty(m.VrType)),
-            MoviesFavorite: movies.Count(m => m.IsFavorite),
-            TotalBytes: local.Sum(m => m.LocalFileSizeBytes ?? 0),
-            TotalRuntimeHours: local.Sum(m => m.MediaDurationSeconds ?? 0) / 3600.0,
+            Movies: await movies.CountAsync(ct),
+            MoviesGot: await movies.CountAsync(m => m.Status == MovieStatus.Got, ct),
+            MoviesMissing: await movies.CountAsync(m => m.Status == MovieStatus.Missing, ct),
+            MoviesVr: await movies.CountAsync(m => m.VrType != null && m.VrType != "", ct),
+            MoviesFavorite: await movies.CountAsync(m => m.IsFavorite, ct),
+            TotalBytes: rootCounts.Values.Sum(v => v.Bytes),
+            TotalRuntimeHours: await local.SumAsync(m => m.MediaDurationSeconds ?? 0, ct) / 3600.0,
             Actors: await db.Actors.CountAsync(a => a.PlaceholderMovieId == null, ct),
             ActorsFavorite: await db.Actors.CountAsync(a => a.PlaceholderMovieId == null && a.IsFavorite, ct),
             Tags: await db.Tags.CountAsync(ct),
@@ -166,6 +162,8 @@ public class LibraryStatisticsService(IDbContextFactory<AppDbContext> dbFactory,
                 .ToList(),
             AddedPerMonth: addedPerMonth);
     }
+
+    private const string UnknownRoot = "(unknown)";
 
     public static string ResolutionBucket(int? height) => height switch
     {

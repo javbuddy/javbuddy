@@ -1,11 +1,17 @@
 @page "/system/statistics"
 @using Javbuddy.Services.Statistics
 @inject ILibraryStatisticsService StatisticsService
+@inject ILogger<SystemStatistics> Logger
+@implements IDisposable
 @rendermode InteractiveServer
 
 <PageTitle>Statistics · Javbuddy</PageTitle>
 
-@if (stats is null)
+@if (loadFailed)
+{
+    <p class="stats-error" role="alert">Couldn't load the statistics. Reload the page to try again.</p>
+}
+else if (stats is null)
 {
     <LoadingIndicator />
 }
@@ -74,8 +80,35 @@ else
 
 @code {
     private LibraryStatistics? stats;
+    private bool loadFailed;
+    private readonly CancellationTokenSource cts = new();
 
-    protected override async Task OnInitializedAsync() => stats = await StatisticsService.GetAsync();
+    // Loaded after the interactive circuit attaches, not in OnInitializedAsync, so navigating here renders the
+    // page (with its LoadingIndicator) immediately instead of holding the response until the stats are computed.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            stats = await StatisticsService.GetAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // page disposed while loading
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading library statistics failed");
+            loadFailed = true;
+        }
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        cts.Cancel();
+        cts.Dispose();
+    }
 
     private static string Pct(int part, int total) =>
         (total == 0 ? 0 : part * 100.0 / total).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";

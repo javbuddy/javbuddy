@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **System > Statistics opens instantly and loads faster.** The page now appears with its loading indicator as soon as you click, instead of the previous page freezing until the numbers were ready. The "By library root" breakdown reads each movie's stored library root instead of searching the disk for every movie, and the counts and breakdowns are computed in the database. The old "(not found on disk)" row is gone: a movie is counted under the root stored at its last scan, and a Got movie not rescanned since roots were first recorded is listed under "(unknown)" until its next library rescan. "Added per month" covers the last 12 months.
+
 ### Fixed
 
 - **Actor Detail no longer contacts Jellyfin when it loads.** Its "Open in Jellyfin" link used to ask Jellyfin for its server id on a load (waiting up to 15 s when Jellyfin was slow or down). The server id is now stored on each actor, so the link is built from stored data and no page load connects to Jellyfin. The Jellyfin link sync stores it when it links an actor, and on its next run fills it in for actors that were already linked; until then those actors, and any actor whose Jellyfin person id you enter by hand, show the plain "Jellyfin" badge instead of a link. Jellyfin is now contacted only by the link sync, the link lookup when a movie is added or rescanned, and the connection checks.

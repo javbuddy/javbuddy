@@ -31,8 +31,8 @@ public class LibraryStatisticsServiceTests
         using var factory = new TestDbContextFactory();
         await using (var db = await factory.CreateDbContextAsync())
         {
-            var got = new Movie { Code = "AAA-001", Status = MovieStatus.Got, LocalFileSizeBytes = 1000, MediaHeight = 1080, MediaVideoCodec = "AVC", MediaDurationSeconds = 3600, IsFavorite = true };
-            var vr = new Movie { Code = "AAA-002", Status = MovieStatus.Got, LocalFileSizeBytes = 3000, MediaHeight = 2160, MediaVideoCodec = "HEVC", MediaDurationSeconds = 3600, VrType = "SBS" };
+            var got = new Movie { Code = "AAA-001", Status = MovieStatus.Got, LocalRootPath = "/jav", LocalFileSizeBytes = 1000, MediaHeight = 1080, MediaVideoCodec = "AVC", MediaDurationSeconds = 3600, IsFavorite = true };
+            var vr = new Movie { Code = "AAA-002", Status = MovieStatus.Got, LocalRootPath = "/vr", LocalFileSizeBytes = 3000, MediaHeight = 2160, MediaVideoCodec = "HEVC", MediaDurationSeconds = 3600, VrType = "SBS" };
             var missing = new Movie { Code = "AAA-003", Status = MovieStatus.Missing };
             var actor = new Actor { FirstName = "Aika", LastName = "Yumeno", IsFavorite = true };
             var tag = new Tag { Name = "Drama", NeedsReview = true };
@@ -46,11 +46,7 @@ public class LibraryStatisticsServiceTests
             await db.SaveChangesAsync();
         }
 
-        var library = Substitute.For<ILocalLibraryClient>();
-        library.ResolveRootForCodeAsync("AAA-001", Arg.Any<CancellationToken>()).Returns("/jav");
-        library.ResolveRootForCodeAsync("AAA-002", Arg.Any<CancellationToken>()).Returns("/vr");
-
-        var stats = await Service(factory, library).GetAsync();
+        var stats = await Service(factory).GetAsync();
 
         Assert.Equal(3, stats.Movies);
         Assert.Equal(2, stats.MoviesGot);
@@ -71,7 +67,7 @@ public class LibraryStatisticsServiceTests
     }
 
     [Fact]
-    public async Task Get_ListsConfiguredRootsWithNoMovies_AndFlagsMoviesNotOnDisk()
+    public async Task Get_ListsConfiguredRootsWithNoMovies_AndFlagsLocalMoviesWithNoRecordedRoot()
     {
         using var factory = new TestDbContextFactory();
         await using (var db = await factory.CreateDbContextAsync())
@@ -81,12 +77,42 @@ public class LibraryStatisticsServiceTests
         }
 
         var library = Substitute.For<ILocalLibraryClient>();
-        library.ResolveRootForCodeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((string?)null);
-
         var stats = await Service(factory, library).GetAsync();
 
         Assert.Equal(0, stats.ByRoot.Single(r => r.Label == "/jav").Count);
-        Assert.Equal(1, stats.ByRoot.Single(r => r.Label == "(not found on disk)").Count);
+        Assert.Equal(1, stats.ByRoot.Single(r => r.Label == "(unknown)").Count);
+        await library.DidNotReceiveWithAnyArgs().ResolveRootForCodeAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task Get_AddedPerMonth_OnlyCoversTheLast12Months()
+    {
+        using var factory = new TestDbContextFactory();
+        var now = DateTime.UtcNow;
+        var monthStart = new DateTime(now.Year, now.Month, 1);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = new Movie { Code = "AAA-006" };
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+            db.MovieFiles.AddRange(
+                new MovieFile { MovieId = movie.Id, FileName = "1.mkv", FileAddedAt = now },
+                new MovieFile { MovieId = movie.Id, FileName = "2.mkv", FileAddedAt = now },
+                new MovieFile { MovieId = movie.Id, FileName = "3.mkv", FileAddedAt = now.AddMonths(-3) },
+                new MovieFile { MovieId = movie.Id, FileName = "4.mkv", FileAddedAt = now.AddMonths(-24) },
+                new MovieFile { MovieId = movie.Id, FileName = "5.mkv", FileAddedAt = monthStart.AddMonths(-11) },
+                new MovieFile { MovieId = movie.Id, FileName = "6.mkv", FileAddedAt = monthStart.AddMonths(-11).AddTicks(-1) },
+                new MovieFile { MovieId = movie.Id, FileName = "7.mkv", FileAddedAt = monthStart.AddMonths(1) });
+            await db.SaveChangesAsync();
+        }
+
+        var stats = await Service(factory).GetAsync();
+
+        // The start of month -11 is in, the instant before it and a file dated next month are out.
+        var expected = new List<(string, int)> { (monthStart.AddMonths(-11).ToString("yyyy-MM"), 1) };
+        expected.Add((now.AddMonths(-3).ToString("yyyy-MM"), 1));
+        expected.Add((now.ToString("yyyy-MM"), 2));
+        Assert.Equal(expected.OrderBy(e => e.Item1), stats.AddedPerMonth.Select(r => (r.Label, r.Count)));
     }
 
     [Fact]
