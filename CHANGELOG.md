@@ -4,10 +4,11 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-19
+
 ### Changed
 
 - **DeoVR seek-bar previews are built ahead of time.** While DeoVR is enabled, the daily Image Cache task (System > Tasks) now also builds each movie's DeoVR timeline preview from its main file's trickplay, so the seek bar no longer waits for it to be built the first time the movie is opened in DeoVR. Previews already up to date are skipped, one built from an older trickplay set is rebuilt, and one whose movie no longer has trickplay is removed from the cache.
-
 - **System > Statistics opens instantly and loads faster.** The page now appears with its loading indicator as soon as you click, instead of the previous page freezing until the numbers were ready. The "By library root" breakdown reads each movie's stored library root instead of searching the disk for every movie, and the counts and breakdowns are computed in the database. The old "(not found on disk)" row is gone: a movie is counted under the root stored at its last scan, and a Got movie not rescanned since roots were first recorded is listed under "(unknown)" until its next library rescan. "Added per month" covers the last 12 months.
 
 ### Fixed
