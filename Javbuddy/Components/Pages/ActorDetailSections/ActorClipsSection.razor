@@ -107,7 +107,9 @@
         apexCards = [];
         total = 0;
         playingClip = null;
-        await LoadAsync(0, PageSize, append: false);
+        // The prerender shows the same cards but leaves queueing missing media to the circuit's pass, which
+        // loads them again anyway: the per-movie checks would only hold up the first byte.
+        await LoadAsync(0, PageSize, append: false, queueMissingMedia: RendererInfo.IsInteractive);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
