@@ -185,6 +185,163 @@ public sealed class DeoVrTimelineServiceTests : IDisposable
         Assert.Null(await Service().OpenAsync(movieId, Identity));
     }
 
+    /// <summary>A movie with a main file and an alternate version, and (optionally) a trickplay set for
+    /// the main file's identity, which is returned.</summary>
+    private async Task<string> SeedWithFilesAsync(bool withSet = true)
+    {
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            var movie = new Movie { Code = "ABC-123" };
+            movie.MovieFiles.Add(new MovieFile { FileName = "ABC-123-alt.mp4", DurationSeconds = 40, Width = 1280, Height = 720 });
+            movie.MovieFiles.Add(new MovieFile { FileName = "ABC-123.mp4", IsPrimary = true, DurationSeconds = 40, Width = 1920, Height = 1080 });
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+        }
+
+        var identity = TrickplayIdentity.For("ABC-123.mp4", 40, 1920, 1080)!;
+        if (withSet)
+        {
+            await Store().SaveAsync("ABC-123", NewSet(identity), [() => new MemoryStream(Sheet())]);
+        }
+        return identity;
+    }
+
+    [Fact]
+    public async Task PregenerateAsync_CachesTheMainFilesMosaic_ThenLeavesAnUpToDateOneAlone()
+    {
+        var identity = await SeedWithFilesAsync();
+
+        Assert.True(await Service().PregenerateAsync("ABC-123"));
+        var row = await SingleRowAsync();
+        Assert.Equal(identity, row.SourceIdentity);
+        var path = ((ILocalImageCache)imageCache).GetStoragePath(row);
+        var written = File.GetLastWriteTimeUtc(path);
+
+        Assert.True(await Service().PregenerateAsync("ABC-123"));
+        Assert.Equal(written, File.GetLastWriteTimeUtc(path));
+        await maintenance.Received(1).EnforceSizeLimitAsync(Arg.Any<long>(), Arg.Any<CancellationToken>());
+
+        // A request afterwards is served from what was pregenerated.
+        int movieId;
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            movieId = await db.Movies.Select(m => m.Id).SingleAsync();
+        }
+        await using var served = await Service().OpenAsync(movieId, identity);
+        Assert.Equal(path, served!.Key);
+    }
+
+    [Fact]
+    public async Task PregenerateAsync_RebuildsInPlace_AMosaicOfAnotherSetOrAnExpiredOne()
+    {
+        var identity = await SeedWithFilesAsync();
+        Assert.True(await Service().PregenerateAsync("ABC-123"));
+        var first = await SingleRowAsync();
+
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            await db.CachedImages.ExecuteUpdateAsync(s => s.SetProperty(c => c.SourceIdentity, OtherIdentity));
+        }
+        Assert.True(await Service().PregenerateAsync("ABC-123"));
+        var second = await SingleRowAsync();
+        Assert.Equal((first.StorageId, identity), (second.StorageId, second.SourceIdentity));
+
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            await db.CachedImages.ExecuteUpdateAsync(s => s.SetProperty(c => c.UpdatedAt, DateTime.UtcNow.AddHours(-2)));
+        }
+        imageCache.Settings = ImageCacheSettings.Default with { Ttl = TimeSpan.FromHours(1) };
+        Assert.True(await Service().PregenerateAsync("ABC-123"));
+        Assert.True((await SingleRowAsync()).UpdatedAt > DateTime.UtcNow.AddMinutes(-1));
+        Assert.Single(Directory.EnumerateFiles(imageCache.RootPath, "*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task PregenerateAsync_RebuildsAMosaicWhoseFileIsGone()
+    {
+        await SeedWithFilesAsync();
+        Assert.True(await Service().PregenerateAsync("ABC-123"));
+        var path = ((ILocalImageCache)imageCache).GetStoragePath(await SingleRowAsync());
+        File.Delete(path);
+
+        Assert.True(await Service().PregenerateAsync("ABC-123"));
+
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task PregenerateAsync_IsNullWithoutAFile()
+    {
+        await SeedAsync(withSet: true);
+        Assert.Null(await Service().PregenerateAsync("ABC-123")); // a set, but no file to point DeoVR at
+        Assert.Null(await Service().PregenerateAsync("NOPE-001"));
+    }
+
+    [Fact]
+    public async Task PregenerateAsync_IsNullWithoutASetForTheMainFile()
+    {
+        await SeedWithFilesAsync(withSet: false);
+        // Only the alternate version has a set; DeoVR shows the main file's.
+        await Store().SaveAsync("ABC-123", NewSet(TrickplayIdentity.For("ABC-123-alt.mp4", 40, 1280, 720)!), [() => new MemoryStream(Sheet())]);
+
+        Assert.Null(await Service().PregenerateAsync("ABC-123"));
+
+        await using var db = await dbFactory.CreateDbContextAsync();
+        Assert.Empty(db.CachedImages);
+    }
+
+    [Fact]
+    public async Task PregenerateAsync_IsNullWithTheCacheDisabled()
+    {
+        await SeedWithFilesAsync();
+        imageCache.Settings = ImageCacheSettings.Default with { Mode = ImageCacheMode.Disabled };
+
+        Assert.Null(await Service().PregenerateAsync("ABC-123"));
+
+        await using var db = await dbFactory.CreateDbContextAsync();
+        Assert.Empty(db.CachedImages);
+    }
+
+    [Fact]
+    public async Task PregenerateAsync_IsNullWhenTheMainFileHasNoDurationOrResolution()
+    {
+        await SeedWithFilesAsync();
+        await using (var db = await dbFactory.CreateDbContextAsync())
+        {
+            await db.MovieFiles.Where(f => f.IsPrimary).ExecuteUpdateAsync(s => s.SetProperty(f => f.DurationSeconds, (double?)null));
+        }
+
+        Assert.Null(await Service().PregenerateAsync("ABC-123"));
+    }
+
+    [Fact]
+    public async Task PregenerateAsync_IsFalseWhenTheMosaicCannotBeWrittenToTheCache()
+    {
+        await SeedWithFilesAsync();
+        // A file where the cache directory should be, so creating its shard directory fails.
+        await File.WriteAllTextAsync(imageCache.RootPath, "not a directory");
+        try
+        {
+            Assert.False(await Service().PregenerateAsync("ABC-123"));
+
+            await using var db = await dbFactory.CreateDbContextAsync();
+            Assert.Empty(db.CachedImages);
+        }
+        finally
+        {
+            File.Delete(imageCache.RootPath);
+        }
+    }
+
+    [Fact]
+    public async Task PregenerateAsync_IsFalseWhenTheSetHasNoSheets()
+    {
+        var identity = await SeedWithFilesAsync();
+        await stores.Get(ObjectStoreArea.Trickplay).DeleteAsync($"ABC-123/{identity}/0.webp");
+
+        Assert.False(await Service().PregenerateAsync("ABC-123"));
+    }
+
     private static byte[] Sheet()
     {
         using var bitmap = new SKBitmap(64, 36);

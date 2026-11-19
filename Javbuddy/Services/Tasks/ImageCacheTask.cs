@@ -22,7 +22,8 @@ namespace Javbuddy.Services.Tasks;
 ///    LocalImageCacheTask — see ILocalImageCacheService). Images already cached and up to date are
 ///    skipped, so repeat runs after the first full scan are fast.
 ///    While DeoVR is enabled, each movie's DeoVR thumbnail (a JPEG of its fanart — see
-///    IDeoVrThumbnailService) is built here too, so DeoVR's list doesn't wait on conversions.
+///    IDeoVrThumbnailService) and timeline preview mosaic (built from its trickplay set — see
+///    IDeoVrTimelineService) are built here too, so DeoVR's list and seek bar don't wait on conversions.
 /// 2. Caches every tracked Actor's image the same way (unchanged from ActorImageCacheTask — see
 ///    IActorImageCacheService).
 /// 3. One combined cleanup pass: prunes CachedImages rows (movies no longer tracked, or an
@@ -39,7 +40,8 @@ public class ImageCacheTask(
     ILogger<ImageCacheTask>? logger = null,
     IActorPhotoService? actorPhotoService = null,
     IDeoVrSettingsService? deoVrSettingsService = null,
-    IDeoVrThumbnailService? deoVrThumbnailService = null) : IScheduledTask
+    IDeoVrThumbnailService? deoVrThumbnailService = null,
+    IDeoVrTimelineService? deoVrTimelineService = null) : IScheduledTask
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromHours(24);
 
@@ -53,24 +55,26 @@ public class ImageCacheTask(
     private readonly IActorPhotoService? actorPhotoService = actorPhotoService;
     private readonly IDeoVrSettingsService? deoVrSettingsService = deoVrSettingsService;
     private readonly IDeoVrThumbnailService? deoVrThumbnailService = deoVrThumbnailService;
+    private readonly IDeoVrTimelineService? deoVrTimelineService = deoVrTimelineService;
 
     public string Name => "Image Cache";
 
     public string Description =>
-        "Caches poster/fanart/extrafanart images for every tracked movie (and its DeoVR thumbnail while DeoVR is enabled), actor portraits, and actor photos, " +
+        "Caches poster/fanart/extrafanart images for every tracked movie (and its DeoVR thumbnail and timeline preview while DeoVR is enabled), actor portraits, and actor photos, " +
         "then prunes cached files for anything no longer tracked.";
 
     public TimeSpan GetInterval() => DefaultInterval;
 
     public async Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress)
     {
+        var startedAt = DateTime.UtcNow;
         // First, and cheap: it only reads thumbnails already on disk, so an upgraded library gets its poster
         // placeholders straight away instead of after the (slow) conversion passes below.
         var hashesBackfilled = await BackfillPosterBlurHashesAsync(progress, ct);
         var (movieCodes, moviesProcessed, moviesFailed, sourcelessRoles, allRootsOffline) = await CacheMoviesAsync(progress, ct);
         var (actorIds, actorsProcessed, actorsFailed) = await CacheActorsAsync(progress, ct);
         var (photoIds, photosProcessed, photosFailed) = await CacheActorPhotosAsync(progress, ct);
-        var (rowsPruned, filesPruned) = await CleanupAsync(movieCodes, actorIds, sourcelessRoles, allRootsOffline, ct);
+        var (rowsPruned, filesPruned) = await CleanupAsync(movieCodes, actorIds, sourcelessRoles, allRootsOffline, startedAt, ct);
 
         var imagesProcessed = moviesProcessed + actorsProcessed + photosProcessed;
         var imagesFailed = moviesFailed + actorsFailed + photosFailed;
@@ -172,10 +176,11 @@ public class ImageCacheTask(
         // via ListExtraFanartFileNamesAsync.
         var sourcelessRoles = new HashSet<(string Code, string Role)>();
 
-        var deoVrThumbnails = deoVrThumbnailService is not null && deoVrSettingsService is not null
-            && (await deoVrSettingsService.GetEffectiveAsync(ct)).Enabled
-            ? deoVrThumbnailService
-            : null;
+        var deoVrEnabled = deoVrSettingsService is not null && (await deoVrSettingsService.GetEffectiveAsync(ct)).Enabled;
+        var deoVrThumbnails = deoVrEnabled ? deoVrThumbnailService : null;
+        var deoVrTimelines = deoVrEnabled ? deoVrTimelineService : null;
+        // With the cache disabled PregenerateAsync is null for every movie, which says nothing about its trickplay.
+        var timelinesCached = imageCache.Settings.Mode != ImageCacheMode.Disabled;
 
         foreach (var code in codes)
         {
@@ -205,6 +210,16 @@ public class ImageCacheTask(
                 {
                     case true: processed++; break;
                     case false: failed++; break;
+                }
+            }
+            if (deoVrTimelines is not null)
+            {
+                switch (await CacheDeoVrTimelineAsync(deoVrTimelines, code, ct))
+                {
+                    case true: processed++; break;
+                    case false: failed++; break;
+                    // The main file's trickplay set is gone (or the file is), so a mosaic cached from an older one is stale.
+                    case null when timelinesCached && !allRootsOffline: sourcelessRoles.Add((code, DeoVrTimeline.CacheRole)); break;
                 }
             }
 
@@ -299,6 +314,19 @@ public class ImageCacheTask(
         }
     }
 
+    private async Task<bool?> CacheDeoVrTimelineAsync(IDeoVrTimelineService timelines, string code, CancellationToken ct)
+    {
+        try
+        {
+            return await timelines.PregenerateAsync(code, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to cache the DeoVR timeline preview for movie {Code} — skipping", code);
+            return false;
+        }
+    }
+
     private async Task<bool?> CacheActorBothAsync(int actorId, CancellationToken ct)
     {
         try
@@ -366,7 +394,7 @@ public class ImageCacheTask(
     /// for files neither table references any more — computing one combined "kept" StorageId set
     /// up front so this single sweep can't mistake the other kind of image for garbage the way two
     /// separate sweeps had to guard against.</summary>
-    private async Task<(int RowsPruned, int FilesPruned)> CleanupAsync(List<string> liveCodes, List<int> liveActorIds, HashSet<(string Code, string Role)> sourcelessRoles, bool allRootsOffline, CancellationToken ct)
+    private async Task<(int RowsPruned, int FilesPruned)> CleanupAsync(List<string> liveCodes, List<int> liveActorIds, HashSet<(string Code, string Role)> sourcelessRoles, bool allRootsOffline, DateTime startedAt, CancellationToken ct)
     {
         var liveCodeSet = new HashSet<string>(liveCodes, StringComparer.OrdinalIgnoreCase);
         var liveActorIdSet = liveActorIds.ToHashSet();
@@ -378,7 +406,10 @@ public class ImageCacheTask(
 
         var imagesToDelete = new List<CachedImage>(allCachedImages.Where(c => !liveCodeSet.Contains(c.Code)));
         imagesToDelete.AddRange(allCachedImages.Except(imagesToDelete)
-            .Where(c => c.SourceUrl == null && sourcelessRoles.Contains((c.Code, c.Role))));
+            .Where(c => c.SourceUrl == null && sourcelessRoles.Contains((c.Code, c.Role))
+                // A DeoVR request can cache a timeline from a trickplay set saved after the movie pass found none;
+                // only one written before this run can be the stale one it saw.
+                && (c.Role != DeoVrTimeline.CacheRole || c.UpdatedAt < startedAt)));
 
         if (!allRootsOffline)
         {

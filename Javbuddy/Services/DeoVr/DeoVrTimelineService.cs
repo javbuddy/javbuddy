@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Javbuddy.Services.DeoVr;
 
 /// <summary>Serves a movie's DeoVR timeline mosaic (see DeoVrTimeline). It's built from
-/// the movie's trickplay set on first request and kept in the disposable image cache,
+/// the movie's trickplay set on first request, or ahead of time by the Image Cache task (see PregenerateAsync),
+/// and kept in the disposable image cache,
 /// one entry per movie stamped with the set's identity: a request for another set rebuilds it in
 /// place, and the cache's TTL, size eviction and purge apply as to any cached image. With
 /// ImageCache:Mode Disabled it's built on every request and not kept.</summary>
@@ -17,6 +18,12 @@ public interface IDeoVrTimelineService
     /// <summary>The mosaic for the movie's trickplay set with this identity, built if it isn't cached
     /// yet; null when the movie or set doesn't exist. The caller disposes the result.</summary>
     Task<StoredObject?> OpenAsync(int movieId, string identity, CancellationToken ct = default);
+
+    /// <summary>Builds and caches the mosaic for the trickplay set of the movie's main file (the one
+    /// DeoVR's video document points its timeline at) unless it's already cached and up to date.
+    /// True when it's cached; false when it couldn't be built or written to the cache; null when there's nothing to cache
+    /// (no file, no trickplay set for the main file, or ImageCache:Mode Disabled).</summary>
+    Task<bool?> PregenerateAsync(string code, CancellationToken ct = default);
 }
 
 public sealed class DeoVrTimelineService(
@@ -29,7 +36,8 @@ public sealed class DeoVrTimelineService(
 {
     private const int CacheIndex = 0;
 
-    private sealed record Mosaic(byte[] Bytes, DateTimeOffset LastModified);
+    /// <summary>Cached: whether it was written to the image cache (a request still serves one that wasn't).</summary>
+    private sealed record Mosaic(byte[] Bytes, DateTimeOffset LastModified, bool Cached);
 
     public async Task<StoredObject?> OpenAsync(int movieId, string identity, CancellationToken ct = default)
     {
@@ -54,6 +62,35 @@ public sealed class DeoVrTimelineService(
         var key = $"{DeoVrTimeline.CacheRole}/{code}/{identity}";
         return new StoredObject(key, new MemoryStream(mosaic.Bytes, writable: false), mosaic.Bytes.Length, mosaic.LastModified,
             FileSystemObjectStore.ETagFor(mosaic.LastModified, mosaic.Bytes.Length));
+    }
+
+    public async Task<bool?> PregenerateAsync(string code, CancellationToken ct = default)
+    {
+        if (imageCache.Settings.Mode == ImageCacheMode.Disabled) return null;
+
+        List<MovieFile> files;
+        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+        {
+            files = await db.MovieFiles.AsNoTracking().Where(f => f.Movie.Code == code).ToListAsync(ct);
+        }
+        // The same main file DeoVrService.GetVideoAsync points the timeline at.
+        var primary = files
+            .OrderByDescending(f => f.IsPrimary)
+            .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        var identity = primary is null ? null : TrickplayIdentity.For(primary.FileName, primary.DurationSeconds, primary.Width, primary.Height);
+        if (identity is null || await store.GetSetAsync(code, identity, ct) is not { } set) return null;
+
+        var row = await FindRowAsync(code, ct);
+        if (row is not null && row.SourceIdentity == identity && !imageCache.Settings.IsExpired(row.UpdatedAt) && File.Exists(imageCache.GetStoragePath(row)))
+        {
+            return true;
+        }
+
+        // Same key as OpenAsync, so a request arriving meanwhile shares this build.
+        var mosaic = await inFlightConversions.RunOnceAsync(
+            $"deovr-timeline:{code}:{identity}", () => BuildAsync(code, set, caches: true, CancellationToken.None), ct);
+        return mosaic?.Cached ?? false;
     }
 
     /// <summary>The cached mosaic when it was built from this set, hasn't expired and is still on disk.</summary>
@@ -95,12 +132,8 @@ public sealed class DeoVrTimelineService(
         }
 
         var bytes = await ImageConversionGate.RunAsync(() => DeoVrTimeline.Compose(set, sheets), ct);
-        var lastModified = DateTimeOffset.UtcNow;
-        if (caches)
-        {
-            lastModified = await TryCacheAsync(code, set.Identity, bytes, ct) ?? lastModified;
-        }
-        return new Mosaic(bytes, lastModified);
+        var written = caches ? await TryCacheAsync(code, set.Identity, bytes, ct) : null;
+        return new Mosaic(bytes, written ?? DateTimeOffset.UtcNow, written is not null);
     }
 
     /// <summary>Writes the mosaic over the movie's cache entry and stamps it with the set's identity;

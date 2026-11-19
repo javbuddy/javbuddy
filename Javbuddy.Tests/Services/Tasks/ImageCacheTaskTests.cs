@@ -20,6 +20,8 @@ public class ImageCacheTaskTests
 
         public int QualityThumb => ImageConverter.WebPQualityThumb;
 
+        public ImageCacheSettings Settings { get; init; } = ImageCacheSettings.Default;
+
         public TempCacheRoot() => Directory.CreateDirectory(RootPath);
 
         // Deliberately unsharded (unlike the real LocalImageCache) — a test double only needs a
@@ -68,7 +70,8 @@ public class ImageCacheTaskTests
         ILocalLibraryClient? localLibraryClient = null,
         IActorPhotoService? actorPhotoService = null,
         IDeoVrSettingsService? deoVrSettingsService = null,
-        IDeoVrThumbnailService? deoVrThumbnailService = null)
+        IDeoVrThumbnailService? deoVrThumbnailService = null,
+        IDeoVrTimelineService? deoVrTimelineService = null)
     {
         if (movieImageCacheService is null)
         {
@@ -101,7 +104,7 @@ public class ImageCacheTaskTests
         }
 
         return new ImageCacheTask(localLibraryClient, movieImageCacheService, actorImageCacheService, cache, factory, actorPhotoService: actorPhotoService,
-            deoVrSettingsService: deoVrSettingsService, deoVrThumbnailService: deoVrThumbnailService);
+            deoVrSettingsService: deoVrSettingsService, deoVrThumbnailService: deoVrThumbnailService, deoVrTimelineService: deoVrTimelineService);
     }
 
     [Fact]
@@ -257,6 +260,145 @@ public class ImageCacheTaskTests
 
         await thumbnails.Received(1).PregenerateAsync("DEF-456", Arg.Any<CancellationToken>());
         Assert.Contains("1 images cached/up to date, 1 failed", summary);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhileDeoVrIsEnabled_PregeneratesEachMoviesDeoVrTimeline()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.AddRange(new Movie { Code = "ABC-123" }, new Movie { Code = "DEF-456" });
+            db.SaveChanges();
+        }
+
+        var timelines = Substitute.For<IDeoVrTimelineService>();
+        timelines.PregenerateAsync("ABC-123", Arg.Any<CancellationToken>()).Returns(true);
+        timelines.PregenerateAsync("DEF-456", Arg.Any<CancellationToken>()).Returns<bool?>(_ => throw new IOException("disk full"));
+        var task = CreateTask(factory, cache, deoVrSettingsService: DeoVrSettings(enabled: true), deoVrTimelineService: timelines);
+
+        var summary = await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        await timelines.Received(1).PregenerateAsync("ABC-123", Arg.Any<CancellationToken>());
+        await timelines.Received(1).PregenerateAsync("DEF-456", Arg.Any<CancellationToken>());
+        Assert.Contains("1 images cached/up to date, 1 failed", summary);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhileDeoVrIsOff_SkipsDeoVrTimelines_AndKeepsTheirCache()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        var row = new CachedImage { Code = "ABC-123", Role = DeoVrTimeline.CacheRole, Variant = DeoVrTimeline.CacheVariant, StorageId = Guid.NewGuid() };
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123" });
+            db.CachedImages.Add(row);
+            db.SaveChanges();
+        }
+        var path = ((ILocalImageCache)cache).GetStoragePath(row);
+        await File.WriteAllTextAsync(path, "mosaic bytes");
+
+        var timelines = Substitute.For<IDeoVrTimelineService>();
+        var task = CreateTask(factory, cache, deoVrSettingsService: DeoVrSettings(enabled: false), deoVrTimelineService: timelines);
+
+        await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        await timelines.DidNotReceiveWithAnyArgs().PregenerateAsync(default!, default);
+        using var verifyDb = factory.CreateDbContext();
+        Assert.Single(verifyDb.CachedImages);
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task RunAsync_DeoVrTimelineOfAMovieWithoutATrickplaySet_IsPruned()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        var row = new CachedImage
+        {
+            Code = "ABC-123",
+            Role = DeoVrTimeline.CacheRole,
+            Variant = DeoVrTimeline.CacheVariant,
+            StorageId = Guid.NewGuid(),
+            UpdatedAt = DateTime.UtcNow.AddMinutes(-5),
+        };
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123" });
+            db.CachedImages.Add(row);
+            db.SaveChanges();
+        }
+        var path = ((ILocalImageCache)cache).GetStoragePath(row);
+        await File.WriteAllTextAsync(path, "stale mosaic bytes");
+
+        var timelines = Substitute.For<IDeoVrTimelineService>();
+        timelines.PregenerateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((bool?)null);
+        var task = CreateTask(factory, cache, deoVrSettingsService: DeoVrSettings(enabled: true), deoVrTimelineService: timelines);
+
+        await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        using var verifyDb = factory.CreateDbContext();
+        Assert.Empty(verifyDb.CachedImages);
+        Assert.False(File.Exists(path), "the stale DeoVR timeline should be swept");
+    }
+
+    [Fact]
+    public async Task RunAsync_DeoVrTimelineCachedDuringTheRun_IsNotPruned()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123" });
+            db.SaveChanges();
+        }
+
+        // The movie pass finds no trickplay set, then a DeoVR request caches a mosaic from one saved just after.
+        var timelines = Substitute.For<IDeoVrTimelineService>();
+        timelines.PregenerateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(_ =>
+        {
+            using var db = factory.CreateDbContext();
+            db.CachedImages.Add(new CachedImage
+            {
+                Code = "ABC-123",
+                Role = DeoVrTimeline.CacheRole,
+                Variant = DeoVrTimeline.CacheVariant,
+                StorageId = Guid.NewGuid(),
+                UpdatedAt = DateTime.UtcNow.AddSeconds(1),
+            });
+            db.SaveChanges();
+            return (bool?)null;
+        });
+        var task = CreateTask(factory, cache, deoVrSettingsService: DeoVrSettings(enabled: true), deoVrTimelineService: timelines);
+
+        await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        using var verifyDb = factory.CreateDbContext();
+        Assert.Single(verifyDb.CachedImages);
+    }
+
+    [Fact]
+    public async Task RunAsync_WithTheCacheDisabled_KeepsDeoVrTimelineRows()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot { Settings = ImageCacheSettings.Default with { Mode = ImageCacheMode.Disabled } };
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123" });
+            db.CachedImages.Add(new CachedImage { Code = "ABC-123", Role = DeoVrTimeline.CacheRole, Variant = DeoVrTimeline.CacheVariant, StorageId = Guid.NewGuid() });
+            db.SaveChanges();
+        }
+
+        var timelines = Substitute.For<IDeoVrTimelineService>();
+        timelines.PregenerateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((bool?)null);
+        var task = CreateTask(factory, cache, deoVrSettingsService: DeoVrSettings(enabled: true), deoVrTimelineService: timelines);
+
+        await task.RunAsync(CancellationToken.None, NoopProgress);
+
+        using var verifyDb = factory.CreateDbContext();
+        Assert.Single(verifyDb.CachedImages);
     }
 
     [Fact]
