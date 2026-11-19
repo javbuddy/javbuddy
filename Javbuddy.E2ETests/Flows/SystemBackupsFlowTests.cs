@@ -19,8 +19,10 @@ public class SystemBackupsFlowTests(E2EFixture fixture)
         await page.GetByRole(AriaRole.Button, new() { Name = "Backup Now" }).ClickAsync();
 
         await Expect(page.Locator(".alert-success")).ToContainTextAsync("Backup created");
-        var row = page.Locator(".backups-row").First;
-        await Expect(row).ToContainTextAsync("Manual");
+        // Not just the first row: the scheduler's first automatic backup (a minute after the app starts) can land
+        // just after this one and sort above it.
+        var row = page.Locator(".backups-row", new() { HasText = "Manual" }).First;
+        await Expect(row).ToBeVisibleAsync();
         await row.Locator("input[type=checkbox]").CheckAsync();
         var href = await page.Locator("#backup-export").GetAttributeAsync("href");
 
