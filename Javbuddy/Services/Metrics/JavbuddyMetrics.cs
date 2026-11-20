@@ -33,6 +33,10 @@ public class JavbuddyMetrics : IDisposable
     /// whole-file decode it can be hours.</summary>
     private static readonly double[] FfmpegGateWaitBuckets = [0.001, 0.01, 0.1, 1, 5, 30, 60, 300, 900, 1800, 3600, 7200, 14400];
 
+    /// <summary>Histogram buckets for ffmpeg's speed ratio (media seconds per wall second): well under realtime on a slow
+    /// NAS mount up to hundreds of times for a stream copy or keyframe-only decode.</summary>
+    private static readonly double[] FfmpegSpeedRatioBuckets = [0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100, 250, 500, 1000];
+
     private sealed class FfmpegGateState
     {
         public int Active;
@@ -44,6 +48,11 @@ public class JavbuddyMetrics : IDisposable
     private readonly ConcurrentDictionary<string, FfmpegGateState> ffmpegGates = new();
     private readonly ConcurrentDictionary<string, long> taskLastSuccessUnixSeconds = new();
     private long lastBackupUtcTicks;
+    private int ffmpegBinaryAvailable = -1; // -1 = not determined yet
+    private string? ffmpegVersion;
+    private IReadOnlyDictionary<string, int> libraryCodecs = new Dictionary<string, int>();
+    private IReadOnlyDictionary<string, int> libraryResolutions = new Dictionary<string, int>();
+    private IReadOnlyDictionary<string, int> libraryContainers = new Dictionary<string, int>();
 
     private int vrMergeActiveJobs;
     private int imageCacheFiles;
@@ -85,6 +94,35 @@ public class JavbuddyMetrics : IDisposable
             "javbuddy_ffmpeg_input_media_seconds_total", unit: "s",
             description: "Seconds of media covered by successful ffmpeg runs whose input duration is known (not decoded time; a keyframe-only run counts the whole video).");
 
+        FfmpegOutputBytes = meter.CreateCounter<long>(
+            "javbuddy_ffmpeg_output_bytes_total", unit: "By",
+            description: "Bytes written by successful ffmpeg runs (output file, or the files in the trickplay output directory), measured after the run.");
+        FfmpegInputBytes = meter.CreateCounter<long>(
+            "javbuddy_ffmpeg_input_bytes_total", unit: "By",
+            description: "Size of the input file(s) of successful ffmpeg runs (not ffprobe, which reads only headers), i.e. the most they read from the library (a seek or keyframe-only run reads less).");
+        FfmpegSpeedRatio = meter.CreateHistogram<double>(
+            "javbuddy_ffmpeg_speed_ratio", unit: "{ratio}",
+            description: "Media seconds processed per wall-clock second, for successful runs whose input duration is known. Low values point at slow disks or NAS mounts.",
+            advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = FfmpegSpeedRatioBuckets });
+        FfmpegFailures = meter.CreateCounter<long>(
+            "javbuddy_ffmpeg_failures_total",
+            description: "Failed ffmpeg/ffprobe runs, by operation and reason bucketed from stderr (invalid_data, no_such_file, moov_atom_missing, permission, other).");
+        FfmpegKills = meter.CreateCounter<long>(
+            "javbuddy_ffmpeg_kills_total", description: "ffmpeg/ffprobe process trees killed, by operation (a cancelled run kills its process).");
+        FfmpegPriorityDowngradeFailures = meter.CreateCounter<long>(
+            "javbuddy_ffmpeg_priority_downgrade_failures_total", description: "ffmpeg/ffprobe processes that could not be lowered to below-normal priority and ran at normal priority.");
+
+        meter.CreateObservableGauge("javbuddy_ffmpeg_binary_available", ObserveFfmpegBinaryAvailable,
+            description: "1 when both ffmpeg and ffprobe were found, else 0.");
+        meter.CreateObservableGauge("javbuddy_ffmpeg_binary_info", ObserveFfmpegBinaryInfo,
+            description: "Constant 1, labelled with the ffmpeg version. Independent of ffprobe. Absent when ffmpeg is missing or its version could not be read.");
+        meter.CreateObservableGauge("javbuddy_library_video_codec_total", () => ObserveComposition(() => libraryCodecs, "codec"),
+            description: "Library video files, by normalized video codec.");
+        meter.CreateObservableGauge("javbuddy_library_video_resolution_total", () => ObserveComposition(() => libraryResolutions, "resolution_bucket"),
+            description: "Library video files, by resolution bucket (from frame width).");
+        meter.CreateObservableGauge("javbuddy_library_video_container_total", () => ObserveComposition(() => libraryContainers, "container"),
+            description: "Library video files, by normalized container.");
+
         meter.CreateObservableGauge("javbuddy_ffmpeg_active_processes", () => ObserveFfmpegGates(g => Volatile.Read(ref g.Active)),
             description: "ffmpeg/ffprobe processes currently running, by gate (none = not gated).");
         meter.CreateObservableGauge("javbuddy_ffmpeg_gate_queue_depth", () => ObserveFfmpegGates(g => Volatile.Read(ref g.Waiting), includeUngated: false),
@@ -119,6 +157,12 @@ public class JavbuddyMetrics : IDisposable
     public Histogram<double> FfmpegDurationSeconds { get; }
     public Histogram<double> FfmpegGateWaitSeconds { get; }
     public Counter<double> FfmpegInputMediaSeconds { get; }
+    public Counter<long> FfmpegOutputBytes { get; }
+    public Counter<long> FfmpegInputBytes { get; }
+    public Histogram<double> FfmpegSpeedRatio { get; }
+    public Counter<long> FfmpegFailures { get; }
+    public Counter<long> FfmpegKills { get; }
+    public Counter<long> FfmpegPriorityDowngradeFailures { get; }
 
     public void FfmpegWaitStarted(string gate) => Interlocked.Increment(ref GateState(gate).Waiting);
 
@@ -141,6 +185,22 @@ public class JavbuddyMetrics : IDisposable
     {
         var unix = new DateTimeOffset(DateTime.SpecifyKind(whenUtc, DateTimeKind.Utc)).ToUnixTimeSeconds();
         taskLastSuccessUnixSeconds.AddOrUpdate(task, unix, (_, existing) => Math.Max(existing, unix));
+    }
+
+    /// <summary>Records whether both ffmpeg and ffprobe were found and, when known, the ffmpeg version (independent of
+    /// ffprobe's presence). The resolver caches its result, so only the version read can need a retry.</summary>
+    public void UpdateFfmpegBinary(bool available, string? version)
+    {
+        Volatile.Write(ref ffmpegVersion, version);
+        Volatile.Write(ref ffmpegBinaryAvailable, available ? 1 : 0);
+    }
+
+    /// <summary>Replaces the library composition gauges' values (label value to file count).</summary>
+    public void UpdateLibraryComposition(IReadOnlyDictionary<string, int> codecs, IReadOnlyDictionary<string, int> resolutions, IReadOnlyDictionary<string, int> containers)
+    {
+        Volatile.Write(ref libraryCodecs, codecs);
+        Volatile.Write(ref libraryResolutions, resolutions);
+        Volatile.Write(ref libraryContainers, containers);
     }
 
     public void VrMergeJobStarted() => Interlocked.Increment(ref vrMergeActiveJobs);
@@ -188,6 +248,25 @@ public class JavbuddyMetrics : IDisposable
         MarkObserved();
         yield return new Measurement<int>(Volatile.Read(ref moviesGot), new KeyValuePair<string, object?>("status", "Got"));
         yield return new Measurement<int>(Volatile.Read(ref moviesMissing), new KeyValuePair<string, object?>("status", "Missing"));
+    }
+
+    private IEnumerable<Measurement<int>> ObserveFfmpegBinaryAvailable()
+    {
+        var available = Volatile.Read(ref ffmpegBinaryAvailable);
+        if (available >= 0) yield return new Measurement<int>(available);
+    }
+
+    private IEnumerable<Measurement<int>> ObserveFfmpegBinaryInfo()
+    {
+        if (Volatile.Read(ref ffmpegVersion) is { } version)
+            yield return new Measurement<int>(1, new KeyValuePair<string, object?>("version", version));
+    }
+
+    private IEnumerable<Measurement<int>> ObserveComposition(Func<IReadOnlyDictionary<string, int>> read, string label)
+    {
+        MarkObserved();
+        foreach (var (value, count) in read())
+            yield return new Measurement<int>(count, new KeyValuePair<string, object?>(label, value));
     }
 
     private IEnumerable<Measurement<int>> ObserveFfmpegGates(Func<FfmpegGateState, int> read, bool includeUngated = true)
