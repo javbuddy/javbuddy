@@ -21,3 +21,52 @@ internal static class BunitJSInteropExtensions
     internal static void AllowModalShell(this BunitJSInterop jsInterop) =>
         jsInterop.SetupModule("./Components/Shared/ModalShell.razor.js").Mode = JSRuntimeMode.Loose;
 }
+
+/// <summary>A BunitContext with its <c>RendererInfo</c> set, which bUnit leaves unset (a component reading
+/// <c>RendererInfo.IsInteractive</c> then throws). <see cref="Interactive"/> (true by default) is applied before
+/// the first render of any kind, so every render path sees it; a test of the prerender sets it to false first.
+/// It can't be set in the constructor: bUnit builds its service provider when the renderer info is set, and tests
+/// still register their services after construction. Because Render is not virtual, each public render entry
+/// point is hidden here to apply it.</summary>
+public abstract class RendererInfoBunitContext : BunitContext
+{
+    private bool rendererInfoApplied;
+
+    protected bool Interactive { get; set; } = true;
+
+    private void ApplyRendererInfo()
+    {
+        if (rendererInfoApplied) return;
+        rendererInfoApplied = true;
+        SetRendererInfo(new Microsoft.AspNetCore.Components.RendererInfo(Interactive ? "Server" : "Static", Interactive));
+    }
+
+    public new IRenderedComponent<TComponent> Render<TComponent>(Action<ComponentParameterCollectionBuilder<TComponent>>? parameterBuilder = null)
+        where TComponent : Microsoft.AspNetCore.Components.IComponent
+    {
+        ApplyRendererInfo();
+        return base.Render(parameterBuilder);
+    }
+
+    public new IRenderedComponent<TComponent> Render<TComponent>(Microsoft.AspNetCore.Components.RenderFragment renderFragment)
+        where TComponent : Microsoft.AspNetCore.Components.IComponent
+    {
+        ApplyRendererInfo();
+        return base.Render<TComponent>(renderFragment);
+    }
+
+    public new IRenderedComponent<Microsoft.AspNetCore.Components.IComponent> Render(Microsoft.AspNetCore.Components.RenderFragment renderFragment)
+    {
+        ApplyRendererInfo();
+        return base.Render(renderFragment);
+    }
+}
+
+/// <summary>Renders as the interactive circuit does (<c>RendererInfo.IsInteractive</c> is true).</summary>
+public abstract class InteractiveBunitContext : RendererInfoBunitContext;
+
+/// <summary>Renders as the prerender does (<c>RendererInfo.IsInteractive</c> is false).</summary>
+public abstract class PrerenderBunitContext : RendererInfoBunitContext
+{
+    protected PrerenderBunitContext() => Interactive = false;
+}

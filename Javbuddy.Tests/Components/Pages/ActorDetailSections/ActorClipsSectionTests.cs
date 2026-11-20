@@ -12,7 +12,7 @@ using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Pages.ActorDetailSections;
 
-public class ActorClipsSectionTests : BunitContext
+public class ActorClipsSectionTests : InteractiveBunitContext
 {
     private readonly ISceneWallQueryService wall = Substitute.For<ISceneWallQueryService>();
     private readonly ISceneMediaService media = Substitute.For<ISceneMediaService>();
@@ -144,6 +144,21 @@ public class ActorClipsSectionTests : BunitContext
         RenderSection(PlayerClipKind.Apex);
 
         apexMedia.Received(1).EnsureQueuedAsync(30, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void Prerender_ShowsTheClips_ButLeavesQueueingMissingMediaToTheCircuit()
+    {
+        Interactive = false;
+        apexMedia.ServesVariant(Arg.Any<string>()).Returns(true);
+        apexMedia.ServesPreview.Returns(true);
+        var apex = new ApexWallCard(3, 30, "ABC-003", "Title", "Yua — Squirt", 300, ["Yua"], [], false, 5) { HasLocalVideo = true, DurationSeconds = 3600 };
+        wall.GetApexPageAsync(default!, default, default, default, default, default).ReturnsForAnyArgs(new ApexWallPage([apex], 1));
+
+        var cut = RenderSection(PlayerClipKind.Apex);
+
+        Assert.Single(cut.FindAll(".actor-clips"));
+        apexMedia.DidNotReceive().EnsureQueuedAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

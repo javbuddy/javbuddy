@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **Actor Detail loads much faster for actors with many photos (#166).** The Photos card now renders 150 photos at a time instead of every tile at once (the next 150 load as you scroll once "Show all" is open; an album opened there still shows all its photos), and the photo count, albums and viewer still cover every photo. The page still arrives fully drawn, with no placeholders, and the Scenes, Highlights and Apexes sections' missing-image checks now run once per visit instead of twice.
+
 ## [0.7.1] - 2026-11-19
 
 ### Changed
