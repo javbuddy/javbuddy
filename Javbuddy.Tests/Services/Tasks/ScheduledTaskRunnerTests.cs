@@ -92,6 +92,30 @@ public class ScheduledTaskRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_SuccessOnly_RecordsTheTaskLastSuccessTimestamp()
+    {
+        using var metrics = new JavbuddyMetrics();
+        using var recorder = new MetricsRecorder(metrics);
+        using var factory = new TestDbContextFactory();
+        var ok = new FakeTask("ok-task", (_, _) => Task.FromResult<string?>(null));
+        var failing = new FakeTask("failing-task", (_, _) => throw new InvalidOperationException("boom"));
+        var unrecorded = new FakeTask("quiet-task", (_, _) => Task.FromResult<string?>(null), recordRunHistory: false);
+        var before = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        var runner = CreateRunner(factory, metrics);
+        await runner.RunAsync(ok, CancellationToken.None);
+        await runner.RunAsync(failing, CancellationToken.None);
+        await runner.RunAsync(unrecorded, CancellationToken.None);
+        recorder.SampleGauges();
+
+        var stamps = recorder.Measurements
+            .Where(m => m.InstrumentName == "javbuddy_scheduled_task_last_success_timestamp_seconds")
+            .ToDictionary(m => (string)m.Tags["task"]!, m => (double)m.Value!);
+        Assert.Equal(["ok-task", "quiet-task"], stamps.Keys.Order());
+        Assert.All(stamps.Values, v => Assert.InRange(v, before, before + 60));
+    }
+
+    [Fact]
     public async Task RunAsync_ProgressReported_FlushesFinalValueToTheRow()
     {
         using var factory = new TestDbContextFactory();

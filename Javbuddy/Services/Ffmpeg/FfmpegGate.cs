@@ -7,13 +7,22 @@ namespace Javbuddy.Services.Ffmpeg;
 /// and highlight-clip trickplay, so those stay quick while an hours-long job runs. ffprobe is cheap and not gated, so
 /// scanning keeps going too. The lanes are static because the client itself is scoped, so the cap has to live outside
 /// it.</summary>
-public sealed class FfmpegGate(int maxConcurrency)
+public sealed class FfmpegGate(int maxConcurrency, string name = "custom")
 {
+    public const string LongName = "long";
+    public const string ShortName = "short";
+
+    /// <summary>The gate label used for runs that go through no gate (ffprobe, the dts2pts repair).</summary>
+    public const string UngatedName = "none";
+
+    /// <summary>Low-cardinality label for this lane in metrics.</summary>
+    public string Name { get; } = name;
+
     /// <summary>Whole-file work: full trickplay, scene detection, chapter remux and VR merge (the dts2pts repair is ungated).</summary>
-    public static FfmpegGate Long { get; } = new(1);
+    public static FfmpegGate Long { get; } = new(1, LongName);
 
     /// <summary>A few seconds of video: scene stills, hover previews and highlight-clip trickplay.</summary>
-    public static FfmpegGate Short { get; } = new(1);
+    public static FfmpegGate Short { get; } = new(1, ShortName);
 
     private readonly SemaphoreSlim slots = new(maxConcurrency, maxConcurrency);
 

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **ffmpeg, backup and task-freshness metrics on `/metrics`.** New `javbuddy_ffmpeg_runs_total{operation,outcome}` and `javbuddy_ffmpeg_duration_seconds{operation}` (probe, still, preview, trickplay, scene_detect, concat, remux_chapters, remux_dts2pts; outcomes success, failed, cancelled), `javbuddy_ffmpeg_active_processes{gate}`, `javbuddy_ffmpeg_gate_queue_depth{gate}` and `javbuddy_ffmpeg_gate_wait_seconds{gate}` (gates long, short, and none for ungated runs), and `javbuddy_ffmpeg_input_media_seconds_total{operation}` (media seconds covered by successful runs; divide by run time for the speed multiplier). Also `javbuddy_last_backup_age_seconds` (absent while no backup exists) and `javbuddy_scheduled_task_last_success_timestamp_seconds{task}` (unix time, restored from run history after a restart), for "backup or task hasn't run in N days" alerts.
+
 ## [0.7.1] - 2026-11-19
 
 ### Changed

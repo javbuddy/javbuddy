@@ -84,6 +84,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
                 var outcomeTag = new KeyValuePair<string, object?>("outcome", success ? "success" : "failure");
                 metrics.ScheduledTaskRuns.Add(1, new KeyValuePair<string, object?>("task", task.Name), outcomeTag);
                 metrics.ScheduledTaskDurationSeconds.Record(stopwatch.Elapsed.TotalSeconds, new KeyValuePair<string, object?>("task", task.Name));
+                if (success) metrics.RecordScheduledTaskSuccess(task.Name, DateTime.UtcNow);
             }
             catch (Exception ex)
             {
@@ -154,6 +155,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
                 var outcomeTag = new KeyValuePair<string, object?>("outcome", success ? "success" : "failure");
                 metrics.ScheduledTaskRuns.Add(1, new KeyValuePair<string, object?>("task", task.Name), outcomeTag);
                 metrics.ScheduledTaskDurationSeconds.Record(stopwatch.Elapsed.TotalSeconds, new KeyValuePair<string, object?>("task", task.Name));
+                if (success) metrics.RecordScheduledTaskSuccess(task.Name, DateTime.UtcNow);
             }
             catch (Exception ex)
             {

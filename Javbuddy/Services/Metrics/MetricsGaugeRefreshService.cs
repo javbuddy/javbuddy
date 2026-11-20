@@ -1,12 +1,13 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Backups;
 using Javbuddy.Services.Images;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Metrics;
 
 /// <summary>Refreshes JavbuddyMetrics' DB-/filesystem-backed gauges (image cache size, library
-/// counts) on a timer rather than on every /metrics scrape — GetStatsAsync walks the whole cache
+/// counts, last backup, scheduled-task last-success seed) on a timer rather than on every /metrics scrape — GetStatsAsync walks the whole cache
 /// directory, too expensive to redo per-request. Separate from ScheduledTaskHostedService's task
 /// loop: this is internal housekeeping with no user-visible run history, not a domain task.
 /// The first pass runs at startup; after that the refresh is skipped while nothing has scraped the gauges
@@ -28,7 +29,7 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
             try
             {
                 if (first || metrics.WasObservedWithin(JavbuddyMetrics.ObservationIdleAfter))
-                    await RefreshAsync(stoppingToken);
+                    await RefreshAsync(first, stoppingToken);
                 first = false;
             }
             catch (Exception ex)
@@ -47,7 +48,7 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
         }
     }
 
-    private async Task RefreshAsync(CancellationToken ct)
+    private async Task RefreshAsync(bool first, CancellationToken ct)
     {
         using var scope = scopeFactory.CreateScope();
         var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
@@ -63,5 +64,40 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
 
         var cacheStats = await cacheMaintenance.GetStatsAsync(ct);
         metrics.UpdateImageCacheStats(cacheStats.FileCount, cacheStats.TotalBytes);
+
+        // The gauges below are secondary: a failure in one is logged and must not stop the pass (or the others).
+        // Backups are also pushed by BackupService on every change; this pass picks up changes made outside it.
+        try
+        {
+            var backups = await scope.ServiceProvider.GetRequiredService<IBackupService>().ListAsync(ct);
+            metrics.UpdateLastBackup(backups.Count > 0 ? backups.Max(b => b.Manifest.CreatedUtc) : null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to refresh the last-backup gauge.");
+        }
+
+        // Seeds the scheduled-task last-success gauge from persisted history once at startup so it survives a
+        // restart; ScheduledTaskRunner keeps it current afterwards.
+        if (first)
+        {
+            try
+            {
+                await using var db = await dbFactory.CreateDbContextAsync(ct);
+                var lastSuccesses = await db.ScheduledTaskRuns
+                    .Where(r => r.Success && r.EndedAt != null)
+                    .GroupBy(r => r.TaskName)
+                    .Select(g => new { Task = g.Key, EndedAt = g.Max(r => r.EndedAt) })
+                    .ToListAsync(ct);
+                foreach (var last in lastSuccesses)
+                {
+                    if (last.EndedAt is { } endedAt) metrics.RecordScheduledTaskSuccess(last.Task, endedAt);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Failed to seed the scheduled-task last-success gauge.");
+            }
+        }
     }
 }

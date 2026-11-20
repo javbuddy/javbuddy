@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Infrastructure;
+using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Scenes;
 
 namespace Javbuddy.Services.Ffmpeg;
@@ -54,7 +55,10 @@ public interface IFfmpegClient
     Task<FfmpegRunResult> GenerateTrickplayAsync(string inputPath, FfmpegTrickplayRequest request, string outputDirectory, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct = default);
 }
 
-public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGate? longGate = null, FfmpegGate? shortGate = null) : IFfmpegClient
+/// <summary>Every ffmpeg/ffprobe run goes through <see cref="RunInstrumentedAsync{T}"/>, which takes the gate slot (if any)
+/// and records the run's metrics when <c>metrics</c> is given (it is optional so a client can be built without them).
+/// A run that never started a process (binary missing, or cancelled while still queued on a gate) is not counted.</summary>
+public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGate? longGate = null, FfmpegGate? shortGate = null, JavbuddyMetrics? metrics = null) : IFfmpegClient
 {
     private readonly FfmpegGate longGate = longGate ?? FfmpegGate.Long;
     private readonly FfmpegGate shortGate = shortGate ?? FfmpegGate.Short;
@@ -66,9 +70,15 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
     public async Task<FfprobeMediaInfo?> ProbeAsync(string path, CancellationToken ct = default)
     {
-        if (binaryResolver.FfprobePath is null) return null;
+        if (binaryResolver.FfprobePath is not { } ffprobePath) return null;
 
-        var startInfo = new ProcessStartInfo(binaryResolver.FfprobePath)
+        // ffprobe is cheap and not gated, so scanning keeps going while a long decode holds the lane.
+        return await RunInstrumentedAsync("probe", null, TimeSpan.Zero, ct, () => ProbeCoreAsync(ffprobePath, path, ct), r => r is not null);
+    }
+
+    private async Task<FfprobeMediaInfo?> ProbeCoreAsync(string ffprobePath, string path, CancellationToken ct)
+    {
+        var startInfo = new ProcessStartInfo(ffprobePath)
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -157,13 +167,17 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
     public async Task<FfmpegRunResult> ConcatWithChaptersAsync(FfmpegConcatRequest request, IProgress<FfmpegProgress>? progress, CancellationToken ct = default)
     {
-        if (binaryResolver.FfmpegPath is null)
+        if (binaryResolver.FfmpegPath is not { } ffmpegPath)
         {
             return FfmpegRunResult.Failed("ffmpeg is not available (see Settings → Connections → Path Mappings for how the merge step locates it).");
         }
 
-        using var slot = await longGate.EnterAsync(ct);
+        var totalDuration = TimeSpan.FromMicroseconds(request.Parts.Sum(p => p.DurationMicroseconds));
+        return await RunInstrumentedAsync("concat", longGate, totalDuration, ct, () => ConcatCoreAsync(ffmpegPath, request, totalDuration, progress, ct), r => r.Success);
+    }
 
+    private async Task<FfmpegRunResult> ConcatCoreAsync(string ffmpegPath, FfmpegConcatRequest request, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct)
+    {
         var concatListPath = Path.Combine(Path.GetTempPath(), $"javbuddy-vr-merge-{Guid.NewGuid():N}.concat.txt");
         var metadataPath = Path.Combine(Path.GetTempPath(), $"javbuddy-vr-merge-{Guid.NewGuid():N}.metadata.txt");
 
@@ -172,7 +186,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             await File.WriteAllTextAsync(concatListPath, VrMerge.VrPartDetector.BuildConcatList(request.Parts.Select(p => p.AbsolutePath).ToList()), ct);
             await File.WriteAllTextAsync(metadataPath, VrMerge.VrPartDetector.BuildFfMetadata(request.Parts.Select(p => (p.ChapterTitle, p.DurationMicroseconds)).ToList()), ct);
 
-            var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
+            var startInfo = new ProcessStartInfo(ffmpegPath)
             {
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -188,8 +202,6 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             {
                 startInfo.ArgumentList.Add(arg);
             }
-
-            var totalDuration = TimeSpan.FromMicroseconds(request.Parts.Sum(p => p.DurationMicroseconds));
 
             using var process = new Process { StartInfo = startInfo };
             StartAtLowPriority(process);
@@ -220,10 +232,10 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
     }
 
     public Task<FfmpegRunResult> ExtractStillWebpAsync(string inputPath, double seconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
-        RunAsync(BuildStillArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
+        RunAsync("still", BuildStillArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
 
     public Task<FfmpegRunResult> ExtractFrameWebpAsync(string inputPath, double seconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
-        RunAsync(BuildFrameWebpArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
+        RunAsync("still", BuildFrameWebpArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
 
     public static List<string> BuildFrameWebpArguments(string inputPath, double seconds, bool leftEyeOnly, string outputPath) =>
     [
@@ -238,22 +250,25 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
     ];
 
     public Task<FfmpegRunResult> ExtractPreviewVideoAsync(string inputPath, double seconds, double durationSeconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
-        RunAsync(BuildPreviewVideoArguments(inputPath, seconds, durationSeconds, leftEyeOnly, outputPath), ct);
+        RunAsync("preview", BuildPreviewVideoArguments(inputPath, seconds, durationSeconds, leftEyeOnly, outputPath), ct);
 
     public async Task<FfmpegRunResult> RemuxWithChaptersAsync(string inputPath, string ffMetadata, string outputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct = default)
     {
-        if (binaryResolver.FfmpegPath is null)
+        if (binaryResolver.FfmpegPath is not { } ffmpegPath)
         {
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        using var slot = await longGate.EnterAsync(ct);
+        return await RunInstrumentedAsync("remux_chapters", longGate, totalDuration, ct, () => RemuxChaptersCoreAsync(ffmpegPath, inputPath, ffMetadata, outputPath, totalDuration, progress, ct), r => r.Success);
+    }
 
+    private async Task<FfmpegRunResult> RemuxChaptersCoreAsync(string ffmpegPath, string inputPath, string ffMetadata, string outputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct)
+    {
         var metadataPath = Path.Combine(Path.GetTempPath(), $"javbuddy-chapters-{Guid.NewGuid():N}.metadata.txt");
         try
         {
             await File.WriteAllTextAsync(metadataPath, ffMetadata, ct);
-            var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
+            var startInfo = new ProcessStartInfo(ffmpegPath)
             {
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -290,10 +305,14 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
     public async Task<FfmpegSceneSignals?> DetectSceneSignalsAsync(string inputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, IFfmpegSceneSignalSink? sink = null, CancellationToken ct = default)
     {
-        if (binaryResolver.FfmpegPath is null) return null;
+        if (binaryResolver.FfmpegPath is not { } ffmpegPath) return null;
 
-        using var slot = await longGate.EnterAsync(ct);
-        var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
+        return await RunInstrumentedAsync("scene_detect", longGate, totalDuration, ct, () => DetectSceneSignalsCoreAsync(ffmpegPath, inputPath, totalDuration, progress, sink, ct), r => r is not null);
+    }
+
+    private async Task<FfmpegSceneSignals?> DetectSceneSignalsCoreAsync(string ffmpegPath, string inputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, IFfmpegSceneSignalSink? sink, CancellationToken ct)
+    {
+        var startInfo = new ProcessStartInfo(ffmpegPath)
         {
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -460,15 +479,21 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
     public async Task<FfmpegRunResult> GenerateTrickplayAsync(string inputPath, FfmpegTrickplayRequest request, string outputDirectory, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct = default)
     {
-        if (binaryResolver.FfmpegPath is null)
+        if (binaryResolver.FfmpegPath is not { } ffmpegPath)
         {
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
         // A highlight's clip is a few seconds of video, so it goes in the short lane rather than waiting behind a full decode.
-        using var slot = await (request.StartSeconds is null ? longGate : shortGate).EnterAsync(ct);
+        var gate = request.StartSeconds is null ? longGate : shortGate;
+        // A clip only covers LengthSeconds of the video, so that is the media it processes.
+        var inputDuration = request.LengthSeconds is { } length ? TimeSpan.FromSeconds(length) : totalDuration;
+        return await RunInstrumentedAsync("trickplay", gate, inputDuration, ct, () => GenerateTrickplayCoreAsync(ffmpegPath, inputPath, request, outputDirectory, totalDuration, progress, ct), r => r.Success);
+    }
 
-        var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
+    private async Task<FfmpegRunResult> GenerateTrickplayCoreAsync(string ffmpegPath, string inputPath, FfmpegTrickplayRequest request, string outputDirectory, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct)
+    {
+        var startInfo = new ProcessStartInfo(ffmpegPath)
         {
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -559,17 +584,20 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
     private static string FormatSeconds(double seconds) =>
         Math.Max(seconds, 0).ToString("0.###", CultureInfo.InvariantCulture);
 
-    private async Task<FfmpegRunResult> RunAsync(IReadOnlyList<string> arguments, CancellationToken ct)
+    private async Task<FfmpegRunResult> RunAsync(string operation, IReadOnlyList<string> arguments, CancellationToken ct)
     {
-        if (binaryResolver.FfmpegPath is null)
+        if (binaryResolver.FfmpegPath is not { } ffmpegPath)
         {
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        // Only stills and hover previews come through here: the short lane.
-        using var slot = await shortGate.EnterAsync(ct);
+        // Only stills and hover previews come through here: the short lane. No input duration is known, so they add no media seconds.
+        return await RunInstrumentedAsync(operation, shortGate, TimeSpan.Zero, ct, () => RunCoreAsync(ffmpegPath, arguments, ct), r => r.Success);
+    }
 
-        var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
+    private static async Task<FfmpegRunResult> RunCoreAsync(string ffmpegPath, IReadOnlyList<string> arguments, CancellationToken ct)
+    {
+        var startInfo = new ProcessStartInfo(ffmpegPath)
         {
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -601,6 +629,63 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
         return process.ExitCode == 0
             ? FfmpegRunResult.Ok()
             : FfmpegRunResult.Failed($"ffmpeg exited with code {process.ExitCode}: {LastLine(stderr)}");
+    }
+
+    /// <summary>Runs <paramref name="body"/> (one process lifecycle) inside <paramref name="gate"/>'s slot, if any, and records
+    /// its metrics: time queued on the gate, the run's duration from slot acquired to finished (queue time excluded),
+    /// and its outcome (success per <paramref name="succeeded"/>, cancelled on cancellation, otherwise failed).
+    /// <paramref name="inputDuration"/> is the media the run covers; it is added to the input-media-seconds counter on
+    /// success only, and not at all when zero (unknown). On success rather than incrementally from progress: progress is
+    /// only parsed when a caller asks for it, and a failed or cancelled run would otherwise count media it never finished.</summary>
+    private async Task<T> RunInstrumentedAsync<T>(string operation, FfmpegGate? gate, TimeSpan inputDuration, CancellationToken ct, Func<Task<T>> body, Func<T, bool> succeeded)
+    {
+        var gateName = gate?.Name ?? FfmpegGate.UngatedName;
+        IDisposable? slot = null;
+        var waited = Stopwatch.StartNew();
+        if (gate is not null)
+        {
+            metrics?.FfmpegWaitStarted(gateName);
+            try
+            {
+                slot = await gate.EnterAsync(ct);
+            }
+            finally
+            {
+                metrics?.FfmpegWaitEnded(gateName);
+            }
+        }
+
+        using (slot)
+        {
+            // Inside the using so nothing between taking the slot and disposing it can leak it.
+            if (gate is not null) metrics?.FfmpegGateWaitSeconds.Record(waited.Elapsed.TotalSeconds, new KeyValuePair<string, object?>("gate", gateName));
+            var outcome = "failed";
+            var ran = Stopwatch.StartNew();
+            metrics?.FfmpegProcessStarted(gateName);
+            try
+            {
+                var result = await body();
+                if (succeeded(result)) outcome = "success";
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                outcome = "cancelled";
+                throw;
+            }
+            finally
+            {
+                metrics?.FfmpegProcessEnded(gateName);
+                if (metrics is not null)
+                {
+                    var operationTag = new KeyValuePair<string, object?>("operation", operation);
+                    metrics.FfmpegRuns.Add(1, operationTag, new KeyValuePair<string, object?>("outcome", outcome));
+                    metrics.FfmpegDurationSeconds.Record(ran.Elapsed.TotalSeconds, operationTag);
+                    if (outcome == "success" && inputDuration > TimeSpan.Zero)
+                        metrics.FfmpegInputMediaSeconds.Add(inputDuration.TotalSeconds, operationTag);
+                }
+            }
+        }
     }
 
     /// <summary>Starts every ffmpeg/ffprobe run at below-normal priority (nice 10 on Linux,
@@ -663,13 +748,18 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
     public async Task<FfmpegRunResult> RemuxDts2PtsAsync(string inputPath, string outputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct = default)
     {
-        if (binaryResolver.FfmpegPath is null)
+        if (binaryResolver.FfmpegPath is not { } ffmpegPath)
         {
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
         // Deliberately not gated: a repair is user-initiated and shouldn't queue behind hours of background trickplay or scene detection.
-        var startInfo = new ProcessStartInfo(binaryResolver.FfmpegPath)
+        return await RunInstrumentedAsync("remux_dts2pts", null, totalDuration, ct, () => RemuxDts2PtsCoreAsync(ffmpegPath, inputPath, outputPath, totalDuration, progress, ct), r => r.Success);
+    }
+
+    private static async Task<FfmpegRunResult> RemuxDts2PtsCoreAsync(string ffmpegPath, string inputPath, string outputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct)
+    {
+        var startInfo = new ProcessStartInfo(ffmpegPath)
         {
             RedirectStandardError = true,
             UseShellExecute = false,

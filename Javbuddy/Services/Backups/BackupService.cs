@@ -1,4 +1,5 @@
 using Javbuddy.Services.Common;
+using Javbuddy.Services.Metrics;
 
 namespace Javbuddy.Services.Backups;
 
@@ -31,7 +32,8 @@ public sealed class BackupService(
     BackupLocation location,
     IBackupSettingsService settingsService,
     TimeProvider time,
-    ILogger<BackupService> logger) : IBackupService
+    ILogger<BackupService> logger,
+    JavbuddyMetrics? metrics = null) : IBackupService
 {
     /// <summary>The largest import accepted, and the largest database taken out of an archive.</summary>
     public const long MaxArchiveBytes = 4L * 1024 * 1024 * 1024;
@@ -80,6 +82,7 @@ public sealed class BackupService(
         {
             var entry = await CreateCoreAsync(kind, ct);
             await PruneCoreAsync();
+            PublishLastBackup();
             return entry;
         }
         finally
@@ -113,6 +116,22 @@ public sealed class BackupService(
         }
     }
 
+    /// <summary>Tells the last-backup-age gauge what the newest backup is now, so it follows every change at once rather
+    /// than waiting for the gauge refresh. Callers hold the lock. Best effort: a failure must not fail the backup operation.</summary>
+    private void PublishLastBackup()
+    {
+        if (metrics is null) return;
+        try
+        {
+            var entries = List();
+            metrics.UpdateLastBackup(entries.Count > 0 ? entries.Max(e => e.Manifest.CreatedUtc) : null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Could not update the last-backup metric.");
+        }
+    }
+
     /// <summary>A free file name for a backup made at <paramref name="utc"/> (two in the same second get a suffix).</summary>
     internal static string UniquePath(string folder, BackupKind kind, DateTime utc)
     {
@@ -137,6 +156,7 @@ public sealed class BackupService(
 
             File.Delete(path);
             logger.LogInformation("Deleted database backup {File}.", fileName);
+            PublishLastBackup();
             return OperationResult.Ok();
         }
         finally
@@ -182,6 +202,7 @@ public sealed class BackupService(
                 File.Move(zipPath, target);
                 logger.LogInformation("Imported database backup {File} (made {Created:u} by Javbuddy {Version}).",
                     Path.GetFileName(target), manifest.CreatedUtc, manifest.AppVersion);
+                PublishLastBackup();
                 return OperationResult.Ok();
             }
             catch (InvalidDataException ex)
@@ -243,7 +264,9 @@ public sealed class BackupService(
         await gate.WaitAsync(ct);
         try
         {
-            return await PruneCoreAsync();
+            var deleted = await PruneCoreAsync();
+            if (deleted > 0) PublishLastBackup();
+            return deleted;
         }
         finally
         {
