@@ -3,6 +3,7 @@ using Javbuddy.Services.Backups;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Metrics;
+using Javbuddy.Services.Tasks;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,7 +23,8 @@ public class MetricsGaugeRefreshServiceTests
                 Run("sync", success: true, ended: new DateTime(2026, 11, 10, 0, 0, 0, DateTimeKind.Utc)),
                 Run("sync", success: true, ended: new DateTime(2026, 11, 12, 0, 0, 0, DateTimeKind.Utc)),
                 Run("sync", success: false, ended: new DateTime(2026, 11, 14, 0, 0, 0, DateTimeKind.Utc)),
-                Run("never-ok", success: false, ended: new DateTime(2026, 11, 14, 0, 0, 0, DateTimeKind.Utc)));
+                Run("never-ok", success: false, ended: new DateTime(2026, 11, 14, 0, 0, 0, DateTimeKind.Utc)),
+                Run("retired", success: true, ended: new DateTime(2026, 11, 15, 0, 0, 0, DateTimeKind.Utc)));
             await db.SaveChangesAsync();
         }
 
@@ -39,6 +41,8 @@ public class MetricsGaugeRefreshServiceTests
             .AddSingleton<Microsoft.EntityFrameworkCore.IDbContextFactory<Javbuddy.Data.AppDbContext>>(factory)
             .AddSingleton(backups)
             .AddSingleton(cache)
+            .AddSingleton(RegisteredTask("sync")) // "never-ok" is registered too, but has no success; "retired" is not registered
+            .AddSingleton(RegisteredTask("never-ok"))
             .BuildServiceProvider();
 
         using var metrics = new JavbuddyMetrics(new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(newest.AddHours(5))));
@@ -68,6 +72,13 @@ public class MetricsGaugeRefreshServiceTests
             .ToDictionary(g => g.Key, g => (double)g.Last().Value!);
         Assert.Equal(["sync"], stamps.Keys);
         Assert.Equal(new DateTimeOffset(2026, 11, 12, 0, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds(), stamps["sync"]);
+    }
+
+    private static IScheduledTask RegisteredTask(string name)
+    {
+        var task = Substitute.For<IScheduledTask>();
+        task.Name.Returns(name);
+        return task;
     }
 
     private static ScheduledTaskRun Run(string task, bool success, DateTime ended) =>

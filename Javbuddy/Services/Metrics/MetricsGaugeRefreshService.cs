@@ -3,6 +3,7 @@ using Javbuddy.Models;
 using Javbuddy.Services.Backups;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Tasks;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Metrics;
@@ -139,6 +140,9 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
         {
             try
             {
+                // Only tasks that are registered now (by the name the runner records), so a retired or renamed task
+                // doesn't keep a frozen series.
+                var registered = scope.ServiceProvider.GetServices<IScheduledTask>().Select(t => t.Name).ToHashSet();
                 await using var db = await dbFactory.CreateDbContextAsync(ct);
                 var lastSuccesses = await db.ScheduledTaskRuns
                     .Where(r => r.Success && r.EndedAt != null)
@@ -147,7 +151,7 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
                     .ToListAsync(ct);
                 foreach (var last in lastSuccesses)
                 {
-                    if (last.EndedAt is { } endedAt) metrics.RecordScheduledTaskSuccess(last.Task, endedAt);
+                    if (registered.Contains(last.Task) && last.EndedAt is { } endedAt) metrics.RecordScheduledTaskSuccess(last.Task, endedAt);
                 }
                 taskSeedDone = true;
             }

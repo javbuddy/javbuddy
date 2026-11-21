@@ -57,7 +57,8 @@ public interface IFfmpegClient
 
 /// <summary>Every ffmpeg/ffprobe run goes through <see cref="RunInstrumentedAsync{T}"/>, which takes the gate slot (if any)
 /// and records the run's metrics when <c>metrics</c> is given (it is optional so a client can be built without them).
-/// A run that never started a process (binary missing, or cancelled while still queued on a gate) is not counted.</summary>
+/// A run that never got a gate slot or a binary (binary missing, or cancelled while queued on a gate) is not counted; a
+/// <c>Process.Start</c> failure after that counts as a failed run with reason "other".</summary>
 public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGate? longGate = null, FfmpegGate? shortGate = null, JavbuddyMetrics? metrics = null) : IFfmpegClient
 {
     private readonly FfmpegGate longGate = longGate ?? FfmpegGate.Long;
@@ -233,10 +234,10 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
     }
 
     public Task<FfmpegRunResult> ExtractStillWebpAsync(string inputPath, double seconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
-        RunAsync("still", inputPath, outputPath, BuildStillArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
+        RunAsync("still", outputPath, BuildStillArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
 
     public Task<FfmpegRunResult> ExtractFrameWebpAsync(string inputPath, double seconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
-        RunAsync("still", inputPath, outputPath, BuildFrameWebpArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
+        RunAsync("still", outputPath, BuildFrameWebpArguments(inputPath, seconds, leftEyeOnly, outputPath), ct);
 
     public static List<string> BuildFrameWebpArguments(string inputPath, double seconds, bool leftEyeOnly, string outputPath) =>
     [
@@ -251,7 +252,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
     ];
 
     public Task<FfmpegRunResult> ExtractPreviewVideoAsync(string inputPath, double seconds, double durationSeconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
-        RunAsync("preview", inputPath, outputPath, BuildPreviewVideoArguments(inputPath, seconds, durationSeconds, leftEyeOnly, outputPath), ct);
+        RunAsync("preview", outputPath, BuildPreviewVideoArguments(inputPath, seconds, durationSeconds, leftEyeOnly, outputPath), ct);
 
     public async Task<FfmpegRunResult> RemuxWithChaptersAsync(string inputPath, string ffMetadata, string outputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct = default)
     {
@@ -490,7 +491,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
         var gate = request.StartSeconds is null ? longGate : shortGate;
         // A clip only covers LengthSeconds of the video, so that is the media it processes.
         var inputDuration = request.LengthSeconds is { } length ? TimeSpan.FromSeconds(length) : totalDuration;
-        return await RunInstrumentedAsync("trickplay", gate, inputDuration, new RunIo([inputPath], OutputDirectory: outputDirectory), ct, scope => GenerateTrickplayCoreAsync(scope, ffmpegPath, inputPath, request, outputDirectory, totalDuration, progress, ct), r => r.Success);
+        return await RunInstrumentedAsync("trickplay", gate, inputDuration, new RunIo(request.StartSeconds is null ? [inputPath] : [], OutputDirectory: outputDirectory), ct, scope => GenerateTrickplayCoreAsync(scope, ffmpegPath, inputPath, request, outputDirectory, totalDuration, progress, ct), r => r.Success);
     }
 
     private static async Task<FfmpegRunResult> GenerateTrickplayCoreAsync(FfmpegRunScope scope, string ffmpegPath, string inputPath, FfmpegTrickplayRequest request, string outputDirectory, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct)
@@ -586,15 +587,16 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
     private static string FormatSeconds(double seconds) =>
         Math.Max(seconds, 0).ToString("0.###", CultureInfo.InvariantCulture);
 
-    private async Task<FfmpegRunResult> RunAsync(string operation, string inputPath, string outputPath, IReadOnlyList<string> arguments, CancellationToken ct)
+    private async Task<FfmpegRunResult> RunAsync(string operation, string outputPath, IReadOnlyList<string> arguments, CancellationToken ct)
     {
         if (binaryResolver.FfmpegPath is not { } ffmpegPath)
         {
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        // Only stills and hover previews come through here: the short lane. No input duration is known, so they add no media seconds.
-        return await RunInstrumentedAsync(operation, shortGate, TimeSpan.Zero, new RunIo([inputPath], outputPath), ct, scope => RunCoreAsync(scope, ffmpegPath, arguments, ct), r => r.Success);
+        // Only stills and hover previews come through here: the short lane. No input duration is known, so they add no media seconds,
+        // and they read only a few MB of a large file, so they declare no inputs for the input-bytes counter either.
+        return await RunInstrumentedAsync(operation, shortGate, TimeSpan.Zero, new RunIo([], outputPath), ct, scope => RunCoreAsync(scope, ffmpegPath, arguments, ct), r => r.Success);
     }
 
     private static async Task<FfmpegRunResult> RunCoreAsync(FfmpegRunScope scope, string ffmpegPath, IReadOnlyList<string> arguments, CancellationToken ct)
@@ -636,7 +638,8 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
     /// <summary>The files a run reads and writes, for the byte counters: <see cref="InputPaths"/>, plus the output file or the
     /// directory the run fills (trickplay writes N.webp sheets into a fresh staging directory).</summary>
-    /// A probe reads only headers, so it declares no inputs and adds nothing to the input-bytes counter.
+    /// Only whole-file operations declare inputs: a probe reads headers, a still, preview or highlight clip a few MB, so they declare none
+    /// and add nothing to the input-bytes counter.
     private sealed record RunIo(IReadOnlyList<string> InputPaths, string? OutputFile = null, string? OutputDirectory = null)
     {
         public static RunIo None { get; } = new([]);

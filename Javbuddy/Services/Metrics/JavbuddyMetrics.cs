@@ -85,7 +85,7 @@ public class JavbuddyMetrics : IDisposable
         FfmpegRuns = meter.CreateCounter<long>(
             "javbuddy_ffmpeg_runs_total", description: "ffmpeg/ffprobe process runs, by operation and outcome (success, failed, cancelled).");
         FfmpegDurationSeconds = meter.CreateHistogram<double>(
-            "javbuddy_ffmpeg_duration_seconds", unit: "s", description: "ffmpeg/ffprobe run time from process start to exit, excluding time queued on a gate.",
+            "javbuddy_ffmpeg_duration_seconds", unit: "s", description: "ffmpeg/ffprobe run time from gate slot acquired to completion, excluding time queued on a gate.",
             advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = FfmpegDurationBuckets });
         FfmpegGateWaitSeconds = meter.CreateHistogram<double>(
             "javbuddy_ffmpeg_gate_wait_seconds", unit: "s", description: "Time spent waiting for a free slot on an ffmpeg gate.",
@@ -99,7 +99,7 @@ public class JavbuddyMetrics : IDisposable
             description: "Bytes written by successful ffmpeg runs (output file, or the files in the trickplay output directory), measured after the run.");
         FfmpegInputBytes = meter.CreateCounter<long>(
             "javbuddy_ffmpeg_input_bytes_total", unit: "By",
-            description: "Size of the input file(s) of successful ffmpeg runs (not ffprobe, which reads only headers), i.e. the most they read from the library (a seek or keyframe-only run reads less).");
+            description: "Size of the input file(s) of successful whole-file ffmpeg runs (trickplay, scene_detect, concat, remux), i.e. the most they read from the library (a keyframe-only run reads less). Not counted for probe, still, preview or highlight clips, which read only a small part.");
         FfmpegSpeedRatio = meter.CreateHistogram<double>(
             "javbuddy_ffmpeg_speed_ratio", unit: "{ratio}",
             description: "Media seconds processed per wall-clock second, for successful runs whose input duration is known. Low values point at slow disks or NAS mounts.",

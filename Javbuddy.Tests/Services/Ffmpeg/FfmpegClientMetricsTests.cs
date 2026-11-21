@@ -235,7 +235,7 @@ public sealed class FfmpegClientMetricsTests : IDisposable
     private const string WriteLastArgument = "for a; do last=\"$a\"; done; printf 'abcdefg' > \"$last\"";
 
     [Fact]
-    public async Task Still_Success_CountsInputAndOutputBytes()
+    public async Task Still_Success_CountsOutputBytes_ButNoInputBytes()
     {
         if (OperatingSystem.IsWindows()) return;
         var input = InputFile("in.mp4", 1000);
@@ -244,9 +244,7 @@ public sealed class FfmpegClientMetricsTests : IDisposable
         var result = await Client(Script("ffmpeg", WriteLastArgument)).ExtractStillWebpAsync(input, 5, false, output);
 
         Assert.True(result.Success);
-        var inBytes = Assert.Single(Of("javbuddy_ffmpeg_input_bytes_total"));
-        Assert.Equal(1000L, inBytes.Value);
-        Assert.Equal("still", inBytes.Tags["operation"]);
+        Assert.Empty(Of("javbuddy_ffmpeg_input_bytes_total")); // a still reads only a few MB of the file
         var outBytes = Assert.Single(Of("javbuddy_ffmpeg_output_bytes_total"));
         Assert.Equal(7L, outBytes.Value);
         Assert.Equal("still", outBytes.Tags["operation"]);
@@ -262,7 +260,33 @@ public sealed class FfmpegClientMetricsTests : IDisposable
 
         Assert.True(result.Success);
         Assert.Empty(Of("javbuddy_ffmpeg_output_bytes_total"));
-        Assert.Equal(10L, Assert.Single(Of("javbuddy_ffmpeg_input_bytes_total")).Value);
+    }
+
+    [Fact]
+    public async Task Preview_Success_CountsOutputBytes_ButNoInputBytes()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var input = InputFile("in.mp4", 1000);
+
+        var result = await Client(Script("ffmpeg", WriteLastArgument)).ExtractPreviewVideoAsync(input, 5, 3, false, Path.Combine(dir.FullName, "out.webm"));
+
+        Assert.True(result.Success);
+        Assert.Empty(Of("javbuddy_ffmpeg_input_bytes_total"));
+        Assert.Equal(7L, Assert.Single(Of("javbuddy_ffmpeg_output_bytes_total")).Value);
+    }
+
+    [Fact]
+    public async Task TrickplayClip_CountsNoInputBytes_ButTheWholeFileDoes()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var input = InputFile("in.mp4", 100);
+        var client = Client(Script("ffmpeg", "exit 0"));
+
+        await client.GenerateTrickplayAsync(input, new FfmpegTrickplayRequest(2, 320, 180, 5, 5, false, false, StartSeconds: 30, LengthSeconds: 10), dir.FullName, TimeSpan.FromHours(1), null);
+        Assert.Empty(Of("javbuddy_ffmpeg_input_bytes_total"));
+
+        await client.GenerateTrickplayAsync(input, new FfmpegTrickplayRequest(2, 320, 180, 5, 5, false, false), dir.FullName, TimeSpan.FromHours(1), null);
+        Assert.Equal(100L, Assert.Single(Of("javbuddy_ffmpeg_input_bytes_total")).Value);
     }
 
     [Fact]
