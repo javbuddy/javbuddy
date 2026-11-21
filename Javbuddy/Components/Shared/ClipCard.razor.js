@@ -35,9 +35,17 @@ export function bindHoverPreviews(container, cardSelector = '.scene-wall-card') 
         clearTimeout(timer);
         timer = 0;
         if (!video) return;
-        releaseVideo(video);
-        video.remove();
+        // Hidden at once, but only released and removed once a frame without it has been painted:
+        // tearing down a video that is still on screen can show its emptied surface — a blank white
+        // frame over the card's still — for one frame, as the pointer moves on to the next card.
+        const gone = video;
         video = null;
+        gone.pause();
+        gone.style.visibility = 'hidden';
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            releaseVideo(gone);
+            gone.remove();
+        }));
     };
 
     const play = () => {

@@ -152,7 +152,8 @@ public class ClipCardHoverPreviewFlowTests(E2EFixture fixture)
         {
             var (x, y) = await CenterOfAsync(page, i);
             await page.Mouse.MoveAsync(x, y);
-            await Expect(page.Locator(".scene-wall-card video")).ToHaveCountAsync(1);
+            // In the card under the pointer: the one just left keeps its hidden video for a frame or two.
+            await Expect(page.Locator(".scene-wall-card").Nth(i).Locator("video")).ToHaveCountAsync(1);
         }
         await page.Mouse.MoveAsync(5, 5);
         await Expect(page.Locator(".scene-wall-card video")).ToHaveCountAsync(0);
