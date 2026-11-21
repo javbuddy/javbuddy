@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-21
+
 ### Added
 
 - **ffmpeg, library and freshness metrics on `/metrics`.**
