@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Movies;
 using Microsoft.Data.Sqlite;
 
@@ -41,6 +42,7 @@ public partial class R18DevDumpStore
         var cached = catalogVersionCache;
         if (cached is null || cached.Path != dbPath || cached.WriteTime != writeTime)
         {
+            using var activity = JavbuddyTracing.StartR18DevQuery("catalog_availability");
             await using var connection = await OpenReadOnlyAsync(ct);
             await using var cmd = connection.CreateCommand();
             cmd.CommandText = "SELECT COUNT(*) FROM pragma_table_info('dump_meta') WHERE name = 'catalog_version'";
@@ -65,6 +67,7 @@ public partial class R18DevDumpStore
         int limit,
         CancellationToken ct = default)
     {
+        using var activity = JavbuddyTracing.StartR18DevQuery("catalog_page");
         await using var connection = await OpenReadOnlyAsync(ct);
         await using var cmd = connection.CreateCommand();
         var where = BuildCatalogWhere(cmd, filter, keys);
@@ -93,6 +96,7 @@ public partial class R18DevDumpStore
 
     public async Task<int> CountCatalogAsync(R18DevCatalogFilter filter, R18DevCanonicalKeyFilter? keys, CancellationToken ct = default)
     {
+        using var activity = JavbuddyTracing.StartR18DevQuery("catalog_count");
         await using var connection = await OpenReadOnlyAsync(ct);
         await using var cmd = connection.CreateCommand();
         var where = BuildCatalogWhere(cmd, filter, keys);
@@ -102,6 +106,7 @@ public partial class R18DevDumpStore
 
     public async Task<IReadOnlyList<R18DevCategoryOption>> GetCategoriesAsync(CancellationToken ct = default)
     {
+        using var activity = JavbuddyTracing.StartR18DevQuery("categories");
         await using var connection = await OpenReadOnlyAsync(ct);
         await using var cmd = connection.CreateCommand();
         // The dump repeats some names under several ids (e.g. three "Big Tits"), so they're merged.
@@ -123,6 +128,7 @@ public partial class R18DevDumpStore
 
     public async Task<(int Min, int Max)?> GetReleaseYearBoundsAsync(CancellationToken ct = default)
     {
+        using var activity = JavbuddyTracing.StartR18DevQuery("release_year_bounds");
         await using var connection = await OpenReadOnlyAsync(ct);
         await using var cmd = connection.CreateCommand();
         // Two index seeks on idx_videos_browse rather than one MIN/MAX scan.
@@ -142,6 +148,7 @@ public partial class R18DevDumpStore
         var norm = CodeNormalization.Normalize(term);
         if (norm.Length < 2) return [];
 
+        using var activity = JavbuddyTracing.StartR18DevQuery("suggest");
         await using var connection = await OpenReadOnlyAsync(ct);
         await using var cmd = connection.CreateCommand();
         // A range over idx_videos_dvd_id_norm: everything starting with what was typed, the exact

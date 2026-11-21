@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **OpenTelemetry tracing.** Set `OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` for a full traces URL, such as VictoriaTraces') and Javbuddy sends traces over OTLP, showing where the time goes in a slow page load, click or API call. Traces cover HTTP requests (not health probes, `/metrics`, static files or the Blazor WebSocket), an interactive page's first render, clicks and in-page navigations, each database query with its SQL (literal values stripped, parameter values left out), r18.dev reference database lookups, and outgoing calls to integrations (with query strings, and so any API key in them, replaced by `*`). Tracing is off, with no spans created, while no endpoint is set. The standard `OTEL_*` variables set the protocol, headers, service name and sampling; see [docs/configuration.md](docs/configuration.md#tracing-opentelemetry).
+
 ## [0.7.3] - 2026-11-21
 
 ### Fixed

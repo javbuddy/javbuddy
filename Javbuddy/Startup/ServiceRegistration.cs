@@ -35,6 +35,7 @@ using Javbuddy.Services.VideoRepair;
 using Javbuddy.Services.VrMerge;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Javbuddy.Startup;
 
@@ -287,9 +288,12 @@ public static class ServiceRegistration
         // Prometheus-format /metrics endpoint: built-in ASP.NET Core/HttpClient/runtime
         // instrumentation plus JavbuddyMetrics' own app-specific instruments (scheduled tasks, image
         // cache, library size, torrent grabs, VR merge jobs).
-        services.AddOpenTelemetry()
-            .ConfigureResource(resource => resource.AddService("Javbuddy"))
-            .WithMetrics(metrics => metrics
+        // An explicit AddService name would override the standard OTEL_SERVICE_NAME, so it's honored here.
+        var serviceName = configuration["OTEL_SERVICE_NAME"] is { Length: > 0 } name ? name : "Javbuddy";
+        var openTelemetry = services.AddOpenTelemetry()
+            .ConfigureResource(resource => resource.AddService(serviceName));
+
+        openTelemetry.WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
@@ -301,6 +305,35 @@ public static class ServiceRegistration
                 // query cache hit/miss, execution-strategy and optimistic-concurrency failures.
                 .AddMeter("Microsoft.EntityFrameworkCore")
                 .AddPrometheusExporter());
+
+        // Traces, exported over OTLP. Off entirely (no spans are even created) unless an OTLP endpoint
+        // is set, so dev runs and tests export nothing. Exporter, protocol and sampler are configured
+        // through the standard OTEL_* environment variables.
+        if (JavbuddyTracing.IsOtlpEndpointConfigured(configuration))
+        {
+            openTelemetry.WithTracing(tracing => tracing
+                .AddAspNetCoreInstrumentation(options =>
+                    options.Filter = http => JavbuddyTracing.ShouldTraceRequest(http.Request.Path.Value))
+                .AddHttpClientInstrumentation()
+                // Interactive Blazor work runs over the circuit's WebSocket rather than as HTTP requests.
+                // The ASP.NET Core instrumentation's SignalR hub spans (an interactive render's queries
+                // sit under them) plus these Blazor sources make a click or a navigation its own trace;
+                // BlazorTraceProcessor drops the hub's per-render acknowledgements.
+                .AddSource("Microsoft.AspNetCore.Components")
+                .AddSource("Microsoft.AspNetCore.Components.Server.Circuits")
+                // SQL text is captured with its literals stripped. Parameter values are left out unless
+                // OTEL_DOTNET_EXPERIMENTAL_EFCORE_ENABLE_TRACE_DB_QUERY_PARAMETERS=true.
+                .AddEntityFrameworkCoreInstrumentation()
+                .AddSource(JavbuddyTracing.SourceName)
+                .AddProcessor(new BlazorTraceProcessor())
+                .AddOtlpExporter(options =>
+                {
+                    // AddOtlpExporter reads OTEL_EXPORTER_OTLP_ENDPOINT but not the traces-only override,
+                    // which is the one a traces-only backend (e.g. VictoriaTraces) needs, as a full URL.
+                    if (JavbuddyTracing.TracesEndpoint(configuration) is { } endpoint)
+                        options.Endpoint = endpoint;
+                }));
+        }
 
         // K8s liveness/readiness probes.
         services.AddHealthChecks()

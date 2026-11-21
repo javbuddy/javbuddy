@@ -1,5 +1,8 @@
+using System.Diagnostics;
+using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.R18Dev;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 
@@ -305,5 +308,25 @@ public class R18DevDumpStoreTests : IDisposable
         Assert.Equal(2, movie.GalleryThumbUrls.Count);
         Assert.Equal("https://pics.dmm.co.jp/digital/video/mgmj00077/mgmj00077-1.jpg", movie.GalleryThumbUrls[0]);
         Assert.Equal("https://pics.dmm.co.jp/digital/video/mgmj00077/mgmj00077-2.jpg", movie.GalleryThumbUrls[1]);
+    }
+
+    [Fact]
+    public async Task GetMovieByCodeAsync_RecordsOneR18DevSpanNamedForTheOperationNotTheCode()
+    {
+        using (var seed = OpenSidecarForSeeding())
+        {
+            InsertVideo(seed, "SPAN-001");
+        }
+        var store = new R18DevDumpStore(configuration);
+
+        using var capture = new TraceCapture(JavbuddyTracing.SourceName);
+        var movie = await store.GetMovieByCodeAsync("SPAN-001");
+
+        Assert.NotNull(movie);
+        var span = Assert.Single(capture.Spans);
+        Assert.Equal("r18dev movie_by_code", span.DisplayName);
+        Assert.Equal(ActivityKind.Client, span.Kind);
+        Assert.Equal("sqlite", span.GetTagItem("db.system.name"));
+        Assert.Equal("r18dev", span.GetTagItem("db.namespace"));
     }
 }

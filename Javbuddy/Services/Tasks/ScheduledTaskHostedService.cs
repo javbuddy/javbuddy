@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry;
 
 namespace Javbuddy.Services.Tasks;
 
@@ -88,17 +89,25 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ILogg
 
         foreach (var task in tasks)
         {
-            DateTime? lastRun;
-            await using (var db = await dbFactory.CreateDbContextAsync(ct))
+            bool due;
+            // The once-a-minute "is it due" check would otherwise be a one-query trace per task every
+            // minute; only an actual run is worth tracing.
+            using (SuppressInstrumentationScope.Begin())
             {
-                lastRun = await db.ScheduledTaskRuns
-                    .Where(r => r.TaskName == task.Name && r.EndedAt != null)
-                    .OrderByDescending(r => r.EndedAt)
-                    .Select(r => r.EndedAt)
-                    .FirstOrDefaultAsync(ct);
+                DateTime? lastRun;
+                await using (var db = await dbFactory.CreateDbContextAsync(ct))
+                {
+                    lastRun = await db.ScheduledTaskRuns
+                        .Where(r => r.TaskName == task.Name && r.EndedAt != null)
+                        .OrderByDescending(r => r.EndedAt)
+                        .Select(r => r.EndedAt)
+                        .FirstOrDefaultAsync(ct);
+                }
+
+                due = IsDue(lastRun, DateTime.UtcNow, processStartUtc, task.GetInterval(), task.RunImmediatelyWhenNeverRun);
             }
 
-            if (!IsDue(lastRun, DateTime.UtcNow, processStartUtc, task.GetInterval(), task.RunImmediatelyWhenNeverRun)) continue;
+            if (!due) continue;
 
             if (task.RecordRunHistory)
             {

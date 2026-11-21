@@ -191,6 +191,30 @@ All durable files live in one object store under `ObjectStore:Path`, one key pre
 |---|---|---|---|
 | `R18Dev:DumpSourceOverride` | `R18Dev__DumpSourceOverride` | *(none)* | Path or URL to an r18.dev database dump archive. When unset, uses standard upstream release URL. |
 
+### Tracing (OpenTelemetry)
+
+Javbuddy can send OpenTelemetry traces over OTLP to a trace backend (an OpenTelemetry Collector, Jaeger, Tempo, VictoriaTraces and so on), to see where the time goes in a slow page, click or API call. Tracing is off unless an endpoint is set; with none set, no spans are created or sent.
+
+| Environment Variable | Default | Description |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | *(none)* | Base URL of an OTLP receiver. With `http/protobuf`, `/v1/traces` is appended. |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | *(none)* | Full URL for traces, used exactly as given; takes precedence over `OTEL_EXPORTER_OTLP_ENDPOINT`. Use it for a backend whose traces path isn't `/v1/traces`, e.g. VictoriaTraces' `http://victoriatraces:10428/insert/opentelemetry/v1/traces`. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` | `grpc` (usually port 4317) or `http/protobuf` (usually port 4318). VictoriaTraces needs `http/protobuf`. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | *(none)* | Headers sent with each export, e.g. `Authorization=Bearer abc`. |
+| `OTEL_SERVICE_NAME` | `Javbuddy` | The service name traces are reported under. |
+| `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | `parentbased_always_on` | Sampling. Every trace is kept by default, which suits a single-user app; e.g. `parentbased_traceidratio` with `0.25` keeps a quarter. |
+| `OTEL_DOTNET_EXPERIMENTAL_EFCORE_ENABLE_TRACE_DB_QUERY_PARAMETERS` | `false` | Adds each database query's parameter values to its span. Parameter values can include anything stored in the database, so only turn this on for a trace backend you'd trust with that data. |
+| `OTEL_SEMCONV_STABILITY_OPT_IN` | *(none)* | `database` switches database spans to the newer OpenTelemetry attribute names (`db.query.text` instead of `db.statement`). |
+
+What's traced:
+
+- **Page loads and API calls**: each HTTP request, except health probes (`/healthz/*`), the `/metrics` scrape, static files and the Blazor WebSocket.
+- **Interactive pages**: once a page is interactive, its first render, each click or other event and each in-page navigation get their own traces, named after the component and handler, with the database queries and outgoing calls made while handling them.
+- **Database queries**: each query against Javbuddy's database, with its SQL (literal values are stripped; parameter values are only included with the opt-in above), and each r18.dev reference database lookup as one span per operation.
+- **Outgoing calls** to javinizer-go, Prowlarr, Jellyfin, qBittorrent and other services. Query strings are replaced with `*`, so an API key passed in a URL (as Jellyfin's is) never reaches a trace.
+
+Background work (scheduled tasks, queues) isn't grouped into one trace per run yet, so its database queries and calls show up as separate small traces.
+
 ---
 
 ## Docker Compose Example

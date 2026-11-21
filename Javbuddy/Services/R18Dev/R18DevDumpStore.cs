@@ -1,3 +1,4 @@
+using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Movies;
 using Microsoft.Data.Sqlite;
 
@@ -181,6 +182,7 @@ public partial class R18DevDumpStore(IConfiguration configuration) : IR18DevDump
             return new R18DevFilmographyResult(false, Array.Empty<R18DevFilmographyEntry>());
         }
 
+        using var activity = JavbuddyTracing.StartR18DevQuery("actor_filmography");
         var dbPath = R18DevDumpPaths.GetDbPath(configuration);
         await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
@@ -308,6 +310,7 @@ public partial class R18DevDumpStore(IConfiguration configuration) : IR18DevDump
         var norm = CodeNormalization.Normalize(code);
         if (norm.Length == 0) return null;
 
+        using var activity = JavbuddyTracing.StartR18DevQuery("movie_by_code");
         var dbPath = R18DevDumpPaths.GetDbPath(configuration);
         await using var connection = new SqliteConnection(new SqliteConnectionStringBuilder
         {
