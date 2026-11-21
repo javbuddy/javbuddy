@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-21
+
 ### Added
 
 - **OpenTelemetry tracing.** Set `OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` for a full traces URL, such as VictoriaTraces') and Javbuddy sends traces over OTLP, showing where the time goes in a slow page load, click, API call or background job. Tracing is off, with no spans created, while no endpoint is set. The standard `OTEL_*` variables, including the `OTEL_EXPORTER_OTLP_TRACES_*` overrides, set the protocol, headers, timeout, compression, service name, resource attributes and sampling, and an unusable value stops startup with a message naming it; see [docs/configuration.md](docs/configuration.md#tracing-opentelemetry), which also lists what traces contain (movie codes in paths and tags, exception messages). `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` now also apply to the `target_info` series on `/metrics`; with neither set, it's still `Javbuddy`.
