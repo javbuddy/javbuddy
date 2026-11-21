@@ -186,8 +186,25 @@
     background-color: #2a7fbf;
 }
 
+/* Phones: the track takes a row of its own above the buttons, which would otherwise squeeze it to a
+   sliver. The mute button stays (a clip may start muted, see ClipControls.razor.js), its slider goes. */
 @media (max-width: 576px) {
     .clip-controls-volume-popup {
         display: none !important;
+    }
+
+    .clip-controls {
+        flex-wrap: wrap;
+        row-gap: 0.25rem;
+    }
+
+    .clip-controls-track-wrap {
+        order: -1;
+        flex: 1 0 100%;
+        min-height: 20px;
+    }
+
+    .clip-controls-time {
+        margin-right: auto;
     }
 }

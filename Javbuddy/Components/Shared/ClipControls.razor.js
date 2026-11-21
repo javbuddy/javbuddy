@@ -17,6 +17,17 @@ function readLoop() {
     }
 }
 
+// Plays the video; when the browser blocks sound without a fresh tap (a phone, after .NET moves a
+// playlist on), plays it muted instead of leaving it paused on its first frame. The mute button then
+// shows muted, and a tap on it brings the sound back.
+function playOrMute(video) {
+    video.play().catch((error) => {
+        if (error?.name !== 'NotAllowedError' || video.muted) return;
+        video.muted = true;
+        video.play().catch(() => { });
+    });
+}
+
 function writeLoop(loop) {
     try {
         if (loop) {
@@ -30,8 +41,9 @@ function writeLoop(loop) {
 }
 
 // `options`: { videoSelector, startSeconds, endSeconds (null = the video's end), trickplay,
-// playlist, hasPrevious }. Returns the remembered Loop choice. Called again for each clip.
-export function init(root, dotnet, options) {
+// playlist, hasPrevious }. `newClip`: another clip than the last init's (or the first), rather than the
+// same clip with a changed range or place. Returns the remembered Loop choice. Called again for each clip.
+export function init(root, dotnet, options, newClip) {
     dispose(root);
     // `done` once this clip hands over to .NET (its end, Next, Previous): the next clip loads into the
     // same <video> before .NET re-inits, and this clip's range mustn't pull it back meanwhile.
@@ -81,7 +93,7 @@ export function init(root, dotnet, options) {
         if (state.done) return;
         if (state.loop) {
             video.currentTime = start;
-            video.play().catch(() => { });
+            playOrMute(video);
             return;
         }
         video.pause();
@@ -90,7 +102,7 @@ export function init(root, dotnet, options) {
 
     const restart = () => {
         video.currentTime = start;
-        video.play().catch(() => { });
+        playOrMute(video);
     };
 
     // More than 3 s in, Previous restarts this clip, as in most players; otherwise it goes back one.
@@ -107,8 +119,11 @@ export function init(root, dotnet, options) {
         if (options.playlist && !state.done) handOver('NextAsync');
     };
 
-    // While playing, keeps the playhead inside the clip.
+    // While playing, keeps the playhead inside the clip. Not before the video's metadata is in or while a
+    // seek is under way: the playhead then still reads 0 (or the last clip's spot), and setting it every
+    // frame would restart the seek's range request each time and stall playback.
     const checkRange = () => {
+        if (video.readyState < 1 || video.seeking) return;
         const e = end();
         if (e != null && video.currentTime >= e) {
             reachEnd();
@@ -172,7 +187,7 @@ export function init(root, dotnet, options) {
 
     const seek = (event) => {
         video.currentTime = secondsFor(event);
-        if (video.paused) video.play().catch(() => { });
+        if (video.paused) playOrMute(video);
     };
 
     // Space plays/pauses like the native controls did, and in a playlist N / P go to the next or
@@ -206,6 +221,27 @@ export function init(root, dotnet, options) {
 
     const container = root.closest('.video-player-column') || root.parentElement;
     const unbindFullscreen = bindFullscreen(root, container, video, fullscreenBtn, 'clip-controls-is-fullscreen', 0);
+
+    // Starts a new clip. A clip of the same movie keeps the <video>, and its src changes only in the #t=
+    // fragment, or not at all when both clips start at the same point, so it neither reliably seeks nor
+    // plays again (the last clip paused it at its end): seek to the start and play explicitly. A video
+    // that is still loading gets its #t= and autoplay, so it's only checked once the metadata is in.
+    // The same clip re-inited (its range or place changed) is left as it is, paused or not.
+    const startClip = (seek) => {
+        if (state.done) return;
+        if (seek) video.currentTime = start;
+        if (video.paused) playOrMute(video);
+    };
+    if (newClip && video.readyState >= 1) {
+        startClip(true);
+    } else if (newClip) {
+        const onMetadata = () => {
+            const e = end();
+            startClip(video.currentTime < start - 0.25 || (e != null && video.currentTime >= e - 0.05));
+        };
+        listeners.push([video, 'loadedmetadata', onMetadata]);
+        video.addEventListener('loadedmetadata', onMetadata, { once: true });
+    }
 
     render();
     if (!video.paused) onPlay();

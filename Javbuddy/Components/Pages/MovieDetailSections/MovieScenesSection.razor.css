@@ -491,7 +491,8 @@
 @media (max-width: 640.98px) {
     .movie-scenes-timeline-pin {
         max-width: none;
-        padding: 0.15rem 0.3rem;
+        /* Wider, not taller: a pin must stay within its 24px lane (PinLanePx). */
+        padding: 0.2rem 0.55rem;
     }
 
     .movie-scenes-timeline-pin-name,
@@ -579,4 +580,13 @@
     bottom: 0;
     left: var(--apex-left);
     width: 240px;
+}
+
+/* Phones: the 10px diamond is too small a target for a finger; an invisible ring around it takes the tap. */
+@media (max-width: 640.98px) {
+    .movie-scenes-timeline-apex::before {
+        content: "";
+        position: absolute;
+        inset: -8px;
+    }
 }

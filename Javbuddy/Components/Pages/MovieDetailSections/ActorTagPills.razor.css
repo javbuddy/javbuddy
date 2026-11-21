@@ -104,6 +104,22 @@
     display: flex;
 }
 
+/* On a phone a centered popover runs off the side for a cast member near the edge (and the detail panel's
+   overflow clips it), so it docks at the bottom like Movie Detail's version menu. */
+@media (max-width: 640.98px) {
+    .actor-pills-popover {
+        position: fixed;
+        top: auto;
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+        width: auto;
+        max-height: 50vh;
+        overflow-y: auto;
+        transform: none;
+    }
+}
+
 .actor-pills-heading {
     flex-basis: 100%;
     margin-top: 0.15rem;

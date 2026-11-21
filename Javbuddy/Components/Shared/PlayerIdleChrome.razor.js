@@ -2,7 +2,8 @@
 // the video plays, `root` gets the `player-idle` class; any activity removes it and restarts the timer.
 // It stays off while the video is paused or ended, while the pointer is over the header, scrub bar,
 // clip controls, VR projection picker or side panel, and while focus is inside the header or on the
-// picker (an open dropdown).
+// picker (an open dropdown). On a touch screen, a tap while the chrome is hidden only reveals it: the
+// video doesn't also play/pause, as a mouse user would have revealed it by moving first.
 const IDLE_MS = 3000;
 const KEEP_VISIBLE = '.video-player-modal-header, .scrub-bar, .clip-controls, .video-player-side-panel, .vr-viewer-projection';
 // :hover has to follow each selector, not the list.
@@ -69,6 +70,36 @@ export function init(key, root, selector) {
         }, 600);
     };
 
+    // Captured on root, so they run before the video's own click (play/pause). The tap that reveals the
+    // chrome is swallowed, and so is a second tap right after it: that's a double-tap, which goes
+    // fullscreen (dblclick still fires), and shouldn't pause on the way. A touch that becomes a pan or
+    // drag (pointercancel, no click) doesn't leave a click to swallow behind.
+    const DOUBLE_TAP_MS = 400;
+    let swallowClick = false;
+    let swallowedAt = -Infinity;
+    const onPointerDown = (event) => {
+        if (event.pointerType === 'mouse' || !(event.target instanceof Element) || event.target.closest('.video-player-area') === null) {
+            swallowClick = false;
+            return;
+        }
+        swallowClick = root.classList.contains(IDLE_CLASS) || event.timeStamp - swallowedAt < DOUBLE_TAP_MS;
+    };
+    const onPointerCancel = () => {
+        swallowClick = false;
+    };
+    const onClick = (event) => {
+        if (!swallowClick) return;
+        swallowClick = false;
+        // Only the first tap of a pair starts the window, so a third tap pauses as usual.
+        swallowedAt = event.timeStamp - swallowedAt < DOUBLE_TAP_MS ? -Infinity : event.timeStamp;
+        event.stopPropagation();
+        event.preventDefault();
+    };
+    // Before the activity listeners, which remove the idle class.
+    root.addEventListener('pointerdown', onPointerDown, true);
+    root.addEventListener('pointercancel', onPointerCancel, true);
+    root.addEventListener('click', onClick, true);
+
     const events = ['pointermove', 'pointerdown', 'touchstart', 'wheel', 'keydown', 'click'];
     for (const type of events) root.addEventListener(type, onActivity, { passive: true, capture: true });
     for (const type of ['play', 'playing', 'seeking']) root.addEventListener(type, onStarted, true);
@@ -82,6 +113,9 @@ export function init(key, root, selector) {
         clearTimeout(timer);
         clearTimeout(revealTimer);
         root.classList.remove(IDLE_CLASS);
+        root.removeEventListener('pointerdown', onPointerDown, true);
+        root.removeEventListener('pointercancel', onPointerCancel, true);
+        root.removeEventListener('click', onClick, true);
         for (const type of events) root.removeEventListener(type, onActivity, true);
         for (const type of ['play', 'playing', 'seeking']) root.removeEventListener(type, onStarted, true);
         for (const type of ['pause', 'ended']) root.removeEventListener(type, onStopped, true);

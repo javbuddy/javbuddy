@@ -152,13 +152,13 @@
             {
                 jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Shared/ClipControls.razor.js");
                 selfRef = DotNetObjectReference.Create(this);
-                await InitAsync();
+                await InitAsync(newClip: true);
                 StateHasChanged();
             }
             else if (jsModule is not null && StreamReady && (ClipKey != sentKey || Range with { Trickplay = sentTrickplay } != sentRange))
             {
                 // Another clip in the same player (a playlist's next one): start over on its range.
-                await InitAsync();
+                await InitAsync(newClip: ClipKey != sentKey);
             }
             else if (jsModule is not null && Trickplay != sentTrickplay)
             {
@@ -171,14 +171,16 @@
         }
     }
 
-    private async Task InitAsync()
+    /// <param name="newClip">Another clip than the last init's, which the module seeks to and plays; false
+    /// when only the same clip's range or place changed, which leaves playback as it is.</param>
+    private async Task InitAsync(bool newClip)
     {
         sentTrickplay = Trickplay;
         sentRange = Range;
         sentKey = ClipKey;
         try
         {
-            loop = await jsModule!.InvokeAsync<bool>("init", root, selfRef, sentRange);
+            loop = await jsModule!.InvokeAsync<bool>("init", root, selfRef, sentRange, newClip);
         }
         catch (JSDisconnectedException)
         {
