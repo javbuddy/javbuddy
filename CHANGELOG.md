@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-21
+
 ### Fixed
 
 - **Movie Detail works on phones again.** On a narrow screen the title, badges, overview, tags and cast were squeezed to nothing beside the poster, leaving only the poster visible. In portrait the page now stacks into one column; in landscape, on small tablets and in narrow windows the poster shrinks so the details stay beside it. A cast member's actor-tag popover now opens at the bottom of the screen instead of running off its side, and the timeline's apex diamonds and highlight pins are easier to tap.
