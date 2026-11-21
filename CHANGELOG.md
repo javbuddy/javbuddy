@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-21
+
 ### Fixed
 
 - **No more white flash when moving between hover previews.** Moving the pointer from one scene, highlight or apex card that was playing its hover preview to another could flash the first card's picture solid white for a frame; the preview now disappears cleanly back to the card's screenshot.
