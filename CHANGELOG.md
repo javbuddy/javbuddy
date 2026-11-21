@@ -5,6 +5,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ## [Unreleased]
 
 ## [0.8.2] - 2026-11-21
+
 ### Changed
 
 - Movie Detail's image delete button now appears only while hovering (or focusing) an image, including on touch screens.
