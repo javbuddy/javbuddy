@@ -57,15 +57,3 @@
     .fanart-thumb-cell:focus-within ::deep .fanart-thumb-overlay > * {
         pointer-events: auto;
     }
-
-/* Touch screens have no hover to reveal the overlay's controls (e.g. Movie Detail's delete button), so
-   they're always shown there. */
-@media (hover: none) {
-    .fanart-thumb-overlay {
-        opacity: 1;
-    }
-
-    .fanart-thumb-cell ::deep .fanart-thumb-overlay > * {
-        pointer-events: auto;
-    }
-}
