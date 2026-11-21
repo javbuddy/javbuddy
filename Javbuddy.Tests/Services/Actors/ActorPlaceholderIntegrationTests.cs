@@ -344,6 +344,37 @@ public class ActorPlaceholderIntegrationTests
     }
 
     [Fact]
+    public async Task MergeAsync_ForARealActor_MovesTheirGalleryToTheTarget_InsteadOfCascadeDeletingIt()
+    {
+        using var factory = new TestDbContextFactory();
+        int sourceId, targetId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var source = new Actor { FirstName = "Yui", LastName = "Hatano" };
+            var target = new Actor { FirstName = "Yui", LastName = "Hatano (2)" };
+            db.Actors.AddRange(source, target);
+            await db.SaveChangesAsync();
+            sourceId = source.Id;
+            targetId = target.Id;
+            var album = new ActorAlbum { ActorId = sourceId, Name = "Beach" };
+            db.ActorAlbums.Add(album);
+            await db.SaveChangesAsync();
+            db.ActorPhotos.AddRange(
+                new ActorPhoto { ActorId = sourceId, AlbumId = album.Id, ThumbStorageId = Guid.NewGuid(), FullStorageId = Guid.NewGuid() },
+                new ActorPhoto { ActorId = sourceId, ThumbStorageId = Guid.NewGuid(), FullStorageId = Guid.NewGuid() });
+            await db.SaveChangesAsync();
+        }
+
+        var result = await new ActorService(factory).MergeAsync(sourceId, targetId);
+
+        Assert.True(result.Success);
+        await using var check = await factory.CreateDbContextAsync();
+        Assert.All(await check.ActorPhotos.ToListAsync(), p => Assert.Equal(targetId, p.ActorId));
+        Assert.Equal(2, await check.ActorPhotos.CountAsync());
+        Assert.Equal(targetId, (await check.ActorAlbums.SingleAsync(a => a.Name == "Beach")).ActorId);
+    }
+
+    [Fact]
     public async Task MergeAsync_ForAPlaceholder_KeepsTheirPortraitUntilTheMergeIsSaved()
     {
         using var factory = new TestDbContextFactory();

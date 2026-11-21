@@ -957,11 +957,9 @@ public class ActorService(
             }
         }
 
-        // An unidentified performer's gallery is handed to the real actor, the albums that share a name merged.
-        if (source.IsPlaceholder)
-        {
-            await MoveGalleryAsync(db, source.Id, target.Id, ct);
-        }
+        // The source's gallery is handed to the target, the albums that share a name merged. Removing the source
+        // would otherwise cascade-delete its albums and photos and leak their files.
+        await MoveGalleryAsync(db, source.Id, target.Id, ct);
 
         // 5. Remove source actor (ActorAliases cascades delete)
         db.Actors.Remove(source);

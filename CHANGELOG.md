@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **Merging two actors no longer deletes the merged-away actor's photo gallery.** Their albums and photos now move to the actor they were merged into, as already happened for unidentified performers.
+
 ## [0.8.2] - 2026-11-21
 
 ### Changed
