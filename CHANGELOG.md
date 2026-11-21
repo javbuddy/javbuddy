@@ -4,6 +4,35 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **Movie Detail works on phones again.** On a narrow screen the title, badges, overview, tags and cast were squeezed to nothing beside the poster, leaving only the poster visible. In portrait the page now stacks into one column; in landscape, on small tablets and in narrow windows the poster shrinks so the details stay beside it. A cast member's actor-tag popover now opens at the bottom of the screen instead of running off its side, and the timeline's apex diamonds and highlight pins are easier to tap.
+- **Clip playback no longer stalls when moving between clips of the same movie.** Next, Previous and a playlist moving on by itself could leave the next clip paused, or at the wrong spot, when it came from the same movie as the last one. The player also no longer re-seeks repeatedly while a clip is still loading. When the browser won't play a clip with sound (as phones often do once a playlist moves on by itself), the clip now plays muted, with the mute button showing it, instead of sitting paused on its first frame.
+- **Tapping a playing video on a touch screen to bring back its hidden controls no longer also pauses it**, and double-tapping it to go fullscreen no longer leaves it paused.
+- **The video player fits on phones.** The header's buttons no longer crowd out the movie code: the keyboard-shortcuts button and the "Open in Jellyfin" label are hidden on narrow screens (its icon remains), and the version picker is narrower. In the clip player, the seek track gets a full-width row above the buttons instead of shrinking to a sliver.
+- **Phone layout fixes across the app.**
+  - Search is back in the header on phones, with its results opening full width below it.
+  - The menu button opens the navigation under the header wherever the page is scrolled to, instead of at the top of the page, off screen.
+  - Filter and Sort menus open at the bottom of the screen instead of running past its right edge.
+  - Pages use less side padding.
+  - Review: the movie card no longer collapses to a thin strip with its content spilling out.
+  - System → Status: Disk Space no longer makes the page wider than the screen, About rows stack their label above the value and wrap long paths, and the Image Cache purge confirmation wraps.
+  - Tags: each tag's action buttons sit on one line under its name instead of in a tall column.
+  - Actors: two cards a row instead of one stretched card.
+  - Actor Detail: the header's name and details get most of the width next to a smaller photo.
+  - Torrent Sort: file rows wrap their details under the name instead of running off the screen.
+  - System → Statistics, Library Import and the Options dialog stack instead of overflowing or squeezing.
+- **Controls that only appeared on hover now work on touch screens.** These are always shown there:
+  - an actor card's favorite heart
+  - an image's delete button on Movie Detail
+  - an actor photo's details
+  - the r18.dev quick search and add buttons
+
+  A tap on an actor's name opens its tags popover, and a tap elsewhere closes it.
+- **Timelines can be scrubbed by touch.** Dragging a finger along the movie or clip player's timeline shows the preview as it moves and jumps there when you let go, without starting a paused video. On Movie Detail's scenes timeline the preview follows your finger, and letting go just closes it; only a tap plays. An up or down swipe there still scrolls the page.
+- **The clip player no longer shows a Cast button, and its controls hide again after you tap Next or Previous on a touch screen.** Chrome on Android drew its own Cast button over the clip, and a tapped button kept the controls on screen until you tapped elsewhere.
+- **Collapsing the sidebar only applies to the wide layout.** On a phone, the menu shows its labels even when the sidebar was collapsed on a larger screen.
+
 ## [0.8.0] - 2026-11-21
 
 ### Added

@@ -294,15 +294,3 @@ button.movie-detail-badge-versions {
         background-color: rgba(13, 110, 253, 0.38);
         color: #b3d1ff;
     }
-
-@media (max-width: 640.98px) {
-    .movie-detail-layout {
-        grid-template-columns: 1fr;
-        padding: 1rem;
-    }
-
-    /* Single column stacks sidebar and main as rows 1 and 2, so end after main instead. */
-    .movie-detail-backdrop {
-        grid-row: auto / 3;
-    }
-}

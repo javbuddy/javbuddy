@@ -746,7 +746,10 @@
         gap: 0.25rem;
     }
 
+    /* flex: none, as the container is no longer a fixed height for a 0 basis to grow into: the card
+       collapsed to a thin strip with its content spilling out. */
     .cleanup-card {
+        flex: none;
         flex-direction: column;
         height: auto;
         overflow: visible;

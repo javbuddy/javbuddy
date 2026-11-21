@@ -9,6 +9,11 @@
     color: #ffffff;
 }
 
+/* min-width: 0 lets a long name or row of chips wrap instead of pushing past the hero. */
+.actor-hero-info {
+    min-width: 0;
+}
+
 .actor-hero-avatar {
     flex-shrink: 0;
     width: 96px;
@@ -206,4 +211,29 @@
     color: var(--jb-dark-muted);
     border: 1px solid var(--jb-dark-border);
     border-radius: 3px;
+}
+
+/* Phones: a smaller avatar, padding and title, so the name and attribute chips get most of the width. */
+@media (max-width: 640.98px) {
+    .actor-hero {
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .actor-hero-avatar {
+        width: 64px;
+        height: 64px;
+        font-size: 1.3rem;
+    }
+
+    .actor-hero-title {
+        font-size: 1.5rem;
+        overflow-wrap: anywhere;
+    }
+
+    .actor-hero-japanese {
+        display: block;
+        margin-left: 0;
+        font-size: 1rem;
+    }
 }

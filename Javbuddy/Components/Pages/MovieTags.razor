@@ -112,7 +112,7 @@
             else
             {
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0">
+                    <table class="table align-middle mb-0 movie-tags-table">
                         <thead>
                             <tr>
                                 <th style="width: 2.5rem;">
@@ -121,9 +121,9 @@
                                            @onchange="e => ToggleSelectAll((bool)(e.Value ?? false))" />
                                 </th>
                                 <th>Name</th>
-                                <th class="text-end">Usage</th>
-                                <th>Added</th>
-                                <th style="width: 220px;">Actions</th>
+                                <th class="text-end movie-tags-usage">Usage</th>
+                                <th class="movie-tags-added">Added</th>
+                                <th class="movie-tags-actions" style="width: 220px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -168,8 +168,8 @@
                                             <span class="movie-tags-scene-count small text-muted ms-1" title="Scenes with this tag">· @tag.SceneCount @(tag.SceneCount == 1 ? "scene" : "scenes")</span>
                                         }
                                     </td>
-                                    <td class="text-muted small">@tag.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
-                                    <td>
+                                    <td class="text-muted small movie-tags-added">@tag.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                    <td class="movie-tags-actions">
                                         @if (pendingConfirm.tagId == tag.Id)
                                         {
                                             <span class="me-2 small">@pendingConfirm.label</span>
@@ -250,13 +250,13 @@
             else
             {
                 <div class="table-responsive">
-                    <table class="table align-middle mb-0">
+                    <table class="table align-middle mb-0 movie-tags-table">
                         <thead>
                             <tr>
                                 <th>Name</th>
-                                <th class="text-end">Usage</th>
-                                <th>Added</th>
-                                <th style="width: 220px;">Actions</th>
+                                <th class="text-end movie-tags-usage">Usage</th>
+                                <th class="movie-tags-added">Added</th>
+                                <th class="movie-tags-actions" style="width: 220px;">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -286,8 +286,8 @@
                                         }
                                     </td>
                                     <td class="text-end"><span class="badge rounded-pill text-bg-secondary">@tag.UseCount</span></td>
-                                    <td class="text-muted small">@tag.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
-                                    <td>
+                                    <td class="text-muted small movie-tags-added">@tag.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                                    <td class="movie-tags-actions">
                                         @if (pendingConfirm.tagId == tag.Id)
                                         {
                                             <span class="me-2 small">@pendingConfirm.label</span>

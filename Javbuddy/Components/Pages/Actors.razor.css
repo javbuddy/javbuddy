@@ -509,3 +509,29 @@ button.actor-table-sort:hover,
 :root[data-theme="dark"] .actor-meta {
     color: var(--jb-dark-muted);
 }
+
+/* Touch screens have no hover to reveal the favorite heart, so it's always shown there. */
+@media (hover: none) {
+    .actor-card-favorite {
+        opacity: 0.75;
+        pointer-events: auto;
+    }
+}
+
+/* Phones: two cards a row at the default and largest sizes, like the movie poster grid, rather than one
+   card stretched across the screen; their avatars shrink to fit. */
+@media (max-width: 700px) {
+    .actor-grid.size-2,
+    .actor-grid.size-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+    }
+
+    .actor-grid.size-2 {
+        --actor-avatar-size: 120px;
+    }
+
+    .actor-grid.size-3 {
+        --actor-avatar-size: 140px;
+    }
+}

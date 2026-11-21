@@ -80,3 +80,10 @@
 :root[data-theme="dark"] .import-stats-error {
     color: #e07a68;
 }
+
+/* Narrow screens: data-table-stack hides the header; the run's time sits above its result. */
+@media (max-width: 900px) {
+    .import-stats-row {
+        grid-template-columns: 1fr;
+    }
+}

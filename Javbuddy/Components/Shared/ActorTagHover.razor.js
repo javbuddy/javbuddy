@@ -52,4 +52,12 @@ document.addEventListener('focusout', e => {
     if (openedByFocus && !hostOf(e.relatedTarget ?? document.body)) hide();
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') hide(); });
+// Touch screens: a tap on an actor opens its popover (as focus would), and a tap anywhere else closes it. The
+// mouseover a browser makes up for a tap isn't relied on: not every touch browser sends one, or then a mouseout.
+document.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse') return;
+    const host = hostOf(e.target);
+    if (host) show(host, true);
+    else hide();
+}, { passive: true });
 window.addEventListener('scroll', () => { if (open && openHost.isConnected) place(openHost, open); }, { capture: true, passive: true });

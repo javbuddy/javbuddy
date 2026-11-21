@@ -115,3 +115,29 @@
 :root[data-theme="dark"] .disk-space-bar {
     background-color: var(--jb-dark-border);
 }
+
+/* Phones: About rows stack their label above the value and wrap long paths. Disk Space keeps its
+   header, as three value columns: the location takes a row above them and the bar one below. */
+@media (max-width: 640.98px) {
+    .about-row {
+        grid-template-columns: 1fr;
+        gap: 0.1rem;
+        overflow-wrap: anywhere;
+    }
+
+    .disk-space-row {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.35rem 0.75rem;
+    }
+
+    .disk-space-location,
+    .disk-space-bar {
+        grid-column: 1 / -1;
+        overflow-wrap: anywhere;
+    }
+
+    .disk-space-header > :first-child,
+    .disk-space-header > :last-child {
+        display: none;
+    }
+}

@@ -73,6 +73,8 @@
 .movie-scenes-timeline-bar {
     position: relative;
     height: 30px;
+    /* A sideways drag scrubs (MovieScenesSection.razor.js); an up/down swipe still scrolls the page. */
+    touch-action: pan-y;
     border-radius: 4px;
     background-color: rgba(255, 255, 255, 0.05);
     overflow: hidden;
@@ -491,7 +493,8 @@
 @media (max-width: 640.98px) {
     .movie-scenes-timeline-pin {
         max-width: none;
-        padding: 0.15rem 0.3rem;
+        /* Wider, not taller: a pin must stay within its 24px lane (PinLanePx). */
+        padding: 0.2rem 0.55rem;
     }
 
     .movie-scenes-timeline-pin-name,
@@ -579,4 +582,13 @@
     bottom: 0;
     left: var(--apex-left);
     width: 240px;
+}
+
+/* Phones: the 10px diamond is too small a target for a finger; an invisible ring around it takes the tap. */
+@media (max-width: 640.98px) {
+    .movie-scenes-timeline-apex::before {
+        content: "";
+        position: absolute;
+        inset: -8px;
+    }
 }

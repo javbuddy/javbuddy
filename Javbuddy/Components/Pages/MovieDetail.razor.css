@@ -139,3 +139,34 @@
     color: #c7cad3;
     margin-bottom: 0.5rem;
 }
+
+/* inline-size only: no layout or paint containment, so it is neither a containing block for the
+   fixed-position menus and lightbox inside nor a stacking context (see .movie-detail-layout's comment). */
+.movie-detail-frame {
+    container-type: inline-size;
+}
+
+/* Narrower than the 340px poster column leaves room for (a phone in landscape, a small tablet, a narrow
+   window): the poster shrinks to a share of the width, so the title, badges and cast stay beside it
+   instead of being squeezed to nothing. */
+@container (max-width: 900px) {
+    .movie-detail-layout {
+        grid-template-columns: minmax(140px, 35%) minmax(0, 1fr);
+        gap: 1.25rem;
+        padding: 1rem;
+    }
+}
+
+/* Phones in portrait: one column, the poster above the title and badges. Later than the container
+   rule above, so it wins there. */
+@media (max-width: 640.98px) {
+    .movie-detail-layout {
+        grid-template-columns: 1fr;
+        padding: 1rem;
+    }
+
+    /* Single column stacks sidebar and main as rows 1 and 2, so end after main instead. */
+    .movie-detail-backdrop {
+        grid-row: auto / 3;
+    }
+}

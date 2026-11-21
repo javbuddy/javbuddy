@@ -289,3 +289,33 @@
 .video-player-modal-panel.player-idle ::deep .video-player-media {
     cursor: none !important;
 }
+
+/* Phones: the header's actions shrink to fit beside the code instead of pushing it off. Keyboard
+   shortcuts and the Jellyfin button's label go (its icon and tooltip stay), the version picker narrows. */
+@media (max-width: 576px) {
+    .video-player-modal-header {
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+    }
+
+    .video-player-modal-actions {
+        gap: 0.35rem;
+    }
+
+    .video-player-modal-actions ::deep .shortcuts-info,
+    .video-player-external-label {
+        display: none;
+    }
+
+    .video-player-version-select {
+        max-width: 7rem;
+    }
+
+    .video-player-external-btn {
+        padding: 0.25rem 0.45rem;
+    }
+
+    .video-player-external-btn svg {
+        margin-right: 0 !important;
+    }
+}

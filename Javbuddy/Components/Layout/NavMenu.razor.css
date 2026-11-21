@@ -225,11 +225,6 @@
     }
 }
 
-:root[data-sidebar-collapsed="true"] .active-task-status {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-}
 
 .sidebar-collapse-toggle {
     appearance: none;
@@ -255,26 +250,37 @@
     color: white;
 }
 
-:root[data-sidebar-collapsed="true"] .nav-label,
-:root[data-sidebar-collapsed="true"] .nav-badge,
-:root[data-sidebar-collapsed="true"] .nav-subitems {
-    display: none;
-}
 
-:root[data-sidebar-collapsed="true"] .nav-item ::deep .nav-link {
-    justify-content: center;
-    padding-left: 0;
-    padding-right: 0;
-    border-left-width: 0;
-}
+/* The collapsed, icons-only sidebar is a wide-layout thing: on a phone the menu opens as a full-width panel,
+   which has room for the labels whatever the (desktop-set) preference says. */
+@media (min-width: 641px) {
+    :root[data-sidebar-collapsed="true"] .active-task-status {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+    }
 
-:root[data-sidebar-collapsed="true"] .sidebar-collapse-toggle {
-    justify-content: center;
-    padding-left: 0;
-}
+    :root[data-sidebar-collapsed="true"] .nav-label,
+    :root[data-sidebar-collapsed="true"] .nav-badge,
+    :root[data-sidebar-collapsed="true"] .nav-subitems {
+        display: none;
+    }
 
-:root[data-sidebar-collapsed="true"] .nav-icon {
-    margin-right: 0;
+    :root[data-sidebar-collapsed="true"] .nav-item ::deep .nav-link {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+        border-left-width: 0;
+    }
+
+    :root[data-sidebar-collapsed="true"] .sidebar-collapse-toggle {
+        justify-content: center;
+        padding-left: 0;
+    }
+
+    :root[data-sidebar-collapsed="true"] .nav-icon {
+        margin-right: 0;
+    }
 }
 
 @media (max-width: 640.98px) {
@@ -282,8 +288,21 @@
         display: none;
     }
 
+    /* Opens as a panel under the sticky header, wherever the page is scrolled to: in the flow, it opened at
+       the top of the document, off screen once scrolled down. */
     .navbar-toggler:checked ~ .nav-scrollable {
         display: block;
+        position: fixed;
+        top: 3.25rem;
+        left: 0;
+        right: 0;
+        max-height: calc(100vh - 3.25rem);
+        max-height: calc(100dvh - 3.25rem);
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        z-index: 1010;
+        background-color: var(--jb-dark-border);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
     }
 
     .sidebar-collapse-toggle {

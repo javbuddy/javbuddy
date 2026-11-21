@@ -22,3 +22,15 @@
     font-weight: 600;
     text-align: right;
 }
+
+/* Phones: labels above their controls, left-aligned, instead of a 140px column beside them. */
+@media (max-width: 576px) {
+    .options-modal-content ::deep .options-row {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
+
+    .options-modal-content ::deep .options-label {
+        text-align: left;
+    }
+}

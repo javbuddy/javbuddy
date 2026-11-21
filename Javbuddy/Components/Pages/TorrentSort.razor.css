@@ -488,3 +488,31 @@
         max-width: 200px;
     }
 }
+
+/* Phones: a file's checkbox and name take the first line, its badge, size and other details wrap onto
+   the next, instead of a 260px-minimum name column running off the screen. */
+@media (max-width: 640.98px) {
+    .sort-file-row,
+    .sort-merge-file-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.75rem;
+    }
+
+    .sort-file-name,
+    .sort-merge-file-name {
+        flex: 1 1 calc(100% - 2rem);
+        min-width: 0;
+    }
+
+    .sort-file-row > :nth-child(n + 3),
+    .sort-merge-file-row > :nth-child(n + 3) {
+        font-size: 0.85rem;
+    }
+
+    .sort-file-row > :nth-child(3),
+    .sort-merge-file-row > :nth-child(3) {
+        margin-left: 1.75rem;
+    }
+}

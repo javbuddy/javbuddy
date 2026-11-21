@@ -42,3 +42,11 @@
     opacity: 1;
     pointer-events: auto;
 }
+
+/* Touch screens have no hover to reveal the quick search/add buttons, so they're always shown there. */
+@media (hover: none) {
+    .missing-poster-action {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}

@@ -115,6 +115,12 @@ export function init(root, config, videoSelector, key) {
     scrubBar.addEventListener('pointermove', showPreview);
     scrubBar.addEventListener('pointerleave', hidePreview);
     scrubBar.addEventListener('click', seek);
+    // A drag only moves the playhead: unlike a tap, letting go doesn't start a paused video.
+    const seekOnly = (event) => {
+        const video = document.querySelector(videoSelector);
+        if (video) video.currentTime = secondsAt(event.clientX);
+    };
+    const unbindTouchScrub = bindTouchScrub(scrubBar, { onMove: showPreview, onSeek: seekOnly, onEnd: hidePreview });
     document.addEventListener('timeupdate', onTimeUpdate, true);
 
     const video = document.querySelector(videoSelector);
@@ -127,6 +133,7 @@ export function init(root, config, videoSelector, key) {
         scrubBar.removeEventListener('pointermove', showPreview);
         scrubBar.removeEventListener('pointerleave', hidePreview);
         scrubBar.removeEventListener('click', seek);
+        unbindTouchScrub();
         document.removeEventListener('timeupdate', onTimeUpdate, true);
         unbindFullscreen();
         transport?.unbind();
@@ -372,6 +379,59 @@ export function isShortcutBlocked(event) {
     return event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey
         || isEditableElement(event.target) || isEditableElement(document.activeElement)
         || document.querySelector('.image-lightbox-backdrop, .cleanup-modal-overlay, .delete-confirm-backdrop') !== null;
+}
+
+// Touch scrubbing for a seek track (ScrubBar's and ClipControls'): a finger dragged along it previews
+// (onMove, the hover preview) and calls onSeek where it's let go (a player jumps there without starting
+// playback; only a tap plays), once, rather than on every move, which
+// would restart the video's range request each time. The pointer is captured, so the drag keeps going off
+// the track. A tap that doesn't move is left to the track's click, so a highlight still snaps to its
+// start. A mouse is left alone: it previews on hover and seeks on click already. Returns an unbind.
+const DRAG_SLOP_PX = 6;
+export function bindTouchScrub(track, { onMove, onSeek, onEnd }) {
+    let drag = null;
+    let swallowClick = false;
+    const onDown = (event) => {
+        if (event.pointerType === 'mouse' || !event.isPrimary) return;
+        drag = { id: event.pointerId, x: event.clientX, moved: false };
+        swallowClick = false;
+        try { track.setPointerCapture(event.pointerId); } catch { /* not capturable */ }
+    };
+    const onPointerMove = (event) => {
+        if (!drag || event.pointerId !== drag.id) return;
+        if (Math.abs(event.clientX - drag.x) > DRAG_SLOP_PX) drag.moved = true;
+        if (drag.moved) onMove(event);
+    };
+    const finish = (event, seek) => {
+        if (!drag || event.pointerId !== drag.id) return;
+        const moved = drag.moved;
+        drag = null;
+        if (moved && seek) {
+            swallowClick = true;
+            onSeek(event);
+        }
+        if (moved) onEnd();
+    };
+    const onUp = (event) => finish(event, true);
+    const onCancel = (event) => finish(event, false);
+    const onClick = (event) => {
+        if (!swallowClick) return;
+        swallowClick = false;
+        event.stopImmediatePropagation();
+    };
+    const listeners = [
+        ['pointerdown', onDown],
+        ['pointermove', onPointerMove],
+        ['pointerup', onUp],
+        ['pointercancel', onCancel],
+    ];
+    for (const [type, handler] of listeners) track.addEventListener(type, handler);
+    // Captured, so it runs before the track's own click (seek) and can stop it after a drag.
+    track.addEventListener('click', onClick, true);
+    return () => {
+        for (const [type, handler] of listeners) track.removeEventListener(type, handler);
+        track.removeEventListener('click', onClick, true);
+    };
 }
 
 // Transport shared by the movie player's ScrubBar and the clip player's ClipControls: click on the
