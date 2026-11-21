@@ -659,6 +659,11 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
     private async Task<T> RunInstrumentedAsync<T>(string operation, FfmpegGate? gate, TimeSpan inputDuration, RunIo io, CancellationToken ct, Func<FfmpegRunScope, Task<T>> body, Func<T, bool> succeeded)
     {
         var gateName = gate?.Name ?? FfmpegGate.UngatedName;
+        // One span per run; the wait for a gate slot is its own child, so queueing behind other ffmpeg work
+        // shows apart from the run itself.
+        using var activity = JavbuddyTracing.Source.StartActivity($"ffmpeg {operation}");
+        activity?.SetTag("javbuddy.ffmpeg.operation", operation);
+        activity?.SetTag("javbuddy.ffmpeg.gate", gateName);
         IDisposable? slot = null;
         var waited = Stopwatch.StartNew();
         if (gate is not null)
@@ -666,7 +671,18 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             metrics?.FfmpegWaitStarted(gateName);
             try
             {
-                slot = await gate.EnterAsync(ct);
+                slot = gate.TryEnter();
+                if (slot is null)
+                {
+                    // Only an actual wait gets a span: queueing behind other ffmpeg work is a distinct cause of a slow run.
+                    using var waitActivity = JavbuddyTracing.Source.StartActivity("ffmpeg gate wait");
+                    slot = await gate.EnterAsync(ct);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                activity.SetOutcome("cancelled");
+                throw;
             }
             finally
             {
@@ -696,6 +712,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             finally
             {
                 var elapsedSeconds = ran.Elapsed.TotalSeconds;
+                activity.SetOutcome(outcome == "failed" ? "failure" : outcome, errorType: outcome == "failed" ? scope.FailureReason : null);
                 metrics?.FfmpegProcessEnded(gateName);
                 if (metrics is not null)
                 {

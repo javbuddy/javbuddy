@@ -454,4 +454,55 @@ public sealed class FfmpegClientMetricsTests : IDisposable
 
         Assert.Equal("probe", Assert.Single(Of("javbuddy_ffmpeg_kills_total")).Tags["operation"]);
     }
+
+    [Fact]
+    public async Task Still_FailedRun_RecordsAFailedSpanWithTheFailureReason_AndNoWaitWhileASlotIsFree()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var ffmpeg = Script("ffmpeg", "echo 'No such file or directory' >&2; exit 1");
+        using var capture = new TraceCapture(JavbuddyTracing.SourceName);
+
+        await Client(ffmpeg, shortGate: new FfmpegGate(1, FfmpegGate.ShortName)).ExtractStillWebpAsync("in.mp4", 5, false, "out.webp");
+
+        var run = Assert.Single(capture.Spans);
+        Assert.Equal("ffmpeg still", run.DisplayName);
+        Assert.Equal("short", run.GetTagItem("javbuddy.ffmpeg.gate"));
+        Assert.Equal("failure", run.GetTagItem("javbuddy.outcome"));
+        Assert.Equal(FfmpegFailureClassifier.NoSuchFile, run.GetTagItem("error.type"));
+        Assert.Equal(System.Diagnostics.ActivityStatusCode.Error, run.Status);
+    }
+
+    [Fact]
+    public async Task Still_QueuedBehindAnotherRun_RecordsAGateWaitChild()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var ffmpeg = Script("ffmpeg", "exit 0");
+        var gate = new FfmpegGate(1, FfmpegGate.ShortName);
+        using var capture = new TraceCapture(JavbuddyTracing.SourceName);
+
+        var held = await gate.EnterAsync(CancellationToken.None);
+        var run = Client(ffmpeg, shortGate: gate).ExtractStillWebpAsync("in.mp4", 5, false, "out.webp");
+        await Task.Delay(50);
+        held.Dispose();
+        await run;
+
+        var span = Assert.Single(capture.Spans, s => s.DisplayName == "ffmpeg still");
+        var wait = Assert.Single(capture.Spans, s => s.DisplayName == "ffmpeg gate wait");
+        Assert.Equal(span.SpanId, wait.ParentSpanId);
+    }
+
+    [Fact]
+    public async Task Probe_Success_RecordsASuccessfulSpanWithoutAGateWait()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var ffprobe = Script("ffprobe", "echo '{\"format\":{\"duration\":\"120\"}}'");
+        using var capture = new TraceCapture(JavbuddyTracing.SourceName);
+
+        await Client(null, ffprobe).ProbeAsync("x.mp4");
+
+        var run = Assert.Single(capture.Spans);
+        Assert.Equal("ffmpeg probe", run.DisplayName);
+        Assert.Equal("success", run.GetTagItem("javbuddy.outcome"));
+        Assert.Equal(System.Diagnostics.ActivityStatusCode.Unset, run.Status);
+    }
 }

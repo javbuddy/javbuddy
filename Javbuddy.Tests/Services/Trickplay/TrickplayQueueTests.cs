@@ -175,4 +175,16 @@ public class TrickplayQueueTests
 
         public void Advance(TimeSpan by) => Interlocked.Add(ref ticks, by.Ticks);
     }
+
+    [Theory]
+    [InlineData(TrickplayGenerateResult.Generated, "success")]
+    [InlineData(TrickplayGenerateResult.AlreadyCurrent, "skipped")]
+    [InlineData(TrickplayGenerateResult.NotNeeded, "skipped")]
+    [InlineData(TrickplayGenerateResult.NotProbed, "failure")]
+    [InlineData(TrickplayGenerateResult.NoFile, "failure")]
+    [InlineData(TrickplayGenerateResult.Failed, "failure")]
+    public void TraceOutcome_MatchesWhatTheBatchCountsAsFailed(TrickplayGenerateResult result, string expected)
+    {
+        Assert.Equal(expected, TrickplayQueue.TraceOutcome(result));
+    }
 }

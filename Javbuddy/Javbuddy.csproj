@@ -43,6 +43,10 @@
     <!-- The Prometheus exporter has never left prerelease upstream (still betas years into 1.x) —
          pinned explicitly rather than following a stable version scheme, since none exists yet. -->
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
+    <!-- Trace export, only wired when an OTLP endpoint is configured (see AddJavbuddyObservability). -->
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <!-- EF Core query spans for traces. Still beta upstream, like the Prometheus exporter above. -->
+    <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" />
     <PackageReference Include="SkiaSharp" />
     <!-- The base SkiaSharp package only bundles Windows/macOS native binaries — Linux (used by
          the Docker image) needs this explicit companion package or libSkiaSharp.so is silently

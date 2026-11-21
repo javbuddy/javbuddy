@@ -5,6 +5,7 @@ using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Tasks;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry;
 
 namespace Javbuddy.Services.Metrics;
 
@@ -37,7 +38,12 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
             try
             {
                 if (first || metrics.WasObservedWithin(JavbuddyMetrics.ObservationIdleAfter))
-                    await RefreshAsync(stoppingToken);
+                {
+                    // Housekeeping that runs every minute while /metrics is scraped; tracing its queries
+                    // would only bury the traces worth reading.
+                    using (SuppressInstrumentationScope.Begin())
+                        await RefreshAsync(stoppingToken);
+                }
                 first = false;
             }
             catch (Exception ex)

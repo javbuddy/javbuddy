@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Trickplay;
 
 namespace Javbuddy.Services.SceneMedia;
@@ -98,6 +99,7 @@ public sealed class SceneMediaQueue(IServiceScopeFactory scopeFactory, ILogger<S
             }
 
             pending.TryRemove(job, out _);
+            using var span = JavbuddyTracing.StartRoot($"{job.Kind.ToString().ToLowerInvariant()} media generate");
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
@@ -112,6 +114,7 @@ public sealed class SceneMediaQueue(IServiceScopeFactory scopeFactory, ILogger<S
                 {
                     Generated?.Invoke(id);
                 }
+                span.SetOutcome(movieId is null ? "skipped" : "success");
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -119,6 +122,7 @@ public sealed class SceneMediaQueue(IServiceScopeFactory scopeFactory, ILogger<S
             }
             catch (Exception ex)
             {
+                span.SetOutcome("failure", ex);
                 logger.LogWarning(ex, "Generating media for {Kind} {Id} failed", job.Kind, job.Id);
             }
         }

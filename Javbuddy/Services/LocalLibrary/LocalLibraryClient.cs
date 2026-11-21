@@ -4,6 +4,7 @@ using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.MediaInfo;
+using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Tags;
@@ -252,6 +253,9 @@ public class LocalLibraryClient(
 
     public async Task<LocalLookupResult> TryGetMetadataAsync(string code, CancellationToken ct = default, bool includeMediaInfo = true)
     {
+        // Finding the folder, reading the .nfo and probing the files: the file-system half of a movie's rescan.
+        using var span = JavbuddyTracing.Source.StartActivity("library metadata lookup");
+        span?.SetTag("javbuddy.movie.code", code);
         var (root, folder) = await FindMovieFolderWithRootAsync(code, ct);
         if (folder is null)
         {
@@ -330,6 +334,7 @@ public class LocalLibraryClient(
 
     public async Task<List<string>> ListMovieCodesAsync(CancellationToken ct = default)
     {
+        using var span = JavbuddyTracing.Source.StartActivity("library list movies");
         var roots = await GetRootPathsAsync(ct);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var codes = new List<string>();

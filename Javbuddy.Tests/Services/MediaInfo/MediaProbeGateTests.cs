@@ -1,5 +1,6 @@
 using Javbuddy.Models;
 using Javbuddy.Services.MediaInfo;
+using Javbuddy.Services.Metrics;
 using Javbuddy.Tests.TestSupport;
 
 namespace Javbuddy.Tests.Services.MediaInfo;
@@ -185,5 +186,32 @@ public class MediaProbeGateTests
         {
             if (Interlocked.CompareExchange(ref target, value, current) == current) return;
         }
+    }
+
+    [Fact]
+    public async Task RunAsync_RecordsOneProbeSpan_WithTheOutcome()
+    {
+        var gate = new MediaProbeGate(2);
+        using var capture = new TraceCapture(JavbuddyTracing.SourceName);
+
+        await gate.RunAsync("ok.mp4", Ok, TimeSpan.FromSeconds(5), CancellationToken.None);
+        await gate.RunAsync("bad.mp4", () => MediaProbeResult.Failed("unreadable"), TimeSpan.FromSeconds(5), CancellationToken.None);
+
+        Assert.Equal(["success", "failure"], capture.Spans.Select(s => (string?)s.GetTagItem("javbuddy.outcome")));
+        Assert.All(capture.Spans, s => Assert.Equal("mediainfo probe", s.DisplayName));
+        Assert.Equal(System.Diagnostics.ActivityStatusCode.Error, capture.Spans[1].Status);
+    }
+
+    [Fact]
+    public async Task RunAsync_TimedOutProbe_EndsItsSpanAsATimeout()
+    {
+        var gate = new MediaProbeGate(2);
+        using var release = new ManualResetEventSlim();
+        using var capture = new TraceCapture(JavbuddyTracing.SourceName);
+
+        await gate.RunAsync("hung.mp4", () => { release.Wait(); return Ok(); }, Short, CancellationToken.None);
+        release.Set();
+
+        Assert.Equal("timeout", Assert.Single(capture.Spans).GetTagItem("javbuddy.outcome"));
     }
 }

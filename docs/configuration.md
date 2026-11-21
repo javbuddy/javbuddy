@@ -191,6 +191,40 @@ All durable files live in one object store under `ObjectStore:Path`, one key pre
 |---|---|---|---|
 | `R18Dev:DumpSourceOverride` | `R18Dev__DumpSourceOverride` | *(none)* | Path or URL to an r18.dev database dump archive. When unset, uses standard upstream release URL. |
 
+### Tracing (OpenTelemetry)
+
+Javbuddy can send OpenTelemetry traces over OTLP to a trace backend (an OpenTelemetry Collector, Jaeger, Tempo, VictoriaTraces and so on), to see where the time goes in a slow page, click or API call. Tracing is off unless an endpoint is set; with none set, no spans are created or sent.
+
+| Environment Variable | Default | Description |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | *(none)* | Base URL of an OTLP receiver. With `http/protobuf`, `/v1/traces` is appended. |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | *(none)* | Full URL for traces, used exactly as given; takes precedence over `OTEL_EXPORTER_OTLP_ENDPOINT`. Use it for a backend whose traces path isn't `/v1/traces`, e.g. VictoriaTraces' `http://victoriatraces:10428/insert/opentelemetry/v1/traces`. |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `grpc` | `grpc` (usually port 4317) or `http/protobuf` (usually port 4318). VictoriaTraces needs `http/protobuf`. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | *(none)* | Headers sent with each export, e.g. `Authorization=Bearer abc`. |
+| `OTEL_EXPORTER_OTLP_TIMEOUT` / `OTEL_EXPORTER_OTLP_COMPRESSION` | *(exporter default)* / `none` | Export timeout in milliseconds, and `gzip` or `none`. |
+| `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`, `_TRACES_HEADERS`, `_TRACES_TIMEOUT`, `_TRACES_COMPRESSION` | *(none)* | Traces-only overrides of the four settings above; each one set takes precedence. An unusable value (an endpoint that isn't an http(s) URL, an unknown protocol or compression, a timeout that isn't a positive number) stops Javbuddy at startup with a message naming the variable. |
+| `OTEL_SERVICE_NAME` | `Javbuddy` | The service name traces, and the `target_info` series on `/metrics`, are reported under. |
+| `OTEL_RESOURCE_ATTRIBUTES` | *(none)* | Extra resource attributes, e.g. `deployment.environment.name=prod,service.instance.id=nas`. A `service.name` here is used unless `OTEL_SERVICE_NAME` is also set. |
+| `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | `parentbased_always_on` | Sampling. Every trace is kept by default, which suits a single-user app; e.g. `parentbased_traceidratio` with `0.25` keeps a quarter. |
+| `OTEL_DOTNET_EXPERIMENTAL_EFCORE_ENABLE_TRACE_DB_QUERY_PARAMETERS` | `false` | Adds each database query's parameter values to its span. Parameter values can include anything stored in the database, so only turn this on for a trace backend you'd trust with that data. |
+| `OTEL_BSP_MAX_QUEUE_SIZE` | `2048` | Spans waiting to be exported. Spans beyond it are dropped, so a library rescan of thousands of movies may need it raised to keep its whole trace. |
+
+What's traced:
+
+- **Page loads and API calls**: each HTTP request, except health probes (`/healthz/*`), the `/metrics` scrape, static files, the Blazor WebSocket, and video streams and backup downloads (their duration is the time spent sending the file, so a stream that's slow to start isn't traced either).
+- **Interactive pages**: once a page is interactive, its first render (`Render /movies/{RouteCode}`), each click or other event (named after the component and handler) and each in-page navigation (`Navigate /actors`) get their own traces, with the database queries and outgoing calls made while handling them.
+- **Database queries**: each query against Javbuddy's database, named after its operation and table (`SELECT Movies`), with its SQL in `db.query.text` (literal values are stripped; parameter values are only included with the opt-in above), and each r18.dev reference database lookup as one `r18dev {operation}` span covering the whole lookup. A query with parameters also gets a `javbuddy.db.parameters_hash` tag: within one run of Javbuddy, two queries with the same hash had the same parameter values, so a query repeated with the same hash is redundant work while one repeated with different hashes is a loop over different rows. The hash is keyed with a secret that changes on every start and never leaves the process, so it can't be matched against guessed values.
+- **Outgoing calls** to javinizer-go, Prowlarr, Jellyfin, qBittorrent and other services. Query strings are replaced with `*`, so an API key passed in a URL (as Jellyfin's is) never reaches a trace.
+- **Background work**: each scheduled task run (`task Library Rescan`, linked to the click that started it when run from System > Tasks) and each item a background queue works through (trickplay, scene/highlight/apex media, `.nfo` drift checks, new-movie artwork, clip actor refreshes) is its own trace. Inside them, and inside requests: each ffmpeg/ffprobe run (`ffmpeg trickplay`, with an `ffmpeg gate wait` child when it had to queue behind other ffmpeg work), each MediaInfo probe, each movie's library metadata lookup, and each image conversion (`image convert`, with an `image conversion gate wait` child when it queued). An image request without an `image convert` child was served from the cache.
+
+A failed span has Error status, the standard `error.type` attribute (an exception's type, or a short reason such as ffmpeg's `no_such_file`) and, when an exception caused it, an `exception` event with its message and stack trace. Every span carries a `javbuddy.outcome` (`success`, `skipped`, `cancelled`, `failure`, `timeout` and so on).
+
+What traces contain: besides timings and SQL without its values, traces carry what identifies your library. Movie codes and actor names appear in request paths (`url.path`, e.g. `/movies/MIDV-461`), and codes in the `javbuddy.movie.code` tag of trickplay and library lookups. Exception messages and stack traces can name files and folders. Send traces only to a backend you'd trust with that.
+
+Database spans always follow the current OpenTelemetry database conventions (`db.system.name`, `db.namespace`, `db.query.text`, `db.query.summary`), never the deprecated `db.statement` set; `OTEL_SEMCONV_STABILITY_OPT_IN` is set by Javbuddy itself and a value given for it is ignored.
+
+The once-a-minute scheduler check and the `/metrics` gauge refresh aren't traced. Time a trace can't account for is mostly first-request warm-up (query compilation, JIT) and Blazor rendering, which have no spans of their own.
+
 ---
 
 ## Docker Compose Example

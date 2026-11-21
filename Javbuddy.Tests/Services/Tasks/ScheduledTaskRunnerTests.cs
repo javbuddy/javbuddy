@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Javbuddy.Models;
 using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Monitoring;
@@ -24,6 +25,42 @@ public class ScheduledTaskRunnerTests
 
     private static ScheduledTaskRunner CreateRunner(TestDbContextFactory factory, JavbuddyMetrics? metrics = null, ScheduledTaskChangeNotifier? notifier = null, ScheduledTaskCancellationRegistry? registry = null) =>
         new(factory, metrics ?? new JavbuddyMetrics(), notifier ?? new ScheduledTaskChangeNotifier(), registry ?? new ScheduledTaskCancellationRegistry(), Substitute.For<ILogger<ScheduledTaskRunner>>());
+
+    // A task run starts its own trace, so it's picked out by its (test-unique) name rather than by TraceCapture's parent.
+    private static async Task<Activity> RunTracedAsync(ScheduledTaskRunner runner, IScheduledTask task)
+    {
+        var stopped = new List<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == JavbuddyTracing.SourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = a => { if (a.DisplayName == $"task {task.Name}") lock (stopped) stopped.Add(a); },
+        };
+        ActivitySource.AddActivityListener(listener);
+        await runner.RunAsync(task, CancellationToken.None);
+        lock (stopped) return Assert.Single(stopped);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RunAsync_RecordsOneRootSpanPerRun_WithItsOutcome(bool recordRunHistory)
+    {
+        using var factory = new TestDbContextFactory();
+        var ok = new FakeTask($"trace-ok-{recordRunHistory}", (_, _) => Task.FromResult<string?>(null), recordRunHistory);
+        var failing = new FakeTask($"trace-fail-{recordRunHistory}", (_, _) => throw new InvalidOperationException("boom"), recordRunHistory);
+
+        var okSpan = await RunTracedAsync(CreateRunner(factory), ok);
+        var failedSpan = await RunTracedAsync(CreateRunner(factory), failing);
+
+        Assert.Null(okSpan.ParentId);
+        Assert.Equal(ok.Name, okSpan.GetTagItem("javbuddy.task.name"));
+        Assert.Equal("success", okSpan.GetTagItem("javbuddy.outcome"));
+        Assert.Equal("failure", failedSpan.GetTagItem("javbuddy.outcome"));
+        Assert.Equal(ActivityStatusCode.Error, failedSpan.Status);
+        Assert.Equal("System.InvalidOperationException", failedSpan.GetTagItem("error.type"));
+        Assert.Contains(failedSpan.Events, e => e.Name == "exception");
+    }
 
     [Fact]
     public async Task RunAsync_SuccessfulTask_RecordsSuccessAndSummary()
