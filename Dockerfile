@@ -6,8 +6,8 @@
 # libraries, which the final stage installs (so their security fixes arrive via apt). Bump by
 # updating FFMPEG_VERSION and FFMPEG_SHA256 (the sha256 of ffmpeg-<version>.tar.xz).
 FROM mcr.microsoft.com/dotnet/sdk:11.0-resolute AS ffmpeg
-ARG FFMPEG_VERSION=9.0.2
-ARG FFMPEG_SHA256=8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e
+ARG FFMPEG_VERSION=9.1
+ARG FFMPEG_SHA256=1a4d394ae63d190a526cd052eb4415c156b5c5e2df37efab41a7de0b8fde2433
 WORKDIR /src
 # Unpinned apt packages: the base image tag floats, and exact distro versions disappear from the archive.
 # hadolint ignore=DL3008

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- The FFmpeg bundled in the Docker image is upgraded from 9.0.2 to 9.1.
+
 ## [0.8.1] - 2026-11-21
 
 ### Fixed
