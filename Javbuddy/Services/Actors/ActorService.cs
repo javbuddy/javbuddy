@@ -704,14 +704,7 @@ public class ActorService(
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var searchUpper = search.Trim().ToUpper();
-            query = query.Where(a =>
-                (a.FirstName != null && a.FirstName.ToUpper().Contains(searchUpper))
-                || (a.LastName != null && a.LastName.ToUpper().Contains(searchUpper))
-                || (a.JapaneseNameKanji != null && a.JapaneseNameKanji.ToUpper().Contains(searchUpper))
-                || (a.JapaneseNameKana != null && a.JapaneseNameKana.ToUpper().Contains(searchUpper))
-                || (a.R18DevName != null && a.R18DevName.ToUpper().Contains(searchUpper))
-                || a.Aliases.Any(al => al.Name.ToUpper().Contains(searchUpper)));
+            query = query.Where(ActorSearch.Matches(search));
         }
 
         var actors = await query
@@ -757,16 +750,10 @@ public class ActorService(
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-        var searchUpper = search.Trim().ToUpper();
         var actors = await db.Actors
             .AsNoTracking()
-            .Where(a => a.FirstName != null && a.PlaceholderMovieId == null
-                && ((a.FirstName != null && a.FirstName.ToUpper().Contains(searchUpper))
-                    || (a.LastName != null && a.LastName.ToUpper().Contains(searchUpper))
-                    || (a.JapaneseNameKanji != null && a.JapaneseNameKanji.ToUpper().Contains(searchUpper))
-                    || (a.JapaneseNameKana != null && a.JapaneseNameKana.ToUpper().Contains(searchUpper))
-                    || (a.R18DevName != null && a.R18DevName.ToUpper().Contains(searchUpper))
-                    || a.Aliases.Any(al => al.Name.ToUpper().Contains(searchUpper))))
+            .Where(a => a.FirstName != null && a.PlaceholderMovieId == null)
+            .Where(ActorSearch.Matches(search))
             .Select(a => new
             {
                 a.Id,

@@ -89,8 +89,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         var query = db.Tags.AsNoTracking().Where(t => !t.IsActorTag).Include(t => t.ParentTag).AsQueryable();
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var upper = search.Trim().ToUpper();
-            query = query.Where(t => t.Name.ToUpper().Contains(upper) || (t.ParentTag != null && t.ParentTag.Name.ToUpper().Contains(upper)));
+            var pattern = SqlLike.Contains(search.Trim());
+            query = query.Where(t => EF.Functions.Like(t.Name, pattern, SqlLike.EscapeChar) || (t.ParentTag != null && EF.Functions.Like(t.ParentTag.Name, pattern, SqlLike.EscapeChar)));
         }
 
         var projected = await query
@@ -380,8 +380,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         var query = db.Tags.AsNoTracking().Where(t => t.Id != sourceTagId && !t.IsActorTag);
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var upper = search.Trim().ToUpper();
-            query = query.Where(t => t.Name.ToUpper().Contains(upper));
+            var pattern = SqlLike.Contains(search.Trim());
+            query = query.Where(t => EF.Functions.Like(t.Name, pattern, SqlLike.EscapeChar));
         }
 
         var candidates = await query

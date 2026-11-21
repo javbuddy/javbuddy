@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Searching actors by full name now works** ("Hatano Yui" or "Yui Hatano"), in the actor search and the merge dialog. Searching names with accented or non-ASCII letters no longer silently misses, and `%` or `_` in a search are matched literally. Tag searches got the same case-matching fix.
 - **Merging two actors no longer deletes the merged-away actor's photo gallery.** Their albums and photos now move to the actor they were merged into, as already happened for unidentified performers.
 
 ## [0.8.2] - 2026-11-21

@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Scenes;
 using Microsoft.EntityFrameworkCore;
@@ -67,8 +68,8 @@ public class ActorTagService(IDbContextFactory<AppDbContext> dbFactory, IClipTag
         var query = db.Tags.AsNoTracking().Where(t => t.IsActorTag);
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var upper = search.Trim().ToUpper();
-            query = query.Where(t => t.Name.ToUpper().Contains(upper) || (t.ParentTag != null && t.ParentTag.Name.ToUpper().Contains(upper)));
+            var pattern = SqlLike.Contains(search.Trim());
+            query = query.Where(t => EF.Functions.Like(t.Name, pattern, SqlLike.EscapeChar) || (t.ParentTag != null && EF.Functions.Like(t.ParentTag.Name, pattern, SqlLike.EscapeChar)));
         }
 
         var tags = await query.Select(t => new
