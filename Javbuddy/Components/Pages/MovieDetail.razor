@@ -52,74 +52,78 @@ else
         </div>
     }
 
-    <div class="movie-detail-layout">
-        @if (HasFetchedMetadata)
-        {
-            <div class="movie-detail-backdrop" style="background-image: url('@BackdropFullUrl()')"></div>
-        }
-        <div class="movie-detail-sidebar">
+    @* A size container, so the layout follows the width it actually gets (the nav sidebar takes some of
+       the window above 640px, more or less depending on whether it is collapsed), not the window's. *@
+    <div class="movie-detail-frame">
+        <div class="movie-detail-layout">
             @if (HasFetchedMetadata)
             {
-                <div class="movie-detail-poster movie-detail-poster-clickable" @onclick="() => OpenDialog(MovieDetailDialog.PosterLightbox)" title="Click to view large poster">
-                    <img src="@PosterFullUrl()" alt="Cover" />
-                </div>
+                <div class="movie-detail-backdrop" style="background-image: url('@BackdropFullUrl()')"></div>
             }
-            else
-            {
-                <div class="movie-detail-poster">
-                    <div class="movie-detail-poster-placeholder">@movie.Code</div>
-                </div>
-            }
-        </div>
-        <div class="movie-detail-main">
-            <h1 class="movie-detail-title" title="@movie.DisplayName">@MovieDetailText.Truncate(movie.DisplayName, 70)</h1>
-            <MovieDetailBadges Movie="movie"
-                               CastEntries="castEntries"
-                               Related="related"
-                               Highlights="highlights"
-                               Apexes="apexes"
-                               CanPlay="CanPlay"
-                               JellyfinWebUrl="@jellyfinWebUrl"
-                               Interactive="interactive"
-                               OnOpenDialog="OpenDialog"
-                               OnReload="LoadAsync"
-                               OnPlay="OpenVideoPlayerModal"
-                               OnPlayClips="PlayClips" />
-            @if (!string.IsNullOrWhiteSpace(movie.MetaDescription))
-            {
-                <p class="movie-detail-overview">@movie.MetaDescription</p>
-            }
-            @if (!string.IsNullOrWhiteSpace(movie.Notes))
-            {
-                <p class="movie-detail-notes"><strong>Notes:</strong> @movie.Notes</p>
-            }
+            <div class="movie-detail-sidebar">
+                @if (HasFetchedMetadata)
+                {
+                    <div class="movie-detail-poster movie-detail-poster-clickable" @onclick="() => OpenDialog(MovieDetailDialog.PosterLightbox)" title="Click to view large poster">
+                        <img src="@PosterFullUrl()" alt="Cover" />
+                    </div>
+                }
+                else
+                {
+                    <div class="movie-detail-poster">
+                        <div class="movie-detail-poster-placeholder">@movie.Code</div>
+                    </div>
+                }
+            </div>
+            <div class="movie-detail-main">
+                <h1 class="movie-detail-title" title="@movie.DisplayName">@MovieDetailText.Truncate(movie.DisplayName, 70)</h1>
+                <MovieDetailBadges Movie="movie"
+                                   CastEntries="castEntries"
+                                   Related="related"
+                                   Highlights="highlights"
+                                   Apexes="apexes"
+                                   CanPlay="CanPlay"
+                                   JellyfinWebUrl="@jellyfinWebUrl"
+                                   Interactive="interactive"
+                                   OnOpenDialog="OpenDialog"
+                                   OnReload="LoadAsync"
+                                   OnPlay="OpenVideoPlayerModal"
+                                   OnPlayClips="PlayClips" />
+                @if (!string.IsNullOrWhiteSpace(movie.MetaDescription))
+                {
+                    <p class="movie-detail-overview">@movie.MetaDescription</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(movie.Notes))
+                {
+                    <p class="movie-detail-notes"><strong>Notes:</strong> @movie.Notes</p>
+                }
 
-            <MovieGenresSection Movie="movie" OnChanged="OnTagsChangedAsync" OnClipsChanged="OnClipTagsChangedAsync" />
+                <MovieGenresSection Movie="movie" OnChanged="OnTagsChangedAsync" OnClipsChanged="OnClipTagsChangedAsync" />
 
-            <MovieCastSection Movie="movie" Cast="castEntries" OnChanged="OnCastChangedAsync" />
-        </div>
+                <MovieCastSection Movie="movie" Cast="castEntries" OnChanged="OnCastChangedAsync" />
+            </div>
 
-        @* Full width below the poster and details, so the scenes timeline and cards have room. *@
-        <div class="movie-detail-wide">
-            @if (CanPlay || scenes.Count > 0 || highlights.Count > 0 || apexes.Count > 0)
-            {
-                <MovieScenesSection @ref="scenesSection" Movie="movie"
-                                    Scenes="scenes"
-                                    Highlights="highlights"
-                                    Apexes="apexes"
-                                    HighlightCounts="highlightCounts"
-                                    ApexCounts="apexCounts"
-                                    CanPlay="CanPlay"
-                                    Cast="sceneCast"
-                                    ActorImageUrl="SceneActorImageUrl"
-                                    OnEdit="range => OpenVideoPlayerAt(range.Start, range.End, editor: true)"
-                                    OnPlayAt="seconds => OpenVideoPlayerAt(seconds)"
-                                    OnScenesChanged="OnScenesChanged"
-                                    OnHighlightsChanged="OnHighlightsChanged"
-                                    OnApexesChanged="OnApexesChanged" />
-            }
+            @* Full width below the poster and details, so the scenes timeline and cards have room. *@
+            <div class="movie-detail-wide">
+                @if (CanPlay || scenes.Count > 0 || highlights.Count > 0 || apexes.Count > 0)
+                {
+                    <MovieScenesSection @ref="scenesSection" Movie="movie"
+                                        Scenes="scenes"
+                                        Highlights="highlights"
+                                        Apexes="apexes"
+                                        HighlightCounts="highlightCounts"
+                                        ApexCounts="apexCounts"
+                                        CanPlay="CanPlay"
+                                        Cast="sceneCast"
+                                        ActorImageUrl="SceneActorImageUrl"
+                                        OnEdit="range => OpenVideoPlayerAt(range.Start, range.End, editor: true)"
+                                        OnPlayAt="seconds => OpenVideoPlayerAt(seconds)"
+                                        OnScenesChanged="OnScenesChanged"
+                                        OnHighlightsChanged="OnHighlightsChanged"
+                                        OnApexesChanged="OnApexesChanged" />
+                }
 
-            <MovieImagesSection @ref="imagesSection" Movie="movie" RefreshToken="imagesRefresh" OnGenerateStillsRequested="() => OpenDialog(MovieDetailDialog.Stills)" />
+                <MovieImagesSection @ref="imagesSection" Movie="movie" RefreshToken="imagesRefresh" OnGenerateStillsRequested="() => OpenDialog(MovieDetailDialog.Stills)" />
+            </div>
         </div>
     </div>
     @if (movie.Status != MovieStatus.Missing)
