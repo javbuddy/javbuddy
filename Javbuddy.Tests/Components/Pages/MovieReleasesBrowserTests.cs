@@ -133,8 +133,12 @@ public class MovieReleasesBrowserTests : BunitContext
 
         cut.FindAll(".btn-group button").Single(b => b.TextContent.Trim().StartsWith("Got")).Click();
 
-        Assert.Equal(R18DevCatalogStatus.Got, changed?.Status);
-        Assert.Equal("MIDE", changed?.CodePrefix);
+        // Waited for, like the series chip test below: on a busy CI runner the callback has landed after Click() returned.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(R18DevCatalogStatus.Got, changed?.Status);
+            Assert.Equal("MIDE", changed?.CodePrefix);
+        });
     }
 
     [Fact]

@@ -240,6 +240,29 @@ public class ScheduledTaskRunnerTests
     }
 
     [Fact]
+    public async Task PruneOldRunsAsync_KeepsATasksNewestSuccessfulRun_EvenWhenItHasFailedSince()
+    {
+        using var factory = new TestDbContextFactory();
+        var now = DateTime.UtcNow;
+        static ScheduledTaskRun Run(DateTime queuedAt, bool success) => new() { TaskName = "Failing", QueuedAt = queuedAt, EndedAt = queuedAt.AddMinutes(1), Success = success };
+        var oldSuccess = Run(now.AddDays(-300), true);
+        var olderSuccess = Run(now.AddDays(-350), true);
+        var failure = Run(now.AddDays(-200), false);
+        var newestFailure = Run(now.AddDays(-150), false);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.ScheduledTaskRuns.AddRange(olderSuccess, oldSuccess, failure, newestFailure);
+            await db.SaveChangesAsync();
+        }
+
+        var deleted = await CreateRunner(factory).PruneOldRunsAsync(TimeSpan.FromDays(90));
+
+        Assert.Equal(2, deleted);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Equal(new[] { oldSuccess.Id, newestFailure.Id }.Order(), await verify.ScheduledTaskRuns.Select(r => r.Id).OrderBy(i => i).ToListAsync());
+    }
+
+    [Fact]
     public async Task PruneOldRunsAsync_DeletesOldFinishedRuns_ButKeepsEachTasksNewestAndRecentOnes()
     {
         using var factory = new TestDbContextFactory();

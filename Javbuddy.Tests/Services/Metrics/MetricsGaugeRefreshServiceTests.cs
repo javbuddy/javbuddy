@@ -355,4 +355,55 @@ public class MetricsGaugeRefreshServiceTests
             dir.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public async Task ImageCacheStatsFailure_DoesNotStopTheBackupCompositionAndTaskSeedGauges()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = new Movie { Code = "ABC-001", Status = MovieStatus.Got };
+            movie.MovieFiles.Add(new MovieFile { FileName = "a.mp4", VideoCodec = "HEVC", ContainerFormat = "Matroska", Width = 3840 });
+            db.Movies.Add(movie);
+            db.ScheduledTaskRuns.Add(Run("sync", success: true, ended: new DateTime(2026, 11, 12, 0, 0, 0, DateTimeKind.Utc)));
+            await db.SaveChangesAsync();
+        }
+
+        var newest = new DateTime(2026, 11, 19, 4, 0, 0, DateTimeKind.Utc);
+        var backups = Substitute.For<IBackupService>();
+        backups.ListAsync(Arg.Any<CancellationToken>()).Returns([new BackupEntry("b.zip", BackupKind.Manual, 1, new BackupManifest("1", newest, "m", 0, 0, 0, 0))]);
+        var cache = Substitute.For<IImageCacheMaintenanceService>();
+        cache.GetStatsAsync(Arg.Any<CancellationToken>()).Returns<Task<ImageCacheStats>>(_ => throw new IOException("cache dir gone"));
+        var services = new ServiceCollection()
+            .AddSingleton<Microsoft.EntityFrameworkCore.IDbContextFactory<Javbuddy.Data.AppDbContext>>(factory)
+            .AddSingleton(backups)
+            .AddSingleton(cache)
+            .AddSingleton(RegisteredTask("sync"))
+            .BuildServiceProvider();
+
+        using var metrics = new JavbuddyMetrics(new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(newest.AddHours(1))));
+        using var recorder = new MetricsRecorder(metrics);
+        using var service = new MetricsGaugeRefreshService(services.GetRequiredService<IServiceScopeFactory>(), metrics, NullLogger<MetricsGaugeRefreshService>.Instance);
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline)
+            {
+                recorder.SampleGauges();
+                if (new[] { "javbuddy_last_backup_age_seconds", "javbuddy_library_video_codec_total", "javbuddy_scheduled_task_last_success_timestamp_seconds", "javbuddy_movies_total" }
+                    .All(n => recorder.Measurements.Any(m => m.InstrumentName == n && (n != "javbuddy_movies_total" || (int)m.Value! > 0)))) break;
+                await Task.Delay(50);
+            }
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+
+        Assert.Equal(3600d, recorder.Measurements.First(m => m.InstrumentName == "javbuddy_last_backup_age_seconds").Value);
+        Assert.Contains(recorder.Measurements, m => m.InstrumentName == "javbuddy_library_video_codec_total" && (string)m.Tags["codec"]! == "hevc" && (int)m.Value! == 1);
+        Assert.Contains(recorder.Measurements, m => m.InstrumentName == "javbuddy_scheduled_task_last_success_timestamp_seconds" && (string)m.Tags["task"]! == "sync");
+        Assert.Contains(recorder.Measurements, m => m.InstrumentName == "javbuddy_movies_total" && (string)m.Tags["status"]! == "Got" && (int)m.Value! == 1);
+    }
 }

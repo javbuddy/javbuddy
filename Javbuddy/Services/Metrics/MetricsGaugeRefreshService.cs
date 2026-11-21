@@ -94,18 +94,30 @@ public class MetricsGaugeRefreshService(IServiceScopeFactory scopeFactory, Javbu
         var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
         var cacheMaintenance = scope.ServiceProvider.GetRequiredService<IImageCacheMaintenanceService>();
 
-        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+        // Every block is isolated: a failure in one is logged and must not stop the pass (or the others).
+        try
         {
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
             var got = await db.Movies.CountAsync(m => m.Status == MovieStatus.Got, ct);
             var missing = await db.Movies.CountAsync(m => m.Status == MovieStatus.Missing, ct);
             var actors = await db.Actors.CountAsync(a => a.PlaceholderMovieId == null, ct);
             metrics.UpdateLibraryStats(got, missing, actors);
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to refresh the movie and actor count gauges.");
+        }
 
-        var cacheStats = await cacheMaintenance.GetStatsAsync(ct);
-        metrics.UpdateImageCacheStats(cacheStats.FileCount, cacheStats.TotalBytes);
+        try
+        {
+            var cacheStats = await cacheMaintenance.GetStatsAsync(ct);
+            metrics.UpdateImageCacheStats(cacheStats.FileCount, cacheStats.TotalBytes);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Failed to refresh the image cache gauges.");
+        }
 
-        // The gauges below are secondary: a failure in one is logged and must not stop the pass (or the others).
         // Backups are also pushed by BackupService on every change; this pass picks up changes made outside it.
         try
         {

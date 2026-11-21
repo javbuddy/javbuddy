@@ -58,7 +58,9 @@ public interface IFfmpegClient
 /// <summary>Every ffmpeg/ffprobe run goes through <see cref="RunInstrumentedAsync{T}"/>, which takes the gate slot (if any)
 /// and records the run's metrics when <c>metrics</c> is given (it is optional so a client can be built without them).
 /// A run that never got a gate slot or a binary (binary missing, or cancelled while queued on a gate) is not counted; a
-/// <c>Process.Start</c> failure after that counts as a failed run with reason "other".</summary>
+/// <c>Process.Start</c> failure after that counts as a failed run with reason "other". So does any failure before the process
+/// exists, such as an IOException writing the concat or chapter temp files; the run's duration and active-process time include
+/// those temp-file writes.</summary>
 public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGate? longGate = null, FfmpegGate? shortGate = null, JavbuddyMetrics? metrics = null) : IFfmpegClient
 {
     private readonly FfmpegGate longGate = longGate ?? FfmpegGate.Long;
