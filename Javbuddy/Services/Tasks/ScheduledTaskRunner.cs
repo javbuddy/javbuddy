@@ -84,6 +84,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
                 var outcomeTag = new KeyValuePair<string, object?>("outcome", success ? "success" : "failure");
                 metrics.ScheduledTaskRuns.Add(1, new KeyValuePair<string, object?>("task", task.Name), outcomeTag);
                 metrics.ScheduledTaskDurationSeconds.Record(stopwatch.Elapsed.TotalSeconds, new KeyValuePair<string, object?>("task", task.Name));
+                if (success) metrics.RecordScheduledTaskSuccess(task.Name, DateTime.UtcNow);
             }
             catch (Exception ex)
             {
@@ -154,6 +155,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
                 var outcomeTag = new KeyValuePair<string, object?>("outcome", success ? "success" : "failure");
                 metrics.ScheduledTaskRuns.Add(1, new KeyValuePair<string, object?>("task", task.Name), outcomeTag);
                 metrics.ScheduledTaskDurationSeconds.Record(stopwatch.Elapsed.TotalSeconds, new KeyValuePair<string, object?>("task", task.Name));
+                if (success) metrics.RecordScheduledTaskSuccess(task.Name, DateTime.UtcNow);
             }
             catch (Exception ex)
             {
@@ -185,7 +187,8 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
 
     /// <summary>Deletes finished runs older than <paramref name="retention"/> so the table doesn't grow forever. Each task's
     /// latest-queued run and latest-ended run are always kept, picked the same way ScheduledTaskOverviewService and the
-    /// scheduler pick them: the Tasks page derives "last execution" and the next due time from them.</summary>
+    /// scheduler pick them: the Tasks page derives "last execution" and the next due time from them. Each task's newest
+    /// successful run is kept too, so the last-success metric can be restored after a restart however long the task has been failing.</summary>
     public async Task<int> PruneOldRunsAsync(TimeSpan? retention = null, CancellationToken ct = default)
     {
         var cutoff = DateTime.UtcNow - (retention ?? RunRetention);
@@ -201,9 +204,15 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
             .Select(g => g.OrderByDescending(r => r.EndedAt).Select(r => r.Id).First())
             .ToListAsync(ct);
 
+        var newestSuccessIds = await db.ScheduledTaskRuns
+            .Where(r => r.Success && r.EndedAt != null)
+            .GroupBy(r => r.TaskName)
+            .Select(g => g.OrderByDescending(r => r.EndedAt).Select(r => r.Id).First())
+            .ToListAsync(ct);
+
         var deleted = await db.ScheduledTaskRuns
             .Where(r => r.EndedAt != null && r.QueuedAt < cutoff
-                && !newestIds.Contains(r.Id) && !newestFinishedIds.Contains(r.Id))
+                && !newestIds.Contains(r.Id) && !newestFinishedIds.Contains(r.Id) && !newestSuccessIds.Contains(r.Id))
             .ExecuteDeleteAsync(ct);
 
         if (deleted > 0)

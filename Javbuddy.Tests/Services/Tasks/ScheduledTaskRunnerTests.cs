@@ -92,6 +92,30 @@ public class ScheduledTaskRunnerTests
     }
 
     [Fact]
+    public async Task RunAsync_SuccessOnly_RecordsTheTaskLastSuccessTimestamp()
+    {
+        using var metrics = new JavbuddyMetrics();
+        using var recorder = new MetricsRecorder(metrics);
+        using var factory = new TestDbContextFactory();
+        var ok = new FakeTask("ok-task", (_, _) => Task.FromResult<string?>(null));
+        var failing = new FakeTask("failing-task", (_, _) => throw new InvalidOperationException("boom"));
+        var unrecorded = new FakeTask("quiet-task", (_, _) => Task.FromResult<string?>(null), recordRunHistory: false);
+        var before = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        var runner = CreateRunner(factory, metrics);
+        await runner.RunAsync(ok, CancellationToken.None);
+        await runner.RunAsync(failing, CancellationToken.None);
+        await runner.RunAsync(unrecorded, CancellationToken.None);
+        recorder.SampleGauges();
+
+        var stamps = recorder.Measurements
+            .Where(m => m.InstrumentName == "javbuddy_scheduled_task_last_success_timestamp_seconds")
+            .ToDictionary(m => (string)m.Tags["task"]!, m => (double)m.Value!);
+        Assert.Equal(["ok-task", "quiet-task"], stamps.Keys.Order());
+        Assert.All(stamps.Values, v => Assert.InRange(v, before, before + 60));
+    }
+
+    [Fact]
     public async Task RunAsync_ProgressReported_FlushesFinalValueToTheRow()
     {
         using var factory = new TestDbContextFactory();
@@ -213,6 +237,29 @@ public class ScheduledTaskRunnerTests
             Assert.True(runs[2].Success);
             Assert.Equal("ok", runs[2].ResultSummary);
         }
+    }
+
+    [Fact]
+    public async Task PruneOldRunsAsync_KeepsATasksNewestSuccessfulRun_EvenWhenItHasFailedSince()
+    {
+        using var factory = new TestDbContextFactory();
+        var now = DateTime.UtcNow;
+        static ScheduledTaskRun Run(DateTime queuedAt, bool success) => new() { TaskName = "Failing", QueuedAt = queuedAt, EndedAt = queuedAt.AddMinutes(1), Success = success };
+        var oldSuccess = Run(now.AddDays(-300), true);
+        var olderSuccess = Run(now.AddDays(-350), true);
+        var failure = Run(now.AddDays(-200), false);
+        var newestFailure = Run(now.AddDays(-150), false);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.ScheduledTaskRuns.AddRange(olderSuccess, oldSuccess, failure, newestFailure);
+            await db.SaveChangesAsync();
+        }
+
+        var deleted = await CreateRunner(factory).PruneOldRunsAsync(TimeSpan.FromDays(90));
+
+        Assert.Equal(2, deleted);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.Equal(new[] { oldSuccess.Id, newestFailure.Id }.Order(), await verify.ScheduledTaskRuns.Select(r => r.Id).OrderBy(i => i).ToListAsync());
     }
 
     [Fact]

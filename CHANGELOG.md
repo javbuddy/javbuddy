@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **ffmpeg, library and freshness metrics on `/metrics`.**
+  - ffmpeg runs: `javbuddy_ffmpeg_runs_total{operation,outcome}` and `javbuddy_ffmpeg_duration_seconds{operation}` (probe, still, preview, trickplay, scene_detect, concat, remux_chapters, remux_dts2pts; outcomes success, failed, cancelled; duration runs from gate slot acquired to completion, so it includes temp-file writes), `javbuddy_ffmpeg_active_processes{gate}` (gates long, short, and none for ungated runs), `javbuddy_ffmpeg_gate_queue_depth{gate}` and `javbuddy_ffmpeg_gate_wait_seconds{gate}` (long and short), and `javbuddy_ffmpeg_input_media_seconds_total{operation}` (media seconds covered by successful runs; divide by run time for the speed multiplier).
+  - ffmpeg throughput: `javbuddy_ffmpeg_output_bytes_total{operation}`, `javbuddy_ffmpeg_input_bytes_total{operation}` (file sizes of successful whole-file runs only: trickplay, scene_detect, concat and the remuxes, not probe, stills, previews or highlight clips; a keyframe-only run reads less) and the `javbuddy_ffmpeg_speed_ratio{operation}` histogram (media seconds per wall second, for successful runs of a known length).
+  - ffmpeg diagnostics: `javbuddy_ffmpeg_failures_total{operation,reason}` (reason bucketed from stderr: invalid_data, no_such_file, moov_atom_missing, permission, other; a failure before the process exists, such as a temp-file write error, counts as `other`), `javbuddy_ffmpeg_kills_total{operation}`, `javbuddy_ffmpeg_priority_downgrade_failures_total`, `javbuddy_ffmpeg_binary_available` (both ffmpeg and ffprobe found) and `javbuddy_ffmpeg_binary_info{version}` (read from ffmpeg itself, so present even when ffprobe is missing). Probe runs are already counted by `javbuddy_ffmpeg_runs_total{operation="probe"}`.
+  - Library composition from the stored media info: `javbuddy_library_video_codec_total{codec}`, `javbuddy_library_video_resolution_total{resolution_bucket}` and `javbuddy_library_video_container_total{container}`.
+  - Freshness: `javbuddy_last_backup_age_seconds` (absent while no backup exists) and `javbuddy_scheduled_task_last_success_timestamp_seconds{task}` (unix time for each currently registered task, restored from run history after a restart; run-history pruning now always keeps each task's newest successful run), for "backup or task hasn't run in N days" alerts.
+
 ## [0.7.1] - 2026-11-19
 
 ### Changed
