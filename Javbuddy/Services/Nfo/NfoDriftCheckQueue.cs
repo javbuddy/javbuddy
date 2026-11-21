@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Javbuddy.Services.Metrics;
 
 namespace Javbuddy.Services.Nfo;
 
@@ -34,6 +35,7 @@ public sealed class NfoDriftCheckQueue(IServiceScopeFactory scopeFactory, ILogge
             {
                 // Dequeued first, so a change that lands mid-check queues the movie again.
                 lock (pending) pending.Remove(movieId);
+                using var span = JavbuddyTracing.StartRoot("nfo drift check");
                 try
                 {
                     await using var scope = scopeFactory.CreateAsyncScope();
@@ -45,6 +47,7 @@ public sealed class NfoDriftCheckQueue(IServiceScopeFactory scopeFactory, ILogge
                 }
                 catch (Exception ex)
                 {
+                    span.SetOutcome("failure", ex.Message);
                     logger.LogError(ex, "The .nfo drift check for movie {MovieId} failed", movieId);
                 }
             }

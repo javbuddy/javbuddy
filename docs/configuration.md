@@ -204,16 +204,19 @@ Javbuddy can send OpenTelemetry traces over OTLP to a trace backend (an OpenTele
 | `OTEL_SERVICE_NAME` | `Javbuddy` | The service name traces are reported under. |
 | `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | `parentbased_always_on` | Sampling. Every trace is kept by default, which suits a single-user app; e.g. `parentbased_traceidratio` with `0.25` keeps a quarter. |
 | `OTEL_DOTNET_EXPERIMENTAL_EFCORE_ENABLE_TRACE_DB_QUERY_PARAMETERS` | `false` | Adds each database query's parameter values to its span. Parameter values can include anything stored in the database, so only turn this on for a trace backend you'd trust with that data. |
-| `OTEL_SEMCONV_STABILITY_OPT_IN` | *(none)* | `database` switches database spans to the newer OpenTelemetry attribute names (`db.query.text` instead of `db.statement`). |
+| `OTEL_BSP_MAX_QUEUE_SIZE` | `2048` | Spans waiting to be exported. Spans beyond it are dropped, so a library rescan of thousands of movies may need it raised to keep its whole trace. |
 
 What's traced:
 
-- **Page loads and API calls**: each HTTP request, except health probes (`/healthz/*`), the `/metrics` scrape, static files and the Blazor WebSocket.
-- **Interactive pages**: once a page is interactive, its first render, each click or other event and each in-page navigation get their own traces, named after the component and handler, with the database queries and outgoing calls made while handling them.
-- **Database queries**: each query against Javbuddy's database, with its SQL (literal values are stripped; parameter values are only included with the opt-in above), and each r18.dev reference database lookup as one span per operation.
+- **Page loads and API calls**: each HTTP request, except health probes (`/healthz/*`), the `/metrics` scrape, static files, the Blazor WebSocket, and video streams and backup downloads (their duration is the time spent sending the file, so a stream that's slow to start isn't traced either).
+- **Interactive pages**: once a page is interactive, its first render (`Render /movies/{RouteCode}`), each click or other event (named after the component and handler) and each in-page navigation (`Navigate /actors`) get their own traces, with the database queries and outgoing calls made while handling them.
+- **Database queries**: each query against Javbuddy's database, named after its operation and table (`SELECT Movies`), with its SQL in `db.query.text` (literal values are stripped; parameter values are only included with the opt-in above), and each r18.dev reference database lookup as one span per operation. A query with parameters also gets a `javbuddy.db.parameters_hash` tag: within one run of Javbuddy, two queries with the same hash had the same parameter values, so a query repeated with the same hash is redundant work while one repeated with different hashes is a loop over different rows. The hash is keyed with a secret that changes on every start and never leaves the process, so it can't be matched against guessed values.
 - **Outgoing calls** to javinizer-go, Prowlarr, Jellyfin, qBittorrent and other services. Query strings are replaced with `*`, so an API key passed in a URL (as Jellyfin's is) never reaches a trace.
+- **Background work**: each scheduled task run (`task Library Rescan`, linked to the click that started it when run from System > Tasks) and each item a background queue works through (trickplay, scene/highlight/apex media, `.nfo` drift checks, new-movie artwork, clip actor refreshes) is its own trace. Inside them, and inside requests: each ffmpeg/ffprobe run (`ffmpeg trickplay`, with a `ffmpeg gate wait` child while it queued behind other ffmpeg work), each MediaInfo probe, each movie's library metadata lookup, and each image conversion (`image convert`, with an `image conversion gate wait` child when it queued). An image request without an `image convert` child was served from the cache.
 
-Background work (scheduled tasks, queues) isn't grouped into one trace per run yet, so its database queries and calls show up as separate small traces.
+Database spans always follow the current OpenTelemetry database conventions (`db.system.name`, `db.namespace`, `db.query.text`, `db.query.summary`), never the deprecated `db.statement` set; `OTEL_SEMCONV_STABILITY_OPT_IN` is set by Javbuddy itself and a value given for it is ignored.
+
+The once-a-minute scheduler check and the `/metrics` gauge refresh aren't traced. Time a trace can't account for is mostly first-request warm-up (query compilation, JIT) and Blazor rendering, which have no spans of their own.
 
 ---
 

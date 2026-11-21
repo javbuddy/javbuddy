@@ -11,6 +11,12 @@ public static class JavbuddyTracing
 
     public static readonly ActivitySource Source = new(SourceName);
 
+    /// <summary>The configuration key OpenTelemetry's instrumentations read their semantic-convention opt-in from.</summary>
+    public const string SemconvOptInKey = "OTEL_SEMCONV_STABILITY_OPT_IN";
+
+    /// <summary>The opt-in Javbuddy always runs with: the stable database conventions only.</summary>
+    public const string SemconvOptIn = "database";
+
     // Requests that would only add noise to traces: the Blazor WebSocket (one HTTP request held open
     // for the whole circuit; the interactive work inside it gets its own Blazor component spans),
     // probes, the Prometheus scrape and framework/static files.
@@ -54,11 +60,61 @@ public static class JavbuddyTracing
         if (ExcludedPathPrefixes.Any(prefix => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
             return false;
 
+        if (IsFileTransfer(path)) return false;
+
         if (StaticFileExtensions.Any(extension => path.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
             return false;
 
         return path.LastIndexOf('/') != 0
             || !RootStaticFileExtensions.Any(extension => path.EndsWith(extension, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Video streams and backup downloads: their duration is the time spent sending the file (often whole
+    // seconds as a player buffers), not work on the server, so they'd crowd out real slow requests when
+    // traces are sorted by duration. The cost is that a stream that's slow to start isn't traced either.
+    private static bool IsFileTransfer(string path) =>
+        (path.StartsWith("/api/movies/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/stream", StringComparison.OrdinalIgnoreCase))
+        || path.StartsWith("/deovr/stream/", StringComparison.OrdinalIgnoreCase)
+        || (path.StartsWith("/api/backups/", StringComparison.OrdinalIgnoreCase) && path.EndsWith("/download", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Starts <paramref name="name"/> as the root of its own trace, linked to whatever span was current
+    /// (e.g. the click that queued a task). Background work outlives what started it, so as a child it would
+    /// hang off a span that ended long before. Only call this from an async method: it clears
+    /// Activity.Current, and an async method's changes to it don't leak back to its caller.</summary>
+    public static Activity? StartRoot(string name, params ReadOnlySpan<KeyValuePair<string, object?>> tags)
+    {
+        if (!Source.HasListeners()) return null;
+
+        var previous = Activity.Current;
+        Activity.Current = null;
+        var activity = Source.StartActivity(
+            name, ActivityKind.Internal, default(ActivityContext), tags: null,
+            links: previous is null ? null : [new ActivityLink(previous.Context)]);
+        if (activity is null)
+        {
+            Activity.Current = previous;
+            return null;
+        }
+        foreach (var tag in tags) activity.SetTag(tag.Key, tag.Value);
+        return activity;
+    }
+
+    /// <summary>Records <paramref name="outcome"/> on <paramref name="activity"/> and marks it failed unless it's
+    /// "success" or "cancelled".</summary>
+    public static void SetOutcome(this Activity? activity, string outcome, string? error = null)
+    {
+        if (activity is null) return;
+        activity.SetTag("javbuddy.outcome", outcome);
+        if (outcome is not ("success" or "cancelled" or "skipped")) activity.SetStatus(ActivityStatusCode.Error, error ?? outcome);
+    }
+
+    /// <summary>Starts a span for one image decode-and-encode (reading the source included), so a cache miss's
+    /// conversion shows apart from serving a file that's already cached.</summary>
+    public static Activity? StartImageConversion(string operation)
+    {
+        var activity = Source.StartActivity("image convert");
+        activity?.SetTag("javbuddy.image.operation", operation);
+        return activity;
     }
 
     /// <summary>Starts a span for one query operation against the r18.dev dump database, which EF

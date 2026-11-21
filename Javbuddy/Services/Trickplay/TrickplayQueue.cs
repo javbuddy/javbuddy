@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.Infrastructure;
+using Javbuddy.Services.Metrics;
 using Javbuddy.Services.Monitoring;
 
 namespace Javbuddy.Services.Trickplay;
@@ -98,11 +99,13 @@ public sealed class TrickplayQueue(IServiceScopeFactory scopeFactory, TaskActivi
             double DecodeElapsedSeconds() => decodeStarted is { } t ? timeProvider.GetElapsedTime(t).TotalSeconds : 0;
 
             Report(null);
+            using var span = JavbuddyTracing.StartRoot("trickplay generate", new KeyValuePair<string, object?>("javbuddy.movie.code", job.Code));
             try
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var result = await scope.ServiceProvider.GetRequiredService<ITrickplayGenerator>()
                     .GenerateAsync(job.MovieId, new ImmediateProgress<FfmpegProgress>(Report), stoppingToken);
+                span.SetOutcome(result == TrickplayGenerateResult.Failed ? "failure" : result.ToString().ToLowerInvariant());
                 if (result == TrickplayGenerateResult.Generated)
                 {
                     generated++;
@@ -124,6 +127,7 @@ public sealed class TrickplayQueue(IServiceScopeFactory scopeFactory, TaskActivi
             }
             catch (Exception ex)
             {
+                span.SetOutcome("failure", ex.Message);
                 failures++;
                 failed.TryAdd((job.MovieId, job.Identity), 0);
                 logger.LogWarning(ex, "Generating trickplay for {Code} failed", job.Code);

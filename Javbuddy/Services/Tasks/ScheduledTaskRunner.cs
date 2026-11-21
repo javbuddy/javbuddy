@@ -24,10 +24,12 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
     /// history), so the caller that queued it knows a refresh will find it.</param>
     public async Task RunAsync(IScheduledTask task, CancellationToken ct, Action? onRecorded = null)
     {
+        // Its own trace, so a run started from a click doesn't hang under the click's span.
+        using var activity = JavbuddyTracing.StartRoot($"task {task.Name}", new KeyValuePair<string, object?>("javbuddy.task.name", task.Name));
         if (!task.RecordRunHistory)
         {
             onRecorded?.Invoke();
-            await RunWithoutHistoryAsync(task, ct);
+            await RunWithoutHistoryAsync(task, activity, ct);
             return;
         }
 
@@ -48,6 +50,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
         string? summary = null;
         string? error = null;
         var success = false;
+        var cancelled = false;
         var progressReporter = new DbProgressReporter(dbFactory, run.Id, changeNotifier);
         var stopwatch = Stopwatch.StartNew();
 
@@ -67,6 +70,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
         }
         catch (OperationCanceledException) when (runCts.IsCancellationRequested)
         {
+            cancelled = true;
             error = "Task was cancelled.";
             logger.LogInformation("Scheduled task {TaskName} was cancelled.", task.Name);
         }
@@ -79,6 +83,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
         {
             cancellationRegistry.Unregister(run.Id);
             stopwatch.Stop();
+            activity.SetOutcome(success ? "success" : cancelled ? "cancelled" : "failure", error);
             try
             {
                 var outcomeTag = new KeyValuePair<string, object?>("outcome", success ? "success" : "failure");
@@ -130,7 +135,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
     /// row, no progress reporting (the task's progress reports are simply discarded), still
     /// records metrics and still logs a failure — only the noisy per-run bookkeeping is
     /// skipped.</summary>
-    private async Task RunWithoutHistoryAsync(IScheduledTask task, CancellationToken ct)
+    private async Task RunWithoutHistoryAsync(IScheduledTask task, Activity? activity, CancellationToken ct)
     {
         var success = false;
         var stopwatch = Stopwatch.StartNew();
@@ -142,13 +147,16 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
+            activity.SetOutcome("cancelled");
         }
         catch (Exception ex)
         {
+            activity.SetOutcome("failure", ex.Message);
             logger.LogError(ex, "Scheduled task {TaskName} failed.", task.Name);
         }
         finally
         {
+            if (success) activity.SetOutcome("success");
             stopwatch.Stop();
             try
             {

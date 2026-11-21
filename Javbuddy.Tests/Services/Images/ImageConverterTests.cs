@@ -1,4 +1,6 @@
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Metrics;
+using Javbuddy.Tests.TestSupport;
 using SkiaSharp;
 
 namespace Javbuddy.Tests.Services.Images;
@@ -15,6 +17,19 @@ public class ImageConverterTests
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    [Fact]
+    public void ConvertBytesToBothWebP_RecordsAnImageConvertSpan()
+    {
+        var sourceBytes = CreateSampleImageBytes(64, 48, SKColors.CornflowerBlue);
+        using var capture = new TraceCapture(JavbuddyTracing.SourceName);
+
+        ImageConverter.ConvertBytesToBothWebP(sourceBytes);
+
+        var span = Assert.Single(capture.Spans);
+        Assert.Equal("image convert", span.DisplayName);
+        Assert.Equal("bytes_to_both_webp", span.GetTagItem("javbuddy.image.operation"));
     }
 
     [Fact]

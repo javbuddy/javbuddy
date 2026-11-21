@@ -1,3 +1,5 @@
+using Javbuddy.Services.Metrics;
+
 namespace Javbuddy.Services.MediaInfo;
 
 /// <summary>Bounds the native MediaInfo probes actually running. A probe call can't be cancelled, so a caller
@@ -19,12 +21,16 @@ public sealed class MediaProbeGate(int maxOutstanding = MediaProbeGate.DefaultMa
 
     public async Task<MediaProbeResult> RunAsync(string key, Func<MediaProbeResult> work, TimeSpan timeout, CancellationToken ct)
     {
+        // Ends when this caller stops waiting, which on a timeout is before the native call itself returns.
+        using var activity = JavbuddyTracing.Source.StartActivity("mediainfo probe");
         var task = TryJoin(key);
+        activity?.SetTag("javbuddy.mediainfo.joined", task is not null);
         if (task is null)
         {
             if (!await slots.WaitAsync(timeout, ct))
             {
                 logger?.LogWarning("MediaInfo probe of {Path} not started: {Outstanding} native probes are still running", key, Outstanding);
+                activity.SetOutcome("gate_full");
                 return MediaProbeResult.Failed($"Too many MediaInfo probes are still running ({Outstanding}); a corrupt file or an unresponsive share may be holding them. Retry later.");
             }
 
@@ -61,6 +67,11 @@ public sealed class MediaProbeGate(int maxOutstanding = MediaProbeGate.DefaultMa
         if (!task.IsCompleted)
         {
             logger?.LogWarning("MediaInfo probe of {Path} timed out; the native call is still running ({Outstanding} outstanding)", key, Outstanding);
+            activity.SetOutcome("timeout");
+        }
+        else
+        {
+            activity.SetOutcome(result.Success ? "success" : result.Skipped ? "skipped" : "failure", result.ErrorMessage);
         }
         return result;
     }

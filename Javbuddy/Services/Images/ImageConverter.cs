@@ -1,3 +1,4 @@
+using Javbuddy.Services.Metrics;
 using SkiaSharp;
 
 namespace Javbuddy.Services.Images;
@@ -18,6 +19,7 @@ public static class ImageConverter
     /// for full variant (capped at FullMaxEdge to keep cache size reasonable).</summary>
     public static byte[] ConvertToWebP(string sourcePath, int? maxEdge)
     {
+        using var span = JavbuddyTracing.StartImageConversion("to_webp");
         var targetMaxEdge = maxEdge ?? FullMaxEdge;
         using var bitmap = DecodeScaled(sourcePath, targetMaxEdge);
 
@@ -37,6 +39,7 @@ public static class ImageConverter
     /// longer edge — for consumers that can't decode WebP, such as DeoVR.</summary>
     public static byte[] ConvertToJpeg(string sourcePath, int maxEdge, int quality)
     {
+        using var span = JavbuddyTracing.StartImageConversion("to_jpeg");
         using var bitmap = DecodeScaled(sourcePath, maxEdge);
 
         var pressure = (long)bitmap.Width * bitmap.Height * 4;
@@ -63,6 +66,7 @@ public static class ImageConverter
         int qualityFull = WebPQualityFull,
         int qualityThumb = WebPQualityThumb)
     {
+        using var span = JavbuddyTracing.StartImageConversion("to_both_webp");
         using var bitmap = DecodeScaled(sourcePath, fullMaxEdge);
         return EncodeBothWebP(bitmap, thumbMaxEdge, fullMaxEdge, qualityFull, qualityThumb);
     }
@@ -75,6 +79,7 @@ public static class ImageConverter
         int qualityFull = WebPQualityFull,
         int qualityThumb = WebPQualityThumb)
     {
+        using var span = JavbuddyTracing.StartImageConversion("poster_to_both_webp");
         using var original = DecodeFileForCrop(sourcePath, fullMaxEdge, LocalPosterCropRect);
         return CropAndEncodeBothWebP(original, LocalPosterCropRect(original.Width, original.Height), thumbMaxEdge, fullMaxEdge, qualityFull, qualityThumb);
     }
@@ -88,6 +93,7 @@ public static class ImageConverter
         int qualityFull = WebPQualityFull,
         int qualityThumb = WebPQualityThumb)
     {
+        using var span = JavbuddyTracing.StartImageConversion("crop_cover_to_both_webp");
         using var original = DecodeBytesForCrop(sourceBytes, fullMaxEdge, CoverCropRect);
         return CropAndEncodeBothWebP(original, CoverCropRect(original.Width, original.Height), thumbMaxEdge, fullMaxEdge, qualityFull, qualityThumb);
     }
@@ -100,6 +106,7 @@ public static class ImageConverter
         int qualityFull = WebPQualityFull,
         int qualityThumb = WebPQualityThumb)
     {
+        using var span = JavbuddyTracing.StartImageConversion("bytes_to_both_webp");
         using var bitmap = DecodeScaledFromBytes(sourceBytes, fullMaxEdge);
         return EncodeBothWebP(bitmap, thumbMaxEdge, fullMaxEdge, qualityFull, qualityThumb);
     }
@@ -114,6 +121,7 @@ public static class ImageConverter
         int qualityFull = WebPQualityFull,
         int qualityThumb = WebPQualityThumb)
     {
+        using var span = JavbuddyTracing.StartImageConversion("crop_to_both_webp");
         var clamped = cropRect.Clamp();
         using var original = DecodeBytesForCrop(sourceBytes, fullMaxEdge, (w, h) => NormalizedCropPixelRect(clamped, w, h));
         return CropAndEncodeBothWebP(original, NormalizedCropPixelRect(clamped, original.Width, original.Height), thumbMaxEdge, fullMaxEdge, qualityFull, qualityThumb);
@@ -126,6 +134,7 @@ public static class ImageConverter
         NormalizedCropRect cropRect,
         int quality = 92)
     {
+        using var span = JavbuddyTracing.StartImageConversion("crop_to_jpeg");
         var clamped = cropRect.Clamp();
         using var original = DecodeScaledFromBytes(sourceBytes, FullMaxEdge * 2);
 

@@ -1,3 +1,5 @@
+using Javbuddy.Services.Metrics;
+
 namespace Javbuddy.Services.Images;
 
 /// <summary>Process-wide cap on how many ImageConverter decodes run at once. Each
@@ -15,7 +17,12 @@ public static class ImageConversionGate
     /// convert must not itself call RunAsync (it would wait on a slot it's holding).</summary>
     public static async Task<T> RunAsync<T>(Func<T> convert, CancellationToken ct = default)
     {
-        await Gate.WaitAsync(ct);
+        if (!Gate.Wait(0, CancellationToken.None))
+        {
+            // Only a real wait gets a span: a burst of cache misses queueing here is a distinct cause of a slow image.
+            using var wait = JavbuddyTracing.Source.StartActivity("image conversion gate wait");
+            await Gate.WaitAsync(ct);
+        }
         try
         {
             return convert();

@@ -33,6 +33,7 @@ using Javbuddy.Services.Torrents.SortWizard;
 using Javbuddy.Services.Trickplay;
 using Javbuddy.Services.VideoRepair;
 using Javbuddy.Services.VrMerge;
+using Microsoft.AspNetCore.Components;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -311,6 +312,15 @@ public static class ServiceRegistration
         // through the standard OTEL_* environment variables.
         if (JavbuddyTracing.IsOtlpEndpointConfigured(configuration))
         {
+            // Database spans always use the current OpenTelemetry conventions (db.system.name, db.namespace,
+            // db.query.text), like the app's own r18.dev spans, rather than the deprecated db.statement set.
+            // The EF instrumentation reads this straight from the process environment (not the app's
+            // configuration) when its options are first built, so it's set there before that happens,
+            // overriding any OTEL_SEMCONV_STABILITY_OPT_IN the deployment sets.
+            Environment.SetEnvironmentVariable(JavbuddyTracing.SemconvOptInKey, JavbuddyTracing.SemconvOptIn);
+
+            // Names each interactive render's trace after its page; left at Blazor's default without tracing.
+            services.AddScoped<IComponentActivator, TracingComponentActivator>();
             openTelemetry.WithTracing(tracing => tracing
                 .AddAspNetCoreInstrumentation(options =>
                     options.Filter = http => JavbuddyTracing.ShouldTraceRequest(http.Request.Path.Value))
@@ -323,7 +333,11 @@ public static class ServiceRegistration
                 .AddSource("Microsoft.AspNetCore.Components.Server.Circuits")
                 // SQL text is captured with its literals stripped. Parameter values are left out unless
                 // OTEL_DOTNET_EXPERIMENTAL_EFCORE_ENABLE_TRACE_DB_QUERY_PARAMETERS=true.
-                .AddEntityFrameworkCoreInstrumentation()
+                .AddEntityFrameworkCoreInstrumentation(options => options.EnrichWithIDbCommand = (activity, command) =>
+                {
+                    if (DbSpanNaming.SpanName(command.CommandText) is { } spanName) activity.DisplayName = spanName;
+                    if (DbSpanNaming.ParametersHash(command) is { } hash) activity.SetTag(DbSpanNaming.ParametersHashTag, hash);
+                })
                 .AddSource(JavbuddyTracing.SourceName)
                 .AddProcessor(new BlazorTraceProcessor())
                 .AddOtlpExporter(options =>

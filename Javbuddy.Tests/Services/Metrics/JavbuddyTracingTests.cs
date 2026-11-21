@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Javbuddy.Services.Metrics;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Javbuddy.Tests.Services.Metrics;
 
@@ -43,7 +44,8 @@ public class JavbuddyTracingTests
     [InlineData("/movies/MIDE-400")]
     [InlineData("/image-cache/MIDE-400/poster/thumb")]
     [InlineData("/trickplay/12/abc/3.webp")]
-    [InlineData("/api/movies/12/stream")]
+    [InlineData("/api/movies/12/subtitles/0")]
+    [InlineData("/scene-image/4/preview")]
     [InlineData("/deovr")]
     public void ShouldTraceRequest_PagesAndDynamicEndpoints_AreTraced(string path)
     {
@@ -64,7 +66,10 @@ public class JavbuddyTracingTests
     [InlineData("/Components/Shared/ModalShell.pxbkdbp836.razor.js")]
     [InlineData("/favicon.webp")]
     [InlineData("/manifest.json")]
-    public void ShouldTraceRequest_ProbesScrapesAndStaticFiles_AreNotTraced(string path)
+    [InlineData("/api/movies/12/stream")]
+    [InlineData("/deovr/stream/12/3/movie.mp4")]
+    [InlineData("/api/backups/javbuddy-2026.zip/download")]
+    public void ShouldTraceRequest_ProbesScrapesStaticFilesAndFileTransfers_AreNotTraced(string path)
     {
         Assert.False(JavbuddyTracing.ShouldTraceRequest(path));
     }
@@ -106,5 +111,96 @@ public class JavbuddyTracingTests
         var url = Assert.IsType<string>(span.GetTagItem("url.full"));
         Assert.DoesNotContain("secret-key", url);
         Assert.StartsWith("http://127.0.0.1:1/System/Info", url);
+    }
+
+    [Fact]
+    public async Task StartRoot_IsARootWithALinkAndParentsWhatRunsUnderIt()
+    {
+        var stopped = new List<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name is JavbuddyTracing.SourceName or "Javbuddy.Tests.StartRoot",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = a => { lock (stopped) stopped.Add(a); },
+        };
+        ActivitySource.AddActivityListener(listener);
+        using var testSource = new ActivitySource("Javbuddy.Tests.StartRoot");
+        using var click = testSource.StartActivity("click")!;
+
+        await RunTaskAsync();
+
+        Activity root, child;
+        lock (stopped)
+        {
+            root = stopped.Single(a => a.DisplayName == "task StartRootTest");
+            child = stopped.Single(a => a.DisplayName == "child of StartRootTest");
+        }
+        Assert.Null(root.ParentId);
+        Assert.NotEqual(click.TraceId, root.TraceId);
+        Assert.Equal(click.SpanId, Assert.Single(root.Links).Context.SpanId);
+        Assert.Equal(root.SpanId, child.ParentSpanId);
+        Assert.Same(click, Activity.Current);
+
+        static async Task RunTaskAsync()
+        {
+            using var root = JavbuddyTracing.StartRoot("task StartRootTest");
+            await Task.Yield();
+            using var child = JavbuddyTracing.Source.StartActivity("child of StartRootTest");
+        }
+    }
+
+    [Theory]
+    [InlineData("Microsoft.AspNetCore.Components.Server.ComponentHub/UpdateRootComponents", "/movies/{RouteCode}", "Render /movies/{RouteCode}")]
+    [InlineData("Microsoft.AspNetCore.Components.Server.ComponentHub/OnLocationChanged", "/actors", "Navigate /actors")]
+    [InlineData("Microsoft.AspNetCore.Components.Server.ComponentHub/BeginInvokeDotNetFromJS", "/actors", null)]
+    [InlineData("GET /actors", "/actors", null)]
+    public void HubSpanName_NamesRendersAndNavigationsAfterTheRoute(string hubName, string route, string? expected)
+    {
+        Assert.Equal(expected, BlazorTraceProcessor.HubSpanName(hubName, route));
+    }
+
+    [Fact]
+    public void NameRender_RenamesTheEnclosingHubSpanAndTagsTheRoute()
+    {
+        using var hubSource = new ActivitySource(BlazorTraceProcessor.SignalRSourceName);
+        using var capture = new TraceCapture(hubSource.Name);
+        using var hub = hubSource.StartActivity("Microsoft.AspNetCore.Components.Server.ComponentHub/UpdateRootComponents")!;
+
+        BlazorTraceProcessor.NameRender(Activity.Current, "/movies/{RouteCode}");
+
+        Assert.Equal("Render /movies/{RouteCode}", hub.DisplayName);
+        Assert.Equal("/movies/{RouteCode}", hub.GetTagItem(BlazorTraceProcessor.RouteTag));
+    }
+
+    [Fact]
+    public void NameRender_OutsideAHubSpan_ChangesNothing()
+    {
+        using var capture = new TraceCapture();
+        var requestName = Activity.Current!.DisplayName;
+
+        BlazorTraceProcessor.NameRender(Activity.Current, "/movies/{RouteCode}");
+
+        Assert.Equal(requestName, Activity.Current!.DisplayName);
+    }
+
+    [Microsoft.AspNetCore.Components.Route("/traced-page/{Id}")]
+    private sealed class TracedPage(TimeProvider time) : Microsoft.AspNetCore.Components.ComponentBase
+    {
+        public TimeProvider Time { get; } = time;
+    }
+
+    [Fact]
+    public void TracingComponentActivator_CreatesWithConstructorInjection_AndNamesTheRenderAfterThePage()
+    {
+        using var hubSource = new ActivitySource(BlazorTraceProcessor.SignalRSourceName);
+        using var capture = new TraceCapture(hubSource.Name);
+        using var hub = hubSource.StartActivity("Microsoft.AspNetCore.Components.Server.ComponentHub/UpdateRootComponents")!;
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        using var services = new ServiceCollection().AddSingleton<TimeProvider>(time).BuildServiceProvider();
+
+        var page = new TracingComponentActivator(services).CreateInstance(typeof(TracedPage));
+
+        Assert.Same(time, Assert.IsType<TracedPage>(page).Time);
+        Assert.Equal("Render /traced-page/{Id}", hub.DisplayName);
     }
 }

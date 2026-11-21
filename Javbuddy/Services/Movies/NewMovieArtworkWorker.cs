@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Javbuddy.Services.Metrics;
 
 namespace Javbuddy.Services.Movies;
 
@@ -32,8 +33,10 @@ public sealed class NewMovieArtworkWorker(
             try
             {
                 await using (var scope = scopeFactory.CreateAsyncScope())
+                using (var span = JavbuddyTracing.StartRoot("new movie artwork"))
                 {
                     var generated = await scope.ServiceProvider.GetRequiredService<INewMovieArtworkService>().GeneratePendingAsync(stoppingToken);
+                    span?.SetTag("javbuddy.count", generated);
                     if (generated > 0) logger.LogInformation("Generated artwork for {Count} new movie(s)", generated);
                 }
                 await signal.WaitAsync(stoppingToken);
