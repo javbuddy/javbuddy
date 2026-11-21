@@ -33,6 +33,9 @@ public sealed class FfmpegGate(int maxConcurrency, string name = "custom")
         return new Slot(slots);
     }
 
+    /// <summary>A slot if one is free right now, else null (without waiting).</summary>
+    public IDisposable? TryEnter() => slots.Wait(0) ? new Slot(slots) : null;
+
     private sealed class Slot(SemaphoreSlim slots) : IDisposable
     {
         private int released;

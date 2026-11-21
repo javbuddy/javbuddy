@@ -3,6 +3,7 @@ using Javbuddy.Services.Metrics;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry.Exporter;
 
 namespace Javbuddy.Tests.Services.Metrics;
 
@@ -24,19 +25,81 @@ public class JavbuddyTracingTests
     }
 
     [Fact]
-    public void TracesEndpoint_IsTheFullUrlAsGiven()
+    public void TracesExporterOverrides_ApplyEveryTracesVariable_AndKeepTheEndpointAsGiven()
     {
-        var config = Config(("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://vt:10428/insert/opentelemetry/v1/traces"));
+        var config = Config(
+            ("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://vt:10428/insert/opentelemetry/v1/traces"),
+            ("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf"),
+            ("OTEL_EXPORTER_OTLP_TRACES_HEADERS", "Authorization=Bearer abc"),
+            ("OTEL_EXPORTER_OTLP_TRACES_TIMEOUT", "2500"),
+            ("OTEL_EXPORTER_OTLP_TRACES_COMPRESSION", "gzip"));
+        var options = new OtlpExporterOptions();
 
-        Assert.Equal(new Uri("http://vt:10428/insert/opentelemetry/v1/traces"), JavbuddyTracing.TracesEndpoint(config));
+        JavbuddyTracing.ReadTracesExporterOverrides(config).ApplyTo(options);
+
+        Assert.Equal(new Uri("http://vt:10428/insert/opentelemetry/v1/traces"), options.Endpoint);
+        Assert.Equal(OtlpExportProtocol.HttpProtobuf, options.Protocol);
+        Assert.Equal("Authorization=Bearer abc", options.Headers);
+        Assert.Equal(2500, options.TimeoutMilliseconds);
+        Assert.Equal(OtlpExportCompression.GZip, options.Compression);
+    }
+
+    [Fact]
+    public void TracesExporterOverrides_NoneSet_LeaveTheOptionsAlone()
+    {
+        var options = new OtlpExporterOptions { Protocol = OtlpExportProtocol.Grpc, TimeoutMilliseconds = 1234 };
+        var endpoint = options.Endpoint;
+
+        JavbuddyTracing.ReadTracesExporterOverrides(Config()).ApplyTo(options);
+
+        Assert.Equal(endpoint, options.Endpoint);
+        Assert.Equal(OtlpExportProtocol.Grpc, options.Protocol);
+        Assert.Equal(1234, options.TimeoutMilliseconds);
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("not a url")]
-    public void TracesEndpoint_UnsetOrInvalid_IsNull(string? value)
+    [InlineData("ENDPOINT", "not a url")]
+    [InlineData("ENDPOINT", "ftp://collector/traces")]
+    [InlineData("PROTOCOL", "http/json")]
+    [InlineData("TIMEOUT", "-5")]
+    [InlineData("COMPRESSION", "zstd")]
+    public void TracesExporterOverrides_UnusableValue_FailsWithTheVariableName(string suffix, string value)
     {
-        Assert.Null(JavbuddyTracing.TracesEndpoint(Config(("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", value))));
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            JavbuddyTracing.ReadTracesExporterOverrides(Config(($"OTEL_EXPORTER_OTLP_TRACES_{suffix}", value))));
+
+        Assert.Contains($"OTEL_EXPORTER_OTLP_TRACES_{suffix}", error.Message);
+    }
+
+    [Theory]
+    [InlineData("success", null, null)]
+    [InlineData("skipped", null, null)]
+    [InlineData("cancelled", null, null)]
+    [InlineData("failure", null, "failure")]
+    [InlineData("timeout", "timeout", "timeout")]
+    public void SetOutcome_OnlyFailuresGetErrorStatusAndErrorType(string outcome, string? errorType, string? expectedErrorType)
+    {
+        using var capture = new TraceCapture(JavbuddyTracing.SourceName);
+        using var span = JavbuddyTracing.Source.StartActivity("work")!;
+
+        span.SetOutcome(outcome, errorType: errorType);
+
+        Assert.Equal(outcome, span.GetTagItem("javbuddy.outcome"));
+        Assert.Equal(expectedErrorType, span.GetTagItem("error.type"));
+        Assert.Equal(expectedErrorType is null ? ActivityStatusCode.Unset : ActivityStatusCode.Error, span.Status);
+    }
+
+    [Fact]
+    public void SetOutcome_WithAnException_RecordsItsTypeAndAnExceptionEvent()
+    {
+        using var capture = new TraceCapture(JavbuddyTracing.SourceName);
+        using var span = JavbuddyTracing.Source.StartActivity("work")!;
+
+        span.SetOutcome("failure", new InvalidOperationException("boom"));
+
+        Assert.Equal("System.InvalidOperationException", span.GetTagItem("error.type"));
+        Assert.Equal("failure", span.StatusDescription);
+        Assert.Contains(span.Events, e => e.Name == "exception");
     }
 
     [Theory]
@@ -187,6 +250,24 @@ public class JavbuddyTracingTests
     private sealed class TracedPage(TimeProvider time) : Microsoft.AspNetCore.Components.ComponentBase
     {
         public TimeProvider Time { get; } = time;
+    }
+
+    [Microsoft.AspNetCore.Components.Route("/two-routes/first")]
+    [Microsoft.AspNetCore.Components.Route("/two-routes/second")]
+    private sealed class TwoRoutePage : Microsoft.AspNetCore.Components.ComponentBase;
+
+    [Fact]
+    public void TracingComponentActivator_PageWithTwoRoutes_IsCreatedAndNamedAfterOneOfThem()
+    {
+        using var hubSource = new ActivitySource(BlazorTraceProcessor.SignalRSourceName);
+        using var capture = new TraceCapture(hubSource.Name);
+        using var hub = hubSource.StartActivity("Microsoft.AspNetCore.Components.Server.ComponentHub/UpdateRootComponents")!;
+        using var services = new ServiceCollection().BuildServiceProvider();
+
+        var page = new TracingComponentActivator(services).CreateInstance(typeof(TwoRoutePage));
+
+        Assert.IsType<TwoRoutePage>(page);
+        Assert.Contains(hub.DisplayName, new[] { "Render /two-routes/first", "Render /two-routes/second" });
     }
 
     [Fact]

@@ -325,8 +325,7 @@ public class R18DevDumpStoreTests : IDisposable
         Assert.NotNull(movie);
         var span = Assert.Single(capture.Spans);
         Assert.Equal("r18dev movie_by_code", span.DisplayName);
-        Assert.Equal(ActivityKind.Client, span.Kind);
-        Assert.Equal("sqlite", span.GetTagItem("db.system.name"));
-        Assert.Equal("r18dev", span.GetTagItem("db.namespace"));
+        Assert.Equal(ActivityKind.Internal, span.Kind);
+        Assert.Equal("movie_by_code", span.GetTagItem("javbuddy.r18dev.operation"));
     }
 }

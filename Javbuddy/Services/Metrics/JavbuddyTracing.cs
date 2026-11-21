@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Globalization;
+using OpenTelemetry.Exporter;
 
 namespace Javbuddy.Services.Metrics;
 
@@ -47,10 +49,53 @@ public static class JavbuddyTracing
         !string.IsNullOrWhiteSpace(configuration["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"])
         || !string.IsNullOrWhiteSpace(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
 
-    /// <summary>OTEL_EXPORTER_OTLP_TRACES_ENDPOINT as a URL used exactly as given (no /v1/traces is
-    /// appended), or null when it isn't set or isn't an absolute URL.</summary>
-    public static Uri? TracesEndpoint(IConfiguration configuration) =>
-        Uri.TryCreate(configuration["OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"], UriKind.Absolute, out var uri) ? uri : null;
+    /// <summary>The OTEL_EXPORTER_OTLP_TRACES_* overrides, which AddOtlpExporter doesn't read itself (only
+    /// UseOtlpExporter does, and that would also export logs and metrics). Each one set wins over its
+    /// OTEL_EXPORTER_OTLP_* counterpart, as the specification has it. Throws on a value that can't be used, so a
+    /// typo fails startup instead of silently exporting nowhere.</summary>
+    public sealed record TracesExporterOverrides(Uri? Endpoint, OtlpExportProtocol? Protocol, string? Headers, int? TimeoutMilliseconds, OtlpExportCompression? Compression)
+    {
+        public void ApplyTo(OtlpExporterOptions options)
+        {
+            // An endpoint set in code is used exactly as given: nothing like /v1/traces is appended.
+            if (Endpoint is not null) options.Endpoint = Endpoint;
+            if (Protocol is { } protocol) options.Protocol = protocol;
+            if (Headers is not null) options.Headers = Headers;
+            if (TimeoutMilliseconds is { } timeout) options.TimeoutMilliseconds = timeout;
+            if (Compression is { } compression) options.Compression = compression;
+        }
+    }
+
+    public static TracesExporterOverrides ReadTracesExporterOverrides(IConfiguration configuration)
+    {
+        string? Value(string suffix) => configuration[$"OTEL_EXPORTER_OTLP_TRACES_{suffix}"] is { Length: > 0 } value ? value.Trim() : null;
+        InvalidOperationException Invalid(string suffix, string value, string expected) =>
+            new($"OTEL_EXPORTER_OTLP_TRACES_{suffix} is '{value}', which isn't {expected}.");
+
+        var endpoint = Value("ENDPOINT") is { } rawEndpoint
+            ? Uri.TryCreate(rawEndpoint, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                ? uri
+                : throw Invalid("ENDPOINT", rawEndpoint, "an absolute http(s) URL")
+            : null;
+        OtlpExportProtocol? protocol = Value("PROTOCOL") switch
+        {
+            null => null,
+            "grpc" => OtlpExportProtocol.Grpc,
+            "http/protobuf" => OtlpExportProtocol.HttpProtobuf,
+            var other => throw Invalid("PROTOCOL", other, "'grpc' or 'http/protobuf'"),
+        };
+        int? timeout = Value("TIMEOUT") is { } rawTimeout
+            ? int.TryParse(rawTimeout, NumberStyles.None, CultureInfo.InvariantCulture, out var ms) && ms > 0 ? ms : throw Invalid("TIMEOUT", rawTimeout, "a positive number of milliseconds")
+            : null;
+        OtlpExportCompression? compression = Value("COMPRESSION") switch
+        {
+            null => null,
+            "gzip" => OtlpExportCompression.GZip,
+            "none" => OtlpExportCompression.None,
+            var other => throw Invalid("COMPRESSION", other, "'gzip' or 'none'"),
+        };
+        return new TracesExporterOverrides(endpoint, protocol, Value("HEADERS"), timeout, compression);
+    }
 
     /// <summary>Whether an incoming HTTP request to <paramref name="path"/> gets a trace.</summary>
     public static bool ShouldTraceRequest(string? path)
@@ -87,25 +132,26 @@ public static class JavbuddyTracing
 
         var previous = Activity.Current;
         Activity.Current = null;
+        // Tags go in at start so a sampler sees them; a link to a span that isn't exported would only dangle.
         var activity = Source.StartActivity(
-            name, ActivityKind.Internal, default(ActivityContext), tags: null,
-            links: previous is null ? null : [new ActivityLink(previous.Context)]);
-        if (activity is null)
-        {
-            Activity.Current = previous;
-            return null;
-        }
-        foreach (var tag in tags) activity.SetTag(tag.Key, tag.Value);
+            name, ActivityKind.Internal, default(ActivityContext), tags: tags.Length == 0 ? null : tags.ToArray(),
+            links: previous is { Recorded: true } ? [new ActivityLink(previous.Context)] : null);
+        if (activity is null) Activity.Current = previous;
         return activity;
     }
 
-    /// <summary>Records <paramref name="outcome"/> on <paramref name="activity"/> and marks it failed unless it's
-    /// "success" or "cancelled".</summary>
-    public static void SetOutcome(this Activity? activity, string outcome, string? error = null)
+    /// <summary>Records <paramref name="outcome"/> on <paramref name="activity"/>. Anything but "success", "skipped" or
+    /// "cancelled" is a failure: the span gets Error status, the standard low-cardinality error.type
+    /// (<paramref name="errorType"/>, else the exception's type, else the outcome) and, given one, the exception
+    /// as an event (its message and stack trace, which can name files).</summary>
+    public static void SetOutcome(this Activity? activity, string outcome, Exception? exception = null, string? errorType = null)
     {
         if (activity is null) return;
         activity.SetTag("javbuddy.outcome", outcome);
-        if (outcome is not ("success" or "cancelled" or "skipped")) activity.SetStatus(ActivityStatusCode.Error, error ?? outcome);
+        if (outcome is "success" or "skipped" or "cancelled") return;
+        activity.SetStatus(ActivityStatusCode.Error, outcome);
+        activity.SetTag("error.type", errorType ?? exception?.GetType().FullName ?? outcome);
+        if (exception is not null) activity.AddException(exception);
     }
 
     /// <summary>Starts a span for one image decode-and-encode (reading the source included), so a cache miss's
@@ -117,16 +163,15 @@ public static class JavbuddyTracing
         return activity;
     }
 
-    /// <summary>Starts a span for one query operation against the r18.dev dump database, which EF
-    /// Core's instrumentation can't see because it's read with plain SqliteConnection commands. The
-    /// span covers the whole operation (opening the file and every statement it runs), and
-    /// <paramref name="operation"/> must be a fixed name, never a code or other per-call value.</summary>
+    /// <summary>Starts a span for one lookup in the r18.dev dump database, which EF Core's instrumentation can't
+    /// see because it's read with plain SqliteConnection commands. The span covers the whole lookup (opening the
+    /// file and every statement it runs), so it's an internal span of the app rather than a database client
+    /// span, which by convention stands for a single call; <paramref name="operation"/> must be a fixed name,
+    /// never a code or other per-call value.</summary>
     public static Activity? StartR18DevQuery(string operation)
     {
-        var activity = Source.StartActivity($"r18dev {operation}", ActivityKind.Client);
-        activity?.SetTag("db.system.name", "sqlite");
-        activity?.SetTag("db.namespace", "r18dev");
-        activity?.SetTag("db.operation.name", operation);
+        var activity = Source.StartActivity($"r18dev {operation}", ActivityKind.Internal);
+        activity?.SetTag("javbuddy.r18dev.operation", operation);
         return activity;
     }
 }

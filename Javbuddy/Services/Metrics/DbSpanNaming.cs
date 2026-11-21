@@ -5,8 +5,9 @@ using System.Text;
 
 namespace Javbuddy.Services.Metrics;
 
-/// <summary>Makes EF Core's query spans readable in a trace list. The instrumentation names every SQLite
-/// span after the database ("main"), so a span is renamed to its operation and table ("SELECT Movies").
+/// <summary>Makes EF Core's query spans readable in a trace list. The instrumentation names a span after its
+/// db.query.summary, but for EF's quoted identifiers that summary is only the operation ("SELECT"), so a span
+/// is named, and its summary set, to its operation and main table instead ("SELECT Movies").
 /// Repeated queries in one trace can't otherwise be told apart (parameter values aren't recorded), so a
 /// keyed hash of the values is added: equal hashes mean the same values. The key is random per process
 /// and never leaves it, so a hash can't be matched against guessed values.</summary>
@@ -15,6 +16,11 @@ public static class DbSpanNaming
     public const string ParametersHashTag = "javbuddy.db.parameters_hash";
 
     private static readonly byte[] HashKey = RandomNumberGenerator.GetBytes(32);
+
+    // EF reuses the same SQL text for a query shape, so names are worked out once per text. Capped, since raw
+    // SQL could in principle vary without bound; past the cap names are still computed, just not kept.
+    private const int MaxCachedNames = 4096;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string?> NameCache = new(StringComparer.Ordinal);
 
     private static readonly HashSet<string> Operations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -26,7 +32,15 @@ public static class DbSpanNaming
     public static string? SpanName(string? sql)
     {
         if (string.IsNullOrWhiteSpace(sql)) return null;
+        if (NameCache.TryGetValue(sql, out var cached)) return cached;
 
+        var name = ComputeSpanName(sql);
+        if (NameCache.Count < MaxCachedNames) NameCache.TryAdd(sql, name);
+        return name;
+    }
+
+    private static string? ComputeSpanName(string sql)
+    {
         var tokens = Tokenize(sql);
         if (tokens.Count == 0 || !Operations.Contains(tokens[0].Text)) return null;
 
@@ -76,11 +90,14 @@ public static class DbSpanNaming
         var builder = new StringBuilder();
         foreach (IDataParameter parameter in command.Parameters)
         {
-            builder.Append(parameter.ParameterName).Append('=');
+            // The value's type is part of it, so "1" and 1 differ; dates keep their full precision.
+            builder.Append(parameter.ParameterName).Append('=').Append(parameter.Value?.GetType().FullName).Append(':');
             builder.Append(parameter.Value switch
             {
                 null or DBNull => "\0null",
                 byte[] bytes => Convert.ToBase64String(bytes),
+                DateTime dateTime => dateTime.ToString("O", CultureInfo.InvariantCulture),
+                DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
                 IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
                 var value => value.ToString(),
             });

@@ -32,13 +32,7 @@ public sealed class NewMovieArtworkWorker(
         {
             try
             {
-                await using (var scope = scopeFactory.CreateAsyncScope())
-                using (var span = JavbuddyTracing.StartRoot("new movie artwork"))
-                {
-                    var generated = await scope.ServiceProvider.GetRequiredService<INewMovieArtworkService>().GeneratePendingAsync(stoppingToken);
-                    span?.SetTag("javbuddy.count", generated);
-                    if (generated > 0) logger.LogInformation("Generated artwork for {Count} new movie(s)", generated);
-                }
+                await GeneratePendingAsync(stoppingToken);
                 await signal.WaitAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -52,6 +46,30 @@ public sealed class NewMovieArtworkWorker(
                 try { await Task.Delay(retryDelay, stoppingToken); }
                 catch (OperationCanceledException) { return; }
             }
+        }
+    }
+
+    // One pass, as one trace; a failure is recorded on it before the loop's handler retries.
+    private async Task GeneratePendingAsync(CancellationToken ct)
+    {
+        using var span = JavbuddyTracing.StartRoot("new movie artwork");
+        try
+        {
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var generated = await scope.ServiceProvider.GetRequiredService<INewMovieArtworkService>().GeneratePendingAsync(ct);
+            span?.SetTag("javbuddy.artwork.generated_movies", generated);
+            span.SetOutcome(generated > 0 ? "success" : "skipped");
+            if (generated > 0) logger.LogInformation("Generated artwork for {Count} new movie(s)", generated);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            span.SetOutcome("cancelled");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            span.SetOutcome("failure", ex);
+            throw;
         }
     }
 }

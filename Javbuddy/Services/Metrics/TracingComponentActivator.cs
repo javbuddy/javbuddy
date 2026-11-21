@@ -1,7 +1,11 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using Javbuddy.Services.Metrics;
 using Microsoft.AspNetCore.Components;
+
+[assembly: System.Reflection.Metadata.MetadataUpdateHandler(typeof(TracingComponentActivator))]
 
 namespace Javbuddy.Services.Metrics;
 
@@ -14,19 +18,24 @@ public sealed class TracingComponentActivator(IServiceProvider services) : IComp
 {
     private static readonly ConcurrentDictionary<Type, (ObjectFactory Factory, string? Route)> Cache = new();
 
-    public IComponent CreateInstance([System.Diagnostics.CodeAnalysis.DynamicallyAccessedMembers(Component)] Type componentType)
+    public IComponent CreateInstance([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type componentType)
     {
         var (factory, route) = Cache.GetOrAdd(componentType, static type =>
         {
             if (!typeof(IComponent).IsAssignableFrom(type))
                 throw new ArgumentException($"The type {type.FullName} does not implement {nameof(IComponent)}.", nameof(componentType));
-            return (ActivatorUtilities.CreateFactory(type, Type.EmptyTypes), type.GetCustomAttribute<RouteAttribute>()?.Template);
+            return (ActivatorUtilities.CreateFactory(type, Type.EmptyTypes), RouteOf(type));
         });
 
         if (route is not null) BlazorTraceProcessor.NameRender(Activity.Current, route);
         return (IComponent)factory(services, null);
     }
 
-    private const System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes Component =
-        System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicConstructors;
+    /// <summary>The page's first route template, or null for a component that isn't a page. A page can have
+    /// several (@page twice), and the first is as good a name as any for the trace.</summary>
+    public static string? RouteOf(Type componentType) =>
+        componentType.GetCustomAttributes<RouteAttribute>(inherit: false).FirstOrDefault()?.Template;
+
+    /// <summary>Called by hot reload: a changed component's constructor or routes may no longer match the cache.</summary>
+    public static void ClearCache(Type[]? updatedTypes) => Cache.Clear();
 }

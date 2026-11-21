@@ -46,9 +46,24 @@ public sealed class ClipActorRefreshWorker(
     {
         var started = Stopwatch.GetTimestamp();
         using var span = JavbuddyTracing.StartRoot("clip actor refresh");
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var count = await ClipActorSync.RefreshStaleAsync(db, logger, onMovieTagsChanged: CheckNfoAsync, ct: ct);
-        span?.SetTag("javbuddy.count", count);
+        int count;
+        try
+        {
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
+            count = await ClipActorSync.RefreshStaleAsync(db, logger, onMovieTagsChanged: CheckNfoAsync, ct: ct);
+            span?.SetTag("javbuddy.clip_actors.refreshed_movies", count);
+            span.SetOutcome(count > 0 ? "success" : "skipped");
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            span.SetOutcome("cancelled");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            span.SetOutcome("failure", ex);
+            throw;
+        }
         if (count >= LogThreshold)
         {
             logger.LogInformation("Refreshed the stored actors of {Count} movies in {Elapsed}", count, Stopwatch.GetElapsedTime(started));

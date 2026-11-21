@@ -71,7 +71,7 @@ public sealed class MediaProbeGate(int maxOutstanding = MediaProbeGate.DefaultMa
         }
         else
         {
-            activity.SetOutcome(result.Success ? "success" : result.Skipped ? "skipped" : "failure", result.ErrorMessage);
+            activity.SetOutcome(result.Success ? "success" : result.Skipped ? "skipped" : "failure");
         }
         return result;
     }

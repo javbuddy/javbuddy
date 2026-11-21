@@ -40,6 +40,7 @@ public sealed class NfoDriftCheckQueue(IServiceScopeFactory scopeFactory, ILogge
                 {
                     await using var scope = scopeFactory.CreateAsyncScope();
                     await scope.ServiceProvider.GetRequiredService<INfoSyncService>().CheckMovieNfoConflictAsync(movieId, stoppingToken);
+                    span.SetOutcome("success");
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -47,7 +48,7 @@ public sealed class NfoDriftCheckQueue(IServiceScopeFactory scopeFactory, ILogge
                 }
                 catch (Exception ex)
                 {
-                    span.SetOutcome("failure", ex.Message);
+                    span.SetOutcome("failure", ex);
                     logger.LogError(ex, "The .nfo drift check for movie {MovieId} failed", movieId);
                 }
             }

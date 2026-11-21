@@ -669,10 +669,20 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
         if (gate is not null)
         {
             metrics?.FfmpegWaitStarted(gateName);
-            using var waitActivity = JavbuddyTracing.Source.StartActivity("ffmpeg gate wait");
             try
             {
-                slot = await gate.EnterAsync(ct);
+                slot = gate.TryEnter();
+                if (slot is null)
+                {
+                    // Only an actual wait gets a span: queueing behind other ffmpeg work is a distinct cause of a slow run.
+                    using var waitActivity = JavbuddyTracing.Source.StartActivity("ffmpeg gate wait");
+                    slot = await gate.EnterAsync(ct);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                activity.SetOutcome("cancelled");
+                throw;
             }
             finally
             {
@@ -702,7 +712,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             finally
             {
                 var elapsedSeconds = ran.Elapsed.TotalSeconds;
-                activity.SetOutcome(outcome == "failed" ? "failure" : outcome, outcome == "failed" ? scope.FailureReason : null);
+                activity.SetOutcome(outcome == "failed" ? "failure" : outcome, errorType: outcome == "failed" ? scope.FailureReason : null);
                 metrics?.FfmpegProcessEnded(gateName);
                 if (metrics is not null)
                 {

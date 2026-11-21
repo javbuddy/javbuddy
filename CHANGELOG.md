@@ -6,11 +6,12 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Added
 
-- **OpenTelemetry tracing.** Set `OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` for a full traces URL, such as VictoriaTraces') and Javbuddy sends traces over OTLP, showing where the time goes in a slow page load, click, API call or background job. Tracing is off, with no spans created, while no endpoint is set. The standard `OTEL_*` variables set the protocol, headers, service name and sampling; see [docs/configuration.md](docs/configuration.md#tracing-opentelemetry).
+- **OpenTelemetry tracing.** Set `OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` for a full traces URL, such as VictoriaTraces') and Javbuddy sends traces over OTLP, showing where the time goes in a slow page load, click, API call or background job. Tracing is off, with no spans created, while no endpoint is set. The standard `OTEL_*` variables, including the `OTEL_EXPORTER_OTLP_TRACES_*` overrides, set the protocol, headers, timeout, compression, service name, resource attributes and sampling, and an unusable value stops startup with a message naming it; see [docs/configuration.md](docs/configuration.md#tracing-opentelemetry), which also lists what traces contain (movie codes in paths and tags, exception messages). `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` now also apply to the `target_info` series on `/metrics`; with neither set, it's still `Javbuddy`.
   - HTTP requests, except health probes, `/metrics`, static files, the Blazor WebSocket, video streams and backup downloads.
   - Interactive pages: each page's first render (`Render /movies/{RouteCode}`), clicks and in-page navigations (`Navigate /actors`) as their own traces.
   - Database queries named after their operation and table (`SELECT Movies`), following the current OpenTelemetry database conventions (`db.query.text` and friends), with their SQL (literal values stripped, parameter values left out) and a per-run keyed hash of the parameter values, so a repeated query can be told apart as redundant (same hash) or a loop over different rows; r18.dev reference database lookups.
   - Outgoing calls to integrations, with query strings (and so any API key in them) replaced by `*`.
+  - Failures with Error status, the standard `error.type` and an exception event.
   - Background work as one trace per scheduled task run and per queued item (trickplay, scene media, `.nfo` drift checks, new-movie artwork, clip actor refreshes), with spans for each ffmpeg/ffprobe run and its wait for a slot, MediaInfo probe, library metadata lookup and image conversion.
 
 ## [0.7.3] - 2026-11-21

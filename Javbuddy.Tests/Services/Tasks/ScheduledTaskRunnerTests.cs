@@ -58,7 +58,8 @@ public class ScheduledTaskRunnerTests
         Assert.Equal("success", okSpan.GetTagItem("javbuddy.outcome"));
         Assert.Equal("failure", failedSpan.GetTagItem("javbuddy.outcome"));
         Assert.Equal(ActivityStatusCode.Error, failedSpan.Status);
-        Assert.Equal("boom", failedSpan.StatusDescription);
+        Assert.Equal("System.InvalidOperationException", failedSpan.GetTagItem("error.type"));
+        Assert.Contains(failedSpan.Events, e => e.Name == "exception");
     }
 
     [Fact]

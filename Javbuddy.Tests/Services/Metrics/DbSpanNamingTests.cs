@@ -72,6 +72,19 @@ public class DbSpanNamingTests
     }
 
     [Fact]
+    public void ParametersHash_DistinguishesTypesAndSubSecondTimes()
+    {
+        var text = DbSpanNaming.ParametersHash(Command(("@p", "1")));
+        var number = DbSpanNaming.ParametersHash(Command(("@p", 1)));
+        var at = new DateTime(2026, 11, 21, 10, 0, 0, DateTimeKind.Utc);
+        var time = DbSpanNaming.ParametersHash(Command(("@p", at)));
+        var laterTime = DbSpanNaming.ParametersHash(Command(("@p", at.AddMilliseconds(5))));
+
+        Assert.NotEqual(text, number);
+        Assert.NotEqual(time, laterTime);
+    }
+
+    [Fact]
     public void ParametersHash_NoParameters_IsNull()
     {
         Assert.Null(DbSpanNaming.ParametersHash(Command()));

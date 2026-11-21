@@ -51,6 +51,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
         string? error = null;
         var success = false;
         var cancelled = false;
+        Exception? failure = null;
         var progressReporter = new DbProgressReporter(dbFactory, run.Id, changeNotifier);
         var stopwatch = Stopwatch.StartNew();
 
@@ -77,13 +78,14 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
         catch (Exception ex)
         {
             error = ex.Message;
+            failure = ex;
             logger.LogError(ex, "Scheduled task {TaskName} failed.", task.Name);
         }
         finally
         {
             cancellationRegistry.Unregister(run.Id);
             stopwatch.Stop();
-            activity.SetOutcome(success ? "success" : cancelled ? "cancelled" : "failure", error);
+            activity.SetOutcome(success ? "success" : cancelled ? "cancelled" : "failure", failure);
             try
             {
                 var outcomeTag = new KeyValuePair<string, object?>("outcome", success ? "success" : "failure");
@@ -151,7 +153,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
         }
         catch (Exception ex)
         {
-            activity.SetOutcome("failure", ex.Message);
+            activity.SetOutcome("failure", ex);
             logger.LogError(ex, "Scheduled task {TaskName} failed.", task.Name);
         }
         finally

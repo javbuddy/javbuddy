@@ -105,7 +105,7 @@ public sealed class TrickplayQueue(IServiceScopeFactory scopeFactory, TaskActivi
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var result = await scope.ServiceProvider.GetRequiredService<ITrickplayGenerator>()
                     .GenerateAsync(job.MovieId, new ImmediateProgress<FfmpegProgress>(Report), stoppingToken);
-                span.SetOutcome(result == TrickplayGenerateResult.Failed ? "failure" : result.ToString().ToLowerInvariant());
+                span.SetOutcome(TraceOutcome(result));
                 if (result == TrickplayGenerateResult.Generated)
                 {
                     generated++;
@@ -127,7 +127,7 @@ public sealed class TrickplayQueue(IServiceScopeFactory scopeFactory, TaskActivi
             }
             catch (Exception ex)
             {
-                span.SetOutcome("failure", ex.Message);
+                span.SetOutcome("failure", ex);
                 failures++;
                 failed.TryAdd((job.MovieId, job.Identity), 0);
                 logger.LogWarning(ex, "Generating trickplay for {Code} failed", job.Code);
@@ -148,6 +148,15 @@ public sealed class TrickplayQueue(IServiceScopeFactory scopeFactory, TaskActivi
             }
         }
     }
+
+    /// <summary>A generation result as a trace outcome. The same results the batch counts as failed are failures;
+    /// one with nothing to do is skipped.</summary>
+    public static string TraceOutcome(TrickplayGenerateResult result) => result switch
+    {
+        TrickplayGenerateResult.Generated => "success",
+        TrickplayGenerateResult.AlreadyCurrent or TrickplayGenerateResult.NotNeeded => "skipped",
+        _ => "failure",
+    };
 
     /// <summary>The time left for <paramref name="remainingSeconds"/> of video at the batch's decode
     /// speed so far, or null until it has been generating for <see cref="MinimumSampleTime"/>.</summary>

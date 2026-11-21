@@ -289,10 +289,10 @@ public static class ServiceRegistration
         // Prometheus-format /metrics endpoint: built-in ASP.NET Core/HttpClient/runtime
         // instrumentation plus JavbuddyMetrics' own app-specific instruments (scheduled tasks, image
         // cache, library size, torrent grabs, VR merge jobs).
-        // An explicit AddService name would override the standard OTEL_SERVICE_NAME, so it's honored here.
-        var serviceName = configuration["OTEL_SERVICE_NAME"] is { Length: > 0 } name ? name : "Javbuddy";
+        // "Javbuddy" unless the standard OTEL_SERVICE_NAME or OTEL_RESOURCE_ATTRIBUTES say otherwise: the
+        // environment detector runs after AddService, so its values win. Shared by traces and /metrics.
         var openTelemetry = services.AddOpenTelemetry()
-            .ConfigureResource(resource => resource.AddService(serviceName));
+            .ConfigureResource(resource => resource.AddService("Javbuddy").AddEnvironmentVariableDetector());
 
         openTelemetry.WithMetrics(metrics => metrics
                 .AddAspNetCoreInstrumentation()
@@ -313,11 +313,12 @@ public static class ServiceRegistration
         if (JavbuddyTracing.IsOtlpEndpointConfigured(configuration))
         {
             // Database spans always use the current OpenTelemetry conventions (db.system.name, db.namespace,
-            // db.query.text), like the app's own r18.dev spans, rather than the deprecated db.statement set.
+            // db.query.text, db.query.summary) rather than the deprecated db.statement set.
             // The EF instrumentation reads this straight from the process environment (not the app's
             // configuration) when its options are first built, so it's set there before that happens,
             // overriding any OTEL_SEMCONV_STABILITY_OPT_IN the deployment sets.
             Environment.SetEnvironmentVariable(JavbuddyTracing.SemconvOptInKey, JavbuddyTracing.SemconvOptIn);
+            var tracesOverrides = JavbuddyTracing.ReadTracesExporterOverrides(configuration);
 
             // Names each interactive render's trace after its page; left at Blazor's default without tracing.
             services.AddScoped<IComponentActivator, TracingComponentActivator>();
@@ -325,28 +326,28 @@ public static class ServiceRegistration
                 .AddAspNetCoreInstrumentation(options =>
                     options.Filter = http => JavbuddyTracing.ShouldTraceRequest(http.Request.Path.Value))
                 .AddHttpClientInstrumentation()
-                // Interactive Blazor work runs over the circuit's WebSocket rather than as HTTP requests.
-                // The ASP.NET Core instrumentation's SignalR hub spans (an interactive render's queries
-                // sit under them) plus these Blazor sources make a click or a navigation its own trace;
-                // BlazorTraceProcessor drops the hub's per-render acknowledgements.
-                .AddSource("Microsoft.AspNetCore.Components")
-                .AddSource("Microsoft.AspNetCore.Components.Server.Circuits")
+                // Interactive Blazor work runs over the circuit's WebSocket rather than as HTTP requests. The
+                // ASP.NET Core instrumentation also listens to the SignalR hub (an interactive render's queries
+                // sit under its spans) and Blazor's component and circuit sources (EnableSignalRSupport and
+                // EnableRazorComponentsSupport, both on by default), which make a click or a navigation its own
+                // trace; BlazorTraceProcessor drops the hub's per-render acknowledgements.
                 // SQL text is captured with its literals stripped. Parameter values are left out unless
                 // OTEL_DOTNET_EXPERIMENTAL_EFCORE_ENABLE_TRACE_DB_QUERY_PARAMETERS=true.
                 .AddEntityFrameworkCoreInstrumentation(options => options.EnrichWithIDbCommand = (activity, command) =>
                 {
-                    if (DbSpanNaming.SpanName(command.CommandText) is { } spanName) activity.DisplayName = spanName;
+                    // The span name is {db.query.summary} by convention, so both are set together.
+                    if (DbSpanNaming.SpanName(command.CommandText) is { } spanName)
+                    {
+                        activity.DisplayName = spanName;
+                        activity.SetTag("db.query.summary", spanName);
+                    }
                     if (DbSpanNaming.ParametersHash(command) is { } hash) activity.SetTag(DbSpanNaming.ParametersHashTag, hash);
                 })
                 .AddSource(JavbuddyTracing.SourceName)
                 .AddProcessor(new BlazorTraceProcessor())
-                .AddOtlpExporter(options =>
-                {
-                    // AddOtlpExporter reads OTEL_EXPORTER_OTLP_ENDPOINT but not the traces-only override,
-                    // which is the one a traces-only backend (e.g. VictoriaTraces) needs, as a full URL.
-                    if (JavbuddyTracing.TracesEndpoint(configuration) is { } endpoint)
-                        options.Endpoint = endpoint;
-                }));
+                // AddOtlpExporter reads the OTEL_EXPORTER_OTLP_* variables but not their TRACES_ overrides, which
+                // a traces-only backend (e.g. VictoriaTraces, with its own traces path) needs.
+                .AddOtlpExporter(tracesOverrides.ApplyTo));
         }
 
         // K8s liveness/readiness probes.

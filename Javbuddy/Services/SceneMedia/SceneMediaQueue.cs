@@ -114,6 +114,7 @@ public sealed class SceneMediaQueue(IServiceScopeFactory scopeFactory, ILogger<S
                 {
                     Generated?.Invoke(id);
                 }
+                span.SetOutcome(movieId is null ? "skipped" : "success");
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -121,7 +122,7 @@ public sealed class SceneMediaQueue(IServiceScopeFactory scopeFactory, ILogger<S
             }
             catch (Exception ex)
             {
-                span.SetOutcome("failure", ex.Message);
+                span.SetOutcome("failure", ex);
                 logger.LogWarning(ex, "Generating media for {Kind} {Id} failed", job.Kind, job.Id);
             }
         }
