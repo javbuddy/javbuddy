@@ -17,12 +17,17 @@ export function init(key, root, selector) {
 
     let timer = null;
     let revealTimer = null;
+    // Until the first pointer event in the player: a device that can't hover (a phone) is a touch screen. A clip
+    // opened by a tap otherwise counted as a mouse, and the hover that tap left behind kept the chrome up.
+    let lastPointer = matchMedia('(hover: none)').matches ? 'touch' : 'mouse';
     const video = () => document.querySelector(selector);
 
     const shouldStayVisible = () => {
         const v = video();
         if (!v || v.paused || v.ended) return true;
-        if (root.querySelector(KEEP_VISIBLE_HOVERED)) return true;
+        // A touch screen leaves :hover on the last thing tapped (Next, say), which would keep the chrome up
+        // for good, so hover only counts for a mouse.
+        if (lastPointer === 'mouse' && root.querySelector(KEEP_VISIBLE_HOVERED)) return true;
         const header = root.querySelector('.video-player-modal-header');
         const active = document.activeElement;
         if (!(active instanceof Element) || !active.matches('select, input, textarea')) return false;
@@ -44,7 +49,9 @@ export function init(key, root, selector) {
         const now = Date.now();
         if (root.classList.contains(IDLE_CLASS)) idleStamp = now;
     };
-    const onActivity = () => {
+    const onActivity = (event) => {
+        if (event?.pointerType) lastPointer = event.pointerType;
+        else if (event?.type === 'touchstart') lastPointer = 'touch';
         noteIdle();
         root.classList.remove(IDLE_CLASS);
         schedule();

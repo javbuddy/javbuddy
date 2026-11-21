@@ -93,3 +93,11 @@ main {
         right: 0.75rem;
         top: 0.5rem;
     }
+
+/* Phones: px-4's 1.5rem each side is a lot of a 360-412px screen. */
+@media (max-width: 640.98px) {
+    article {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+}

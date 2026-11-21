@@ -10,12 +10,15 @@
     <div class="video-player-area">
         @if (Src is not null)
         {
+            @* With a host's own Controls (the clip player), no remote playback: Chrome on Android otherwise
+               draws its own Cast button over the video, which the player's chrome can't hide. *@
             @* Keyed by stream: another movie gets a fresh <video> (and its text tracks and drawn cue) instead of
                the last one's. A clip of the same movie keeps it. *@
             <video @key="videoStream" class="video-player-media @VideoClass @(ScrubBarShown ? "video-player-scrub" : null) @(VrMode ? "video-player-vr" : null)"
                    src="@Src"
                    controls="@(NativeControls && !OwnControls)"
                    controlslist="@(ScrubBarShown ? "nofullscreen" : null)"
+                   disableremoteplayback="@(Controls is not null)"
                    @ondurationchange="OnVideoDurationChangedAsync"
                    autoplay>
                 @for (var i = 0; i < Subtitles.Count; i++)

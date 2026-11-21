@@ -106,7 +106,7 @@ else
     </div>
 }
 
-<div class="d-flex align-items-center justify-content-between">
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
     <h2 class="data-page-title status-section-title mb-0">Image Cache</h2>
     @if (!confirmingPurge)
     {
@@ -116,7 +116,7 @@ else
     }
     else
     {
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex flex-wrap align-items-center gap-2">
             <span class="text-muted">Delete all cached image variants? Newly stored actor images are kept and regenerated on demand.</span>
             <button class="btn btn-sm btn-danger" type="button" @onclick="PurgeCacheAsync" disabled="@purging">
                 @(purging ? "Purging…" : "Confirm")

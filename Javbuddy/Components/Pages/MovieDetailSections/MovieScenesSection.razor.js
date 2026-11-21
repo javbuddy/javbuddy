@@ -1,4 +1,4 @@
-import { formatTime, placePreview, trickplayThumbnails } from '../../Shared/ScrubBar.razor.js';
+import { bindTouchScrub, formatTime, placePreview, trickplayThumbnails } from '../../Shared/ScrubBar.razor.js';
 
 // Pages the highlights shelf by most of its visible width.
 export function scrollShelf(shelf, direction) {
@@ -121,6 +121,21 @@ export function initTimeline(root, trickplay, highlightTrickplay, durationSecond
     // Clicking opens the clip player over the timeline.
     root.addEventListener('click', hide);
     bar.addEventListener('click', onBarClick);
+    // On a touch screen, dragging along the bar previews as it goes, and letting go just ends the preview:
+    // only a tap plays (from that moment on the bare bar, or a scene from its start).
+    let preloaded = false;
+    const unbindTouchScrub = bindTouchScrub(bar, {
+        onMove: (event) => {
+            if (!preloaded) preloadSheets();
+            preloaded = true;
+            onMove(event);
+        },
+        onSeek: () => { },
+        onEnd: () => {
+            preloaded = false;
+            hide();
+        },
+    });
 
     timelines.set(root, () => {
         hide();
@@ -129,6 +144,7 @@ export function initTimeline(root, trickplay, highlightTrickplay, durationSecond
         root.removeEventListener('pointerleave', hide);
         root.removeEventListener('click', hide);
         bar.removeEventListener('click', onBarClick);
+        unbindTouchScrub();
     });
 }
 

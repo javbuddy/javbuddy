@@ -4,7 +4,7 @@
 // in a playlist, moves to the next clip. Previous/Next and P/N also go through .NET.
 // Runs in the browser like ScrubBar.razor.js, whose trickplay, preview and fullscreen helpers it
 // reuses. Loop is remembered in localStorage, which may be unavailable (private mode, blocked).
-import { bindFullscreen, bindTransport, formatTime, placePreview, trickplayThumbnails } from './ScrubBar.razor.js';
+import { bindFullscreen, bindTouchScrub, bindTransport, formatTime, placePreview, trickplayThumbnails } from './ScrubBar.razor.js';
 
 const LOOP_KEY = 'javbuddy-clip-loop';
 const instances = new WeakMap();
@@ -218,6 +218,11 @@ export function init(root, dotnet, options, newClip) {
         [trackWrap, 'click', seek],
     ];
     for (const [target, type, handler] of listeners) target.addEventListener(type, handler);
+    // A drag only moves the playhead: unlike a tap, letting go doesn't start a paused clip.
+    const seekOnly = (event) => {
+        video.currentTime = secondsFor(event);
+    };
+    const unbindTouchScrub = bindTouchScrub(trackWrap, { onMove: showPreview, onSeek: seekOnly, onEnd: hidePreview });
 
     const container = root.closest('.video-player-column') || root.parentElement;
     const unbindFullscreen = bindFullscreen(root, container, video, fullscreenBtn, 'clip-controls-is-fullscreen', 0);
@@ -248,6 +253,7 @@ export function init(root, dotnet, options, newClip) {
 
     state.teardown = () => {
         for (const [target, type, handler] of listeners) target.removeEventListener(type, handler);
+        unbindTouchScrub();
         transport.unbind();
         unbindFullscreen();
         if (frame) cancelAnimationFrame(frame);

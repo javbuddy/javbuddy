@@ -108,14 +108,26 @@ public sealed class E2EFixture : IAsyncLifetime
 
     private readonly List<IPage> _openPages = [];
 
-    public async Task<IPage> NewPageAsync()
+    public Task<IPage> NewPageAsync() => NewPageAsync(new BrowserNewPageOptions());
+
+    /// <summary>A page with these options (e.g. a phone's viewport and touch); the base URL is always the app's.</summary>
+    public async Task<IPage> NewPageAsync(BrowserNewPageOptions options)
     {
         await CloseOpenPagesAsync();
 
-        var page = await Browser.NewPageAsync(new BrowserNewPageOptions { BaseURL = App.ServerAddress });
+        options.BaseURL = App.ServerAddress;
+        var page = await Browser.NewPageAsync(options);
         _openPages.Add(page);
         return page;
     }
+
+    /// <summary>A touch-screen phone page, <paramref name="width"/> × <paramref name="height"/> CSS pixels.</summary>
+    public Task<IPage> NewPhonePageAsync(int width = 390, int height = 844) => NewPageAsync(new BrowserNewPageOptions
+    {
+        ViewportSize = new ViewportSize { Width = width, Height = height },
+        HasTouch = true,
+        IsMobile = true,
+    });
 
     public async Task CloseOpenPagesAsync()
     {

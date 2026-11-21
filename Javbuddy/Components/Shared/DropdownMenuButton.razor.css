@@ -25,3 +25,21 @@
     padding: 0.35rem 0;
     z-index: 50;
 }
+
+/* Phones: a menu opened from a toolbar button near the right edge ran past the window, so menus dock at
+   the bottom of the screen instead, like Movie Detail's version menu. !important beats a caller's inline
+   MenuMinWidth. */
+@media (max-width: 640.98px) {
+    .sort-dropdown-menu {
+        position: fixed;
+        top: auto;
+        left: 0.75rem;
+        right: 0.75rem;
+        bottom: 0.75rem;
+        min-width: 0 !important;
+        max-height: 70vh;
+        max-height: 70dvh;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+    }
+}

@@ -118,6 +118,25 @@ public class ClipControlsTests : BunitContext
     }
 
     [Fact]
+    public void TheModuleIsToldWhetherItsAnotherClip_SoTheSameClipReinitialisedKeepsItsPlayback()
+    {
+        // The module seeks to and plays a new clip; the same clip re-inited (here its place in the playlist
+        // changed) is left as it is, so a clip the user paused stays paused.
+        var cut = Render<ClipControls>(p => p
+            .Add(x => x.VideoSelector, "video.video-player-video")
+            .Add(x => x.ClipKey, "Highlight:1")
+            .Add(x => x.StartSeconds, 10d)
+            .Add(x => x.EndSeconds, 20d)
+            .Add(x => x.OnNext, () => { }));
+
+        cut.Render(p => p.Add(x => x.HasPrevious, true));
+        cut.Render(p => p.Add(x => x.ClipKey, "Highlight:2"));
+
+        var newClip = module.Invocations.Where(i => i.Identifier == "init").Select(i => i.Arguments[3]).ToList();
+        Assert.Equal([true, false, true], newClip);
+    }
+
+    [Fact]
     public void AnotherClip_WaitsForItsVideo_BeforeReinitialising()
     {
         var cut = RenderControls();
