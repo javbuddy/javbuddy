@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Tag discovery, "Apply Rules to Library" and "Strip Ignored Tags" now run as background jobs.** They keep going if you leave the Tags page, report their progress and result in the sidebar, and a second pass is refused while one runs.
 - **Scenes no longer re-queue media checks that cannot produce anything.** With the image cache in Thumbnails or Disabled mode, Movie Detail, the Scenes wall, Actor Detail and the clip editor now skip asking for scene media the mode never keeps, as apexes already did (one shared `IsMissingMedia` check). Highlights still ask, since that also queues their trickplay.
 - **The Scenes wall loads each page's movies' effective actors once instead of up to three times.** One load now serves the scenes, highlights and apexes (and their tag roll-up), instead of one per service, and the clip media lookups use a dictionary instead of scanning the list per clip.
 - **Tag discovery, "Apply Rules to Library" and "Strip Ignored Tags" no longer load the whole Movies table tracked.** They read only each movie's id and genre text, work through the library in chunks of 500 in short transactions, and write the changed genre text with `ExecuteUpdate`, so other writers are not blocked for the whole pass.

@@ -2,6 +2,7 @@
 @using Javbuddy.Models
 @inject ITagService TagService
 @inject ITagRuleService TagRuleService
+@inject TagLibraryPassLauncher PassLauncher
 @inject IActorTagService ActorTagService
 @inject MovieFilterNavigationState FilterNavigationState
 @inject NavigationManager Nav
@@ -636,7 +637,13 @@
         await searchDebouncer.RunAsync(_ => LoadTagsAsync());
     }
 
-    public void Dispose() => searchDebouncer.Dispose();
+    private bool disposed;
+
+    public void Dispose()
+    {
+        disposed = true;
+        searchDebouncer.Dispose();
+    }
 
     private async Task LoadRulesAsync() => rules = await TagRuleService.GetReplacementRulesAsync();
 
@@ -831,18 +838,37 @@
         await RefreshAllTagsAsync();
     }
 
-    private async Task RunDiscoveryAsync()
+    // The pass runs as a background job, so leaving the page doesn't cancel it; this waits for it only to
+    // report the result here. Null when it was refused or failed (the status says which).
+    private async Task<int?> RunPassAsync(TagLibraryPass pass)
     {
+        var job = PassLauncher.TryQueue(pass);
+        if (job is null)
+        {
+            SetStatus("A tag pass over the library is already running.", true);
+            return null;
+        }
+
         busy = true;
-        int count;
         try
         {
-            count = await TagRuleService.RunDiscoveryAsync();
+            var count = await job;
+            return disposed ? null : count;
+        }
+        catch (Exception ex)
+        {
+            if (!disposed) SetStatus($"{TagLibraryPassLauncher.ActivityName(pass)} failed: {ex.Message}", true);
+            return null;
         }
         finally
         {
             busy = false;
         }
+    }
+
+    private async Task RunDiscoveryAsync()
+    {
+        if (await RunPassAsync(TagLibraryPass.Discovery) is not { } count) return;
         SetStatus($"Discovery scanned {count} movie{(count == 1 ? "" : "s")}.", false);
         await LoadTagsAsync();
         await RefreshAllTagsAsync();
@@ -884,16 +910,7 @@
 
     private async Task ApplyRulesToLibraryAsync()
     {
-        busy = true;
-        int count;
-        try
-        {
-            count = await TagRuleService.ApplyReplacementRulesToLibraryAsync();
-        }
-        finally
-        {
-            busy = false;
-        }
+        if (await RunPassAsync(TagLibraryPass.ApplyRules) is not { } count) return;
         SetStatus($"Applied rules across {count} movie{(count == 1 ? "" : "s")}.", false);
         await LoadRulesAsync();
         await RefreshAllTagsAsync();
@@ -927,16 +944,7 @@
 
     private async Task StripIgnoredFromLibraryAsync()
     {
-        busy = true;
-        int count;
-        try
-        {
-            count = await TagRuleService.StripIgnoredTagsFromLibraryAsync();
-        }
-        finally
-        {
-            busy = false;
-        }
+        if (await RunPassAsync(TagLibraryPass.StripIgnored) is not { } count) return;
         SetStatus($"Stripped ignored tags across {count} movie{(count == 1 ? "" : "s")}.", false);
         await LoadIgnoredAsync();
         await RefreshAllTagsAsync();

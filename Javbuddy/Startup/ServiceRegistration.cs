@@ -258,6 +258,7 @@ public static class ServiceRegistration
         services.AddSingleton<ScheduledTaskLauncher>();
         services.AddSingleton<ActorBatchEnrichmentLauncher>();
         services.AddSingleton<NfoDriftPushLauncher>();
+        services.AddSingleton<TagLibraryPassLauncher>();
         services.AddSingleton<JavbuddyMetrics>();
         services.AddHostedService<MetricsGaugeRefreshService>();
 

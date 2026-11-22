@@ -1,16 +1,23 @@
 using Bunit;
 using Javbuddy.Components.Pages;
+using Javbuddy.Services.Infrastructure;
+using Javbuddy.Services.Monitoring;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.Tags;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Pages;
 
 public class MovieTagsTests : BunitContext
 {
+    private static TagLibraryPassLauncher NewPassLauncher() =>
+        new(new BackgroundJobRunner(new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(), Substitute.For<ILogger<BackgroundJobRunner>>()),
+            new TaskActivityTracker(new ScheduledTaskChangeNotifier(), TimeProvider.System));
+
     [Fact]
     public async Task DeletingATagWithSubtags_ShowsAnErrorInsteadOfThrowing()
     {
@@ -20,6 +27,7 @@ public class MovieTagsTests : BunitContext
         await tagService.CreateTagAsync("ram", parent.Tag!.Id);
         Services.AddSingleton<ITagService>(tagService);
         Services.AddSingleton(Substitute.For<ITagRuleService>());
+        Services.AddSingleton(NewPassLauncher());
         Services.AddSingleton(Substitute.For<IActorTagService>());
         Services.AddSingleton(new MovieFilterNavigationState());
 
@@ -40,6 +48,7 @@ public class MovieTagsTests : BunitContext
         tagService.GetTagsAsync(Arg.Any<string?>(), Arg.Any<TagSortOrder>(), Arg.Any<CancellationToken>()).Returns([]);
         Services.AddSingleton(tagService);
         Services.AddSingleton(Substitute.For<ITagRuleService>());
+        Services.AddSingleton(NewPassLauncher());
         Services.AddSingleton(Substitute.For<IActorTagService>());
         Services.AddSingleton(new MovieFilterNavigationState());
         var cut = Render<MovieTags>();
