@@ -10,7 +10,7 @@ namespace Javbuddy.Services.Tasks;
 /// however many tasks get registered later. A due task is queued on <see cref="BackgroundJobRunner"/>
 /// rather than awaited, so a long one (Library Rescan, Image Cache) never holds up the short periodic
 /// ones (qBittorrent Sync, backups); <see cref="ScheduledTaskRunner"/> keeps each task to one run at a time.</summary>
-public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ScheduledTaskLauncher launcher, ScheduledTaskRunTracker tracker, ILogger<ScheduledTaskHostedService> logger) : BackgroundService
+public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ScheduledTaskLauncher launcher, ScheduledTaskRunTracker tracker, ILogger<ScheduledTaskHostedService> logger, TimeProvider? timeProvider = null) : BackgroundService
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan StartupDelay = TimeSpan.FromMinutes(1);
@@ -20,6 +20,7 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, Sched
     private readonly ScheduledTaskLauncher launcher = launcher;
     private readonly ScheduledTaskRunTracker tracker = tracker;
     private readonly ILogger<ScheduledTaskHostedService> logger = logger;
+    private readonly TimeProvider time = timeProvider ?? TimeProvider.System;
 
     // A task that has never run (lastRun is null: a new task, or a fresh/reset database) used to count
     // as immediately due, so it fired on the first tick after every app start, which is surprising for
@@ -35,7 +36,7 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, Sched
     {
         try
         {
-            await Task.Delay(StartupDelay, stoppingToken);
+            await Task.Delay(StartupDelay, time, stoppingToken);
         }
         catch (OperationCanceledException)
         {
@@ -55,7 +56,7 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, Sched
 
             try
             {
-                await Task.Delay(TickInterval, stoppingToken);
+                await Task.Delay(TickInterval, time, stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -78,9 +79,9 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, Sched
         var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
         var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
 
-        if (lastPruneUtc is null || DateTime.UtcNow - lastPruneUtc.Value >= PruneInterval)
+        if (lastPruneUtc is null || time.GetUtcNow().UtcDateTime - lastPruneUtc.Value >= PruneInterval)
         {
-            lastPruneUtc = DateTime.UtcNow;
+            lastPruneUtc = time.GetUtcNow().UtcDateTime;
             try
             {
                 await runner.PruneOldRunsAsync(ct: ct);
@@ -113,7 +114,7 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, Sched
                 }
                 lastRun = ScheduledTaskRunTracker.Latest(lastRun, tracker.GetLastCompletion(task.Name));
 
-                due = IsDue(lastRun, DateTime.UtcNow, processStartUtc, task.GetInterval(), task.RunImmediatelyWhenNeverRun);
+                due = IsDue(lastRun, time.GetUtcNow().UtcDateTime, processStartUtc, task.GetInterval(), task.RunImmediatelyWhenNeverRun);
             }
 
             if (!due) continue;
