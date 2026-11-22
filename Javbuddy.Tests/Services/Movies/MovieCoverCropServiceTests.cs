@@ -41,8 +41,8 @@ public class MovieCoverCropServiceTests
         }
 
         var client = Substitute.For<ILocalLibraryClient>();
-        client.TryGetMetadataAsync("IPX-535", Arg.Any<CancellationToken>(), false)
-            .Returns(new LocalLookupResult(false, null, null, null));
+        client.ResolveMovieFolderPathAsync("IPX-535", Arg.Any<CancellationToken>())
+            .Returns((string?)null);
         client.ListExtraFanartFileNamesAsync("IPX-535", Arg.Any<CancellationToken>())
             .Returns(new List<string> { "a.jpg", "b.jpg" });
 
@@ -114,8 +114,8 @@ public class MovieCoverCropServiceTests
             }
 
             var client = Substitute.For<ILocalLibraryClient>();
-            client.TryGetMetadataAsync("IPX-535", Arg.Any<CancellationToken>(), false)
-                .Returns(new LocalLookupResult(true, tempDir, null, null));
+            client.ResolveMovieFolderPathAsync("IPX-535", Arg.Any<CancellationToken>())
+                .Returns(tempDir);
 
             var cacheStorageDir = Path.Combine(Path.GetTempPath(), "javbuddy_cache_" + Guid.NewGuid());
             Directory.CreateDirectory(cacheStorageDir);
@@ -198,8 +198,8 @@ public class MovieCoverCropServiceTests
                 db.SaveChanges();
             }
 
-            Client.TryGetMetadataAsync("IPX-535", Arg.Any<CancellationToken>(), false)
-                .Returns(new LocalLookupResult(true, MovieDir, null, null));
+            Client.ResolveMovieFolderPathAsync("IPX-535", Arg.Any<CancellationToken>())
+                .Returns(MovieDir);
             var cache = Substitute.For<ILocalImageCache>();
             cache.QualityFull.Returns(82);
             cache.QualityThumb.Returns(85);
@@ -355,8 +355,8 @@ public class MovieCoverCropServiceTests
         }
 
         var client = Substitute.For<ILocalLibraryClient>();
-        client.TryGetMetadataAsync("IPX-999", Arg.Any<CancellationToken>(), false)
-            .Returns(new LocalLookupResult(false, null, null, null));
+        client.ResolveMovieFolderPathAsync("IPX-999", Arg.Any<CancellationToken>())
+            .Returns((string?)null);
 
         var cacheStorageDir = Path.Combine(Path.GetTempPath(), "javbuddy_cache_" + Guid.NewGuid());
         Directory.CreateDirectory(cacheStorageDir);
@@ -455,7 +455,7 @@ public class MovieCoverCropServiceTests
 
         var result = await service.DownloadImageFromUrlAsync("https://example.com/cover.jpg");
 
-        Assert.Equal("Downloaded image file is empty.", result.ErrorMessage);
+        Assert.Equal("The downloaded image was empty.", result.ErrorMessage);
     }
 
     [Fact]
@@ -465,7 +465,7 @@ public class MovieCoverCropServiceTests
 
         var result = await service.DownloadImageFromUrlAsync("https://example.com/cover.jpg");
 
-        Assert.Equal($"Image size ({3L:F1} MB) exceeds maximum allowed size (1 MB).", result.ErrorMessage);
+        Assert.Equal("Image size exceeds 1 MB limit.", result.ErrorMessage);
     }
 
     [Fact]
@@ -475,7 +475,7 @@ public class MovieCoverCropServiceTests
 
         var result = await service.DownloadImageFromUrlAsync("https://example.com/cover.jpg");
 
-        Assert.Equal("Image size exceeds maximum allowed size (1 MB).", result.ErrorMessage);
+        Assert.Equal("Image size exceeds 1 MB limit.", result.ErrorMessage);
     }
 
     [Fact]
@@ -485,7 +485,7 @@ public class MovieCoverCropServiceTests
 
         var result = await service.DownloadImageFromUrlAsync("https://example.com/cover.jpg");
 
-        Assert.Equal("Network error downloading image: connection refused", result.ErrorMessage);
+        Assert.Equal("Failed to download image from the remote server: connection refused", result.ErrorMessage);
     }
 
     [Fact]
@@ -495,7 +495,7 @@ public class MovieCoverCropServiceTests
 
         var result = await service.DownloadImageFromUrlAsync("https://example.com/cover.jpg");
 
-        Assert.Equal("Image download timed out after 30 seconds.", result.ErrorMessage);
+        Assert.Equal("Request timed out while downloading the image.", result.ErrorMessage);
     }
 
     [Fact]

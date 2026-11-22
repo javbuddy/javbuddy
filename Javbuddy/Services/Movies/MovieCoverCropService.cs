@@ -84,8 +84,7 @@ public class MovieCoverCropService(
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies.AsNoTracking().FirstOrDefaultAsync(m => m.Code == code, ct);
-        var localLookup = await localLibraryClient.TryGetMetadataAsync(code, ct, includeMediaInfo: false);
-        var folder = localLookup.Found ? localLookup.FolderPath : null;
+        var folder = await localLibraryClient.ResolveMovieFolderPathAsync(code, ct);
         var sources = new List<MovieCropSource>();
 
         var hasFanart = false;
@@ -227,20 +226,7 @@ public class MovieCoverCropService(
             logger.LogWarning(download.Error, "Unexpected error downloading image from {Url}", url.Trim());
         }
 
-        return new(false, null, null, download.Failure switch
-        {
-            RemoteImageDownloadFailure.MissingUrl => "Please enter an image URL.",
-            RemoteImageDownloadFailure.DefunctHost => "The provided image URL is on a defunct domain (r18.com) and cannot be downloaded.",
-            RemoteImageDownloadFailure.InvalidUrl => "Please enter a valid HTTP or HTTPS image URL.",
-            RemoteImageDownloadFailure.BlockedAddress => RemoteImageDownloadMessages.BlockedAddress,
-            RemoteImageDownloadFailure.Timeout => "Image download timed out after 30 seconds.",
-            RemoteImageDownloadFailure.HttpStatus => $"Failed to download image: Server returned {(int)download.StatusCode!.Value} {download.ReasonPhrase}.",
-            RemoteImageDownloadFailure.DeclaredTooLarge => $"Image size ({download.DeclaredLength!.Value / (1024 * 1024):F1} MB) exceeds maximum allowed size ({uploadSettings.MaxSizeMb} MB).",
-            RemoteImageDownloadFailure.TooLarge => $"Image size exceeds maximum allowed size ({uploadSettings.MaxSizeMb} MB).",
-            RemoteImageDownloadFailure.Empty => "Downloaded image file is empty.",
-            _ when download.Error is HttpRequestException => $"Network error downloading image: {download.Error.Message}",
-            _ => $"Error downloading image: {download.Error?.Message}",
-        });
+        return new(false, null, null, RemoteImageDownloadMessages.Describe(download, uploadSettings.MaxSizeMb));
     }
 
     public async Task<byte[]?> RotateImageAsync(byte[] sourceBytes, bool clockwise, CancellationToken ct = default)
@@ -325,8 +311,7 @@ public class MovieCoverCropService(
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movie = await db.Movies.AsNoTracking().FirstOrDefaultAsync(m => m.Code == code, ct);
-        var localLookup = await localLibraryClient.TryGetMetadataAsync(code, ct, includeMediaInfo: false);
-        var folder = localLookup.Found ? localLookup.FolderPath : null;
+        var folder = await localLibraryClient.ResolveMovieFolderPathAsync(code, ct);
         var isLocal = folder != null && Directory.Exists(folder);
 
         // The library file is written before the cache: if the disk write fails, the cache must
