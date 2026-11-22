@@ -23,6 +23,10 @@
                             {
                                 <span class="version-badge version-badge-vr">@file.VrType</span>
                             }
+                            @if (file.ContentType != MovieContentType.Censored)
+                            {
+                                <span class="version-badge">@MovieFilterOptions.ContentTypeLabel(file.ContentType)</span>
+                            }
                             @if (file.IsPrimary)
                             {
                                 <span class="version-badge-primary">Primary</span>

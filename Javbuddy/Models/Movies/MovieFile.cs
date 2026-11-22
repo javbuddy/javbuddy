@@ -49,6 +49,11 @@ public class MovieFile : IMediaTechnicalInfo
     /// library refresh keeps it instead of detecting it again.</summary>
     public bool VrTypePinned { get; set; }
 
+    /// <summary>This version's content type (censored, uncensored or decensored). New versions start with the
+    /// movie's content type; set by hand on Movie Detail. The primary version's value is mirrored onto
+    /// Movie.ContentType. Javbuddy's database only: not written to the .nfo.</summary>
+    public MovieContentType ContentType { get; set; } = MovieContentType.Censored;
+
     public string? ContainerFormat { get; set; }
     public string? ContainerFormatProfile { get; set; }
     public string? ContainerCodecId { get; set; }

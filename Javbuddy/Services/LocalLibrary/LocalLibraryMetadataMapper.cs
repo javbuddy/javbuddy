@@ -338,6 +338,7 @@ public static class LocalLibraryMetadataMapper
         movie.LocalFileSizeBytes = totalFileSizeBytes;
         movie.MediaVideoFileName = primaryFile.FileName;
         movie.VrType = primaryFile.VrType;
+        movie.ContentType = primaryFile.ContentType;
         movie.MediaVideoFileLastWriteUtc = primaryFile.LastWriteUtc;
         movie.FileAddedAt ??= primaryFile.FileAddedAt;
 

@@ -1100,6 +1100,7 @@ public class LocalLibraryClient(
                     FileAddedAt = movie.FileAddedAt ?? single.Info.CreationTimeUtc,
                     LastWriteUtc = single.Info.LastWriteTimeUtc,
                     IsPrimary = true,
+                    ContentType = movie.ContentType,
                 };
                 LocalLibraryMetadataMapper.CopyLegacyMovieToFile(movie, mf);
                 movie.MovieFiles.Add(mf);
@@ -1133,6 +1134,7 @@ public class LocalLibraryClient(
                     FileSizeBytes = fInfo.Length,
                     FileAddedAt = fInfo.CreationTimeUtc,
                     LastWriteUtc = fInfo.LastWriteTimeUtc,
+                    ContentType = movie.ContentType,
                 };
                 movie.MovieFiles.Add(mf);
                 db.MovieFiles.Add(mf);

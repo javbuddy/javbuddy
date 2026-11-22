@@ -50,6 +50,8 @@
                         <label class="form-label" for="metadata-director">Director</label>
                         <InputText id="metadata-director" class="form-control" @bind-Value="model.MetaDirector" disabled="@saving" />
                     </div>
+                    @if (model.Versions.Count == 0)
+                    {
                     <div class="col-md-4">
                         <label class="form-label" for="metadata-content-type">Content Type</label>
                         <InputSelect id="metadata-content-type" class="form-select" @bind-Value="model.ContentType" disabled="@saving">
@@ -60,12 +62,35 @@
                         </InputSelect>
                         <small class="text-muted">Used by the Content Type filter. Stays in Javbuddy; not written to the .nfo.</small>
                     </div>
+                    }
                     <div class="col-12">
                         <label class="form-label" for="metadata-description">Overview</label>
                         <InputTextArea id="metadata-description" class="form-control" rows="4" @bind-Value="model.MetaDescription" disabled="@saving" />
                     </div>
                     @if (model.VrFormats.Count > 0)
                     {
+                        @* Each version's content type, so one movie can have a censored and a decensored file. *@
+                        <div class="col-12">
+                            <span class="form-label d-block">Content type</span>
+                            @foreach (var version in model.Versions)
+                            {
+                                <div class="metadata-editor-vr-row">
+                                    @if (model.Versions.Count > 1)
+                                    {
+                                        <label class="metadata-editor-vr-version" for="metadata-content-type-@version.FileId">@version.VersionLabel</label>
+                                    }
+                                    <select id="metadata-content-type-@version.FileId" class="form-select metadata-editor-vr-select" aria-label="Content type of @version.VersionLabel"
+                                            @bind="version.ContentType" disabled="@saving">
+                                        @foreach (var type in MovieFilterOptions.ContentTypes)
+                                        {
+                                            <option value="@type">@MovieFilterOptions.ContentTypeLabel(type)</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                            <small class="text-muted">Used by the Content Type filter; the primary version's value is the movie's. Stays in Javbuddy; not written to the .nfo.</small>
+                        </div>
+
                         @* Each version's VR / 3D format. Javbuddy's own data only:
                            the file isn't renamed. *@
                         <div class="col-12">
@@ -128,6 +153,24 @@
         public string? MetaDescription { get; set; }
         public MovieContentType ContentType { get; set; }
         public List<VrChoice> VrFormats { get; set; } = [];
+        public List<ContentTypeChoice> Versions { get; set; } = [];
+    }
+
+    /// <summary>One version's content type choice.</summary>
+    private sealed class ContentTypeChoice
+    {
+        public int FileId { get; init; }
+        public string VersionLabel { get; init; } = "";
+        public MovieContentType Original { get; init; }
+        public MovieContentType ContentType { get; set; }
+
+        public static ContentTypeChoice From(MovieFile file) => new()
+        {
+            FileId = file.Id,
+            VersionLabel = file.VersionTag,
+            Original = file.ContentType,
+            ContentType = file.ContentType,
+        };
     }
 
     /// <summary>One version's VR format choice: Auto (detected), None, or a VrFormat value.</summary>
@@ -187,6 +230,11 @@
                     .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
                     .Select(VrChoice.From)
                     .ToList(),
+                Versions = Movie.MovieFiles
+                    .OrderByDescending(f => f.IsPrimary)
+                    .ThenBy(f => f.FileName, StringComparer.OrdinalIgnoreCase)
+                    .Select(ContentTypeChoice.From)
+                    .ToList(),
             };
             saveError = null;
             saveWarning = null;
@@ -212,7 +260,7 @@
             model.MetaSeries,
             model.MetaDirector,
             model.MetaDescription,
-            model.ContentType);
+            model.Versions.Count == 0 ? model.ContentType : null);
 
         OperationResult result;
         string? nfoWarning;
@@ -220,6 +268,11 @@
         {
             result = await MovieService.UpdateMetadataAsync(Movie.Id, update);
             nfoWarning = result.Success ? result.ErrorMessage : null;
+            foreach (var version in model.Versions.Where(v => v.ContentType != v.Original))
+            {
+                if (!result.Success) break;
+                result = await MovieService.SetFileContentTypeAsync(Movie.Id, version.FileId, version.ContentType);
+            }
             foreach (var vr in model.VrFormats.Where(v => v.Choice != v.Original))
             {
                 if (!result.Success) break;

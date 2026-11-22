@@ -131,6 +131,11 @@ public interface IMovieService
     /// Javbuddy's own data changes; the file isn't renamed. Fails when fileId isn't one of the
     /// movie's files or vrType isn't a known format.</summary>
     Task<OperationResult> SetVrTypeAsync(int movieId, int fileId, string? vrType, bool detect = false, CancellationToken ct = default);
+
+    /// <summary>Sets one version's content type (e.g. a censored and a decensored version of the same movie). The
+    /// primary version's value is mirrored onto the movie. Only Javbuddy's own data changes. Fails when fileId isn't
+    /// one of the movie's files or contentType isn't a defined value.</summary>
+    Task<OperationResult> SetFileContentTypeAsync(int movieId, int fileId, MovieContentType contentType, CancellationToken ct = default);
 }
 
 /// <summary>Mutations for MovieDetail.razor's toolbar actions — extracted so the page doesn't
@@ -164,6 +169,28 @@ public class MovieService(
         file.VrTypePinned = !detect;
         if (!detect) file.VrType = vrType;
         LocalLibraryMetadataMapper.ApplyVrFormats(movie);
+        await db.SaveChangesAsync(ct);
+        movieChangeNotifier?.NotifyChanged();
+        return new OperationResult(true);
+    }
+
+    public async Task<OperationResult> SetFileContentTypeAsync(int movieId, int fileId, MovieContentType contentType, CancellationToken ct = default)
+    {
+        if (!Enum.IsDefined(contentType))
+        {
+            return new OperationResult(false, $"Unknown content type \"{contentType}\".");
+        }
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var movie = await db.Movies.Include(m => m.MovieFiles).FirstOrDefaultAsync(m => m.Id == movieId, ct);
+        var file = movie?.MovieFiles.FirstOrDefault(f => f.Id == fileId);
+        if (movie is null || file is null)
+        {
+            return new OperationResult(false, "That version no longer exists.");
+        }
+
+        file.ContentType = contentType;
+        if (file.IsPrimary) movie.ContentType = contentType;
         await db.SaveChangesAsync(ct);
         movieChangeNotifier?.NotifyChanged();
         return new OperationResult(true);
@@ -407,7 +434,7 @@ public class MovieService(
     public async Task<OperationResult> UpdateMetadataAsync(int movieId, MovieMetadataUpdate update, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var movie = await db.Movies.FindAsync([movieId], ct);
+        var movie = await db.Movies.Include(m => m.MovieFiles).FirstOrDefaultAsync(m => m.Id == movieId, ct);
         if (movie is null)
         {
             return OperationResult.Fail("Movie not found.");
@@ -422,7 +449,13 @@ public class MovieService(
         movie.MetaSeries = update.MetaSeries.TrimToNull();
         movie.MetaDirector = update.MetaDirector.TrimToNull();
         movie.MetaDescription = update.MetaDescription.TrimToNull();
-        if (update.ContentType is { } contentType) movie.ContentType = contentType;
+        if (update.ContentType is { } contentType)
+        {
+            movie.ContentType = contentType;
+            // With local versions the primary one is the source of truth (it is mirrored onto the movie on refresh).
+            var primary = movie.MovieFiles.FirstOrDefault(f => f.IsPrimary);
+            if (primary is not null) primary.ContentType = contentType;
+        }
 
         await db.SaveChangesAsync(ct);
         movieChangeNotifier?.NotifyChanged();

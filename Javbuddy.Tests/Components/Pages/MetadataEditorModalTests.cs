@@ -213,7 +213,25 @@ public class MetadataEditorModalTests : BunitContext
         Assert.Contains("Auto (VR180 SBS)", cut.Find("#metadata-vr-70").TextContent);
         Assert.Equal("none", cut.Find("#metadata-vr-71").GetAttribute("value"));
         Assert.Contains("Auto (detect again)", cut.Find("#metadata-vr-71").TextContent);
-        Assert.Equal(["Original", "2D"], cut.FindAll(".metadata-editor-vr-version").Select(l => l.TextContent));
+        Assert.Equal(["Original", "2D"], cut.FindAll("label[for^=metadata-vr-]").Select(l => l.TextContent));
+    }
+
+    [Fact]
+    public async Task ContentType_OffersOnePickerPerVersion_AndSavesOnlyAChangedOne()
+    {
+        var service = SetUpMovieService();
+        service.UpdateMetadataAsync(Arg.Any<int>(), Arg.Any<MovieMetadataUpdate>(), Arg.Any<CancellationToken>()).Returns(new OperationResult(true));
+        service.SetFileContentTypeAsync(Arg.Any<int>(), Arg.Any<int>(), Arg.Any<MovieContentType>(), Arg.Any<CancellationToken>()).Returns(new OperationResult(true));
+        var cut = Render<MetadataEditorModal>(p => p.Add(x => x.Movie, VrMovie()));
+        cut.Render(p => p.Add(x => x.Show, true));
+
+        Assert.Empty(cut.FindAll("#metadata-content-type"));
+        cut.Find("#metadata-content-type-71").Change(nameof(MovieContentType.Decensored));
+        await cut.InvokeAsync(() => cut.Find("form").Submit());
+
+        await service.Received(1).UpdateMetadataAsync(Arg.Any<int>(), Arg.Is<MovieMetadataUpdate>(u => u.ContentType == null), Arg.Any<CancellationToken>());
+        await service.Received(1).SetFileContentTypeAsync(Arg.Any<int>(), 71, MovieContentType.Decensored, Arg.Any<CancellationToken>());
+        await service.DidNotReceive().SetFileContentTypeAsync(Arg.Any<int>(), 70, Arg.Any<MovieContentType>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

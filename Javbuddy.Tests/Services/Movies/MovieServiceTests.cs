@@ -1647,4 +1647,66 @@ public class MovieServiceTests
         Assert.False((await service.SetVrTypeAsync(movieId, primaryId, "VR720")).Success);
         Assert.False((await service.SetVrTypeAsync(movieId + 1, primaryId, "VR")).Success);
     }
+
+    [Fact]
+    public async Task SetFileContentTypeAsync_SetsTheVersion_AndOnlyThePrimarysBecomesTheMovies()
+    {
+        using var factory = new TestDbContextFactory();
+        var (movieId, primaryId, otherId) = await SeedVrMovieAsync(factory);
+        var service = new MovieService(factory);
+
+        Assert.True((await service.SetFileContentTypeAsync(movieId, otherId, MovieContentType.Decensored)).Success);
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = await db.Movies.Include(m => m.MovieFiles).SingleAsync(m => m.Id == movieId);
+            Assert.Equal(MovieContentType.Decensored, movie.MovieFiles.Single(f => f.Id == otherId).ContentType);
+            Assert.Equal(MovieContentType.Censored, movie.ContentType);
+        }
+
+        Assert.True((await service.SetFileContentTypeAsync(movieId, primaryId, MovieContentType.Uncensored)).Success);
+
+        await using var readDb = await factory.CreateDbContextAsync();
+        Assert.Equal(MovieContentType.Uncensored, (await readDb.Movies.SingleAsync(m => m.Id == movieId)).ContentType);
+    }
+
+    [Fact]
+    public async Task SetFileContentTypeAsync_RejectsAnUndefinedType_AndAnotherMoviesFile()
+    {
+        using var factory = new TestDbContextFactory();
+        var (movieId, primaryId, _) = await SeedVrMovieAsync(factory);
+        var service = new MovieService(factory);
+
+        Assert.False((await service.SetFileContentTypeAsync(movieId, primaryId, (MovieContentType)99)).Success);
+        Assert.False((await service.SetFileContentTypeAsync(movieId + 1, primaryId, MovieContentType.Decensored)).Success);
+    }
+
+    [Fact]
+    public async Task SetPrimaryFileAsync_CopiesTheNewPrimarysContentTypeOntoTheMovie()
+    {
+        using var factory = new TestDbContextFactory();
+        var (movieId, _, otherId) = await SeedVrMovieAsync(factory);
+        var service = new MovieService(factory);
+        await service.SetFileContentTypeAsync(movieId, otherId, MovieContentType.Decensored);
+
+        Assert.True((await service.SetPrimaryFileAsync(movieId, otherId)).Success);
+
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(MovieContentType.Decensored, (await db.Movies.SingleAsync(m => m.Id == movieId)).ContentType);
+    }
+
+    [Fact]
+    public async Task UpdateMetadataAsync_ContentType_WritesThroughToThePrimaryVersion()
+    {
+        using var factory = new TestDbContextFactory();
+        var (movieId, primaryId, otherId) = await SeedVrMovieAsync(factory);
+        var service = new MovieService(factory);
+
+        await service.UpdateMetadataAsync(movieId, TitleOnlyUpdate("A") with { ContentType = MovieContentType.Uncensored });
+
+        await using var db = await factory.CreateDbContextAsync();
+        var files = (await db.Movies.Include(m => m.MovieFiles).SingleAsync(m => m.Id == movieId)).MovieFiles.ToDictionary(f => f.Id);
+        Assert.Equal(MovieContentType.Uncensored, files[primaryId].ContentType);
+        Assert.Equal(MovieContentType.Censored, files[otherId].ContentType);
+    }
 }

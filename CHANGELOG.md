@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **Content type is now set per version.** A movie can keep a censored and a decensored (or uncensored) file side by side: Edit Metadata has a Content type picker per version, like the VR format one, and the version list in Media Info shows a badge for non-censored versions. The primary version's content type is the movie's, so the Content Type filter and statistics work as before. Existing versions start with their movie's content type. Versions are matched by file name, so renaming a non-primary file resets its content type to the movie's.
+
 ## [0.9.1] - 2026-11-22
 
 ### Fixed
