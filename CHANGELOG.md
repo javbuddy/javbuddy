@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **The docs now say that backups contain the saved integration secrets in plain text** (qBittorrent password, Prowlarr, Jellyfin and javinizer-go keys) and that the download endpoint has no login, so keep backups private or put Javbuddy behind an authenticating proxy.
 - **The header search treats `%` and `_` as ordinary characters.** Typing `a_b` no longer matches `axb`, and `100%` no longer matches everything starting `100`.
 - **The Jellyfin API key is sent in an `Authorization: MediaBrowser Token="…"` header instead of the `?apikey=` query string**, so it no longer ends up in request URLs that logs, traces or proxies record. Like the other integrations' credentials, it now travels in a header.
 - **Provider and .nfo image downloads (movie covers, posters, actor photos) can no longer reach private addresses.** They now use the same public-address-only HTTP client as "Import image from URL", so a cover URL in a local .nfo can't make the server fetch from loopback, the LAN or cloud metadata addresses.

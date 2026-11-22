@@ -39,7 +39,7 @@ In Linux, Docker, and shell environments, nested JSON configuration keys use dou
 
 ### Database Backups
 
-Set on **System → Backups**; each setting here overrides its field there and locks it. A backup holds the database only. A restore applies at the next start, so *Restart now* only brings Javbuddy back up under a restart policy (such as Docker's `restart: unless-stopped`).
+Set on **System → Backups**; each setting here overrides its field there and locks it. A backup holds the database only, which includes the connection settings you saved on the Settings pages (the qBittorrent password and the Prowlarr, Jellyfin and javinizer-go keys) in plain text. Javbuddy has no login, so anyone who can reach it can download a backup (`/api/backups/{file}/download`); keep backup files and exports private, and put Javbuddy behind an authenticating reverse proxy if the network isn't trusted. A restore applies at the next start, so *Restart now* only brings Javbuddy back up under a restart policy (such as Docker's `restart: unless-stopped`).
 
 | Key | Environment Variable | Default | Description |
 |---|---|---|---|
