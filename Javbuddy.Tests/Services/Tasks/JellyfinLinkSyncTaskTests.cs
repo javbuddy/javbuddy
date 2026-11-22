@@ -38,6 +38,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
         jellyfinClient.LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new MediaServerLookupResult(true, new List<MediaServerItemDto>(), null));
 
@@ -86,6 +87,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
         jellyfinClient.LookupPersonAsync("Mikami Yua", Arg.Any<CancellationToken>())
             .Returns(new JellyfinPersonDto { Id = "jf-person-123", Name = "Mikami Yua" });
 
@@ -129,6 +131,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
         jellyfinClient.LookupPersonAsync("Mikami Yua", Arg.Any<CancellationToken>())
             .Returns(new JellyfinPersonDto { Id = "jf-person-123", ServerId = "server-from-person" });
 
@@ -154,6 +157,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
         jellyfinClient.GetServerIdAsync(Arg.Any<CancellationToken>()).Returns("server-from-system-info");
         jellyfinClient.LookupPersonAsync("Mikami Yua", Arg.Any<CancellationToken>())
             .Returns(new JellyfinPersonDto { Id = "jf-person-123" });
@@ -180,6 +184,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
         jellyfinClient.GetServerIdAsync(Arg.Any<CancellationToken>()).Returns("server-1");
 
         await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
@@ -205,6 +210,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
 
         await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
 
@@ -230,6 +236,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
         jellyfinClient.LookupPersonAsync("Primary Name", Arg.Any<CancellationToken>()).Returns((JellyfinPersonDto?)null);
         jellyfinClient.LookupPersonAsync("Known Alias", Arg.Any<CancellationToken>())
             .Returns(new JellyfinPersonDto { Id = "jf-alias-456", Name = "Known Alias" });
@@ -259,6 +266,7 @@ public class JellyfinLinkSyncTaskTests
 
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
         jellyfinClient.LookupMovieAsync("AAA-001", Arg.Any<CancellationToken>())
             .Returns(new MediaServerLookupResult(true, new List<MediaServerItemDto>
             {
@@ -284,6 +292,71 @@ public class JellyfinLinkSyncTaskTests
     }
 
     [Fact]
+    public async Task RunAsync_JellyfinUnreachable_SkipsWithoutLookingAnythingUp()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.Add(new Movie { Code = "AAA-001" });
+            await db.SaveChangesAsync();
+        }
+        var jellyfinClient = Substitute.For<IJellyfinClient>();
+        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(false, "timed out"));
+
+        var summary = await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
+
+        Assert.Contains("not reachable", summary);
+        await jellyfinClient.DidNotReceive().LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_ConsecutiveLookupFailures_StopTheRunAndSkipActors()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            for (var i = 1; i <= 6; i++) db.Movies.Add(new Movie { Code = $"AAA-00{i}" });
+            db.Actors.Add(new Actor { FirstName = "Yua", LastName = "Mikami" });
+            await db.SaveChangesAsync();
+        }
+        var jellyfinClient = Substitute.For<IJellyfinClient>();
+        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
+        jellyfinClient.LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new MediaServerLookupResult(false, null, "timed out"));
+
+        var summary = await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
+
+        Assert.Contains("stopped after 3 consecutive failed lookups", summary);
+        await jellyfinClient.Received(3).LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        await jellyfinClient.DidNotReceive().LookupPersonAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RunAsync_ASuccessfulLookupResetsTheFailureStreak()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            for (var i = 1; i <= 6; i++) db.Movies.Add(new Movie { Code = $"AAA-00{i}" });
+            await db.SaveChangesAsync();
+        }
+        var jellyfinClient = Substitute.For<IJellyfinClient>();
+        jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
+        var fail = new MediaServerLookupResult(false, null, "x");
+        var ok = new MediaServerLookupResult(true, new List<MediaServerItemDto>(), null);
+        jellyfinClient.LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(fail, fail, ok, fail, fail, ok);
+
+        var summary = await new JellyfinLinkSyncTask(jellyfinClient, factory, EmptyConfiguration()).RunAsync(CancellationToken.None, new RecordingProgress());
+
+        Assert.DoesNotContain("stopped", summary);
+        await jellyfinClient.Received(6).LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task RunAsync_NeverLooksUpAnUnidentifiedPerformer_InJellyfin()
     {
         using var factory = new TestDbContextFactory();
@@ -297,6 +370,7 @@ public class JellyfinLinkSyncTaskTests
         }
         var jellyfinClient = Substitute.For<IJellyfinClient>();
         jellyfinClient.IsEnabledAsync(Arg.Any<CancellationToken>()).Returns(true);
+        jellyfinClient.TestConnectionAsync(Arg.Any<CancellationToken>()).Returns(new MediaServerTestResult(true, "ok"));
         jellyfinClient.LookupMovieAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new MediaServerLookupResult(true, new List<MediaServerItemDto>(), null));
 

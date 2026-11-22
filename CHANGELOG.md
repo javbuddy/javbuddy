@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Jellyfin Link Sync no longer waits out a timeout per item while Jellyfin is down.** It checks the connection first and skips the run if Jellyfin is unreachable, and stops after three failed lookups in a row.
 - **Library Rescan does far less filesystem work.** The subtitle, trailer, .nfo and image checks now run as one pass that finds each movie's folder once instead of four times, the run is skipped entirely when no library root is reachable, and .nfo conflict detection loads the library in chunks instead of all at once.
 - **Enriching all actors no longer re-syncs the whole library once per actor.** Movie casts are re-linked once at the end of the run, and only when a name or alias changed, instead of after every actor that picked up any field such as height or cup size.
 - **Activity > Queue's Refresh goes through the task launcher.** It no longer runs the qBittorrent sync itself with no cancellation, so it can't overlap a scheduled sync and stops with the app; the live progress poll moved into the queue service.

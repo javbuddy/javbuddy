@@ -46,6 +46,14 @@ public class JellyfinLinkSyncTask(
             return "skipped — Jellyfin integration is disabled";
         }
 
+        // With Jellyfin down every lookup would wait out its own request timeout on the shared scheduler,
+        // so one cheap check up front replaces thousands of timeouts.
+        var connection = await jellyfinClient.TestConnectionAsync(ct);
+        if (!connection.Success)
+        {
+            return $"skipped — Jellyfin is not reachable ({connection.Message})";
+        }
+
         // Only Id + Code are needed to look each movie up; matches are reloaded and saved in
         // their own short-lived context below.
         List<LinkTarget> targets;
@@ -59,6 +67,8 @@ public class JellyfinLinkSyncTask(
 
         var checkedCount = 0;
         var matched = 0;
+        var consecutiveFailures = 0;
+        var aborted = false;
 
         foreach (var movie in targets)
         {
@@ -67,6 +77,13 @@ public class JellyfinLinkSyncTask(
             progress.Report(new TaskProgress(checkedCount, targets.Count, "Checking Jellyfin"));
 
             var result = await jellyfinClient.LookupMovieAsync(movie.Code, ct);
+            consecutiveFailures = result.Success ? 0 : consecutiveFailures + 1;
+            if (consecutiveFailures >= MaxConsecutiveFailures)
+            {
+                aborted = true;
+                break;
+            }
+
             var match = result.Success ? result.Items?.FirstOrDefault() : null;
             if (match is null) continue;
 
@@ -82,6 +99,11 @@ public class JellyfinLinkSyncTask(
         if (matched > 0)
         {
             movieChangeNotifier?.NotifyChanged();
+        }
+
+        if (aborted)
+        {
+            return $"stopped after {MaxConsecutiveFailures} consecutive failed lookups — Jellyfin stopped responding; checked {checkedCount}, linked {matched}";
         }
 
         // The server id is only read when an actor needs it, and at most once per scan.
@@ -212,6 +234,8 @@ public class JellyfinLinkSyncTask(
 
         return $"checked {checkedCount}, linked {matched}";
     }
+
+    private const int MaxConsecutiveFailures = 3;
 
     private sealed record LinkTarget(int Id, string Code);
 }
