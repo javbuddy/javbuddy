@@ -22,7 +22,9 @@ public interface IBackupSettingsService
     /// the defaults.</summary>
     Task<BackupSettings> GetEffectiveAsync(CancellationToken ct = default);
 
-    /// <summary>The settings in effect without a query once read (the scheduler asks every minute); refreshed on save.</summary>
+    /// <summary>The settings in effect, never querying the database (the scheduler asks every minute on its own loop):
+    /// the last ones read or saved, seeded by <see cref="GetEffectiveAsync"/> at startup. Until then the defaults with
+    /// the environment overrides.</summary>
     BackupSettings GetEffectiveCached();
 
     /// <summary>The saved row (or the defaults), for the Settings form.</summary>
@@ -56,8 +58,7 @@ public sealed class BackupSettingsService(IDbContextFactory<AppDbContext> dbFact
             return known;
         }
 
-        using var db = dbFactory.CreateDbContext();
-        return cached = Apply(db.BackupSettings.AsNoTracking().OrderBy(s => s.Id).FirstOrDefault() ?? new BackupSettings());
+        return Apply(new BackupSettings());
     }
 
     public Task<BackupSettings> GetStoredAsync(CancellationToken ct = default) =>
@@ -66,14 +67,15 @@ public sealed class BackupSettingsService(IDbContextFactory<AppDbContext> dbFact
     public async Task SaveAsync(BackupSettings settings, CancellationToken ct = default)
     {
         // Clamped here rather than only in the repository's copy, which an insert into an empty table bypasses.
-        await repository.SaveAsync(new BackupSettings
+        var clamped = new BackupSettings
         {
             Id = settings.Id,
             Enabled = settings.Enabled,
             RetentionDays = ClampDays(settings.RetentionDays),
             FrequencyDays = ClampDays(settings.FrequencyDays),
-        }, ct);
-        cached = null;
+        };
+        await repository.SaveAsync(clamped, ct);
+        cached = Apply(clamped);
     }
 
     public bool IsSetByEnvironment(string field) => field == nameof(BackupSettings.Enabled)

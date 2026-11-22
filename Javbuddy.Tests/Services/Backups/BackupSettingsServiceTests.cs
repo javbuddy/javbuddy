@@ -1,4 +1,5 @@
 using Javbuddy.Models;
+using Javbuddy.Services.Backups;
 
 namespace Javbuddy.Tests.Services.Backups;
 
@@ -78,5 +79,18 @@ public sealed class BackupSettingsServiceTests
         var stored = await env.Settings.GetStoredAsync();
         Assert.Equal(1, stored.RetentionDays);
         Assert.Equal(1, stored.FrequencyDays);
+    }
+
+    [Fact]
+    public async Task GetEffectiveCached_DoesNotReadTheDatabaseUntilSeeded()
+    {
+        using var env = new BackupTestEnvironment();
+        await env.Settings.SaveAsync(new BackupSettings { Enabled = true, RetentionDays = 20, FrequencyDays = 7 });
+        var fresh = new BackupSettingsService(env.Factory, env.Configuration);
+
+        Assert.Equal(1, fresh.GetEffectiveCached().FrequencyDays);
+
+        await fresh.GetEffectiveAsync();
+        Assert.Equal(7, fresh.GetEffectiveCached().FrequencyDays);
     }
 }

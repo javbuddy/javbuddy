@@ -138,6 +138,9 @@ using (var scope = app.Services.CreateScope())
 
     var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
     await runner.CleanUpOrphanedRunsAsync();
+
+    // Seeds the backup settings the scheduler reads from memory, so it never has to query the database itself.
+    await scope.ServiceProvider.GetRequiredService<IBackupSettingsService>().GetEffectiveAsync();
 }
 
 // Configure the HTTP request pipeline.

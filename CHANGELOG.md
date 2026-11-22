@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **The backup scheduler no longer reads the database on its own loop.** The backup settings are loaded at startup and refreshed when saved, so the once-a-minute check never blocks on synchronous SQLite I/O.
 - **The same scheduled task can no longer run twice at once.** The scheduler, System > Tasks, Library Import and Activity > Queue now share one guard, so two Library Rescans no longer race to import the same code and fail partway. Run now reports that the task is already running.
 - **A long task no longer stalls the short ones.** Due tasks start in the background instead of one after another, so a Library Rescan or Image Cache run no longer delays the qBittorrent sync or a backup.
 - **Tasks that keep no run history now remember when they last ran.** The qBittorrent sync waits its interval after each run instead of running on every tick, and a task's Next Execution on System > Tasks no longer slides forward on every refresh.
