@@ -96,8 +96,8 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
                 // (image tags, user data, the total count). A search returns a handful of items in one request.
                 var url = CombineUrl(settings.BaseUrl!, "/Items")
                     + $"?recursive=true&includeItemTypes=Movie&enableImages=false&enableUserData=false&enableTotalRecordCount=false"
-                    + $"&searchTerm={Uri.EscapeDataString(query)}&apikey={Uri.EscapeDataString(settings.ApiKey!)}";
-                using var response = await client.GetAsync(url, token);
+                    + $"&searchTerm={Uri.EscapeDataString(query)}";
+                using var response = await GetAsync(client, url, settings.ApiKey!, token);
 
                 if (!response.IsSuccessStatusCode)
                 {
@@ -109,6 +109,15 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
                 return new MediaServerLookupResult(true, items, null);
             },
             message => new MediaServerLookupResult(false, null, message));
+    }
+
+    /// <summary>GET with the API key in the Authorization header (<c>MediaBrowser Token="…"</c>), so it
+    /// never appears in a URL that HttpClient logging, traces or proxies would record.</summary>
+    private static async Task<HttpResponseMessage> GetAsync(HttpClient client, string url, string apiKey, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.TryAddWithoutValidation("Authorization", $"MediaBrowser Token=\"{apiKey.Replace("\"", "")}\"");
+        return await client.SendAsync(request, ct);
     }
 
     public async Task<string?> GetServerIdAsync(CancellationToken ct = default)
@@ -125,8 +134,8 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
         var result = await ExecuteAsync(TimeSpan.FromSeconds(15), ct,
             async (client, token) =>
             {
-                var url = CombineUrl(settings.BaseUrl!, "/System/Info") + $"?apikey={Uri.EscapeDataString(settings.ApiKey!)}";
-                using var response = await client.GetAsync(url, token);
+                var url = CombineUrl(settings.BaseUrl!, "/System/Info");
+                using var response = await GetAsync(client, url, settings.ApiKey!, token);
                 if (!response.IsSuccessStatusCode)
                 {
                     return null;
@@ -177,21 +186,20 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
             async (client, token) =>
             {
                 var trimmed = name.Trim();
-                var url = CombineUrl(settings.BaseUrl!, $"/Persons/{Uri.EscapeDataString(trimmed)}")
-                    + $"?apikey={Uri.EscapeDataString(settings.ApiKey!)}";
+                var url = CombineUrl(settings.BaseUrl!, $"/Persons/{Uri.EscapeDataString(trimmed)}");
 
                 try
                 {
-                    using var response = await client.GetAsync(url, token);
+                    using var response = await GetAsync(client, url, settings.ApiKey!, token);
                     if (response.IsSuccessStatusCode)
                     {
                         return await response.Content.ReadFromJsonAsync<JellyfinPersonDto>(cancellationToken: token);
                     }
 
                     var searchUrl = CombineUrl(settings.BaseUrl!, "/Persons")
-                        + $"?searchTerm={Uri.EscapeDataString(trimmed)}&limit=5&apikey={Uri.EscapeDataString(settings.ApiKey!)}";
+                        + $"?searchTerm={Uri.EscapeDataString(trimmed)}&limit=5";
 
-                    using var searchResponse = await client.GetAsync(searchUrl, token);
+                    using var searchResponse = await GetAsync(client, searchUrl, settings.ApiKey!, token);
                     if (searchResponse.IsSuccessStatusCode)
                     {
                         var queryResult = await searchResponse.Content.ReadFromJsonAsync<JellyfinQueryResultDto>(cancellationToken: token);
@@ -229,8 +237,8 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
         return await ExecuteAsync(TimeSpan.FromSeconds(15), ct,
             async (client, token) =>
             {
-                var url = CombineUrl(settings.BaseUrl!, "/System/Info") + $"?apikey={Uri.EscapeDataString(settings.ApiKey!)}";
-                using var response = await client.GetAsync(url, token);
+                var url = CombineUrl(settings.BaseUrl!, "/System/Info");
+                using var response = await GetAsync(client, url, settings.ApiKey!, token);
 
                 if (response.IsSuccessStatusCode)
                 {
