@@ -176,12 +176,15 @@ public sealed class ApexMediaServiceTests : IDisposable
         Assert.Equal(rows, (await RowsAsync()).Count);
     }
 
+    private readonly QueueDrain drain = new();
+
     /// <summary>A service whose queue runs for real, so EnsureQueued's work is generated in the background.</summary>
     private async Task<(IApexMediaService Service, SceneMediaQueue Queue, TaskCompletionSource<int> Generated)> StartBackgroundAsync(int movieId)
     {
         SceneMediaQueue backgroundQueue = null!;
         var services = new ServiceCollection()
             .AddSingleton<IApexMediaService>(_ => CreateService(backgroundQueue))
+            .AddSingleton(drain.HighlightService)
             .BuildServiceProvider();
         backgroundQueue = new SceneMediaQueue(services.GetRequiredService<IServiceScopeFactory>(), NullLogger<SceneMediaQueue>.Instance);
         var generated = new TaskCompletionSource<int>();
@@ -242,7 +245,7 @@ public sealed class ApexMediaServiceTests : IDisposable
         using var disposeQueue = backgroundQueue;
 
         await service.EnsureQueuedAsync(movieId);
-        await Task.Delay(300);
+        await drain.DrainAsync(backgroundQueue); // anything the request queued has run by now
 
         Assert.Empty(calls);
         await backgroundQueue.StopAsync(CancellationToken.None);

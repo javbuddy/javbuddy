@@ -2,6 +2,7 @@ using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Torrents;
 using Javbuddy.Services.Torrents.SortWizard;
+using Javbuddy.Tests.TestSupport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
@@ -34,20 +35,27 @@ public class SortWizardStepTests
     [Fact]
     public async Task OrganizeStep_TickerNotifiesEverySecondUntilOrganizeReturns()
     {
-        var time = new FakeTimeProvider();
+        var time = new SignalingFakeTimeProvider();
         var release = new TaskCompletionSource<OperationResult>();
         var sortService = Substitute.For<ITorrentSortService>();
         sortService.OrganizeAsync(7, "/media", Arg.Any<CancellationToken>()).Returns(release.Task);
         var session = new WizardSession { TorrentDownloadId = 7, Destination = "/media" };
         var notifications = 0;
-        session.Changed += () => notifications++;
+        var ticked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var armed = false;
+        session.Changed += () =>
+        {
+            notifications++;
+            if (Volatile.Read(ref armed)) ticked.TrySetResult();
+        };
         var organize = new OrganizeStep(session, sortService, time);
 
         var running = organize.OrganizeAsync();
-        await Task.Yield();
+        await time.WaitForTimerAsync(); // the ticker is waiting on the clock
         var before = notifications;
+        Volatile.Write(ref armed, true);
         time.Advance(TimeSpan.FromSeconds(1));
-        await Task.Delay(50);
+        await ticked.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.True(organize.Organizing);
         Assert.True(notifications > before);
@@ -70,8 +78,14 @@ public class SortWizardStepTests
         var session = new WizardSession { TorrentDownloadId = 7 };
         var scrape = new ScrapeStep(session, sortService, new ConfigurationBuilder().Build(), time);
 
+        var reviewing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        session.Changed += () =>
+        {
+            if (session.Step == WizardStep.Review) reviewing.TrySetResult();
+        };
+
         scrape.StartPolling();
-        await Task.Delay(100);
+        await reviewing.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(WizardStep.Review, session.Step);
         await scrape.DisposeAsync();

@@ -385,28 +385,34 @@ public sealed class SceneMediaServiceTests : IDisposable
         var (movieId, sceneId) = await SeedAsync();
         var media = Substitute.For<ISceneMediaService>();
         media.GenerateAsync(sceneId, Arg.Any<CancellationToken>()).Returns(movieId);
-        var services = new ServiceCollection().AddSingleton(media).BuildServiceProvider();
-        using var backgroundQueue = new SceneMediaQueue(services.GetRequiredService<IServiceScopeFactory>(), NullLogger<SceneMediaQueue>.Instance)
+        var drain = new QueueDrain();
+        var services = new ServiceCollection().AddSingleton(media).AddSingleton(drain.HighlightService).BuildServiceProvider();
+        var time = new SignalingFakeTimeProvider();
+        using var backgroundQueue = new SceneMediaQueue(services.GetRequiredService<IServiceScopeFactory>(), NullLogger<SceneMediaQueue>.Instance, time)
         {
-            // Long enough that a stalled CI runner can't let the first edit settle before the second one.
             SettleDelay = TimeSpan.FromSeconds(2)
         };
-        var generated = new TaskCompletionSource<int>();
+        var generated = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         backgroundQueue.Generated += id => generated.TrySetResult(id);
         await backgroundQueue.StartAsync(CancellationToken.None);
         var window = new SceneMediaWindow(600_000, 3_600_000);
 
         backgroundQueue.NoteScenesChanged(movieId);
         backgroundQueue.Enqueue(sceneId, movieId, window);
-        await Task.Delay(200);
+        await time.AdvanceWhenWaitingAsync(TimeSpan.FromMilliseconds(200)); // the job is deferred behind the settle delay
         // Another edit restarts the wait; a repeat request while deferred doesn't queue it twice.
         backgroundQueue.NoteScenesChanged(movieId);
-        var restarted = DateTime.UtcNow;
         backgroundQueue.Enqueue(sceneId, movieId, window);
 
+        // The first wait ends at the original settle time, but the later edit pushes the job back again.
+        time.Advance(TimeSpan.FromMilliseconds(1800));
+        await time.WaitForTimerAsync();
+        Assert.False(generated.Task.IsCompleted, "generation ran before the scenes settled");
+        await media.DidNotReceive().GenerateAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+
+        time.Advance(TimeSpan.FromMilliseconds(200));
         Assert.Equal(movieId, await generated.Task.WaitAsync(TimeSpan.FromSeconds(15)));
-        Assert.True(DateTime.UtcNow - restarted >= TimeSpan.FromMilliseconds(1900), "generation ran before the scenes settled");
-        await Task.Delay(300);
+        await drain.DrainAsync(backgroundQueue);
         await media.Received(1).GenerateAsync(sceneId, Arg.Any<CancellationToken>());
         await backgroundQueue.StopAsync(CancellationToken.None);
     }
@@ -422,8 +428,10 @@ public sealed class SceneMediaServiceTests : IDisposable
                 return FfmpegRunResult.Failed("boom");
             });
         SceneMediaQueue backgroundQueue = null!;
+        var drain = new QueueDrain();
         var services = new ServiceCollection()
             .AddSingleton<ISceneMediaService>(_ => new SceneMediaService(factory, localLibrary, ffmpeg, imageCache, maintenance, backgroundQueue))
+            .AddSingleton(drain.HighlightService)
             .BuildServiceProvider();
         backgroundQueue = new SceneMediaQueue(services.GetRequiredService<IServiceScopeFactory>(), NullLogger<SceneMediaQueue>.Instance);
         using var disposeQueue = backgroundQueue;
@@ -436,7 +444,7 @@ public sealed class SceneMediaServiceTests : IDisposable
         // The still was written, so the job still reports the movie.
         Assert.Equal(movieId, await generated.Task.WaitAsync(TimeSpan.FromSeconds(5)));
         await service.EnsureQueuedAsync(movieId);
-        await Task.Delay(300);
+        await drain.DrainAsync(backgroundQueue); // anything the second request queued has run by now
 
         Assert.Single(calls, c => c.Kind == "preview");
         Assert.Equal(["thumb"], (await RowsAsync()).Select(r => r.Variant));

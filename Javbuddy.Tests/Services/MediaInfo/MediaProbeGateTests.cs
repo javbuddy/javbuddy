@@ -113,11 +113,19 @@ public class MediaProbeGateTests
         var gate = new MediaProbeGate(3);
         var running = 0;
         var peak = 0;
+        var probed = 0;
+        using var limitReached = new ManualResetEventSlim();
         MediaProbeResult Work()
         {
             var now = Interlocked.Increment(ref running);
             InterlockedMax(ref peak, now);
-            Thread.Sleep(40);
+            // Hold every probe until the limit's worth are running at once, so the overlap is certain rather than
+            // left to a sleep; a gate that let in a fourth would show as a higher peak.
+            if (now >= 3) limitReached.Set();
+            Assert.True(limitReached.Wait(TimeSpan.FromSeconds(30)), "the gate never let three probes run together");
+            // Absence can only be observed by waiting: give a fourth probe, if the gate wrongly admitted one, a
+            // moment to show up. Only the first wave pays for it; the rest of the probes run straight through.
+            if (Interlocked.Exchange(ref probed, 1) == 0) SpinWait.SpinUntil(() => Volatile.Read(ref running) > 3, TimeSpan.FromMilliseconds(100));
             Interlocked.Decrement(ref running);
             return Ok();
         }

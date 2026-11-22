@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Services.Tasks;
@@ -17,27 +16,6 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
 {
     private static readonly TimeSpan Minute = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan Failsafe = TimeSpan.FromSeconds(30);
-
-    /// <summary>A fake clock that signals each time a timer is created, so a test advances time only once the
-    /// service is actually waiting on it, rather than sleeping and hoping.</summary>
-    private sealed class SignalingTimeProvider() : FakeTimeProvider(DateTimeOffset.UtcNow)
-    {
-        public SemaphoreSlim TimerCreated { get; } = new(0);
-
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            var timer = base.CreateTimer(callback, state, dueTime, period);
-            TimerCreated.Release();
-            return timer;
-        }
-
-        /// <summary>Waits for the service to start waiting on the clock, then moves it forward one tick.</summary>
-        public async Task NextTickAsync()
-        {
-            await TimerCreated.WaitAsync(Failsafe);
-            Advance(Minute);
-        }
-    }
 
     private sealed class CountingTask(string name, TimeSpan interval, bool recordRunHistory = true, bool runImmediately = true, Func<int>? onInterval = null) : IScheduledTask
     {
@@ -68,7 +46,7 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
 
     private readonly TestDbContextFactory factory = new();
     private readonly JavbuddyMetrics metrics = new();
-    private readonly SignalingTimeProvider time = new();
+    private readonly SignalingFakeTimeProvider time = new();
     private readonly ScheduledTaskRunTracker tracker = new();
     private readonly ILogger<ScheduledTaskHostedService> logger = Substitute.For<ILogger<ScheduledTaskHostedService>>();
     private ServiceProvider? provider;
@@ -108,7 +86,7 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
     {
         var task = new CountingTask("Soon", Minute);
         await StartAsync(task);
-        await time.TimerCreated.WaitAsync(Failsafe);
+        await time.WaitForTimerAsync();
 
         time.Advance(Minute - TimeSpan.FromSeconds(1));
 
@@ -121,7 +99,7 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
         var task = new CountingTask("Due", Minute);
         await StartAsync(task);
 
-        await time.NextTickAsync();
+        await time.AdvanceWhenWaitingAsync(Minute);
         await task.WaitForRunAsync();
         await tracker.WaitUntilIdleAsync("Due");
 
@@ -137,7 +115,7 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
         var probe = new CountingTask("Probe", Minute);
         await StartAsync(waiting, probe);
 
-        await time.NextTickAsync();
+        await time.AdvanceWhenWaitingAsync(Minute);
         await probe.WaitForRunAsync();
 
         Assert.Equal(0, waiting.Runs);
@@ -152,13 +130,13 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
         var probe = new CountingTask("Probe", Minute);
         await StartAsync(noHistory, probe);
 
-        await time.NextTickAsync();
+        await time.AdvanceWhenWaitingAsync(Minute);
         await noHistory.WaitForRunAsync();
         await probe.WaitForRunAsync();
         await tracker.WaitUntilIdleAsync("No history");
         await tracker.WaitUntilIdleAsync("Probe");
 
-        await time.NextTickAsync(); // the second tick: the probe runs again, the task is not yet due
+        await time.AdvanceWhenWaitingAsync(Minute); // the second tick: the probe runs again, the task is not yet due
         await probe.WaitForRunAsync();
 
         Assert.Equal(1, noHistory.Runs);
@@ -171,10 +149,10 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
         var task = new CountingTask("Frequent", Minute, recordRunHistory: false);
         await StartAsync(task);
 
-        await time.NextTickAsync();
+        await time.AdvanceWhenWaitingAsync(Minute);
         await task.WaitForRunAsync();
         await tracker.WaitUntilIdleAsync("Frequent");
-        await time.NextTickAsync();
+        await time.AdvanceWhenWaitingAsync(Minute);
         await task.WaitForRunAsync();
 
         Assert.Equal(2, task.Runs);
@@ -188,10 +166,10 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
         var slow = new BlockingTask(release.Task, started);
         await StartAsync(slow);
 
-        await time.NextTickAsync();
+        await time.AdvanceWhenWaitingAsync(Minute);
         await started.WaitAsync(Failsafe);
-        await time.NextTickAsync();
-        await time.NextTickAsync();
+        await time.AdvanceWhenWaitingAsync(Minute);
+        await time.AdvanceWhenWaitingAsync(Minute);
         Assert.Equal(1, slow.Runs);
 
         release.SetResult("done");
@@ -221,8 +199,8 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
         var flaky = new CountingTask("Flaky", Minute, onInterval: () => Interlocked.Increment(ref calls) == 1 ? throw new InvalidOperationException("bad interval") : 0);
         await StartAsync(flaky);
 
-        await time.NextTickAsync();
-        await time.TimerCreated.WaitAsync(Failsafe); // the loop got back to waiting after the failed tick
+        await time.AdvanceWhenWaitingAsync(Minute);
+        await time.WaitForTimerAsync(); // the loop got back to waiting after the failed tick
         Assert.Equal(0, flaky.Runs);
         time.Advance(Minute);
         await flaky.WaitForRunAsync();
@@ -236,7 +214,7 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
     {
         var task = new CountingTask("Never", Minute);
         await StartAsync(task);
-        await time.TimerCreated.WaitAsync(Failsafe);
+        await time.WaitForTimerAsync();
 
         await service!.StopAsync(CancellationToken.None);
 
@@ -248,9 +226,9 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
     {
         var task = new CountingTask("Once", TimeSpan.FromHours(1), recordRunHistory: false);
         await StartAsync(task);
-        await time.NextTickAsync();
+        await time.AdvanceWhenWaitingAsync(Minute);
         await task.WaitForRunAsync();
-        await time.TimerCreated.WaitAsync(Failsafe); // waiting for the next tick
+        await time.WaitForTimerAsync(); // waiting for the next tick
 
         await service!.StopAsync(CancellationToken.None);
 

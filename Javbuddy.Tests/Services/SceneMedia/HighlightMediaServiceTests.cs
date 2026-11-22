@@ -236,8 +236,10 @@ public sealed class HighlightMediaServiceTests : IDisposable
                 return FfmpegRunResult.Failed("boom");
             });
         SceneMediaQueue backgroundQueue = null!;
+        var drain = new QueueDrain();
         var services = new ServiceCollection()
             .AddSingleton<IHighlightMediaService>(_ => new HighlightMediaService(factory, localLibrary, ffmpeg, imageCache, maintenance, backgroundQueue))
+            .AddSingleton(drain.ApexService)
             .BuildServiceProvider();
         backgroundQueue = new SceneMediaQueue(services.GetRequiredService<IServiceScopeFactory>(), NullLogger<SceneMediaQueue>.Instance);
         using var disposeQueue = backgroundQueue;
@@ -247,7 +249,7 @@ public sealed class HighlightMediaServiceTests : IDisposable
         // The still was written, so the run still reports the movie.
         Assert.Equal(movieId, await service.GenerateAsync(highlightId));
         await service.EnsureQueuedAsync(movieId);
-        await Task.Delay(300);
+        await drain.DrainAsync(backgroundQueue, MediaKind.Apex); // anything the second request queued has run by now
 
         Assert.Single(calls, c => c.Kind == "preview");
         Assert.Equal(["thumb"], (await RowsAsync()).Select(r => r.Variant));

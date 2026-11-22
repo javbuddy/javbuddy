@@ -64,10 +64,15 @@ public class SceneMediaQueueTests
 
         queue.Enqueue(5, 9, Window);
         queue.EnqueueHighlight(5, 9, Window);
-        queue.EnqueueHighlight(7, 9, Window); // remembered as failed for this range: skipped
+        queue.EnqueueHighlight(7, 9, Window); // remembered as failed for this range: never queued
+
+        // Jobs run in order, so once this later one has, the skipped highlight 7 would have run already.
+        var last = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        scenes.GenerateAsync(99, Arg.Any<CancellationToken>()).Returns(_ => { last.TrySetResult(); return (int?)null; });
+        queue.Enqueue(99, 9, Window);
 
         Assert.True(done.Wait(TimeSpan.FromSeconds(5)));
-        await Task.Delay(200);
+        await last.Task.WaitAsync(TimeSpan.FromSeconds(5));
         await highlights.DidNotReceive().GenerateAsync(7, Arg.Any<CancellationToken>());
         await queue.StopAsync(CancellationToken.None);
         queue.Dispose();
