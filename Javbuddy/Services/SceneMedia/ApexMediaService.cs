@@ -30,13 +30,24 @@ public interface IApexMediaService
     Task DeleteForApexAsync(int apexId, CancellationToken ct = default);
 }
 
-public static class ApexMediaExtensions
+public static class ClipMediaExtensions
 {
-    /// <summary>Whether an apex lacks media this image-cache mode keeps — what decides asking
-    /// <see cref="IApexMediaService.EnsureQueuedAsync"/>. In Thumbnails mode there is never a preview, so
-    /// its absence isn't a reason to ask.</summary>
+    /// <summary>Whether a clip lacks media this image-cache mode keeps — what decides asking a media service to
+    /// queue generation. In Thumbnails mode there is never a preview, and in Disabled mode nothing is kept, so a
+    /// missing version isn't a reason to ask (generation would enqueue nothing).</summary>
     public static bool IsMissingMedia(this IApexMediaService media, long? thumbVersion, long? previewVersion) =>
-        (thumbVersion is null && media.ServesVariant(SceneMediaService.VariantThumb)) || (previewVersion is null && media.ServesPreview);
+        IsMissing(variant => variant == SceneMediaService.VariantPreview ? media.ServesPreview : media.ServesVariant(variant), thumbVersion, previewVersion);
+
+    /// <inheritdoc cref="IsMissingMedia(IApexMediaService, long?, long?)"/>
+    public static bool IsMissingMedia(this ISceneMediaService media, long? thumbVersion, long? previewVersion) =>
+        IsMissing(media.ServesVariant, thumbVersion, previewVersion);
+
+    /// <inheritdoc cref="IsMissingMedia(IApexMediaService, long?, long?)"/>
+    public static bool IsMissingMedia(this IHighlightMediaService media, long? thumbVersion, long? previewVersion) =>
+        IsMissing(media.ServesVariant, thumbVersion, previewVersion);
+
+    private static bool IsMissing(Func<string, bool> servesVariant, long? thumbVersion, long? previewVersion) =>
+        (thumbVersion is null && servesVariant(SceneMediaService.VariantThumb)) || (previewVersion is null && servesVariant(SceneMediaService.VariantPreview));
 }
 
 /// <summary>A screenshot and a hover preview for apex markers: a still of the frame the preview starts on

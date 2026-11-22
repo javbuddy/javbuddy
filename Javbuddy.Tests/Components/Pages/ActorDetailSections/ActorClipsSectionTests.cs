@@ -25,6 +25,8 @@ public class ActorClipsSectionTests : BunitContext
 
     public ActorClipsSectionTests()
     {
+        media.ServesVariant(Arg.Any<string>()).Returns(true);
+        highlightMedia.ServesVariant(Arg.Any<string>()).Returns(true);
         Services.AddSingleton(wall);
         Services.AddSingleton(media);
         Services.AddSingleton(highlightMedia);

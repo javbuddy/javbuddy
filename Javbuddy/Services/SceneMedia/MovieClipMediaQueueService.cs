@@ -16,11 +16,11 @@ public class MovieClipMediaQueueService(ISceneMediaService sceneMedia, IHighligh
 {
     public async Task EnsureQueuedAsync(int movieId, IReadOnlyList<SceneItem> scenes, IReadOnlyList<HighlightItem> highlights, IReadOnlyList<ApexItem> apexes, CancellationToken ct = default)
     {
-        if (scenes.Any(s => s.ThumbVersion is null || s.PreviewVersion is null))
+        if (scenes.Any(s => sceneMedia.IsMissingMedia(s.ThumbVersion, s.PreviewVersion)))
         {
             await sceneMedia.EnsureQueuedAsync(movieId, ct);
         }
-        if (highlights.Any(h => h.ThumbVersion is null || h.PreviewVersion is null))
+        if (highlights.Any(h => highlightMedia.IsMissingMedia(h.ThumbVersion, h.PreviewVersion)))
         {
             await highlightMedia.EnsureQueuedAsync(movieId, ct);
         }

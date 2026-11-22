@@ -324,11 +324,11 @@
         // its screenshot/preview while the host stays open.
         try
         {
-            if (scenes.Any(s => s.ThumbVersion is null || s.PreviewVersion is null))
+            if (scenes.Any(s => SceneMedia.IsMissingMedia(s.ThumbVersion, s.PreviewVersion)))
             {
                 await SceneMedia.EnsureQueuedAsync(MovieId);
             }
-            if (highlights.Any(h => h.ThumbVersion is null || h.PreviewVersion is null))
+            if (highlights.Any(h => HighlightMedia.IsMissingMedia(h.ThumbVersion, h.PreviewVersion)))
             {
                 await HighlightMedia.EnsureQueuedAsync(MovieId);
             }

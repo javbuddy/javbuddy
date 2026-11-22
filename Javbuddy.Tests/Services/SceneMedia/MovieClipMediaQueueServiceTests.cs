@@ -14,6 +14,8 @@ public class MovieClipMediaQueueServiceTests
     public MovieClipMediaQueueServiceTests()
     {
         service = new MovieClipMediaQueueService(sceneMedia, highlightMedia, apexMedia);
+        sceneMedia.ServesVariant(Arg.Any<string>()).Returns(true);
+        highlightMedia.ServesVariant(Arg.Any<string>()).Returns(true);
         apexMedia.ServesVariant(Arg.Any<string>()).Returns(true);
         apexMedia.ServesPreview.Returns(true);
     }
@@ -85,6 +87,32 @@ public class MovieClipMediaQueueServiceTests
         await service.EnsureQueuedAsync(7, [], [], [Apex(1, null)]);
 
         await apexMedia.DidNotReceiveWithAnyArgs().EnsureQueuedAsync(default, default);
+    }
+
+    [Fact]
+    public async Task ScenesAndHighlightsWithoutAPreviewInThumbnailsMode_AreNotAReasonToQueue()
+    {
+        sceneMedia.ServesVariant(Arg.Any<string>()).Returns(false);
+        sceneMedia.ServesVariant("thumb").Returns(true);
+        highlightMedia.ServesVariant(Arg.Any<string>()).Returns(false);
+        highlightMedia.ServesVariant("thumb").Returns(true);
+
+        await service.EnsureQueuedAsync(7, [Scene(1, null)], [Highlight(1, null)], []);
+
+        await sceneMedia.DidNotReceiveWithAnyArgs().EnsureQueuedAsync(default, default);
+        await highlightMedia.DidNotReceiveWithAnyArgs().EnsureQueuedAsync(default, default);
+    }
+
+    [Fact]
+    public async Task ScenesAndHighlightsWithNoMediaWhenTheCacheIsDisabled_AreNotAReasonToQueue()
+    {
+        sceneMedia.ServesVariant(Arg.Any<string>()).Returns(false);
+        highlightMedia.ServesVariant(Arg.Any<string>()).Returns(false);
+
+        await service.EnsureQueuedAsync(7, [Scene(null, null)], [Highlight(null, null)], []);
+
+        await sceneMedia.DidNotReceiveWithAnyArgs().EnsureQueuedAsync(default, default);
+        await highlightMedia.DidNotReceiveWithAnyArgs().EnsureQueuedAsync(default, default);
     }
 
     [Fact]

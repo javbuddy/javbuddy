@@ -37,6 +37,8 @@ public abstract class ClipEditorTestBase : BunitContext
 
     protected ClipEditorTestBase()
     {
+        sceneMedia.ServesVariant(Arg.Any<string>()).Returns(true);
+        highlightMedia.ServesVariant(Arg.Any<string>()).Returns(true);
         var clipTags = new ClipTagSyncService(factory, Substitute.For<INfoSyncService>());
         sceneService = new MovieSceneService(factory, clipTags: clipTags);
         highlightService = new MovieHighlightService(factory, clipTags: clipTags);

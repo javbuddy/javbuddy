@@ -169,7 +169,7 @@
                 total = page.TotalCount;
                 highlightCards = append ? [.. highlightCards, .. page.Cards] : [.. page.Cards];
                 if (!queueMissingMedia) break;
-                foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion))))
+                foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion)), HighlightMedia.IsMissingMedia))
                 {
                     await HighlightMedia.EnsureQueuedAsync(movieId);
                 }
@@ -182,7 +182,7 @@
                 total = page.TotalCount;
                 sceneCards = append ? [.. sceneCards, .. page.Cards] : [.. page.Cards];
                 if (!queueMissingMedia) break;
-                foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion))))
+                foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion)), SceneMedia.IsMissingMedia))
                 {
                     await SceneMedia.EnsureQueuedAsync(movieId);
                 }
@@ -192,8 +192,8 @@
         return true;
     }
 
-    private static IEnumerable<int> MoviesMissingMedia(IEnumerable<(int MovieId, long? Thumb, long? Preview)> loadedCards) =>
-        loadedCards.Where(c => c.Thumb is null || c.Preview is null).Select(c => c.MovieId).Distinct();
+    private static IEnumerable<int> MoviesMissingMedia(IEnumerable<(int MovieId, long? Thumb, long? Preview)> loadedCards, Func<long?, long?, bool> isMissing) =>
+        loadedCards.Where(c => isMissing(c.Thumb, c.Preview)).Select(c => c.MovieId).Distinct();
 
     // Refresh the loaded cards when one of their movies got new screenshots/previews.
     private void OnMediaGenerated(int movieId)
