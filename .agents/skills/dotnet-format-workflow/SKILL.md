@@ -14,7 +14,7 @@ Use this skill before finishing any code change, and whenever a `dotnet format -
 ## Check: `--verify-no-changes`
 
 ```bash
-dotnet format Javbuddy.slnx --verify-no-changes
+dotnet format Javbuddy.slnx --verify-no-changes --include <changed files>
 ```
 
 Exits non-zero and lists the files/rules it would change, without writing anything, if the codebase isn't already clean. Run this — not the bare `dotnet format` — when you just want to know whether something is clean (e.g. as a final check before considering a change done); it won't silently rewrite files you haven't reviewed.

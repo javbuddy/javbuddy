@@ -37,9 +37,9 @@ DB-backed tests reuse `Javbuddy.Tests/TestSupport/TestDbContextFactory.cs`, whic
 1. Inspect the implementation diff and neighboring tests.
 2. Identify the smallest externally observable behavior that proves the change.
 3. Add or update focused tests in the matching existing test area.
-4. Run `dotnet test Javbuddy.Tests/Javbuddy.Tests.csproj` when unit or component tests changed.
+4. Run `dotnet test Javbuddy.Tests/Javbuddy.Tests.csproj --filter "FullyQualifiedName~<related class>"` when unit or component tests changed.
 5. Run `dotnet test Javbuddy.E2ETests/Javbuddy.E2ETests.csproj` only when E2E tests changed.
-6. Run `dotnet format Javbuddy.slnx --verify-no-changes`.
+6. Run `dotnet format Javbuddy.slnx --verify-no-changes --include <changed files>`.
 7. Report the tests added, why that level was chosen, and the exact command results.
 
 ## Delegating This Work

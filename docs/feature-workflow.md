@@ -41,7 +41,8 @@ Follow the layering in `docs/architecture.md` (components call services, not `ID
 ## 5. Verify the implementation
 
 - Run the relevant tests per `AGENTS.md`'s Testing section (new service method → xUnit test; new shared component → bUnit test; pure-function helper → cheap unit test). Add an E2E test only for flows that specifically need a real browser/SignalR circuit.
-- Run `dotnet format Javbuddy.slnx --verify-no-changes`.
+- Run `dotnet format Javbuddy.slnx --verify-no-changes --include <changed files>` (changed/added files only; full solution only for broad changes).
+- Run only the tests related to the change (`dotnet test <project> --filter "FullyQualifiedName~<Class or Namespace>"`); the full suite is for cross-cutting changes, releases, or when asked.
 - For UI changes, actually run the app and exercise the feature in a browser — load the `debug-ui` skill and, when browser output would flood the main context, delegate the verification with a complete subagent brief — rather than claiming a UI works from reading the code alone.
 - Append what you found during implementation to the plan's `## Improvements & Issues Resolved` section (root cause + fix, per bug) — don't rewrite the plan itself.
 

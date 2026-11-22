@@ -26,7 +26,7 @@ A .NET Blazor Server app for tracking wanted/owned JAV movies, modeled on Sonarr
 
 - Don't write raw SQL against the app's own database (`AppDbContext`) — use EF Core. The only permitted exceptions are encapsulated atomic upsert helpers for image cache metadata (`Data/AppDbContextImageCacheExtensions.cs`), where EF Core lacks native upsert and SQLite's atomic `ON CONFLICT DO UPDATE` prevents unique constraint concurrency races without noisy error logging, the connection PRAGMAs (WAL, `synchronous`, `busy_timeout`, cache and journal size) in `Data/SqlitePragmaInterceptor.cs`, the whole-database upkeep (`PRAGMA optimize`, `VACUUM`, WAL checkpoint, size) in `Data/SqliteMaintenance.cs`, which EF Core has no API for, and `PRAGMA integrity_check` on an extracted copy of a backup in `Services/Backups/BackupDatabase.cs` (the snapshot itself uses SQLite's online backup API, not SQL). A migration may also use `migrationBuilder.Sql` for a data fix-up its schema change needs (e.g. resolving duplicates before a unique index is built). Raw SQL is also fine against the separate r18.dev dump DB (`Services/R18Dev/R18DevDumpStore.cs`, backed by `Javbuddy.r18dev.db`), since it's a read-only imported reference dataset, not app data.
 - Don't create, edit, or delete anything in a real media library (a configured library root outside the repo).
-- Run `dotnet format Javbuddy.slnx --verify-no-changes` before committing/pushing.
+- Before committing/pushing, run `dotnet format Javbuddy.slnx --verify-no-changes --include <files>` on just the files you changed or added (`git status --short`), not the whole solution. Use the full-solution form only when asked or when a change is broad (e.g. `.editorconfig`, `Directory.Build.props`).
 
 ## Structure & conventions
 
@@ -40,7 +40,7 @@ A .NET Blazor Server app for tracking wanted/owned JAV movies, modeled on Sonarr
 
 ## Testing
 
-- Test project: `Javbuddy.Tests` (xUnit + bUnit for Razor component rendering + NSubstitute for mocking). Run with `dotnet test Javbuddy.Tests/Javbuddy.Tests.csproj`.
+- Test project: `Javbuddy.Tests` (xUnit + bUnit for Razor component rendering + NSubstitute for mocking). Run with `dotnet test Javbuddy.Tests/Javbuddy.Tests.csproj`. While developing, run only the tests related to the change with `--filter` (e.g. `--filter "FullyQualifiedName~ActorService"`, matching the changed class or namespace and its tests); run the full suite only when asked, before a release, or when the change is cross-cutting (shared infrastructure, DB schema, DI registration).
 - DB-backed tests use `Javbuddy.Tests/TestSupport/TestDbContextFactory.cs`, an `IDbContextFactory<AppDbContext>` backed by an in-memory SQLite connection — this exercises the real provider (constraints, indexes, conversions), unlike EF Core's `InMemory` provider. Reuse it rather than adding a second DB test double.
 - Tests never depend on files on a developer's machine. `test-jav/`, `test-jav-nfo/` and the dev databases exist only for running the app by hand; a test builds its own fixture in a temp dir (or uses `TestDbContextFactory`) instead of reading a real local path.
 - New non-trivial service method → add an xUnit test. New non-trivial shared component (`Components/Shared/`) → add a bUnit test. Pure-function static helpers (mappers, normalizers, formatters) are the cheapest to test — no mocking needed — so don't skip them.
