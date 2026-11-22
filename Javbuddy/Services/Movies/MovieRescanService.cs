@@ -146,7 +146,9 @@ public class MovieRescanService(
                 {
                     await using var db = await dbFactory.CreateDbContextAsync(ct);
                     var movie = await db.Movies.FindAsync([movieId], ct);
-                    if (movie is not null)
+                    // A movie that may sit on an offline root isn't known to be gone — leave it alone.
+                    var unreachableRoots = new UnreachableRoots(await localLibraryClient.GetUnreachableRootPathsAsync(ct));
+                    if (movie is not null && !unreachableRoots.MayHide(movie.LocalRootPath))
                     {
                         if (movie.Status == MovieStatus.Got)
                         {

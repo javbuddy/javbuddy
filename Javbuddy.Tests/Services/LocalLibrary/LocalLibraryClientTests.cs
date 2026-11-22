@@ -125,6 +125,23 @@ public class LocalLibraryClientTests
     }
 
     [Fact]
+    public async Task GetUnreachableRootPathsAsync_ReturnsOnlyConfiguredRootsThatDoNotExist()
+    {
+        using var factory = new TestDbContextFactory();
+        using var existing = new TempRoot();
+        var missing = Path.Combine(existing.Path, "unmounted");
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["LocalLibrary:RootPaths:0"] = existing.Path,
+            ["LocalLibrary:RootPaths:1"] = missing
+        }).Build();
+
+        var client = new LocalLibraryClient(factory, config, new MemoryCache(new MemoryCacheOptions()), Substitute.For<IMediaInfoProber>(), NullLogger<LocalLibraryClient>.Instance);
+
+        Assert.Equal([missing], await client.GetUnreachableRootPathsAsync());
+    }
+
+    [Fact]
     public async Task GetRootPathsAsync_FallsBackToDbWhenEnvNotSet()
     {
         using var factory = new TestDbContextFactory();

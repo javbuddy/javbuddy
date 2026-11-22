@@ -38,6 +38,8 @@ public class MovieRescanServiceTests
                 .Returns(new OperationResult(true, null));
             localLibraryClient.AnyRootReachableAsync(Arg.Any<CancellationToken>())
                 .Returns(true);
+            localLibraryClient.GetUnreachableRootPathsAsync(Arg.Any<CancellationToken>())
+                .Returns([]);
         }
 
         if (javinizerClient is null)
@@ -396,6 +398,8 @@ public class MovieRescanServiceTests
             .Returns(new LocalLookupResult(false, null, null, null));
         localLibraryClient.AnyRootReachableAsync(Arg.Any<CancellationToken>())
             .Returns(true);
+        localLibraryClient.GetUnreachableRootPathsAsync(Arg.Any<CancellationToken>())
+            .Returns([]);
 
         var service = CreateService(factory, localLibraryClient: localLibraryClient);
         var result = await service.RescanAsync(movieId);
@@ -435,6 +439,8 @@ public class MovieRescanServiceTests
             .Returns(new LocalLookupResult(false, null, null, null));
         localLibraryClient.AnyRootReachableAsync(Arg.Any<CancellationToken>())
             .Returns(true);
+        localLibraryClient.GetUnreachableRootPathsAsync(Arg.Any<CancellationToken>())
+            .Returns([]);
 
         var service = CreateService(factory, localLibraryClient: localLibraryClient);
         var result = await service.RescanAsync(movieId);
@@ -451,6 +457,36 @@ public class MovieRescanServiceTests
         var after = await checkDb.Movies.SingleAsync(m => m.Id == movieId);
         Assert.Equal(MovieStatus.Missing, after.Status);
         Assert.Equal("jf-1", after.JellyfinItemId);
+    }
+
+    [Theory]
+    [InlineData("/offline", MovieStatus.Got)]
+    [InlineData("/online", MovieStatus.Missing)]
+    [InlineData(null, MovieStatus.Got)]
+    public async Task RescanAsync_MissingLocalFolder_WithOneRootOffline_OnlyRevertsAMovieItCouldHaveSeen(string? localRootPath, MovieStatus expected)
+    {
+        using var factory = new TestDbContextFactory();
+        int movieId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = new Movie { Code = "ABC-123", Status = MovieStatus.Got, LocalFileSizeBytes = 9999, LocalRootPath = localRootPath };
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+            movieId = movie.Id;
+        }
+
+        var localLibraryClient = Substitute.For<ILocalLibraryClient>();
+        localLibraryClient.TryGetMetadataAsync("ABC-123", Arg.Any<CancellationToken>(), false)
+            .Returns(new LocalLookupResult(false, null, null, null));
+        localLibraryClient.AnyRootReachableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        localLibraryClient.GetUnreachableRootPathsAsync(Arg.Any<CancellationToken>()).Returns(["/offline"]);
+
+        await CreateService(factory, localLibraryClient: localLibraryClient).RescanAsync(movieId);
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        var updated = await verifyDb.Movies.SingleAsync(m => m.Id == movieId);
+        Assert.Equal(expected, updated.Status);
+        Assert.Equal(expected == MovieStatus.Got ? 9999 : null, updated.LocalFileSizeBytes);
     }
 
     [Fact]

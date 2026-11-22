@@ -20,6 +20,7 @@ public class LibraryRescanTaskTests
     {
         var client = Substitute.For<ILocalLibraryClient>();
         client.AnyRootReachableAsync(Arg.Any<CancellationToken>()).Returns(anyRootReachable);
+        client.GetUnreachableRootPathsAsync(Arg.Any<CancellationToken>()).Returns([]);
         client.ListMovieCodesAsync(Arg.Any<CancellationToken>()).Returns(folderCodes ?? []);
         client.TryGetMetadataAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(ci => metadataLookup?.Invoke(ci.ArgAt<string>(0)) ?? new LocalLookupResult(false, null, null, null));
@@ -224,6 +225,7 @@ public class LibraryRescanTaskTests
     [Theory]
     [InlineData("/offline", MovieStatus.Got)]     // on the offline root: left alone
     [InlineData("/online", MovieStatus.Missing)]  // on the reachable root: genuinely gone
+    [InlineData("/offline/", MovieStatus.Got)]    // stored with a trailing slash the config lacks
     [InlineData(null, MovieStatus.Got)]           // root unknown: can't be judged while any root is offline
     public async Task RunAsync_OneRootOffline_OnlyRevertsMoviesItCouldHaveSeen(string? localRootPath, MovieStatus expected)
     {

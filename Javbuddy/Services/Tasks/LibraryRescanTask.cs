@@ -101,6 +101,10 @@ public class LibraryRescanTask(
         // its per-item loop) so the label still updates even for a stage with zero items to
         // process (e.g. "Importing new movies" when nothing new was found) instead of leaving the
         // previous stage's label stuck on screen.
+        // Taken before the scan: a root that was offline while scanning but remounted afterwards would
+        // otherwise read as reachable, and its never-scanned movies would be reverted.
+        var unreachableRoots = new UnreachableRoots(await localLibraryClient.GetUnreachableRootPathsAsync(ct));
+
         progress.Report(new TaskProgress(0, null, "Scanning local library folders"));
         var folderCodes = await localLibraryClient.ListMovieCodesAsync(ct);
         var folderCodeSet = new HashSet<string>(folderCodes, StringComparer.OrdinalIgnoreCase);
@@ -109,7 +113,6 @@ public class LibraryRescanTask(
         var imported = await ImportNewMoviesAsync(folderCodes, progress, ct);
 
         progress.Report(new TaskProgress(0, null, "Reverting deleted movies"));
-        var unreachableRoots = (await localLibraryClient.GetUnreachableRootPathsAsync(ct) ?? []).ToHashSet(StringComparer.Ordinal);
         var reverted = await RevertDeletedMoviesAsync(folderCodeSet, unreachableRoots, ct);
 
         var subtitlesSynced = await SyncSubtitleFlagsAsync(progress, ct);
@@ -229,9 +232,10 @@ public class LibraryRescanTask(
     }
 
     /// <summary>Reverts any Got movie whose folder isn't in the current listing back to Missing,
-    /// (except those on an offline root) clearing the local-file-derived fields that no longer describe anything real, and logs a
-    /// debug message per reverted movie so the revert isn't silent.</summary>
-    private async Task<int> RevertDeletedMoviesAsync(HashSet<string> folderCodeSet, HashSet<string> unreachableRoots, CancellationToken ct)
+    /// clearing the local-file-derived fields that no longer describe anything real, and logs a
+    /// debug message per reverted movie so the revert isn't silent. Movies on an unreachable root
+    /// are skipped, since the scan never looked inside it.</summary>
+    private async Task<int> RevertDeletedMoviesAsync(HashSet<string> folderCodeSet, UnreachableRoots unreachableRoots, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var gotMovies = await db.Movies.Where(m => m.Status == MovieStatus.Got && m.Code != null).ToListAsync(ct);
@@ -243,7 +247,7 @@ public class LibraryRescanTask(
 
             // The scan never looked inside an offline root, so absence there proves nothing. A movie
             // with no recorded root could be on any root, so it's only judged when all are reachable.
-            if (movie.LocalRootPath is null ? unreachableRoots.Count > 0 : unreachableRoots.Contains(movie.LocalRootPath)) continue;
+            if (unreachableRoots.MayHide(movie.LocalRootPath)) continue;
 
             movie.Status = MovieStatus.Missing;
             LocalLibraryMetadataMapper.ClearLocalFileData(movie);
