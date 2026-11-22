@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **A downloaded movie cover that isn't a decodable image no longer throws out of the poster crop.** The poster request now falls back as for any other failed cover download instead of failing with an error.
 - **The movie cover crop's import-from-URL errors now use the same wording as the actor and extrafanart imports**, and a 404 says the image wasn't found at that URL.
 - **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 - **qBittorrent sessions are reused instead of logging in on every call.** Javbuddy logs in again only when qBittorrent reports the session expired. After a login that qBittorrent actually rejects (wrong credentials, or a 401/403) it stops retrying, so it no longer trips qBittorrent's WebUI ban; temporary failures (5xx, 429, network errors) are reported but retried normally. Changing the credentials in Settings, or pressing Test connection there, resumes it; the background health check never resets the state.
