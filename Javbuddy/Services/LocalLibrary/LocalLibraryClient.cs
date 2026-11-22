@@ -26,6 +26,11 @@ public interface ILocalLibraryClient
     /// "the whole library was deleted".</summary>
     Task<bool> AnyRootReachableAsync(CancellationToken ct = default);
 
+    /// <summary>Configured root paths (exactly as <see cref="Movie.LocalRootPath"/> stores them) whose
+    /// folder doesn't currently exist — e.g. an unmounted share. Movies under these can't be judged
+    /// missing from a scan that never looked inside them.</summary>
+    Task<List<string>> GetUnreachableRootPathsAsync(CancellationToken ct = default);
+
     /// <summary>Finds the movie's local folder (by exact then case-insensitive name match against
     /// each configured root) and, if found, parses its .nfo and checks for poster/fanart/video files.</summary>
     Task<LocalLookupResult> TryGetMetadataAsync(string code, CancellationToken ct = default, bool includeMediaInfo = true);
@@ -330,6 +335,12 @@ public class LocalLibraryClient(
     {
         var roots = await GetRootPathsAsync(ct);
         return roots.Any(root => !string.IsNullOrWhiteSpace(root) && Directory.Exists(root));
+    }
+
+    public async Task<List<string>> GetUnreachableRootPathsAsync(CancellationToken ct = default)
+    {
+        var roots = await GetRootPathsAsync(ct);
+        return roots.Where(root => !string.IsNullOrWhiteSpace(root) && !Directory.Exists(root)).ToList();
     }
 
     public async Task<List<string>> ListMovieCodesAsync(CancellationToken ct = default)

@@ -221,6 +221,27 @@ public class LibraryRescanTaskTests
         Assert.Equal(MovieStatus.Got, (await verifyDb.Movies.SingleAsync()).Status);
     }
 
+    [Theory]
+    [InlineData("/offline", MovieStatus.Got)]     // on the offline root: left alone
+    [InlineData("/online", MovieStatus.Missing)]  // on the reachable root: genuinely gone
+    [InlineData(null, MovieStatus.Got)]           // root unknown: can't be judged while any root is offline
+    public async Task RunAsync_OneRootOffline_OnlyRevertsMoviesItCouldHaveSeen(string? localRootPath, MovieStatus expected)
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123", Status = MovieStatus.Got, LocalRootPath = localRootPath });
+            await db.SaveChangesAsync();
+        }
+
+        var client = CreateLocalLibraryClient(folderCodes: []);
+        client.GetUnreachableRootPathsAsync(Arg.Any<CancellationToken>()).Returns(["/offline"]);
+        await new LibraryRescanTask(factory, client, NullLogger<LibraryRescanTask>.Instance).RunAsync(CancellationToken.None, NoopProgress);
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.Equal(expected, (await verifyDb.Movies.SingleAsync()).Status);
+    }
+
     [Fact]
     public async Task RunAsync_NoRootReachable_SkipsImportAndRevert_ButStillProbes()
     {

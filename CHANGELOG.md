@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **An offline library folder no longer turns its movies back to Missing.** When one of several library roots is unreachable (an unmounted share), the rescan leaves movies on that root untouched instead of clearing their file, MediaInfo and image data.
 - **A qBittorrent outage no longer wipes Activity > Queue tracking.** When qBittorrent is unreachable, rejects the login or returns an error, the background sync now skips that run instead of marking every tracked download as removed.
 - **Merging actors no longer leaves the discarded portrait's original file behind** when the target already had a portrait.
 - **Actor portraits no longer leak files when several requests ask for the same actor at once.** Concurrent cache misses now share one conversion instead of racing on the cache files and orphaning a stored original.
