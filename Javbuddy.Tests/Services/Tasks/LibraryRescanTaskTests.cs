@@ -26,13 +26,7 @@ public class LibraryRescanTaskTests
             .Returns(ci => metadataLookup?.Invoke(ci.ArgAt<string>(0)) ?? new LocalLookupResult(false, null, null, null));
         client.RefreshMediaInfoOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new OperationResult(true, null));
-        client.RefreshSubtitleFlagOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new OperationResult(true, null));
-        client.RefreshTrailerFlagOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new OperationResult(true, null));
-        client.RefreshLocalMetadataIfNfoChangedAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(new OperationResult(true, null));
-        client.SyncImagesSignatureAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+        client.RefreshFolderStateAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new OperationResult(true, null));
         return client;
     }
@@ -245,7 +239,7 @@ public class LibraryRescanTaskTests
     }
 
     [Fact]
-    public async Task RunAsync_NoRootReachable_SkipsImportAndRevert_ButStillProbes()
+    public async Task RunAsync_NoRootReachable_SkipsImportRevertAndEveryPerMoviePass()
     {
         using var factory = new TestDbContextFactory();
         await using (var db = await factory.CreateDbContextAsync())
@@ -263,10 +257,12 @@ public class LibraryRescanTaskTests
         Assert.Equal(MovieStatus.Got, (await verifyDb.Movies.SingleAsync()).Status);
         Assert.Contains("no configured local library root is currently reachable", summary);
         await client.DidNotReceive().ListMovieCodesAsync(Arg.Any<CancellationToken>());
+        await client.DidNotReceive().RefreshMediaInfoOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await client.DidNotReceive().RefreshFolderStateAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task RunAsync_CallsMediaInfoAndNfoAndImagesSyncForEveryGotMovie_NotMissing()
+    public async Task RunAsync_CallsMediaInfoAndFolderStateSyncForEveryGotMovie_NotMissing()
     {
         // The retry/change-eligibility decisions (has the video/nfo/images actually changed since
         // last time?) now live inside LocalLibraryClient's own methods — see LocalLibraryClientTests
@@ -290,17 +286,13 @@ public class LibraryRescanTaskTests
         await task.RunAsync(CancellationToken.None, NoopProgress);
 
         await client.Received(1).RefreshMediaInfoOnlyAsync(gotId, Arg.Any<CancellationToken>());
-        await client.Received(1).RefreshTrailerFlagOnlyAsync(gotId, Arg.Any<CancellationToken>());
-        await client.Received(1).RefreshLocalMetadataIfNfoChangedAsync(gotId, Arg.Any<CancellationToken>());
-        await client.Received(1).SyncImagesSignatureAsync(gotId, Arg.Any<CancellationToken>());
+        await client.Received(1).RefreshFolderStateAsync(gotId, Arg.Any<CancellationToken>());
         await client.DidNotReceive().RefreshMediaInfoOnlyAsync(missingId, Arg.Any<CancellationToken>());
-        await client.DidNotReceive().RefreshTrailerFlagOnlyAsync(missingId, Arg.Any<CancellationToken>());
-        await client.DidNotReceive().RefreshLocalMetadataIfNfoChangedAsync(missingId, Arg.Any<CancellationToken>());
-        await client.DidNotReceive().SyncImagesSignatureAsync(missingId, Arg.Any<CancellationToken>());
+        await client.DidNotReceive().RefreshFolderStateAsync(missingId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task RunAsync_SyncsSubtitleFlagForEveryGotMovie_EvenOneAlreadySuccessfullyScanned()
+    public async Task RunAsync_SyncsFolderStateForEveryGotMovie_EvenOneAlreadySuccessfullyScanned()
     {
         // The bug this test guards against: a movie whose MediaInfo probe already succeeded before
         // subtitle detection existed (MediaScannedAt set, no error) was never getting its subtitle
@@ -322,9 +314,9 @@ public class LibraryRescanTaskTests
         var task = new LibraryRescanTask(factory, client, NullLogger<LibraryRescanTask>.Instance);
         var summary = await task.RunAsync(CancellationToken.None, NoopProgress);
 
-        await client.Received(1).RefreshSubtitleFlagOnlyAsync(alreadyScannedId, Arg.Any<CancellationToken>());
-        await client.DidNotReceive().RefreshSubtitleFlagOnlyAsync(missingId, Arg.Any<CancellationToken>());
-        Assert.Contains("synced subtitle flag for 1/1 Got movies", summary);
+        await client.Received(1).RefreshFolderStateAsync(alreadyScannedId, Arg.Any<CancellationToken>());
+        await client.DidNotReceive().RefreshFolderStateAsync(missingId, Arg.Any<CancellationToken>());
+        Assert.Contains("checked folder contents for 1/1 Got movies", summary);
     }
 
     [Fact]

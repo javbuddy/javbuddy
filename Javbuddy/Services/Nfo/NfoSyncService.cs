@@ -641,46 +641,62 @@ public class NfoSyncService(
         IProgress<TaskProgress>? progress = null,
         CancellationToken ct = default)
     {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-
-        // Batch-load all Got movies with their linked actors/aliases and tags in one query,
-        // avoiding the N+1 pattern of creating a DbContext per movie.
-        var movies = await db.Movies
-            .AsSplitQuery()
-            .Include(m => m.MovieActors)
-            .ThenInclude(ma => ma.Actor)
-            .ThenInclude(a => a.Aliases)
-            .Include(m => m.MovieTags)
-            .ThenInclude(mt => mt.Tag)
-            .ThenInclude(t => t.ParentTag)
-            .Where(m => m.Status == MovieStatus.Got && m.Code != null)
-            .OrderBy(m => m.Id)
-            .ToListAsync(ct);
+        // Movies are loaded in id-ordered chunks, each on its own short-lived context, so the tracked graph
+        // (actors, aliases, tags per movie) is bounded by the chunk size rather than the whole library.
+        const int chunkSize = 200;
+        int total;
+        await using (var countDb = await dbFactory.CreateDbContextAsync(ct))
+        {
+            total = await countDb.Movies.CountAsync(m => m.Status == MovieStatus.Got && m.Code != null, ct);
+        }
 
         var conflicts = new List<ActorNfoConflictCheckResult>();
-        int total = movies.Count;
-        bool anyDirty = false;
+        var processed = 0;
+        var lastId = 0;
 
-        for (int i = 0; i < movies.Count; i++)
+        while (true)
         {
             ct.ThrowIfCancellationRequested();
-            progress?.Report(new TaskProgress(i + 1, total, "Detecting .nfo metadata conflicts"));
+            await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-            var movie = movies[i];
-            var result = await CheckMovieNfoConflictInMemoryAsync(movie, ct);
-            if (result.changed) anyDirty = true;
-            if (result.result.HasConflict)
+            var movies = await db.Movies
+                .AsSplitQuery()
+                .Include(m => m.MovieActors)
+                .ThenInclude(ma => ma.Actor)
+                .ThenInclude(a => a.Aliases)
+                .Include(m => m.MovieTags)
+                .ThenInclude(mt => mt.Tag)
+                .ThenInclude(t => t.ParentTag)
+                .Where(m => m.Status == MovieStatus.Got && m.Code != null && m.Id > lastId)
+                .OrderBy(m => m.Id)
+                .Take(chunkSize)
+                .ToListAsync(ct);
+            if (movies.Count == 0) break;
+
+            var anyDirty = false;
+            foreach (var movie in movies)
             {
-                conflicts.Add(result.result);
+                ct.ThrowIfCancellationRequested();
+                processed++;
+                progress?.Report(new TaskProgress(Math.Min(processed, total), total, "Detecting .nfo metadata conflicts"));
+
+                var result = await CheckMovieNfoConflictInMemoryAsync(movie, ct);
+                if (result.changed) anyDirty = true;
+                if (result.result.HasConflict)
+                {
+                    conflicts.Add(result.result);
+                }
             }
+
+            if (anyDirty)
+            {
+                await db.SaveChangesAsync(ct);
+            }
+
+            lastId = movies[^1].Id;
         }
 
-        if (anyDirty)
-        {
-            await db.SaveChangesAsync(ct);
-        }
-
-        return new ActorNfoConflictBatchResult(total, conflicts.Count, conflicts);
+        return new ActorNfoConflictBatchResult(processed, conflicts.Count, conflicts);
     }
 
     /// <summary>Checks a single already-loaded movie for .nfo drift without creating a new

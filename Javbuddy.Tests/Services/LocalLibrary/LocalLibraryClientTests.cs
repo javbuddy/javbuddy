@@ -1139,6 +1139,55 @@ public class LocalLibraryClientTests
     }
 
     [Fact]
+    public async Task RefreshFolderStateAsync_SetsSubtitleTrailerAndImageSignatureInOnePass()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        await File.WriteAllTextAsync(Path.Combine(folder, "ABC-123.srt"), "x");
+        await File.WriteAllTextAsync(Path.Combine(folder, "ABC-123-trailer.mp4"), "x");
+        await File.WriteAllTextAsync(Path.Combine(folder, "poster.jpg"), "x");
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "ABC-123" };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        var client = CreateClientFor(factory, root);
+        var result = await client.RefreshFolderStateAsync(movieId);
+
+        Assert.True(result.Success);
+        using var verifyDb = factory.CreateDbContext();
+        var saved = verifyDb.Movies.Single(m => m.Id == movieId);
+        Assert.True(saved.MediaHasSubtitleFile);
+        Assert.True(saved.MediaHasTrailerFile);
+        Assert.NotNull(saved.MediaImagesSignature);
+    }
+
+    [Fact]
+    public async Task RefreshFolderStateAsync_NoLocalFolder_Fails()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "ABC-123" };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        var result = await CreateClientFor(factory, root).RefreshFolderStateAsync(movieId);
+
+        Assert.False(result.Success);
+    }
+
+    [Fact]
     public async Task RefreshTrailerFlagOnlyAsync_FlagFlipsToTrue_SetsFlag()
     {
         using var factory = new TestDbContextFactory();

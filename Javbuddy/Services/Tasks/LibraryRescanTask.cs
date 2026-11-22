@@ -11,7 +11,7 @@ namespace Javbuddy.Services.Tasks;
 
 /// <summary>Periodic full sync between the configured local library folders and the tracked Movies
 /// table — the automatic counterpart to LibraryImport.razor's manual "Discover from Local Library"
-/// button, plus the MediaInfo technical rescan that used to be its own task. One run does seven
+/// button, plus the MediaInfo technical rescan that used to be its own task. One run does these
 /// things against the same folder-name listing:
 ///
 /// 1. Discovers new movies: any top-level folder with no matching tracked Movie is imported as Got,
@@ -21,38 +21,33 @@ namespace Javbuddy.Services.Tasks;
 ///    its local-file-derived fields cleared via LocalLibraryMetadataMapper.ClearLocalFileData —
 ///    descriptive Meta* fields are left alone since they're not tied to the file's presence. Logs a
 ///    debug message per reverted movie.
-/// 3. Syncs the sidecar-subtitle-file flag for every Got movie, every run — a subtitle file can be
-///    dropped into an already-fully-probed movie's folder at any time, so this can't share MediaInfo
-///    probing's retry gate below. Logs a debug message when the flag actually flips either way.
-/// 4. Syncs the trailer-file flag the same way (RefreshTrailerFlagOnlyAsync) — a "{code}-trailer.{ext}"
-///    file next to the movie's own video file.
-/// 5. Probes MediaInfo, including detecting a video file upgrade/replacement: every Got movie gets a
+/// 3. Probes MediaInfo, including detecting a video file upgrade/replacement: every Got movie gets a
 ///    cheap file-size/last-write-time check first (RefreshMediaInfoOnlyAsync), and only pays for the
 ///    expensive native probe when that changed since the last successful probe, or there wasn't one
 ///    yet. Logs a debug message when the resulting resolution actually differs from what was
 ///    previously known.
-/// 6. Syncs descriptive metadata when a movie's .nfo file was edited (RefreshLocalMetadataIfNfoChangedAsync):
-///    if the movie has no descriptive metadata yet, populates it; if the movie already has metadata in
-///    Javbuddy, preserves it (Javbuddy has absolute authority) and records observation time.
-/// 7. Syncs a poster/fanart/extrafanart signature (SyncImagesSignatureAsync) — detection only; an
-///    actual change is left for ImageCacheTask's own daily recache to pick up, this just logs
-///    a debug message noticing it.
-/// 8. Detects metadata conflicts between local .nfo files and Javbuddy (DetectConflictsAsync).
+/// 4. Checks each Got movie's folder in one pass, resolving it once (RefreshFolderStateAsync): the
+///    sidecar-subtitle and trailer flags (every run — a file can be dropped into an already-probed
+///    movie's folder at any time, so this can't share MediaInfo probing's retry gate), descriptive
+///    metadata when the .nfo was edited (populated if the movie has none yet; otherwise preserved,
+///    since Javbuddy has absolute authority, and the observation time recorded), and a
+///    poster/fanart/extrafanart signature — detection only; an actual change is left for
+///    ImageCacheTask's own daily recache to pick up.
+/// 5. Detects metadata conflicts between local .nfo files and Javbuddy (DetectConflictsAsync).
 ///
 /// A movie step 1 imports is marked Movie.NewArtworkPending; once the probe has recorded its duration the
 /// NewMovieArtworkWorker (a background queue, so this run never waits on ffmpeg) generates its missing
 /// extrafanart, poster and fanart, per the "New movie artwork" settings.
 ///
-/// Steps 5-7 use a null-stored-value-means-"never observed, establish the baseline, don't log or
+/// Steps 3 and 4 use a null-stored-value-means-"never observed, establish the baseline, don't log or
 /// re-apply" rule (see each LocalLibraryClient method) specifically so rolling this feature out to
 /// an already-fully-scanned library doesn't fire a false "changed" event. Info in Javbuddy is authoritative.
 ///
 /// Steps 1 and 2 both hinge on knowing which folders currently exist — if every configured root is
 /// unreachable (e.g. a network share briefly unmounted), that would read as "the whole library was
-/// deleted" and revert every Got movie at once. AnyRootReachableAsync guards against that: both
-/// steps are skipped entirely for a run where no root can be reached, leaving the tracked library
-/// untouched until the share comes back. Steps 3-7 stay safe to run regardless — each movie's own
-/// folder lookup just comes back "not found" and leaves that movie's fields untouched.</summary>
+/// deleted" and revert every Got movie at once. AnyRootReachableAsync guards against that: when no
+/// root can be reached the whole run is skipped, leaving the tracked library untouched until the
+/// share comes back (every per-movie folder lookup would only fail anyway).</summary>
 public class LibraryRescanTask(
     IDbContextFactory<AppDbContext> dbFactory,
     ILocalLibraryClient localLibraryClient,
@@ -85,14 +80,10 @@ public class LibraryRescanTask(
     {
         if (!await localLibraryClient.AnyRootReachableAsync(ct))
         {
-            var subtitlesWhileUnreachable = await SyncSubtitleFlagsAsync(progress, ct);
-            var trailersWhileUnreachable = await SyncTrailerFlagsAsync(progress, ct);
-            var probedWhileUnreachable = await ProbeMediaInfoAsync(progress, ct);
-            var nfoWhileUnreachable = await SyncNfoAsync(progress, ct);
-            var imagesWhileUnreachable = await SyncImagesAsync(progress, ct);
+            // No folder can be resolved, so every per-movie pass would only fail its lookup (one filesystem
+            // round trip per movie per pass); there is nothing to detect or probe.
             movieChangeNotifier?.NotifyChanged();
-            return "no configured local library root is currently reachable — skipped new/removed movie detection; "
-                + subtitlesWhileUnreachable + "; " + trailersWhileUnreachable + "; " + probedWhileUnreachable + "; " + nfoWhileUnreachable + "; " + imagesWhileUnreachable;
+            return "no configured local library root is currently reachable — skipped new/removed movie detection and the per-movie folder checks";
         }
 
         // Each stage below reports its own Current/Total range starting back at 0 — a bare
@@ -115,19 +106,16 @@ public class LibraryRescanTask(
         progress.Report(new TaskProgress(0, null, "Reverting deleted movies"));
         var reverted = await RevertDeletedMoviesAsync(folderCodeSet, unreachableRoots, ct);
 
-        var subtitlesSynced = await SyncSubtitleFlagsAsync(progress, ct);
-        var trailersSynced = await SyncTrailerFlagsAsync(progress, ct);
         var probed = await ProbeMediaInfoAsync(progress, ct);
         // MediaInfo has now recorded the durations the artwork frames are taken by (NewMovieArtworkWorker).
         newMovieArtworkSignal?.Signal();
-        var nfoSynced = await SyncNfoAsync(progress, ct);
-        var imagesSynced = await SyncImagesAsync(progress, ct);
+        var folderStateSynced = await SyncFolderStateAsync(progress, ct);
         var conflictsDetected = await DetectConflictsAsync(progress, ct);
 
         movieChangeNotifier?.NotifyChanged();
 
         return $"{folderCodes.Count} folders scanned, {imported} new movie(s) imported, "
-            + $"{reverted} movie(s) reverted to Missing (file no longer found), {subtitlesSynced}, {trailersSynced}, {probed}, {nfoSynced}, {imagesSynced}"
+            + $"{reverted} movie(s) reverted to Missing (file no longer found), {probed}, {folderStateSynced}"
             + (conflictsDetected is not null ? $", {conflictsDetected}" : "");
     }
 
@@ -263,19 +251,6 @@ public class LibraryRescanTask(
         return reverted;
     }
 
-    /// <summary>Recomputes the sidecar-subtitle-file flag for every Got movie, every run — see the
-    /// class doc for why this can't share MediaInfo probing's retry gate. Cheap directory listing
-    /// per movie (no MediaInfoLib native call), so redoing it unconditionally for the whole library
-    /// on every scheduled run is fine.</summary>
-    private async Task<string> SyncSubtitleFlagsAsync(IProgress<TaskProgress> progress, CancellationToken ct) =>
-        await RunPerMovieAsync(progress, ct, localLibraryClient.RefreshSubtitleFlagOnlyAsync, "Syncing subtitle flags", "synced subtitle flag for");
-
-    /// <summary>Recomputes the trailer-file flag for every Got movie, every run — same reasoning as
-    /// SyncSubtitleFlagsAsync (a trailer file can appear/disappear at any time, independent of
-    /// MediaInfo's retry gate).</summary>
-    private async Task<string> SyncTrailerFlagsAsync(IProgress<TaskProgress> progress, CancellationToken ct) =>
-        await RunPerMovieAsync(progress, ct, localLibraryClient.RefreshTrailerFlagOnlyAsync, "Syncing trailer flags", "synced trailer flag for");
-
     /// <summary>Probes MediaInfo (and, since RefreshMediaInfoOnlyAsync now checks the video file's
     /// size/last-write time first, detects a video file upgrade/replacement too) — see the class
     /// doc. Runs against every Got movie, not a MediaScannedAt/MediaScanError-filtered subset,
@@ -289,16 +264,14 @@ public class LibraryRescanTask(
     private async Task<string> ProbeMediaInfoAsync(IProgress<TaskProgress> progress, CancellationToken ct) =>
         await RunPerMovieAsync(progress, ct, localLibraryClient.RefreshMediaInfoOnlyAsync, "Probing MediaInfo", "probed", "MediaInfo for");
 
-    /// <summary>Re-applies descriptive metadata when a movie's .nfo file was edited since the last
-    /// time this was checked — see the class doc for the null-baseline guard against a whole-library
-    /// false-positive on rollout.</summary>
-    private async Task<string> SyncNfoAsync(IProgress<TaskProgress> progress, CancellationToken ct) =>
-        await RunPerMovieAsync(progress, ct, localLibraryClient.RefreshLocalMetadataIfNfoChangedAsync, "Syncing .nfo files", "checked", ".nfo files for");
-
-    /// <summary>Detects a poster/fanart/extrafanart change (add/remove/replace) — see the class doc;
-    /// actually recaching is left to ImageCacheTask's own daily freshness check.</summary>
-    private async Task<string> SyncImagesAsync(IProgress<TaskProgress> progress, CancellationToken ct) =>
-        await RunPerMovieAsync(progress, ct, localLibraryClient.SyncImagesSignatureAsync, "Syncing images", "checked images for");
+    /// <summary>One pass over every Got movie that, with the folder resolved once, recomputes the sidecar
+    /// subtitle and trailer flags (every run — a file can appear at any time, independent of
+    /// MediaInfo's retry gate), re-applies descriptive metadata when the .nfo was edited since last
+    /// checked (see the class doc for the null-baseline guard against a whole-library false-positive
+    /// on rollout), and detects a poster/fanart/extrafanart change — actually recaching is left to
+    /// ImageCacheTask's own daily freshness check.</summary>
+    private async Task<string> SyncFolderStateAsync(IProgress<TaskProgress> progress, CancellationToken ct) =>
+        await RunPerMovieAsync(progress, ct, localLibraryClient.RefreshFolderStateAsync, "Syncing subtitles, trailers, .nfo files and images", "checked", "folder contents for");
 
     private async Task<string?> DetectConflictsAsync(IProgress<TaskProgress> progress, CancellationToken ct)
     {

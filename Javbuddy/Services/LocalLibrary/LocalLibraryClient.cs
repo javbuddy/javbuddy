@@ -162,6 +162,11 @@ public interface ILocalLibraryClient
     /// size/last-write-time freshness check.</summary>
     Task<OperationResult> SyncImagesSignatureAsync(int movieId, CancellationToken ct = default);
 
+    /// <summary>Runs the subtitle-flag, trailer-flag, .nfo-change and image-signature checks in one
+    /// pass, resolving the movie's folder once — what the rescan uses instead of the four separate
+    /// operations above, which each resolve it again.</summary>
+    Task<OperationResult> RefreshFolderStateAsync(int movieId, CancellationToken ct = default);
+
     /// <summary>Resolves the on-disk file path to the movie's .nfo file if one exists, or null if not found.</summary>
     Task<string?> ResolveNfoFilePathAsync(string code, CancellationToken ct = default);
 }
@@ -1203,6 +1208,13 @@ public class LocalLibraryClient(
             return new OperationResult(false, "No local folder found for this code.");
         }
 
+        ApplySubtitleFlag(movie, folder);
+        await db.SaveChangesAsync(ct);
+        return new OperationResult(true, null);
+    }
+
+    private void ApplySubtitleFlag(Movie movie, string folder)
+    {
         var newValue = HasSubtitleFile(folder);
         if (movie.MediaHasSubtitleFile != newValue)
         {
@@ -1212,8 +1224,6 @@ public class LocalLibraryClient(
         }
 
         movie.MediaHasSubtitleFile = newValue;
-        await db.SaveChangesAsync(ct);
-        return new OperationResult(true, null);
     }
 
     public async Task<OperationResult> RefreshTrailerFlagOnlyAsync(int movieId, CancellationToken ct = default)
@@ -1231,6 +1241,13 @@ public class LocalLibraryClient(
             return new OperationResult(false, "No local folder found for this code.");
         }
 
+        ApplyTrailerFlag(movie, folder);
+        await db.SaveChangesAsync(ct);
+        return new OperationResult(true, null);
+    }
+
+    private void ApplyTrailerFlag(Movie movie, string folder)
+    {
         var newValue = HasTrailerFile(folder);
         if (movie.MediaHasTrailerFile != newValue)
         {
@@ -1240,8 +1257,29 @@ public class LocalLibraryClient(
         }
 
         movie.MediaHasTrailerFile = newValue;
-        await db.SaveChangesAsync(ct);
-        return new OperationResult(true, null);
+    }
+
+    public async Task<OperationResult> RefreshFolderStateAsync(int movieId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var movie = await db.Movies.FindAsync(new object[] { movieId }, ct);
+        if (movie is null || string.IsNullOrWhiteSpace(movie.Code))
+        {
+            return new OperationResult(false, "Movie not found.");
+        }
+
+        // Resolved once for all four checks; each used to resolve the folder (and open a context) on its own.
+        var folder = await FindMovieFolderAsync(movie.Code, ct);
+        if (folder is null)
+        {
+            return new OperationResult(false, "No local folder found for this code.");
+        }
+
+        ApplySubtitleFlag(movie, folder);
+        ApplyTrailerFlag(movie, folder);
+        var nfo = await SyncNfoCoreAsync(db, movie, folder, ct);
+        var images = await SyncImagesCoreAsync(db, movie, folder, ct);
+        return nfo.Success ? images : nfo;
     }
 
     public async Task<OperationResult> RefreshLocalMetadataIfNfoChangedAsync(int movieId, CancellationToken ct = default)
@@ -1259,7 +1297,13 @@ public class LocalLibraryClient(
             return new OperationResult(false, "No local folder found for this code.");
         }
 
-        var nfoPath = FindNfoFile(folder, movie.Code);
+        return await SyncNfoCoreAsync(db, movie, folder, ct);
+    }
+
+    private async Task<OperationResult> SyncNfoCoreAsync(AppDbContext db, Movie movie, string folder, CancellationToken ct)
+    {
+        var code = movie.Code!;
+        var nfoPath = FindNfoFile(folder, code);
         if (nfoPath is null)
         {
             if (movie.MediaNfoLastWriteUtc is not null)
@@ -1344,6 +1388,11 @@ public class LocalLibraryClient(
             return new OperationResult(false, "No local folder found for this code.");
         }
 
+        return await SyncImagesCoreAsync(db, movie, folder, ct);
+    }
+
+    private async Task<OperationResult> SyncImagesCoreAsync(AppDbContext db, Movie movie, string folder, CancellationToken ct)
+    {
         var signature = ComputeImagesSignature(folder);
 
         if (movie.MediaImagesSignature is null)
