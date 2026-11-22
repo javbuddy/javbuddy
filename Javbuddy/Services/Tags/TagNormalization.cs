@@ -457,7 +457,7 @@ public static class TagNormalization
 
     private static async Task<NormalizationContext> LoadContextAsync(AppDbContext db, CancellationToken ct)
     {
-        var settings = await db.TagSettings.AsNoTracking().OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
+        var settings = await db.TagSettings.ReadSingleRowAsync(ct);
         return new NormalizationContext(
             await db.IgnoredTags.AsNoTracking().ToListAsync(ct),
             await db.TagReplacementRules.AsNoTracking().Include(r => r.TargetTag).ThenInclude(t => t.ParentTag).ToListAsync(ct),

@@ -162,7 +162,7 @@ public class R18DevReleaseBrowseService(IDbContextFactory<AppDbContext> dbFactor
     public async Task<R18DevMovieDetail?> GetPreviewAsync(string code, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var enabled = await db.R18DevSettings.OrderBy(s => s.Id).Select(s => s.Enabled).FirstOrDefaultAsync(ct);
+        var enabled = (await db.R18DevSettings.ReadSingleRowAsync(ct))?.Enabled ?? false;
         return enabled ? await dumpStore.GetMovieByCodeAsync(code, ct) : null;
     }
 
@@ -184,7 +184,7 @@ public class R18DevReleaseBrowseService(IDbContextFactory<AppDbContext> dbFactor
     private async Task<(bool Enabled, R18DevCatalogAvailability Availability)> GetAvailabilityAsync(CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var enabled = await db.R18DevSettings.OrderBy(s => s.Id).Select(s => s.Enabled).FirstOrDefaultAsync(ct);
+        var enabled = (await db.R18DevSettings.ReadSingleRowAsync(ct))?.Enabled ?? false;
         return enabled ? (true, await dumpStore.GetCatalogAvailabilityAsync(ct)) : (false, R18DevCatalogAvailability.NoDump);
     }
 

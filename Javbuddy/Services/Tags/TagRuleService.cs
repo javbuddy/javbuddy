@@ -153,7 +153,7 @@ public class TagRuleService(IDbContextFactory<AppDbContext> dbFactory, ClipActor
     public async Task<bool> GetAutoIgnoreNonLatinAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var settings = await db.TagSettings.AsNoTracking().OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
+        var settings = await db.TagSettings.ReadSingleRowAsync(ct);
         return settings?.AutoIgnoreNonLatinTags ?? false;
     }
 
