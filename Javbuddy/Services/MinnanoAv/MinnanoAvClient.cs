@@ -37,6 +37,25 @@ public partial class MinnanoAvClient(
         new("en-US", 0.9),
     ];
 
+    // A search that redirects straight to a performer has already fetched and parsed their detail page; the
+    // caller's GetPerformerDetailAsync for that same page takes it from here instead of fetching it a second
+    // time (and waiting out another request delay). Each entry is handed out once and expires if never claimed.
+    private static readonly TimeSpan RedirectedDetailLifetime = TimeSpan.FromMinutes(2);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime StoredAt, MinnanoAvPerformerDetail Detail)> redirectedDetails = new();
+
+    private static string DetailCacheKey(string pathOrUrl) =>
+        (Uri.TryCreate(pathOrUrl, UriKind.Absolute, out var uri) ? uri.AbsolutePath : pathOrUrl).Trim().TrimStart('/');
+
+    private void RememberRedirectedDetail(string path, MinnanoAvPerformerDetail detail)
+    {
+        var now = DateTime.UtcNow;
+        foreach (var stale in redirectedDetails.Where(e => now - e.Value.StoredAt > RedirectedDetailLifetime).Select(e => e.Key))
+        {
+            redirectedDetails.TryRemove(stale, out _);
+        }
+        redirectedDetails[DetailCacheKey(path)] = (now, detail);
+    }
+
     [GeneratedRegex(@"/actress\d+\.html$", RegexOptions.IgnoreCase)]
     private static partial Regex DetailPagePathRegex();
 
@@ -93,6 +112,7 @@ public partial class MinnanoAvClient(
                 var detail = MinnanoAvHtmlParser.ParsePerformerDetail(html, finalPath, baseUrl);
                 if (detail is null) return Array.Empty<MinnanoAvSearchResult>();
 
+                RememberRedirectedDetail(finalPath, detail);
                 return new[]
                 {
                     new MinnanoAvSearchResult(
@@ -128,6 +148,12 @@ public partial class MinnanoAvClient(
     public async Task<MinnanoAvPerformerDetail?> GetPerformerDetailAsync(string performerPathOrUrl, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(performerPathOrUrl)) return null;
+
+        if (redirectedDetails.TryRemove(DetailCacheKey(performerPathOrUrl), out var remembered)
+            && DateTime.UtcNow - remembered.StoredAt <= RedirectedDetailLifetime)
+        {
+            return remembered.Detail;
+        }
 
         try
         {

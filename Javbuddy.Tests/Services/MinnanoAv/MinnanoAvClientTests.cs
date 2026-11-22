@@ -76,6 +76,32 @@ public class MinnanoAvClientTests
         Assert.Contains("148426.jpg", results[0].ImageUrl);
     }
 
+    [Fact]
+    public async Task GetPerformerDetailAsync_AfterASearchRedirectedToThatPage_ReusesItInsteadOfFetchingAgain()
+    {
+        var requests = 0;
+        var handler = new FakeHttpMessageHandler((request, _) =>
+        {
+            requests++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(SampleDetailHtml),
+                RequestMessage = new HttpRequestMessage(HttpMethod.Get, "https://www.minnano-av.com/actress148426.html")
+            });
+        });
+        var client = new MinnanoAvClient(new FakeHttpClientFactory(handler), new TestDbContextFactory());
+
+        var match = Assert.Single(await client.SearchPerformersAsync("通野未帆"));
+        var detail = await client.GetPerformerDetailAsync(match.PathOrUrl);
+
+        Assert.Equal(1, requests);
+        Assert.Equal("通野未帆", detail?.Name);
+
+        // Handed out once: a later request for the page is a real fetch.
+        await client.GetPerformerDetailAsync(match.PathOrUrl);
+        Assert.Equal(2, requests);
+    }
+
     [Theory]
     [InlineData("148426")]
     [InlineData(" 148426 ")]
