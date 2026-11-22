@@ -127,16 +127,16 @@ public sealed class ActorPhotoService(
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var normalized = search.Trim();
+            var normalized = search.Trim().ToLower();
             query = query.Where(p =>
                 (p.Actor != null && (
-                    (p.Actor.FirstName != null && p.Actor.FirstName.Contains(normalized)) ||
-                    (p.Actor.LastName != null && p.Actor.LastName.Contains(normalized)) ||
-                    (p.Actor.LastName != null && p.Actor.FirstName != null && (p.Actor.LastName + " " + p.Actor.FirstName).Contains(normalized)) ||
-                    (p.Actor.FirstName != null && p.Actor.LastName != null && (p.Actor.FirstName + " " + p.Actor.LastName).Contains(normalized)) ||
-                    (p.Actor.JapaneseNameKanji != null && p.Actor.JapaneseNameKanji.Contains(normalized)) ||
-                    (p.Actor.JapaneseNameKana != null && p.Actor.JapaneseNameKana.Contains(normalized)))) ||
-                (p.Album != null && p.Album.Name.Contains(normalized)));
+                    (p.Actor.FirstName != null && p.Actor.FirstName.ToLower().Contains(normalized)) ||
+                    (p.Actor.LastName != null && p.Actor.LastName.ToLower().Contains(normalized)) ||
+                    (p.Actor.LastName != null && p.Actor.FirstName != null && (p.Actor.LastName + " " + p.Actor.FirstName).ToLower().Contains(normalized)) ||
+                    (p.Actor.FirstName != null && p.Actor.LastName != null && (p.Actor.FirstName + " " + p.Actor.LastName).ToLower().Contains(normalized)) ||
+                    (p.Actor.JapaneseNameKanji != null && p.Actor.JapaneseNameKanji.ToLower().Contains(normalized)) ||
+                    (p.Actor.JapaneseNameKana != null && p.Actor.JapaneseNameKana.ToLower().Contains(normalized)))) ||
+                (p.Album != null && p.Album.Name.ToLower().Contains(normalized)));
         }
 
         query = sort switch

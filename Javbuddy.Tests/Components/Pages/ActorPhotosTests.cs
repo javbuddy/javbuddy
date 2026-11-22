@@ -102,13 +102,13 @@ public class ActorPhotosTests : BunitContext
         var searchInput = cut.Find("input[type='search']");
         searchInput.Input("Fukada");
 
-        var filteredTiles = cut.FindAll(".actor-photo-tile");
-        Assert.Single(filteredTiles);
-        Assert.Contains("Fukada Eimi", filteredTiles[0].TextContent);
+        // The filter waits for typing to pause, so the tiles change only after the debounce.
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".actor-photo-tile")));
+        Assert.Contains("Fukada Eimi", cut.Find(".actor-photo-tile").TextContent);
 
         // Search for non-matching term
         searchInput.Input("NonExistentActor");
-        Assert.Empty(cut.FindAll(".actor-photo-tile"));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".actor-photo-tile")));
         Assert.Contains("No photos match your current filters", cut.Markup);
 
         // Click Reset filters
@@ -441,10 +441,11 @@ public class ActorPhotosTests : BunitContext
         Assert.Equal(240, cut.FindAll(".actor-photo-tile").Count);
 
         cut.Find("input[type='search']").Input("Hidden Album");
-        Assert.Single(cut.FindAll(".actor-photo-tile"));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".actor-photo-tile")));
         Assert.Equal("/actor-photo/250/thumb", cut.Find(".actor-photo-tile-img").GetAttribute("data-src"));
 
         cut.Find("input[type='search']").Input("No matching album");
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".actor-photo-tile")));
         cut.Find("button.btn-link").Click();
         Assert.Equal(120, cut.FindAll(".actor-photo-tile").Count);
         Assert.Equal("/actor-photo/1/thumb", cut.Find(".actor-photo-tile-img").GetAttribute("data-src"));

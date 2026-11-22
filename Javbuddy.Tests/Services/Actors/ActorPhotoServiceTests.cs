@@ -410,6 +410,10 @@ public class ActorPhotoServiceTests : IDisposable
         Assert.Single(searchActor);
         Assert.Equal("Fukada Eimi", searchActor[0].ActorDisplayName);
 
+        // 7b. Search ignores case
+        Assert.Single(await service.GetGlobalPhotosAsync(search: "fukada eimi"));
+        Assert.Single(await service.GetGlobalPhotosAsync(search: "SUMMER gravure"));
+
         // 8. Sort oldest first
         var oldest = await service.GetGlobalPhotosAsync(sort: "oldest");
         Assert.Equal(1.5, oldest[0].AspectRatio);

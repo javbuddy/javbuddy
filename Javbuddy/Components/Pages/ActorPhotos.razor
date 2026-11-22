@@ -177,6 +177,7 @@ else
     private List<GlobalActorPhotoItem>? allPhotos;
     private List<ActorWithPhotoCountSummary>? actorsWithPhotos;
     private string textFilter = "";
+    private readonly Debouncer textFilterDebouncer = new();
     private int? selectedActorId;
     private AlbumFilterOption albumFilter = AlbumFilterOption.All;
     private bool favoritesOnly;
@@ -228,10 +229,17 @@ else
         RebuildPhotos();
     }
 
-    private void OnTextFilterInput(ChangeEventArgs e)
+    private async Task OnTextFilterInput(ChangeEventArgs e)
     {
-        textFilter = e.Value?.ToString() ?? "";
-        RebuildPhotos();
+        var value = e.Value?.ToString() ?? "";
+
+        // A newer keystroke supersedes this one, so the filter, sort and regrouping run once typing pauses.
+        await textFilterDebouncer.RunAsync(_ =>
+        {
+            textFilter = value;
+            RebuildPhotos();
+            return Task.CompletedTask;
+        });
     }
 
     private void ToggleFilterDropdown()
@@ -320,6 +328,7 @@ else
 
     private void ResetFilters()
     {
+        textFilterDebouncer.Cancel();
         textFilter = "";
         selectedActorId = null;
         albumFilter = AlbumFilterOption.All;
@@ -560,6 +569,7 @@ else
     public async ValueTask DisposeAsync()
     {
         disposed = true;
+        textFilterDebouncer.Dispose();
         if (jsModule is not null)
         {
             try

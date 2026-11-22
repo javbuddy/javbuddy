@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **The Actor Photos filter box waits for a pause in typing** before filtering, sorting and regrouping every photo, and the photo search in the service now ignores case.
 - **The movie filters' actor picker loads only the columns an actor's name needs** instead of every full actor row.
 - **minnano-av no longer fetches the same actress page twice.** When a name search redirects straight to a performer, the page already loaded is reused for the detail lookup instead of requesting it again after another request delay.
 - **Actor discovery is faster on a large library.** Scanning reads movies' .nfo files several at a time, merges candidates by name through an index instead of comparing each against all the others, and importing no longer searches the library again for a headshot the scan already found.
