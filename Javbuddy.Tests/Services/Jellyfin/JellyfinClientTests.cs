@@ -297,6 +297,29 @@ public class JellyfinClientTests
         Assert.Equal(1, calls);
     }
 
+    [Theory]
+    [InlineData("text/html", "<html>login</html>", false)]
+    [InlineData("application/json", "[1,2]", true)]
+    public async Task TestConnectionAsync_NonJsonFails_WrongShapeIsLenient(string contentType, string body, bool expectSuccess)
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.JellyfinSettings.Add(new JellyfinSettings { BaseUrl = "http://localhost:8096", ApiKey = "testkey", Enabled = true });
+            await db.SaveChangesAsync();
+        }
+
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent(body, System.Text.Encoding.UTF8, contentType)
+        }));
+        var client = new JellyfinClient(new FakeHttpClientFactory(handler), factory, new ConfigurationBuilder().Build());
+        var result = await client.TestConnectionAsync();
+
+        Assert.Equal(expectSuccess, result.Success);
+        if (!expectSuccess) Assert.Contains("Unexpected response", result.Message);
+    }
+
     [Fact]
     public async Task TestConnectionAsync_ReturnsFailure_WhenUnauthorized()
     {

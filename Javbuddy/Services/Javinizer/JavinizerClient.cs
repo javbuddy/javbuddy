@@ -153,15 +153,8 @@ public class JavinizerClient : ApiClientBase<JavinizerSettings>, IJavinizerClien
                 if (response.IsSuccessStatusCode)
                 {
                     string? version = null;
-                    try
-                    {
-                        var status = await response.Content.ReadFromJsonAsync<JavinizerVersionResponseDto>(cancellationToken: token);
-                        version = status?.EffectiveVersion;
-                    }
-                    catch (JsonException)
-                    {
-                        // Best-effort extraction; connection itself succeeded.
-                    }
+                    var status = await ReadJsonLenientAsync<JavinizerVersionResponseDto>(response, token);
+                    version = status?.EffectiveVersion;
 
                     return new JavinizerTestResult(true, "Connected successfully.", version);
                 }

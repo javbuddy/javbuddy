@@ -230,24 +230,16 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
                 {
                     string? serverId = null;
                     string? version = null;
-                    try
+                    var info = await ReadJsonLenientAsync<JellyfinSystemInfoDto>(response, token);
+                    if (!string.IsNullOrWhiteSpace(info?.Id))
                     {
-                        var info = await response.Content.ReadFromJsonAsync<JellyfinSystemInfoDto>(cancellationToken: token);
-                        if (!string.IsNullOrWhiteSpace(info?.Id))
-                        {
-                            cachedServerId = info.Id;
-                            cachedServerIdBaseUrl = settings.BaseUrl;
-                            serverId = info.Id;
-                        }
-                        if (!string.IsNullOrWhiteSpace(info?.Version))
-                        {
-                            version = info.Version;
-                        }
+                        cachedServerId = info.Id;
+                        cachedServerIdBaseUrl = settings.BaseUrl;
+                        serverId = info.Id;
                     }
-                    catch (System.Text.Json.JsonException)
+                    if (!string.IsNullOrWhiteSpace(info?.Version))
                     {
-                        // Server info deserialization is best-effort for caching server ID;
-                        // the connection itself succeeded.
+                        version = info.Version;
                     }
 
                     return new MediaServerTestResult(true, "Connected successfully.", version, serverId);

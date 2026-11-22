@@ -106,7 +106,7 @@ public class JavinizerClientTests
     }
 
     [Fact]
-    public async Task TestConnectionAsync_ReturnsSuccess_WhenVersionMissingOrMalformed()
+    public async Task TestConnectionAsync_ReturnsSuccess_WhenVersionMissingOrWrongShape()
     {
         using var factory = new TestDbContextFactory();
         await using (var db = await factory.CreateDbContextAsync())
@@ -115,13 +115,34 @@ public class JavinizerClientTests
             await db.SaveChangesAsync();
         }
 
-        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.OK, "not-valid-json");
+        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.OK, "[1,2]");
         var client = new JavinizerClient(new FakeHttpClientFactory(handler), factory, new ConfigurationBuilder().Build());
         var result = await client.TestConnectionAsync();
 
         Assert.True(result.Success);
         Assert.Equal("Connected successfully.", result.Message);
         Assert.Null(result.Version);
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_ReturnsFailure_WhenBodyIsNotJson()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.JavinizerSettings.Add(new JavinizerSettings { BaseUrl = "http://localhost:8765", ApiToken = "testtoken" });
+            await db.SaveChangesAsync();
+        }
+
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<html>login</html>", System.Text.Encoding.UTF8, "text/html")
+        }));
+        var client = new JavinizerClient(new FakeHttpClientFactory(handler), factory, new ConfigurationBuilder().Build());
+        var result = await client.TestConnectionAsync();
+
+        Assert.False(result.Success);
+        Assert.Contains("Unexpected response", result.Message);
     }
 
     [Fact]

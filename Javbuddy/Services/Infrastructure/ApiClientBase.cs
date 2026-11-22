@@ -78,6 +78,24 @@ public abstract class ApiClientBase<TSettings>(IHttpClientFactory httpClientFact
         }
     }
 
+    /// <summary>Best-effort read of a success body whose content is optional (a version string on a
+    /// connection test). A body that isn't JSON at all (an HTML proxy/login page) still throws
+    /// <see cref="JsonException"/>, so <see cref="ExecuteAsync{T}"/> reports it as an unexpected response;
+    /// only schema drift (valid JSON of the wrong shape) is tolerated and yields null.</summary>
+    protected static async Task<T?> ReadJsonLenientAsync<T>(HttpResponseMessage response, CancellationToken ct) where T : class
+    {
+        var text = await response.Content.ReadAsStringAsync(ct);
+        using var document = JsonDocument.Parse(text);
+        try
+        {
+            return document.Deserialize<T>(JsonSerializerOptions.Web);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Reads a structured JSON error body for a non-success response, falling back to
     /// <see cref="HttpResponseMessage.ReasonPhrase"/> if the body isn't present/parseable or
     /// <paramref name="selectMessage"/> returns null. Cancellation is rethrown rather than treated

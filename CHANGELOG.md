@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 - **qBittorrent sessions are reused instead of logging in on every call.** Javbuddy logs in again only when qBittorrent reports the session expired. After a login that qBittorrent actually rejects (wrong credentials, or a 401/403) it stops retrying, so it no longer trips qBittorrent's WebUI ban; temporary failures (5xx, 429, network errors) are reported but retried normally. Changing the credentials in Settings, or pressing Test connection there, resumes it; the background health check never resets the state.
 - **javinizer-go error messages now include the per-item details** it sends in `errors` (e.g. "Invalid request: path is required"), instead of only the summary.
 - **A non-JSON response from an integration (an HTML proxy or login page served with a 200) is reported as "Unexpected response from {service}."** instead of throwing, so it no longer silently stops the Activity Queue live progress updates.
@@ -67,6 +68,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - **Movie Detail works on phones again.** On a narrow screen the title, badges, overview, tags and cast were squeezed to nothing beside the poster, leaving only the poster visible. In portrait the page now stacks into one column; in landscape, on small tablets and in narrow windows the poster shrinks so the details stay beside it. A cast member's actor-tag popover now opens at the bottom of the screen instead of running off its side, and the timeline's apex diamonds and highlight pins are easier to tap.
 - **Clip playback no longer stalls when moving between clips of the same movie.** Next, Previous and a playlist moving on by itself could leave the next clip paused, or at the wrong spot, when it came from the same movie as the last one. The player also no longer re-seeks repeatedly while a clip is still loading. When the browser won't play a clip with sound (as phones often do once a playlist moves on by itself), the clip now plays muted, with the mute button showing it, instead of sitting paused on its first frame.
 - **Tapping a playing video on a touch screen to bring back its hidden controls no longer also pauses it**, and double-tapping it to go fullscreen no longer leaves it paused.
@@ -110,6 +113,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - **No more white flash when moving between hover previews.** Moving the pointer from one scene, highlight or apex card that was playing its hover preview to another could flash the first card's picture solid white for a frame; the preview now disappears cleanly back to the card's screenshot.
 
 ## [0.7.2] - 2026-11-21
@@ -132,6 +137,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - **Actor Detail no longer contacts Jellyfin when it loads.** Its "Open in Jellyfin" link used to ask Jellyfin for its server id on a load (waiting up to 15 s when Jellyfin was slow or down). The server id is now stored on each actor, so the link is built from stored data and no page load connects to Jellyfin. The Jellyfin link sync stores it when it links an actor, and on its next run fills it in for actors that were already linked; until then those actors, and any actor whose Jellyfin person id you enter by hand, show the plain "Jellyfin" badge instead of a link. Jellyfin is now contacted only by the link sync, the link lookup when a movie is added or rescanned, and the connection checks.
 
 ## [0.7.0] - 2026-11-15
@@ -142,6 +149,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - **Shift+A closes an apex in the scene editor.** After A opens the Mark apex form, Shift+A sets the apex's tail so its window ends at the playhead and saves it, like Shift+H for a highlight.
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - **Space plays and pauses again after you switch movies in the scene editor.** Closing a movie's player left its Space shortcut running on the page, which swallowed Space for the next movie's player until you reloaded.
 
@@ -167,6 +176,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - **Switching between Movie Detail's Refresh and Tools menus takes one click.** With one menu open, clicking the other's button only closed the first, and a second click was needed to open the second; it now switches straight over. A click elsewhere or Escape still closes the menu.
 - **Typing in Actor Missing's filter no longer re-renders every release card.** Each keystroke made every card in the grid redraw even though nothing in it changed; a card now only redraws when its own release changes.
 - **Activity > Queue and History now pick up status changes that happen in the background.** A download that finished, was removed from qBittorrent, or was matched to its torrent by the periodic sync used to stay as it was on an already-open page until you reloaded it; the pages, the sidebar badge and the Movies downloading indicators now refresh when that happens.
@@ -182,6 +193,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - **The Transgender checkbox on Actor Edit has no help text under it.** The line about the filters including or excluding the actor is gone.
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - **The clip editor's new-scene form no longer has a large gap between Title and Start.** The scene form's styles had been split out with a rule that gave the Title field a tall flex-basis; the fields stack tightly again.
 - **The delete button on Movie Detail's images is back in the top-right corner and translucent.** Its styling stopped applying when the Images section got the shared section header, so the button showed unstyled in the middle of the image on hover.
@@ -208,6 +221,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - **Filtering, sorting and searching the Movies page is lighter on the database.** A filter chip, sort change or search keystroke used to re-read every filter option list and the library totals on top of the count; it now re-reads only the matching count and the All / Missing / Got counts. Those library-wide lists reload when the library changes (e.g. during an import), and overlapping change notifications no longer start overlapping reloads.
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - **The scene editor no longer hides the titlebar, scrub bar and cursor when idle.** While editing scenes you often watch or listen without touching the mouse, and the player's chrome faded out after 3 seconds. With the editor open it now stays visible; normal playback still hides it after a few idle seconds.
 - **Hovering an actor's name in the clip editor no longer shows "Jump to this scene" beside the tag popover.** Scene, highlight and apex rows passed their seek tooltip down to the actor names, so the browser's tooltip appeared next to the actor-tag popover. Actor names now show only the popover (or nothing, when they have no tags); the rest of the row keeps its seek tooltip, and clicking still seeks.
@@ -273,6 +288,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - Syncing to the `.nfo` now creates the elements a file lacks (or has empty) — Overview (`<plot>`), original title, director, studio, label, series, release date and runtime — and the passive drift check reports them, so a value added or fetched in Javbuddy after the import reaches the `.nfo`. After upgrading, the first rescan may show drift on many movies whose `.nfo` lacks a value Javbuddy has; **Push** writes them.
 
 ## [0.5.1] - 2026-11-08
@@ -286,6 +303,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - **Generate stills** can now be stopped while it is running: the Cancel button becomes **Stop**, which aborts the frame extraction and returns the dialog to idle. (#125)
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - Closing the video player right after it opens no longer ends the page's session when a late subtitle call hits the already-closed player.
 - Moving to another movie in the player (Movies' Play all / Shuffle, or switching versions) now starts a fresh video element with its own subtitle tracks instead of reusing the previous one's, so the last movie's subtitle line no longer stays on screen. (#122)
@@ -318,6 +337,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - A subtitle cue no longer stays on screen over the next clip or movie when that one has no subtitles. (#107)
 - NFO sync now adds a `<title>` to an `.nfo` that lacked one (or had it empty) when the movie has a title, placing it right after `<id>` (else as the first element). (#106)
 - minnano-av.com actor detail pages whose performer name or aliases include a parenthesized qualifier (such as `みさ（同人モデル）` or `みさちゃん（FC2）`) now parse and keep the qualifier instead of failing to load or truncating at the first parenthesis. (#105)
@@ -332,6 +353,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - The first search on minnano-av.com or WAPdB through a challenge solver (seen with a freshly started Trawl) no longer reports "blocked by a bot challenge": the solver sometimes returns a still-challenged page on a cold start, and Javbuddy now retries it once before giving up. (#103)
 - In the player's scene editor, the keyboard shortcuts (i) popover is drawn over the **Scenes** heading and the add buttons instead of under them.
 - Tags added in Javbuddy to a movie whose `.nfo` had no `<genre>` elements are now detected as `.nfo` drift ("Javbuddy changed") and are written into the file when you resolve the conflict or use **Write Javbuddy metadata to .nfo**; before, an `.nfo` without genres was never flagged and nothing was ever written to it. The `<genre>` elements are placed before the first `<actor>` with the file's own indentation. An `.nfo` with no genres is also flagged for a movie that already had tags, so after updating, such movies show up as drift until you write them. Likewise, if another tool strips the genres from an `.nfo` whose tags Javbuddy knows, it shows as an external edit.
@@ -345,6 +368,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ## [0.4.1] - 2026-11-04
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - **Generate poster & fanart** no longer fails with "Couldn't extract any frames from the video" in the Docker image, whose ffmpeg has no JPEG encoder: frames are now taken as WebP (with the same colour conversion the scene screenshots use) and converted to JPEG by the app. When extraction does fail, the message now says why.
 
@@ -378,6 +403,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - Tag names, actor names and actor aliases are now unique ignoring case in the database itself, not only in the app's checks, and two actors with the same single name (no last name) can no longer both be saved. Any such duplicates in an existing database are kept but renamed with the first free " (2)", " (3)"… suffix during the upgrade, so they can be merged with the Merge tools (a renamed actor keeps its old name as an alias, so its movies stay linked); an alias an actor has twice in different case is removed.
 - Duplicate checks for tag and actor names, aliases, ignored tags and replacement rules no longer miss a name with non-ASCII letters (e.g. "ū") that matches only in different case.
 - Movie codes are now case-insensitive in the image cache, the torrent history and actor photos too, as they already were for movies, so an image cached under `abc-123` is found and replaced for `ABC-123` instead of being duplicated. The upgrade fails on a database that already holds the same code twice in different case in the image cache or the candidate list; delete the database file to recreate it.
@@ -397,6 +424,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - Long actor tags, and tags under a parent, are no longer cut off in the cast pills on Movie Detail or in the actor-tag hover popovers; they wrap instead.
 
 ## [0.3.7] - 2026-10-25
@@ -414,6 +443,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ## [0.3.5] - 2026-10-20
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - The video player's hidden controls stay hidden when the next clip starts (e.g. while playing scenes), in and out of fullscreen, instead of reappearing.
 - Scrubbing the Scenes timeline on Movie Detail shows the "Generating previews…" placeholder with progress while the movie's trickplay is being generated, as the player does, and switches to thumbnails once it's ready.
@@ -441,6 +472,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - Poster Options has a "Show Versions Badge" option (on by default). A movie with several file versions shows "N versions" as a badge in the poster's bottom-right corner, instead of in the text under the poster.
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - Scrolling the Movies page no longer blanks the grid, jumps the scrollbar or shifts rows when some posters had an extra or wrapped line under them, e.g. "N versions" with the Size line hidden. Every poster card is the same height again: the version count moved onto the poster as a badge, and size, quality and status lines are cut off with "…" instead of wrapping.
 
@@ -475,6 +508,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - The Scenes timeline's hover preview on the movie detail page no longer plays forward by itself; its frame follows only the pointer position (#69).
 - The System page's uptime no longer jumps by an hour when daylight saving time starts or ends while the app is running.
 - Task durations of a day or more on the System > Tasks page show their days (`1d 01:00:00`) instead of wrapping back to `01:00:00`.
@@ -490,6 +525,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - The Scenes, Highlights and Apexes wall loads each window of cards much faster, so scrolling it no longer outruns the loading (#33). Opening a window used to run dozens of queries per movie on it. It now loads all of them together.
 
 ### Removed
@@ -499,6 +536,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ## [0.2.2] - 2026-10-10
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - Movie Detail's Genres editor: hovering a tag that comes from scenes, highlights or apexes now explains that removing it also removes it from them; before, the tooltip could be missing.
 - Movie Detail's Genres editor: an actor tag left on the movie by an earlier version is now removed directly, without the scenes-and-highlights confirmation that didn't apply to it.
@@ -512,6 +551,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
+
 - Movie Detail's Genres editor: tags the movie only has because a scene, highlight or apex carries them showed a remove button that did nothing. They now show dashed and muted while editing, and removing one asks for confirmation, then removes the tag from those scenes, highlights and apexes too.
 
 ## [0.2.0] - 2026-10-10
@@ -522,6 +563,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 - Docker image: MediaInfo now comes from the `MediaInfo.Wrapper.Core` NuGet package (bumped to 26.10.0, which ships generic Linux runtime identifiers) instead of the distro's `libmediainfo0v5`; only its `libcurl3-gnutls` and `libmms0` dependencies are installed from apt.
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - Clip tag refreshes and actor discovery imports now retry or skip only on a duplicate-key database error, not on any constraint error (a foreign key or NOT NULL failure now surfaces as the real error).
 - Screen readers now announce an actor's tags (and where an inherited actor comes from) when the actor gets focus on a scene, highlight or apex row or card.
@@ -543,6 +586,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ## [0.1.2] - 2026-10-08
 
 ### Fixed
+
+- **Connection tests for Prowlarr, javinizer-go and Jellyfin no longer report "Connected successfully" when the server answers 200 with a non-JSON page** (e.g. a proxy login page); they report an unexpected response instead.
 
 - Docker ARM64 image: publish the app assembly for ARM64 instead of defaulting to x86-64.
 

@@ -177,15 +177,8 @@ public class ProwlarrClient : ApiClientBase<ProwlarrSettings>, IProwlarrClient
                 if (response.IsSuccessStatusCode)
                 {
                     string? version = null;
-                    try
-                    {
-                        var status = await response.Content.ReadFromJsonAsync<ProwlarrSystemStatusDto>(cancellationToken: token);
-                        version = status?.Version;
-                    }
-                    catch (System.Text.Json.JsonException)
-                    {
-                        // Best-effort extraction; connection itself succeeded.
-                    }
+                    var status = await ReadJsonLenientAsync<ProwlarrSystemStatusDto>(response, token);
+                    version = status?.Version;
 
                     return new ProwlarrTestResult(true, "Connected successfully.", version);
                 }
