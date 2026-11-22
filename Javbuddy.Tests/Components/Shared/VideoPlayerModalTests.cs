@@ -33,6 +33,7 @@ public class VideoPlayerModalTests : BunitContext
         Services.AddSingleton<IMovieService>(new MovieService(factory));
         Services.AddSingleton<IMovieHighlightService>(new MovieHighlightService(factory));
         Services.AddSingleton<IMovieApexService>(new MovieApexService(factory));
+        Services.AddSingleton<IMovieClipService>(sp => new MovieClipService(factory, sp.GetRequiredService<IMovieSceneService>(), sp.GetRequiredService<IMovieHighlightService>(), sp.GetRequiredService<IMovieApexService>()));
         Services.AddSingleton<IActorTagService>(new ActorTagService(factory));
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Tags.ITagService>());
         Services.AddSingleton(Substitute.For<ISceneChapterImportService>());

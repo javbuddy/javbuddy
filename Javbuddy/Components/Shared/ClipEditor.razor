@@ -3,6 +3,7 @@
 @inject IMovieSceneService SceneService
 @inject IMovieHighlightService HighlightService
 @inject IMovieApexService ApexService
+@inject IMovieClipService ClipService
 @inject IActorTagService ActorTagService
 @inject ISceneChapterImportService ChapterImportService
 @inject ISceneMediaService SceneMedia
@@ -301,9 +302,7 @@
     private async Task ReloadAsync()
     {
         loadSequence++;
-        scenes = await SceneService.GetScenesAsync(MovieId);
-        highlights = await HighlightService.GetHighlightsAsync(MovieId);
-        apexes = await ApexService.GetApexesAsync(MovieId);
+        (scenes, highlights, apexes) = await ClipService.GetClipsAsync(MovieId);
         defaultApexWindow = await ApexService.GetDefaultWindowAsync();
         cast = await SceneService.GetCastOptionsAsync(MovieId);
         actorTags = await ActorTagService.GetEffectiveAsync(MovieId);
@@ -352,7 +351,7 @@
     }
 
     // A finished media job only changes the media versions the three lists carry, so just those are re-read
-    // (concurrently, each on its own DbContext): the cast, actor tags, default window and chapter probe are
+    // (in one clip load): the cast, actor tags, default window and chapter probe are
     // untouched and the queue already holds whatever media is still missing. A burst of notifications (many
     // jobs finishing together) piles up behind the reload in flight and is answered by one more.
     private async Task ReloadMediaAsync()
@@ -372,17 +371,12 @@
                 mediaReloadAgain = false;
                 var movie = MovieId;
                 var reloads = loadSequence;
-                var scenesTask = SceneService.GetScenesAsync(movie);
-                var highlightsTask = HighlightService.GetHighlightsAsync(movie);
-                var apexesTask = ApexService.GetApexesAsync(movie);
-                await Task.WhenAll(scenesTask, highlightsTask, apexesTask);
+                var clips = await ClipService.GetClipsAsync(movie);
 
                 // A full reload (a save, another movie) ran meanwhile and is newer than this one.
                 if (disposed || movie != MovieId || reloads != loadSequence) continue;
 
-                scenes = scenesTask.Result;
-                highlights = highlightsTask.Result;
-                apexes = apexesTask.Result;
+                (scenes, highlights, apexes) = clips;
                 tree = ClipTree.Build(cast, scenes, highlights, apexes);
                 await OnScenesChanged.InvokeAsync(scenes);
                 await OnHighlightsChanged.InvokeAsync(highlights);

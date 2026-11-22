@@ -35,6 +35,8 @@ public abstract class ClipEditorTestBase : BunitContext
     protected readonly SceneMediaQueue mediaQueue;
     protected readonly int movieId;
 
+    protected readonly IMovieClipService clipService;
+
     protected ClipEditorTestBase()
     {
         sceneMedia.ServesVariant(Arg.Any<string>()).Returns(true);
@@ -46,6 +48,8 @@ public abstract class ClipEditorTestBase : BunitContext
         Services.AddSingleton<IMovieSceneService>(sceneService);
         Services.AddSingleton<IMovieHighlightService>(highlightService);
         Services.AddSingleton<IMovieApexService>(apexService);
+        clipService = new MovieClipService(factory, sceneService, highlightService, apexService);
+        Services.AddSingleton<IMovieClipService>(clipService);
         Services.AddSingleton<IActorTagService>(new ActorTagService(factory));
         Services.AddSingleton<ITagService>(new TagService(factory, Substitute.For<INfoSyncService>()));
         Services.AddSingleton(chapterImport);

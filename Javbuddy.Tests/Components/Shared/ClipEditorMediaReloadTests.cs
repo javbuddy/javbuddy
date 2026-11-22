@@ -14,15 +14,14 @@ public class ClipEditorMediaReloadTests : ClipEditorTestBase
     private readonly IMovieSceneService scenesSpy = Substitute.For<IMovieSceneService>();
     private readonly IMovieHighlightService highlightsSpy = Substitute.For<IMovieHighlightService>();
     private readonly IMovieApexService apexesSpy = Substitute.For<IMovieApexService>();
+    private readonly IMovieClipService clipsSpy = Substitute.For<IMovieClipService>();
     private readonly IActorTagService actorTagsSpy = Substitute.For<IActorTagService>();
 
     public ClipEditorMediaReloadTests()
     {
         // Forward to the real services, but count the calls.
-        scenesSpy.GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(ci => sceneService.GetScenesAsync(ci.ArgAt<int>(0)));
+        clipsSpy.GetClipsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(ci => clipService.GetClipsAsync(ci.ArgAt<int>(0)));
         scenesSpy.GetCastOptionsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(ci => sceneService.GetCastOptionsAsync(ci.ArgAt<int>(0)));
-        highlightsSpy.GetHighlightsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(ci => highlightService.GetHighlightsAsync(ci.ArgAt<int>(0)));
-        apexesSpy.GetApexesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(ci => apexService.GetApexesAsync(ci.ArgAt<int>(0)));
         apexesSpy.GetDefaultWindowAsync(Arg.Any<CancellationToken>()).Returns(ci => apexService.GetDefaultWindowAsync());
         var realActorTags = new ActorTagService(factory);
         actorTagsSpy.GetEffectiveAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(ci => realActorTags.GetEffectiveAsync(ci.ArgAt<int>(0)));
@@ -30,6 +29,7 @@ public class ClipEditorMediaReloadTests : ClipEditorTestBase
         Services.AddSingleton(scenesSpy);
         Services.AddSingleton(highlightsSpy);
         Services.AddSingleton(apexesSpy);
+        Services.AddSingleton(clipsSpy);
         Services.AddSingleton(actorTagsSpy);
     }
 
@@ -39,6 +39,7 @@ public class ClipEditorMediaReloadTests : ClipEditorTestBase
         var sceneId = (await sceneService.AddSceneAsync(movieId, 600, null, "Bath")).SceneId!.Value;
         var cut = RenderClipEditor();
         Assert.Empty(cut.FindAll(".scene-editor-thumb img"));
+        clipsSpy.ClearReceivedCalls();
         scenesSpy.ClearReceivedCalls();
         highlightsSpy.ClearReceivedCalls();
         apexesSpy.ClearReceivedCalls();
@@ -59,9 +60,7 @@ public class ClipEditorMediaReloadTests : ClipEditorTestBase
 
         // The lists carry the media versions; the cast, default window, actor tags and library don't change,
         // and the queue already holds the missing media.
-        await scenesSpy.Received(1).GetScenesAsync(movieId, Arg.Any<CancellationToken>());
-        await highlightsSpy.Received(1).GetHighlightsAsync(movieId, Arg.Any<CancellationToken>());
-        await apexesSpy.Received(1).GetApexesAsync(movieId, Arg.Any<CancellationToken>());
+        await clipsSpy.Received(1).GetClipsAsync(movieId, Arg.Any<CancellationToken>());
         await scenesSpy.DidNotReceive().GetCastOptionsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         await apexesSpy.DidNotReceive().GetDefaultWindowAsync(Arg.Any<CancellationToken>());
         await actorTagsSpy.DidNotReceive().GetEffectiveAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
@@ -75,21 +74,21 @@ public class ClipEditorMediaReloadTests : ClipEditorTestBase
         await sceneService.AddSceneAsync(movieId, 600, null, "Bath");
         var gate = new TaskCompletionSource();
         var cut = RenderClipEditor();
-        scenesSpy.ClearReceivedCalls();
+        clipsSpy.ClearReceivedCalls();
         // The first reload is held open while the burst arrives.
-        scenesSpy.GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(async ci =>
+        clipsSpy.GetClipsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(async ci =>
         {
             await gate.Task;
-            return await sceneService.GetScenesAsync(ci.ArgAt<int>(0));
+            return await clipService.GetClipsAsync(ci.ArgAt<int>(0));
         });
 
         const int burst = 10;
         for (var i = 0; i < burst; i++) RaiseGenerated(movieId);
         gate.SetResult();
 
-        cut.WaitForAssertion(() => Assert.True(scenesSpy.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IMovieSceneService.GetScenesAsync)) >= 1));
+        cut.WaitForAssertion(() => Assert.True(clipsSpy.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IMovieClipService.GetClipsAsync)) >= 1));
         await Task.Delay(300);
-        var calls = scenesSpy.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IMovieSceneService.GetScenesAsync));
+        var calls = clipsSpy.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IMovieClipService.GetClipsAsync));
         Assert.InRange(calls, 1, 2);
     }
 

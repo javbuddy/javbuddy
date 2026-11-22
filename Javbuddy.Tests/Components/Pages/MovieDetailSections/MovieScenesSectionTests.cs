@@ -21,6 +21,7 @@ public class MovieScenesSectionTests : BunitContext
     private readonly ISceneMediaService sceneMedia = Substitute.For<ISceneMediaService>();
     private readonly IHighlightMediaService highlightMedia = Substitute.For<IHighlightMediaService>();
     private readonly IMovieApexService apexService = Substitute.For<IMovieApexService>();
+    private readonly IMovieClipService clipService = Substitute.For<IMovieClipService>();
     private readonly IActorTagService actorTagService = Substitute.For<IActorTagService>();
     private readonly IApexMediaService apexMedia = Substitute.For<IApexMediaService>();
     private readonly ISceneMediaService workerMedia = Substitute.For<ISceneMediaService>();
@@ -70,6 +71,7 @@ public class MovieScenesSectionTests : BunitContext
         Services.AddSingleton(sceneService);
         Services.AddSingleton(highlightService);
         Services.AddSingleton(apexService);
+        Services.AddSingleton(clipService);
         actorTagService.GetEffectiveAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(NoActorTags);
         actorTagService.GetActorTagsAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(Library);
         Services.AddSingleton(actorTagService);
@@ -637,8 +639,7 @@ public class MovieScenesSectionTests : BunitContext
         // The media appears (as if the worker wrote it); another movie's is reported first and ignored.
         var scene = TwoScenes[0] with { ThumbVersion = 1, PreviewVersion = 2 };
         var highlight = ThreeHighlights[1] with { ThumbVersion = 3, PreviewVersion = 4 };
-        sceneService.GetScenesAsync(PlayableMovie.Id, Arg.Any<CancellationToken>()).Returns([scene]);
-        highlightService.GetHighlightsAsync(PlayableMovie.Id, Arg.Any<CancellationToken>()).Returns([highlight]);
+        clipService.GetClipsAsync(PlayableMovie.Id, Arg.Any<CancellationToken>()).Returns(new MovieClips([scene], [highlight], []));
         workerMedia.GenerateAsync(90, Arg.Any<CancellationToken>()).Returns(8);
         workerMedia.GenerateAsync(1, Arg.Any<CancellationToken>()).Returns(PlayableMovie.Id);
         await mediaQueue.StartAsync(CancellationToken.None);
@@ -647,7 +648,7 @@ public class MovieScenesSectionTests : BunitContext
 
         Assert.Equal([highlight], await changedHighlights.Task.WaitAsync(TimeSpan.FromSeconds(10)));
         Assert.Equal([scene], changedScenes);
-        await sceneService.DidNotReceive().GetScenesAsync(8, Arg.Any<CancellationToken>());
+        await clipService.DidNotReceive().GetClipsAsync(8, Arg.Any<CancellationToken>());
         await mediaQueue.StopAsync(CancellationToken.None);
     }
 
@@ -743,7 +744,7 @@ public class MovieScenesSectionTests : BunitContext
         var changedApexes = new TaskCompletionSource<IReadOnlyList<ApexItem>>(TaskCreationOptions.RunContinuationsAsynchronously);
         RenderWithApexes(LocalMovie, a => changedApexes.TrySetResult(a));
         IReadOnlyList<ApexItem> reloaded = [TwoApexes[0], TwoApexes[1] with { PreviewVersion = 5 }];
-        apexService.GetApexesAsync(LocalMovie.Id, Arg.Any<CancellationToken>()).Returns(reloaded);
+        clipService.GetClipsAsync(LocalMovie.Id, Arg.Any<CancellationToken>()).Returns(new MovieClips([], [], reloaded));
         workerMedia.GenerateAsync(1, Arg.Any<CancellationToken>()).Returns(LocalMovie.Id);
         await mediaQueue.StartAsync(CancellationToken.None);
 

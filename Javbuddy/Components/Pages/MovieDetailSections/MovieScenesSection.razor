@@ -6,7 +6,7 @@
 @inject SceneMediaQueue SceneMediaQueue
 @inject ISceneMediaService SceneMedia
 @inject IHighlightMediaService HighlightMedia
-@inject IMovieApexService ApexService
+@inject IMovieClipService ClipService
 @inject IActorTagService ActorTagService
 @inject IApexMediaService ApexMedia
 @inject ITrickplayService TrickplayService
@@ -357,9 +357,10 @@
             if (disposed || movieId != Movie.Id) return;
             // What was generated may be a highlight's trickplay set: load them again.
             highlightTrickplayLoadedFor = [];
-            await OnScenesChanged.InvokeAsync(await SceneService.GetScenesAsync(movieId));
-            await OnHighlightsChanged.InvokeAsync(await HighlightService.GetHighlightsAsync(movieId));
-            await OnApexesChanged.InvokeAsync(await ApexService.GetApexesAsync(movieId));
+            var clips = await ClipService.GetClipsAsync(movieId);
+            await OnScenesChanged.InvokeAsync(clips.Scenes);
+            await OnHighlightsChanged.InvokeAsync(clips.Highlights);
+            await OnApexesChanged.InvokeAsync(clips.Apexes);
         });
     }
 
