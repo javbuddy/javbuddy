@@ -10,7 +10,8 @@ namespace Javbuddy.Tests.TestSupport;
 public sealed class QueueDrain
 {
     private static readonly SceneMediaWindow Window = new(0, 1);
-    private readonly TaskCompletionSource ran = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource? ran;
+    private int nextId = int.MaxValue;
 
     public IHighlightMediaService HighlightService { get; }
     public IApexMediaService ApexService { get; }
@@ -18,15 +19,19 @@ public sealed class QueueDrain
     public QueueDrain()
     {
         HighlightService = Substitute.For<IHighlightMediaService>();
-        HighlightService.GenerateAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(_ => { ran.TrySetResult(); return (int?)null; });
+        HighlightService.GenerateAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(_ => { Volatile.Read(ref ran)?.TrySetResult(); return (int?)null; });
         ApexService = Substitute.For<IApexMediaService>();
-        ApexService.GenerateAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(_ => { ran.TrySetResult(); return (int?)null; });
+        ApexService.GenerateAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(_ => { Volatile.Read(ref ran)?.TrySetResult(); return (int?)null; });
     }
 
+    /// <summary>Completes once a sentinel job queued now has run. Can be called any number of times.</summary>
     public async Task DrainAsync(SceneMediaQueue queue, MediaKind sentinelKind = MediaKind.Highlight)
     {
-        if (sentinelKind == MediaKind.Apex) queue.EnqueueApex(int.MaxValue, 0, Window);
-        else queue.EnqueueHighlight(int.MaxValue, 0, Window);
-        await ran.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var current = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Volatile.Write(ref ran, current);
+        var id = Interlocked.Decrement(ref nextId);
+        if (sentinelKind == MediaKind.Apex) queue.EnqueueApex(id, 0, Window);
+        else queue.EnqueueHighlight(id, 0, Window);
+        await current.Task.WaitAsync(TimeSpan.FromSeconds(30));
     }
 }

@@ -209,7 +209,9 @@ public class MergeStepTests : IDisposable
         await step.StartMergeAsync();
         Assert.True(step.Merging);
 
+        var job = tracker.Get(7)!;
         release.SetResult(VrMergeResult.Ok("/merged.mp4"));
+        await job.Task!; // finished before the tick, so the poll loop sees it done and doesn't wait for another tick
         time.Advance(TimeSpan.FromSeconds(1));
         await WaitForAsync(() => step.MergedFilePath is not null);
 
@@ -233,7 +235,9 @@ public class MergeStepTests : IDisposable
         session.Step = WizardStep.Merge;
 
         await step.StartMergeAsync();
+        var job = tracker.Get(7)!;
         release.SetResult(VrMergeResult.Failed("disk full"));
+        await job.Task!;
         time.Advance(TimeSpan.FromSeconds(1));
         await WaitForAsync(() => step.MergeError is not null);
 
@@ -253,7 +257,9 @@ public class MergeStepTests : IDisposable
         await step.DetectMergeCandidateAsync();
 
         await step.StartMergeAsync();
+        var job = tracker.Get(7)!;
         step.CancelMerge();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => job.Task!);
         time.Advance(TimeSpan.FromSeconds(1));
         await WaitForAsync(() => step.MergeError is not null);
 
@@ -265,7 +271,7 @@ public class MergeStepTests : IDisposable
     {
         var release = new TaskCompletionSource<VrMergeResult>();
         var calls = 0;
-        tracker.GetOrStart(7, (_, _) => { calls++; return release.Task; });
+        var job = tracker.GetOrStart(7, (_, _) => { calls++; return release.Task; });
         await using var step = Create();
 
         await step.InitializeAsync("/raw", dir, CancellationToken.None);
@@ -276,6 +282,7 @@ public class MergeStepTests : IDisposable
         await mergeService.DidNotReceive().DetectAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
 
         release.SetResult(VrMergeResult.Ok("/merged.mp4"));
+        await job.Task!;
         time.Advance(TimeSpan.FromSeconds(1));
         await WaitForAsync(() => step.MergedFilePath is not null);
         Assert.Equal("/merged.mp4", step.MergedFilePath);

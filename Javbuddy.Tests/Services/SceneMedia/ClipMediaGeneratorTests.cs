@@ -139,7 +139,19 @@ public sealed class ClipMediaGeneratorTests : IDisposable
 
         await Create().GenerateAsync("scene", 1, movieId, 10, 20, Window, [], CancellationToken.None);
 
+        Assert.Equal(2, calls.Count);
         Assert.All(calls, c => Assert.True(c.LeftEye));
+    }
+
+    [Fact]
+    public async Task GenerateAsync_RegularVideo_UsesTheWholeFrame()
+    {
+        await SeedMovieAsync();
+
+        await Create().GenerateAsync("scene", 1, movieId, 10, 20, Window, [], CancellationToken.None);
+
+        Assert.Equal(2, calls.Count);
+        Assert.All(calls, c => Assert.False(c.LeftEye));
     }
 
     [Fact]
@@ -253,6 +265,7 @@ public sealed class ClipMediaGeneratorTests : IDisposable
         var outcome = await Create().GenerateAsync("scene", 1, movieId, 10, 20, Window, [], CancellationToken.None, [SceneMediaService.VariantThumb]);
 
         Assert.Equal(ClipGenerateOutcome.Failed, outcome);
+        Assert.NotNull(tempPath); // ffmpeg was asked to write somewhere
         Assert.False(File.Exists(tempPath));
         await maintenance.DidNotReceive().EnforceSizeLimitAsync(Arg.Any<long>(), Arg.Any<CancellationToken>());
     }

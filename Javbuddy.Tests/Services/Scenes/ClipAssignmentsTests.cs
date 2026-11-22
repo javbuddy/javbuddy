@@ -177,8 +177,13 @@ public sealed class ClipAssignmentsTests : IDisposable
     }
 
     [Fact]
-    public async Task LoadClipMediaVersionsAsync_NoClipIds_LoadsNothing()
+    public async Task LoadClipMediaVersionsAsync_NoClipIds_LoadsNothing_EvenWhenRowsExist()
     {
+        await using (var seed = await factory.CreateDbContextAsync())
+        {
+            seed.CachedImages.Add(new CachedImage { Code = "AAA-001", Role = "scene", Index = 1, Variant = SceneMediaService.VariantThumb, StorageId = Guid.NewGuid(), SceneStartMs = 0, SceneEndMs = 1, UpdatedAt = DateTime.UtcNow });
+            await seed.SaveChangesAsync();
+        }
         await using var db = await factory.CreateDbContextAsync();
 
         var versions = await ClipAssignments.LoadClipMediaVersionsAsync(db, "scene", [], null, null, CancellationToken.None);
