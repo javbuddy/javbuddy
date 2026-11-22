@@ -19,7 +19,7 @@ public abstract class ApiClientBase<TSettings>(IHttpClientFactory httpClientFact
     /// <summary>Display name used in generated error messages, e.g. "javinizer-go", "Jellyfin".</summary>
     protected abstract string ServiceName { get; }
 
-    /// <summary>Named HttpClient to resolve (Program.cs registers "", "NoRedirect", "QBittorrent").
+    /// <summary>Named HttpClient to resolve (Startup/ServiceRegistration.cs registers "", "NoRedirect", "QBittorrent").
     /// Defaults to the unnamed client.</summary>
     protected virtual string HttpClientName => "";
 
