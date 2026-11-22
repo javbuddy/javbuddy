@@ -73,6 +73,43 @@ public class ActorImageCacheServiceTests
     }
 
     [Fact]
+    public async Task GetOrCreateBothAsync_ConcurrentMissesForOneActor_ShareOneResolution()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Yui", LastName = "Hatano" };
+            var movie = new Movie { Code = "FGAN-188", Title = "Test Movie" };
+            db.Actors.Add(actor);
+            db.Movies.Add(movie);
+            await db.SaveChangesAsync();
+            db.MovieActors.Add(new MovieActor { ActorId = actor.Id, MovieId = movie.Id });
+            await db.SaveChangesAsync();
+        }
+
+        var client = Substitute.For<ILocalLibraryClient>();
+        var release = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resolveCalls = 0;
+        client.ResolveActorImagePathAsync("FGAN-188", Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                Interlocked.Increment(ref resolveCalls);
+                return release.Task;
+            });
+
+        var service = new ActorImageCacheService(client, Substitute.For<ILocalImageCache>(), factory, Substitute.For<IImageCacheMaintenanceService>());
+        var first = service.GetOrCreateBothAsync(1);
+        var second = service.GetOrCreateBothAsync(1);
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (Volatile.Read(ref resolveCalls) == 0 && DateTime.UtcNow < deadline) await Task.Delay(10);
+        await Task.Delay(100);
+        release.SetResult(null);
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(1, resolveCalls);
+    }
+
+    [Fact]
     public async Task GetOrCreateBothAsync_GeneratesSwappedCandidateWhenLastNameEmpty()
     {
         using var factory = new TestDbContextFactory();

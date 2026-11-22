@@ -69,8 +69,10 @@ public class ActorImageCacheService(
     IHttpClientFactory? httpClientFactory = null,
     ILogger<ActorImageCacheService>? logger = null,
     IActorImageDataStore? dataStore = null,
-    ImageUploadSettings? uploadSettings = null) : IActorImageCacheService
+    ImageUploadSettings? uploadSettings = null,
+    InFlightImageConversions? inFlightConversions = null) : IActorImageCacheService
 {
+    private readonly InFlightImageConversions inFlightConversions = inFlightConversions ?? new();
     private readonly ImageUploadSettings uploadSettings = uploadSettings ?? ImageUploadSettings.Default;
     public const string VariantThumb = "thumb";
     public const string VariantFull = "full";
@@ -122,7 +124,12 @@ public class ActorImageCacheService(
         return source?.SourceStorageId is { } id ? await dataStore.OpenReadAsync(id, source.SourceExtension, ct) : null;
     }
 
-    public async Task<(string? ThumbPath, string? FullPath)> GetOrCreateBothAsync(int actorId, CancellationToken ct = default)
+    // Concurrent misses for one actor share a single conversion and its result. Without this they race on the
+    // same cache files, and the losing caller's freshly stored source blob is never referenced again.
+    public Task<(string? ThumbPath, string? FullPath)> GetOrCreateBothAsync(int actorId, CancellationToken ct = default) =>
+        inFlightConversions.RunOnceAsync($"actor:{actorId}", () => GetOrCreateBothCoreAsync(actorId, CancellationToken.None), ct);
+
+    private async Task<(string? ThumbPath, string? FullPath)> GetOrCreateBothCoreAsync(int actorId, CancellationToken ct)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
