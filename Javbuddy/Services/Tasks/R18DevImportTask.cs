@@ -1,6 +1,4 @@
-using Javbuddy.Data;
 using Javbuddy.Services.R18Dev;
-using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Tasks;
 
@@ -8,12 +6,12 @@ namespace Javbuddy.Services.Tasks;
 /// R18DevDumpImporter), on a weekly interval matching r18.dev's own Tuesday publish cadence.
 /// A no-op — skipped, not run — while the r18.dev metadata source is disabled in Settings, since
 /// the whole feature is opt-in.</summary>
-public class R18DevImportTask(IR18DevDumpImporter importer, IDbContextFactory<AppDbContext> dbFactory) : IScheduledTask
+public class R18DevImportTask(IR18DevDumpImporter importer, IR18DevSettingsService settingsService) : IScheduledTask
 {
     private static readonly TimeSpan Interval = TimeSpan.FromDays(7);
 
     private readonly IR18DevDumpImporter importer = importer;
-    private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
+    private readonly IR18DevSettingsService settingsService = settingsService;
 
     public string Name => "r18.dev Dump Import";
 
@@ -25,19 +23,19 @@ public class R18DevImportTask(IR18DevDumpImporter importer, IDbContextFactory<Ap
 
     public async Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress)
     {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var settings = await db.R18DevSettings.OrderBy(s => s.Id).FirstOrDefaultAsync(ct);
-        if (settings is not { Enabled: true })
+        if (!(await settingsService.GetEffectiveAsync(ct)).Enabled)
         {
             return "skipped — r18.dev metadata source is disabled";
         }
 
         var result = await importer.ImportAsync(progress, ct);
 
+        // Save the stored row, not the effective one, so R18Dev__Enabled never leaks into the database.
+        var settings = await settingsService.GetStoredAsync(ct);
         settings.LastImportedAt = DateTime.UtcNow;
         settings.LastImportSourceDate = result.SourceDate;
         settings.LastImportSummary = result.Summary;
-        await db.SaveChangesAsync(ct);
+        await settingsService.SaveAsync(settings, ct);
 
         if (!result.Success)
         {

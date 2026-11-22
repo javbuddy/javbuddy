@@ -28,7 +28,7 @@ public class R18DevDumpServiceTests : IDisposable
             .Build();
         dumpPath = R18DevDumpPaths.GetDbPath(configuration);
         store = new R18DevDumpStore(configuration);
-        settingsService = new R18DevSettingsService(factory);
+        settingsService = new R18DevSettingsService(factory, new ConfigurationBuilder().Build());
         service = new R18DevDumpService(store, settingsService);
     }
 
@@ -69,7 +69,7 @@ public class R18DevDumpServiceTests : IDisposable
         await service.DeleteDumpAsync(settings);
 
         Assert.False(File.Exists(dumpPath));
-        var loaded = await settingsService.GetAsync();
+        var loaded = await settingsService.GetStoredAsync();
         Assert.True(loaded.Enabled);
         Assert.Equal("/dumps/x.sql", loaded.DumpSourceOverride);
         Assert.Null(loaded.LastImportedAt);
@@ -86,7 +86,7 @@ public class R18DevDumpServiceTests : IDisposable
         await service.SaveAsync(settings, wasEnabled: true);
 
         Assert.False(File.Exists(dumpPath));
-        var loaded = await settingsService.GetAsync();
+        var loaded = await settingsService.GetStoredAsync();
         Assert.False(loaded.Enabled);
         Assert.Null(loaded.LastImportedAt);
         Assert.Null(loaded.LastImportSummary);
@@ -104,7 +104,7 @@ public class R18DevDumpServiceTests : IDisposable
         await service.SaveAsync(settings, wasEnabled);
 
         Assert.True(File.Exists(dumpPath));
-        var loaded = await settingsService.GetAsync();
+        var loaded = await settingsService.GetStoredAsync();
         Assert.Equal(enabled, loaded.Enabled);
         Assert.Equal("10 rows", loaded.LastImportSummary);
     }

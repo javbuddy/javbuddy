@@ -2,6 +2,7 @@ using Javbuddy.Models;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.R18Dev;
 using Javbuddy.Tests.TestSupport;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 
@@ -21,7 +22,7 @@ public class R18DevReleaseBrowseServiceTests : IDisposable
 
     public void Dispose() => factory.Dispose();
 
-    private R18DevReleaseBrowseService Service => new(factory, store, new R18DevLibrarySnapshotCache(factory, time), time);
+    private R18DevReleaseBrowseService Service => new(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()), store, new R18DevLibrarySnapshotCache(factory, time), time);
 
     private static R18DevFilmographyEntry Entry(string dvdId, DateOnly? released = null, string? title = "Title") =>
         new(dvdId, title, null, released, null);
@@ -53,6 +54,18 @@ public class R18DevReleaseBrowseServiceTests : IDisposable
             DeletedMovieHistory.RecordAsync(db, new Movie { Code = code }).GetAwaiter().GetResult();
         }
         db.SaveChanges();
+    }
+
+    [Fact]
+    public async Task BrowseAsync_SourceEnabledOnlyByEnvironment_IsEnabled()
+    {
+        SeedSettings(enabled: false);
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["R18Dev:Enabled"] = "true" }).Build();
+        var service = new R18DevReleaseBrowseService(new R18DevSettingsService(factory, config), store, new R18DevLibrarySnapshotCache(factory, time), time);
+
+        var result = await service.BrowseAsync(new R18DevCatalogFilter(), 0);
+
+        Assert.True(result.Enabled);
     }
 
     [Fact]

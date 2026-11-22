@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **`R18Dev__Enabled` environment variable** turns the r18.dev metadata source on or off, like the Jellyfin, DeoVR and trickplay overrides. Set, it overrides the Enable setting in Settings > Metadata, which then shows it read-only.
+
 ### Fixed
 
 - **The movie cover crop's import-from-URL errors now use the same wording as the actor and extrafanart imports**, and a 404 says the image wasn't found at that URL.

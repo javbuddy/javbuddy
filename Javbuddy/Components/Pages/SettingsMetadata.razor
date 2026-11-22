@@ -57,7 +57,7 @@ else
         <section class="metadata-section">
             <h2 class="metadata-section-title">Sources</h2>
             <div class="metadata-grid">
-                <StatusTile Title="r18.dev" Description="Imports r18.dev's public database dump: actor filmographies, the Missing pages and Movies &gt; All releases." Configured="settings.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenModal" />
+                <StatusTile Title="r18.dev" Description="Imports r18.dev's public database dump: actor filmographies, the Missing pages and Movies &gt; All releases." Configured="r18DevEffective.Enabled" ConfiguredLabel="Enabled" NotConfiguredLabel="Disabled" OnOpen="OpenModal" />
             </div>
         </section>
     </div>
@@ -82,8 +82,19 @@ else
         <EditForm Model="settings" OnValidSubmit="Save" FormName="r18dev-settings">
             <DataAnnotationsValidator />
             <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="r18dev-enabled" @bind="settings.Enabled" />
+                @if (R18DevSettingsService.IsEnabledSetByEnvironment)
+                {
+                    <input class="form-check-input" type="checkbox" id="r18dev-enabled" checked="@r18DevEffective.Enabled" disabled />
+                }
+                else
+                {
+                    <input class="form-check-input" type="checkbox" id="r18dev-enabled" @bind="settings.Enabled" />
+                }
                 <label class="form-check-label" for="r18dev-enabled">Enable the r18.dev metadata source</label>
+                @if (R18DevSettingsService.IsEnabledSetByEnvironment)
+                {
+                    <div class="form-text">Set by the <code>R18Dev__Enabled</code> environment variable.</div>
+                }
             </div>
 
             @if (envOverrideConfigured)
@@ -240,6 +251,7 @@ else
     private bool showLocalLibraryModal;
 
     private R18DevSettings? settings;
+    private R18DevSettings r18DevEffective = new();
     private bool showModal;
     private bool saved;
     private bool importing;
@@ -275,7 +287,8 @@ else
 
     private async Task LoadAsync()
     {
-        settings = await R18DevSettingsService.GetAsync();
+        settings = await R18DevSettingsService.GetStoredAsync();
+        r18DevEffective = await R18DevSettingsService.GetEffectiveAsync();
         minnanoAvSettings = await MinnanoAvSettingsService.GetAsync();
         if (MinnanoAvSolverEnv is { } minnanoAvSolver) minnanoAvSettings.UseChallengeSolver = minnanoAvSolver;
         discoverySources = await DiscoverySettingsService.GetSourcesAsync();
@@ -348,6 +361,7 @@ else
 
         await R18DevDumpService.SaveAsync(settings, wasEnabledOnOpen);
         wasEnabledOnOpen = settings.Enabled;
+        r18DevEffective = await R18DevSettingsService.GetEffectiveAsync();
         saved = true;
     }
 
@@ -357,6 +371,7 @@ else
 
         await R18DevDumpService.DeleteDumpAsync(settings);
         wasEnabledOnOpen = settings.Enabled;
+        r18DevEffective = await R18DevSettingsService.GetEffectiveAsync();
         saved = true;
     }
 

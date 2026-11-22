@@ -1,6 +1,4 @@
-using Javbuddy.Data;
 using Javbuddy.Services.Movies;
-using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.R18Dev;
 
@@ -74,7 +72,7 @@ public interface IR18DevReleaseBrowseService
 
 /// <summary>The Movies page's "All releases (r18.dev)" browse and the other catalog lookups: joins
 /// the sidecar dump store (which can't see the main database) with the local library.</summary>
-public class R18DevReleaseBrowseService(IDbContextFactory<AppDbContext> dbFactory, IR18DevDumpStore dumpStore, R18DevLibrarySnapshotCache libraryCache, TimeProvider timeProvider) : IR18DevReleaseBrowseService
+public class R18DevReleaseBrowseService(IR18DevSettingsService settingsService, IR18DevDumpStore dumpStore, R18DevLibrarySnapshotCache libraryCache, TimeProvider timeProvider) : IR18DevReleaseBrowseService
 {
     /// <summary>Rows fetched per page — what the Movies page shows per "Show more".</summary>
     public const int PageSize = 200;
@@ -161,8 +159,7 @@ public class R18DevReleaseBrowseService(IDbContextFactory<AppDbContext> dbFactor
 
     public async Task<R18DevMovieDetail?> GetPreviewAsync(string code, CancellationToken ct = default)
     {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var enabled = (await db.R18DevSettings.ReadSingleRowAsync(ct))?.Enabled ?? false;
+        var enabled = (await settingsService.GetEffectiveAsync(ct)).Enabled;
         return enabled ? await dumpStore.GetMovieByCodeAsync(code, ct) : null;
     }
 
@@ -183,8 +180,7 @@ public class R18DevReleaseBrowseService(IDbContextFactory<AppDbContext> dbFactor
 
     private async Task<(bool Enabled, R18DevCatalogAvailability Availability)> GetAvailabilityAsync(CancellationToken ct)
     {
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var enabled = (await db.R18DevSettings.ReadSingleRowAsync(ct))?.Enabled ?? false;
+        var enabled = (await settingsService.GetEffectiveAsync(ct)).Enabled;
         return enabled ? (true, await dumpStore.GetCatalogAvailabilityAsync(ct)) : (false, R18DevCatalogAvailability.NoDump);
     }
 

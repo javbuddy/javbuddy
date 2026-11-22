@@ -15,6 +15,7 @@ using Javbuddy.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -60,7 +61,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         var actor = new Actor { Id = 1, FirstName = "Redhead", LastName = "ABC-123", PlaceholderMovieId = 7 };
         var actorService = Substitute.For<IActorService>();
         actorService.GetByRouteNameAsync("Redhead (ABC-123)", Arg.Any<CancellationToken>()).Returns(actor);
@@ -91,7 +92,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -164,7 +165,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var actorService = Substitute.For<IActorService>();
@@ -219,7 +220,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var yua = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var eimi = new Actor { Id = 2, FirstName = "Eimi", LastName = "Fukada" };
@@ -264,7 +265,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var yua = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var actorService = Substitute.For<IActorService>();
@@ -297,7 +298,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         var movieService = Substitute.For<Javbuddy.Services.Movies.IMovieService>();
         Services.AddSingleton(movieService);
 
@@ -338,7 +339,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         var movieService = Substitute.For<Javbuddy.Services.Movies.IMovieService>();
         Services.AddSingleton(movieService);
 
@@ -378,7 +379,7 @@ public class ActorDetailTests : BunitContext
         var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         var movieService = Substitute.For<Javbuddy.Services.Movies.IMovieService>();
         Services.AddSingleton(movieService);
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
@@ -454,7 +455,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var actorService = Substitute.For<IActorService>();
@@ -503,7 +504,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -532,7 +533,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -567,7 +568,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
 
@@ -594,7 +595,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -637,7 +638,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actorService = Substitute.For<IActorService>();
         actorService.GetByRouteNameAsync("Remu", Arg.Any<CancellationToken>())
@@ -672,7 +673,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -723,7 +724,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -758,7 +759,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -792,7 +793,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -827,7 +828,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -855,7 +856,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -899,7 +900,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -929,7 +930,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -967,7 +968,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -1007,7 +1008,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -1047,7 +1048,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -1077,7 +1078,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var m1 = new Movie { Id = 10, Code = "AAA-001", Status = MovieStatus.Missing };
@@ -1118,7 +1119,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var m1 = new Movie { Id = 10, Code = "SIVR-059", Status = MovieStatus.Got, VrType = "VR180 SBS" };
@@ -1155,7 +1156,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var m1 = new Movie { Id = 10, Code = "IPX-001", Status = MovieStatus.Missing };
@@ -1197,7 +1198,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         const int movieCount = 32;
@@ -1255,7 +1256,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var m1 = new Movie { Id = 10, Code = "BBB-002", Title = "Bravo", Status = MovieStatus.Missing };
@@ -1297,7 +1298,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var day = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -1334,7 +1335,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         Movie[] movies =
@@ -1373,7 +1374,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var mOld = new Movie
@@ -1467,7 +1468,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var m1 = new Movie { Id = 10, Code = "AAA-001", Status = MovieStatus.Got };
@@ -1505,7 +1506,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var actorService = Substitute.For<IActorService>();
         actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(actor);
@@ -1551,7 +1552,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var m1 = new Movie { Id = 10, Code = "AAA-001", Status = MovieStatus.Got };
@@ -1594,7 +1595,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var m1 = new Movie { Id = 10, Code = "AAA-001", Status = MovieStatus.Missing };
@@ -1633,7 +1634,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -1693,7 +1694,7 @@ public class ActorDetailTests : BunitContext
     {
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actorService = Substitute.For<IActorService>();
         actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(actor);
@@ -1757,7 +1758,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor
         {
@@ -1790,7 +1791,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 9, FirstName = "Yua", LastName = "Mikami" };
 
@@ -1823,7 +1824,7 @@ public class ActorDetailTests : BunitContext
         var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         await using (var db = await factory.CreateDbContextAsync())
@@ -1897,7 +1898,7 @@ public class ActorDetailTests : BunitContext
     {
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         var actor = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var actorService = Substitute.For<IActorService>();
         actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(actor);
@@ -1947,7 +1948,7 @@ public class ActorDetailTests : BunitContext
         using var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorDetailQueryService>(new ActorDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         var yua = new Actor { Id = 1, FirstName = "Yua", LastName = "Mikami" };
         var actorService = Substitute.For<IActorService>();
         actorService.GetByRouteNameAsync("Mikami Yua", Arg.Any<CancellationToken>()).Returns(yua);

@@ -9,6 +9,7 @@ using Javbuddy.Services.R18Dev;
 using Javbuddy.Services.Torrents;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -62,7 +63,7 @@ public class ActorMissingFilterTests : BunitContext
         var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton<IActorService>(new ActorService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
 
         using (var db = factory.CreateDbContext())
         {

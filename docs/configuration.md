@@ -187,8 +187,11 @@ All durable files live in one object store under `ObjectStore:Path`, one key pre
 
 ### R18.dev Reference Database
 
+`R18Dev:Enabled` overrides the **Enable the r18.dev metadata source** setting of **Settings > Metadata**, which then shows it read-only.
+
 | Key | Environment Variable | Default | Description |
 |---|---|---|---|
+| `R18Dev:Enabled` | `R18Dev__Enabled` | `false` | Turns the r18.dev metadata source on or off: the dump import, actor filmographies, the Missing pages and Movies > All releases. |
 | `R18Dev:DumpSourceOverride` | `R18Dev__DumpSourceOverride` | *(none)* | Path or URL to an r18.dev database dump archive. When unset, uses standard upstream release URL. |
 
 ### Tracing (OpenTelemetry)

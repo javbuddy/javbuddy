@@ -268,7 +268,7 @@ else
 
         r18DevNameInput = actor.R18DevName;
 
-        r18DevEnabled = (await R18DevSettingsService.GetAsync()).Enabled;
+        r18DevEnabled = (await R18DevSettingsService.GetEffectiveAsync()).Enabled;
         loadingFilmography = r18DevEnabled;
     }
 

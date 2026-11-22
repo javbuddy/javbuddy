@@ -22,6 +22,7 @@ using Javbuddy.Services.Trickplay;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.AspNetCore.Components;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 
@@ -44,7 +45,7 @@ public class MovieDetailTests : BunitContext
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton(imageServing ?? Substitute.For<IImageServingService>());
         Services.AddSingleton<IMovieDetailQueryService>(new MovieDetailQueryService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         Services.AddSingleton<IMovieSceneService>(new MovieSceneService(factory));
         Services.AddSingleton<IMovieHighlightService>(new MovieHighlightService(factory));
         Services.AddSingleton<IMovieApexService>(new MovieApexService(factory));
@@ -71,7 +72,7 @@ public class MovieDetailTests : BunitContext
         Services.AddSingleton(new TrickplayGenerationTracker());
         var dumpStore = r18DevDumpStore ?? Substitute.For<IR18DevDumpStore>();
         Services.AddSingleton(dumpStore);
-        Services.AddSingleton<IR18DevReleaseBrowseService>(new R18DevReleaseBrowseService(factory, dumpStore, new R18DevLibrarySnapshotCache(factory, TimeProvider.System), TimeProvider.System));
+        Services.AddSingleton<IR18DevReleaseBrowseService>(new R18DevReleaseBrowseService(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()), dumpStore, new R18DevLibrarySnapshotCache(factory, TimeProvider.System), TimeProvider.System));
         Services.AddSingleton(Substitute.For<IMovieAddService>());
         var nfoSync = Substitute.For<INfoSyncService>();
         nfoSync.CheckMovieNfoConflictAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())

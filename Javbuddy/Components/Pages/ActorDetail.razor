@@ -250,7 +250,7 @@ else
             downloadingCodes = await ActorDetailQuery.GetDownloadingCodesAsync();
 
             imageCount = await ActorDetailQuery.GetPhotoCountAsync(actor.Id);
-            r18DevEnabled = (await R18DevSettingsService.GetAsync()).Enabled;
+            r18DevEnabled = (await R18DevSettingsService.GetEffectiveAsync()).Enabled;
 
             jellyfinWebUrl = !string.IsNullOrWhiteSpace(actor.JellyfinPersonId)
                 ? await JellyfinClient.GetWebUrlAsync(actor.JellyfinPersonId, actor.JellyfinServerId)

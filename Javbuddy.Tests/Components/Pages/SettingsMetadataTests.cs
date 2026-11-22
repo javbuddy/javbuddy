@@ -58,6 +58,33 @@ public class SettingsMetadataTests : BunitContext
         new(new ScheduledTaskChangeNotifier(), TimeProvider.System);
 
     [Fact]
+    public void R18DevEnabledEnvironmentVariable_ShowsTheTileEnabledAndLocksTheCheckbox()
+    {
+        var factory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        Services.AddSingleton(Substitute.For<IR18DevDumpStore>());
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["R18Dev:Enabled"] = "true" }).Build();
+        Services.AddSingleton<IConfiguration>(configuration);
+        Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, configuration));
+        Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
+        Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
+        Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
+        Services.AddSingleton(NewTaskActivityTracker());
+
+        var cut = Render<SettingsMetadata>();
+
+        var tile = cut.FindAll(".status-tile").First(t => t.TextContent.Contains("r18.dev"));
+        Assert.Contains("Enabled", tile.TextContent);
+        tile.Click();
+
+        var checkbox = cut.Find("#r18dev-enabled");
+        Assert.True(checkbox.HasAttribute("disabled"));
+        Assert.True(checkbox.HasAttribute("checked"));
+        Assert.Contains("R18Dev__Enabled", cut.Markup);
+    }
+
+    [Fact]
     public void RendersMoviesAndActorsSectionsWithStatusTiles()
     {
         var factory = new TestDbContextFactory();
@@ -71,7 +98,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton<IConfiguration>(configuration);
 
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
@@ -113,7 +140,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton(dumpStore);
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
@@ -146,7 +173,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton<IConfiguration>(configuration);
 
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
@@ -184,7 +211,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton<IConfiguration>(configuration);
 
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
@@ -212,7 +239,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
             .AddInMemoryCollection(env is null ? [] : new Dictionary<string, string?> { ["MinnanoAv:UseChallengeSolver"] = env }).Build());
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
@@ -239,7 +266,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton(Substitute.For<IR18DevDumpStore>());
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
@@ -340,7 +367,7 @@ public class SettingsMetadataTests : BunitContext
         Services.AddSingleton(Substitute.For<IR18DevDumpStore>());
         Services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         Services.AddSingleton<IMinnanoAvSettingsService>(new MinnanoAvSettingsService(factory));
-        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory));
+        Services.AddSingleton<IR18DevSettingsService>(new R18DevSettingsService(factory, new ConfigurationBuilder().Build()));
         Services.AddSingleton<IR18DevDumpService, R18DevDumpService>();
         Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(factory));
         Services.AddSingleton<IDiscoverySettingsService>(new DiscoverySettingsService(TwoSources(), factory));
