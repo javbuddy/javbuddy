@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-22
+
 ### Fixed
 
 - **The Status page no longer shows "No sub-services configured." on first load.** The sub-service checks started before the page knew which integrations were configured; they now wait for that, so the services appear without a refresh (#196).
