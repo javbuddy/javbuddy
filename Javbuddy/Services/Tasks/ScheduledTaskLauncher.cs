@@ -49,14 +49,22 @@ public sealed class ScheduledTaskLauncher(BackgroundJobRunner jobs, ScheduledTas
 
         return jobs.Enqueue(taskName, async (services, ct) =>
         {
-            var task = services.GetServices<IScheduledTask>().FirstOrDefault(t => t.Name == taskName);
-            if (task is null)
+            // The runner releases the claim itself once entered; anything failing before that (resolving the
+            // task, creating the runner) would otherwise leave the task "running" until a restart.
+            var entered = false;
+            try
             {
-                tracker.Release(taskName);
-                return;
-            }
+                var task = services.GetServices<IScheduledTask>().FirstOrDefault(t => t.Name == taskName);
+                if (task is null) return;
 
-            await services.GetRequiredService<ScheduledTaskRunner>().RunAsync(task, ct, onRecorded, alreadyClaimed: true);
+                var runner = services.GetRequiredService<ScheduledTaskRunner>();
+                entered = true;
+                await runner.RunAsync(task, ct, onRecorded, alreadyClaimed: true);
+            }
+            finally
+            {
+                if (!entered) tracker.Release(taskName);
+            }
         });
     }
 }

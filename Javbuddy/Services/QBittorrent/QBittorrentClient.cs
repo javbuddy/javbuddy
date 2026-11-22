@@ -270,7 +270,7 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
     /// there is none. qBittorrent answers 403 once a session has expired, so a 403 is retried once
     /// after a fresh login. Returns null when the login is rejected; that is remembered, and no
     /// further login is attempted (a wrong password would trip qBittorrent's WebUI ban) until the
-    /// connection settings change or <see cref="TestConnectionAsync"/> is run with <c>forceLogin</c>. The caller disposes the response.</summary>
+    /// mark expires (<see cref="QBittorrentSessionCache.RejectionLifetime"/>), the connection settings change or <see cref="TestConnectionAsync"/> is run with <c>forceLogin</c>. The caller disposes the response.</summary>
     private async Task<HttpResponseMessage?> SendAuthenticatedAsync(HttpClient client, QBittorrentSettings settings, Func<string, HttpRequestMessage> buildRequest, CancellationToken ct)
     {
         if (sessions.IsLoginRejected(settings)) return null;
@@ -393,7 +393,7 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
 public class QBittorrentSessionCache
 {
     private readonly ConcurrentDictionary<(string, string, string), string> sids = new();
-    private readonly ConcurrentDictionary<(string, string, string), bool> rejected = new();
+    private readonly ConcurrentDictionary<(string, string, string), DateTime> rejected = new();
 
     // The password is only kept as a hash, so it isn't held in plain text here.
     private static (string, string, string) KeyOf(QBittorrentSettings s) =>
@@ -408,13 +408,25 @@ public class QBittorrentSessionCache
         rejected.TryRemove(key, out _);
     }
 
-    public bool IsLoginRejected(QBittorrentSettings settings) => rejected.ContainsKey(KeyOf(settings));
+    /// <summary>How long a rejected login is remembered. qBittorrent also answers a login with 403 when it has
+    /// temporarily banned the IP after repeated failures, and the password can be fixed on the qBittorrent side,
+    /// so the mark expires and a later call tries again instead of failing until the settings change.</summary>
+    internal static readonly TimeSpan RejectionLifetime = TimeSpan.FromMinutes(10);
+
+    public bool IsLoginRejected(QBittorrentSettings settings)
+    {
+        var key = KeyOf(settings);
+        if (!rejected.TryGetValue(key, out var markedAt)) return false;
+        if (DateTime.UtcNow - markedAt < RejectionLifetime) return true;
+        rejected.TryRemove(key, out _);
+        return false;
+    }
 
     public void MarkLoginRejected(QBittorrentSettings settings)
     {
         var key = KeyOf(settings);
         sids.TryRemove(key, out _);
-        rejected[key] = true;
+        rejected[key] = DateTime.UtcNow;
     }
 
     /// <summary>Drops the cached session and any "login rejected" mark, so the next call logs in again.</summary>
