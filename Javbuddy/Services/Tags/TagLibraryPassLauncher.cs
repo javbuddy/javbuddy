@@ -55,15 +55,19 @@ public sealed class TagLibraryPassLauncher(BackgroundJobRunner jobs, TaskActivit
                     _ => await rules.StripIgnoredTagsFromLibraryAsync(ct),
                 };
                 activities.Complete(activityId, $"{count} movie{(count == 1 ? "" : "s")} reprocessed.");
-                Volatile.Write(ref running, 0);
-                result.SetResult(count);
+                Volatile.Write(ref running, 0); // before the result, so a caller that awaits it sees the launcher free
+                result.TrySetResult(count);
             }
             catch (Exception ex)
             {
                 activities.Complete(activityId, $"{name} failed: {ex.Message}", failed: true);
                 Volatile.Write(ref running, 0);
-                result.SetException(ex);
+                result.TrySetException(ex);
                 throw;
+            }
+            finally
+            {
+                Volatile.Write(ref running, 0);
             }
         });
         return result.Task;

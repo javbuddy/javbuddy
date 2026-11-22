@@ -831,13 +831,14 @@
     // on its error there.
     private async Task PlayAllAsync(bool shuffle)
     {
-        var clips = (CurrentView switch
+        var view = CurrentView; // read once: the view can change while the playlist loads
+        var clips = (view switch
             {
                 WallView.Highlights => await SceneWall.GetHighlightPlaylistAsync(CurrentFilter, sort, randomSeed),
                 WallView.Apexes => await SceneWall.GetApexPlaylistAsync(CurrentFilter, sort, randomSeed),
                 _ => await SceneWall.GetScenePlaylistAsync(CurrentFilter, sort, randomSeed),
             })
-            .Select(c => PlayerClip.FromPlaylist(CurrentView switch
+            .Select(c => PlayerClip.FromPlaylist(view switch
             {
                 WallView.Highlights => PlayerClipKind.Highlight,
                 WallView.Apexes => PlayerClipKind.Apex,

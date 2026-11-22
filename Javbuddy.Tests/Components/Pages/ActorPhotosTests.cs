@@ -169,6 +169,25 @@ public class ActorPhotosTests : BunitContext
     }
 
     [Fact]
+    public void ActorNameSort_OrdersByDisplayName_SoAOneNameActorSortsUnderHerName()
+    {
+        // The service's SQL order would put "Yua" (no last name) first.
+        var photos = new List<GlobalActorPhotoItem>
+        {
+            new(1, 101, "Yua", null, null, 1.0, DateTime.UtcNow),
+            new(2, 102, "Aoi Tsukasa", null, null, 1.0, DateTime.UtcNow),
+        };
+        ServePhotos(photos);
+        photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>()).Returns(new List<ActorWithPhotoCountSummary>());
+        var cut = Render<ActorPhotos>();
+
+        cut.FindAll("button").First(b => b.TextContent.Contains("Sort: Newest")).Click();
+        cut.FindAll(".sort-dropdown-item").First(b => b.TextContent.Contains("Actor Name")).Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(["Aoi Tsukasa", "Yua"], cut.FindAll(".actor-photos-timeline-heading").Select(h => h.TextContent.Trim().Split('\n')[0].Trim()).ToArray()));
+    }
+
+    [Fact]
     public void ClickingPhoto_OpensLightbox_AndHandlesNextPrevClose()
     {
         var photos = new List<GlobalActorPhotoItem>

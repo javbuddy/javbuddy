@@ -349,13 +349,23 @@ else
         // A newer query (or a dispose) supersedes this one.
         if (disposed || version != queryVersion) return;
 
-        ApplyPhotos(sort == "random" ? [.. photos.OrderBy(p => HashCode.Combine(p.Id, randomSeed))] : [.. photos]);
+        // Random is seeded per click and the actor order is by display name (a one-name actor sorts under her
+        // name, a placeholder under its label), neither of which SQL can order by, so both are applied here to
+        // the already filtered list.
+        ApplyPhotos(sort switch
+        {
+            "random" => [.. photos.OrderBy(p => HashCode.Combine(p.Id, randomSeed))],
+            "actor" => [.. photos.OrderBy(p => p.ActorDisplayName).ThenByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id)],
+            _ => [.. photos],
+        });
         StateHasChanged();
     }
 
     private void ApplyPhotos(List<GlobalActorPhotoItem> photos, bool resetVisibleCount = true)
     {
         FilteredPhotos = photos;
+        // A new query result can reorder or drop the open photo, so the lightbox closes with it.
+        if (resetVisibleCount) activeLightboxIndex = -1;
         allTimelineGroups = GetTimelineGroups();
         if (resetVisibleCount) visiblePhotoCount = PhotoBatchSize;
         gridGeneration++;
@@ -568,6 +578,7 @@ else
             var result = await ActorPhotoService.DeletePhotoAsync(photoToDelete.ActorId, photoToDelete.Id);
             if (result.Success)
             {
+                queryVersion++; // an in-flight query would bring the deleted photo back
                 totalPhotoCount = totalPhotoCount is { } total ? total - 1 : null;
                 ApplyPhotos([.. FilteredPhotos.Where(p => p.Id != photoToDelete.Id)], resetVisibleCount: false);
                 var photos = FilteredPhotos;
