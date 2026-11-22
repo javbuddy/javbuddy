@@ -6,10 +6,9 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
-- **qBittorrent sessions are reused instead of logging in on every call.** Javbuddy logs in again only when qBittorrent reports the session expired, and after a rejected login (wrong credentials) it stops retrying, so it no longer trips qBittorrent's WebUI ban. Fixing the credentials in Settings, or pressing Test connection, resumes it.
+- **qBittorrent sessions are reused instead of logging in on every call.** Javbuddy logs in again only when qBittorrent reports the session expired. After a login that qBittorrent actually rejects (wrong credentials, or a 401/403) it stops retrying, so it no longer trips qBittorrent's WebUI ban; temporary failures (5xx, 429, network errors) are reported but retried normally. Changing the credentials in Settings, or pressing Test connection there, resumes it; the background health check never resets the state.
 - **javinizer-go error messages now include the per-item details** it sends in `errors` (e.g. "Invalid request: path is required"), instead of only the summary.
 - **A non-JSON response from an integration (an HTML proxy or login page served with a 200) is reported as "Unexpected response from {service}."** instead of throwing, so it no longer silently stops the Activity Queue live progress updates.
-
 - **The Movies grid text and code-prefix filters and the Scenes, Highlights and Apex wall search treat `%` and `_` as ordinary characters**, like the header search.
 - **Image downloads from URLs (imports, providers, .nfo) bypass any HTTP(S)_PROXY**, so the private-address check sees the image host rather than the proxy. Behind a proxy-only network, remote image downloads will fail.
 - **Actor thumbnails from a movie's .nfo must be a supported image type** (.jpg, .jpeg, .png, .webp, .jfif); older `.tbn`, `.gif` and `.bmp` thumbs are no longer used, and provider/.nfo image URLs on a private network address are no longer fetched.

@@ -23,7 +23,10 @@ public interface IQBittorrentClient
 {
     Task<string?> GetBaseUrlAsync(CancellationToken ct = default);
     Task<string?> GetExternalUrlAsync(CancellationToken ct = default);
-    Task<QBittorrentTestResult> TestConnectionAsync(CancellationToken ct = default);
+    /// <summary>Checks the connection. A plain call reuses the cached session and honours a remembered
+    /// "login rejected" state, so background health checks don't hammer qBittorrent; the Settings
+    /// "Test connection" passes <paramref name="forceLogin"/> to always try a real login and lift that state.</summary>
+    Task<QBittorrentTestResult> TestConnectionAsync(CancellationToken ct = default, bool forceLogin = false);
 
     /// <summary>For magnet links only — qBittorrent resolves these itself via DHT/trackers, so
     /// handing it the URL is safe regardless of qBittorrent's network position.</summary>
@@ -84,7 +87,7 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
     protected override string ServiceName => "qBittorrent";
     protected override string HttpClientName => "QBittorrent";
 
-    public async Task<QBittorrentTestResult> TestConnectionAsync(CancellationToken ct = default)
+    public async Task<QBittorrentTestResult> TestConnectionAsync(CancellationToken ct = default, bool forceLogin = false)
     {
         var settings = await GetSettingsAsync(ct);
         if (settings is null)
@@ -95,8 +98,9 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
         return await ExecuteAsync(TimeSpan.FromSeconds(15), ct,
             async (client, token) =>
             {
-                // An explicit test always tries a real login, so it also lifts a "login rejected" block.
-                sessions.Forget(settings);
+                // Only the explicit Settings test forces a real login (lifting a "login rejected" block);
+                // the periodic health check must not drop a valid session or retry a rejected login.
+                if (forceLogin) sessions.Forget(settings);
                 using var response = await SendAuthenticatedAsync(client, settings, sid =>
                     BuildRequest(HttpMethod.Get, settings, "/api/v2/app/version", sid), token);
                 if (response is null)
@@ -266,7 +270,7 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
     /// there is none. qBittorrent answers 403 once a session has expired, so a 403 is retried once
     /// after a fresh login. Returns null when the login is rejected; that is remembered, and no
     /// further login is attempted (a wrong password would trip qBittorrent's WebUI ban) until the
-    /// connection settings change or <see cref="TestConnectionAsync"/> is run. The caller disposes the response.</summary>
+    /// connection settings change or <see cref="TestConnectionAsync"/> is run with <c>forceLogin</c>. The caller disposes the response.</summary>
     private async Task<HttpResponseMessage?> SendAuthenticatedAsync(HttpClient client, QBittorrentSettings settings, Func<string, HttpRequestMessage> buildRequest, CancellationToken ct)
     {
         if (sessions.IsLoginRejected(settings)) return null;
@@ -316,20 +320,31 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
         });
 
         using var response = await client.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode) return null;
 
-        if (!response.Headers.TryGetValues("Set-Cookie", out var cookies)) return null;
-        foreach (var cookie in cookies)
+        // Only these are a real "wrong credentials / banned" answer; anything else (5xx, 429, a 200
+        // without a session cookie) is a temporary failure, surfaced as an error and not remembered.
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden) return null;
+        if (!response.IsSuccessStatusCode)
         {
-            var sidPart = cookie.Split(';')[0];
-            if (sidPart.StartsWith("SID=", StringComparison.OrdinalIgnoreCase))
+            throw new HttpRequestException($"login returned {(int)response.StatusCode}");
+        }
+
+        if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
+        {
+            foreach (var cookie in cookies)
             {
-                return sidPart["SID=".Length..];
+                var sidPart = cookie.Split(';')[0];
+                if (sidPart.StartsWith("SID=", StringComparison.OrdinalIgnoreCase))
+                {
+                    return sidPart["SID=".Length..];
+                }
             }
         }
-        return null;
-    }
 
+        var body = (await response.Content.ReadAsStringAsync(ct)).Trim();
+        if (body.Equals("Fails.", StringComparison.OrdinalIgnoreCase)) return null;
+        throw new HttpRequestException("login response had no session cookie");
+    }
     /// <summary>qBittorrent requires a Referer/Origin header matching its own host on
     /// state-changing requests (CSRF protection) in addition to the session cookie.</summary>
     private static void AddAuthHeaders(HttpRequestMessage request, string baseUrl, string sid)
@@ -380,7 +395,9 @@ public class QBittorrentSessionCache
     private readonly ConcurrentDictionary<(string, string, string), string> sids = new();
     private readonly ConcurrentDictionary<(string, string, string), bool> rejected = new();
 
-    private static (string, string, string) KeyOf(QBittorrentSettings s) => (s.BaseUrl ?? "", s.Username ?? "", s.Password ?? "");
+    // The password is only kept as a hash, so it isn't held in plain text here.
+    private static (string, string, string) KeyOf(QBittorrentSettings s) =>
+        (s.BaseUrl ?? "", s.Username ?? "", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(s.Password ?? ""))));
 
     public string? TryGetSid(QBittorrentSettings settings) => sids.GetValueOrDefault(KeyOf(settings));
 

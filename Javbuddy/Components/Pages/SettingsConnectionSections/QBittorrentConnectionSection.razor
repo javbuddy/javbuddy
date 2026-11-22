@@ -115,7 +115,7 @@
             {
                 await Save();
             }
-            testResult = await QBittorrentClient.TestConnectionAsync();
+            testResult = await QBittorrentClient.TestConnectionAsync(forceLogin: true);
         }
         finally
         {
