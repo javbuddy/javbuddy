@@ -1169,6 +1169,35 @@ public class LocalLibraryClientTests
     }
 
     [Fact]
+    public async Task RefreshFolderStateAsync_SavesAChangedSubtitleFlag_OfAnAlreadyBaselinedMovie()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        await File.WriteAllTextAsync(Path.Combine(folder, "ABC-123.srt"), "x");
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "ABC-123", MediaHasSubtitleFile = false };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+        var client = CreateClientFor(factory, root);
+        await client.RefreshFolderStateAsync(movieId); // baselines the images signature
+        using (var db = factory.CreateDbContext())
+        {
+            var m = db.Movies.Single(); m.MediaHasSubtitleFile = false; db.SaveChanges();
+        }
+
+        await client.RefreshFolderStateAsync(movieId);
+
+        using var verifyDb = factory.CreateDbContext();
+        Assert.True(verifyDb.Movies.Single().MediaHasSubtitleFile);
+    }
+
+    [Fact]
     public async Task RefreshFolderStateAsync_NoLocalFolder_Fails()
     {
         using var factory = new TestDbContextFactory();

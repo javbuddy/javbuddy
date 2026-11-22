@@ -1277,6 +1277,8 @@ public class LocalLibraryClient(
 
         ApplySubtitleFlag(movie, folder);
         ApplyTrailerFlag(movie, folder);
+        // The nfo and image checks below only save when they change something themselves.
+        await db.SaveChangesAsync(ct);
         var nfo = await SyncNfoCoreAsync(db, movie, folder, ct);
         var images = await SyncImagesCoreAsync(db, movie, folder, ct);
         return nfo.Success ? images : nfo;

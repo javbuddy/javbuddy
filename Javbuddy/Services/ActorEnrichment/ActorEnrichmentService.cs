@@ -381,9 +381,17 @@ public class ActorEnrichmentService(
             // Also after a cancel: actors already saved must still get their movies linked.
             if (runCache.CastSyncPending)
             {
-                await using var syncDb = await dbFactory.CreateDbContextAsync(CancellationToken.None);
-                await MovieActorAssociation.SynchronizeAllAsync(syncDb, CancellationToken.None);
-                await syncDb.SaveChangesAsync(CancellationToken.None);
+                try
+                {
+                    await using var syncDb = await dbFactory.CreateDbContextAsync(CancellationToken.None);
+                    await MovieActorAssociation.SynchronizeAllAsync(syncDb, CancellationToken.None);
+                    await syncDb.SaveChangesAsync(CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    // Must not replace the run's own outcome (a cancel, or the error that ended it).
+                    logger.LogWarning(ex, "Syncing movie casts after the enrichment run failed");
+                }
             }
         }
 

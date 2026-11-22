@@ -131,8 +131,8 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
         {
             var targetBytes = (long)(maxSizeBytes * EvictionTargetRatio);
             await using var db = await dbFactory.CreateDbContextAsync(ct);
-            // Rows go in batches rather than one statement per evicted file; a batch's files are deleted
-            // first, so cancelling between batches never leaves a row for a file that is already gone.
+            // Rows go in batches rather than one statement per evicted file. If eviction is cut short, up to
+            // a batch of rows can briefly point at deleted files; lookups re-check the file, so that is harmless.
             var evictedStorageIds = new List<Guid>(EvictionRowBatchSize);
             foreach (var file in files)
             {
