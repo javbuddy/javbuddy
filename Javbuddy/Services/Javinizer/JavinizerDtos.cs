@@ -221,13 +221,28 @@ public class GenreViewDto
     public string? Name { get; set; }
 }
 
+/// <summary>javinizer-go's ErrorResponse (internal/api/contracts/system_types.go): a summary in
+/// <c>error</c>, optional per-item details in <c>errors</c>, and a stable machine-readable
+/// <c>code</c> (with <c>params</c> for localisation, unused here).</summary>
 public class ErrorResponseDto
 {
     [JsonPropertyName("error")]
     public string? Error { get; set; }
 
-    [JsonPropertyName("message")]
-    public string? Message { get; set; }
+    [JsonPropertyName("code")]
+    public string? Code { get; set; }
+
+    [JsonPropertyName("errors")]
+    public List<string>? Errors { get; set; }
+
+    /// <summary>The summary followed by any detail lines ("summary: detail1; detail2"), or null
+    /// when the body carried neither.</summary>
+    public string? Describe()
+    {
+        var details = string.Join("; ", (Errors ?? []).Where(e => !string.IsNullOrWhiteSpace(e)));
+        if (string.IsNullOrWhiteSpace(Error)) return details.Length > 0 ? details : null;
+        return details.Length > 0 ? $"{Error}: {details}" : Error;
+    }
 }
 
 // javinizer-go v1.5.1's batch-job API (torrent sorting wizard).

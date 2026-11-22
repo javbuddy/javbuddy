@@ -175,6 +175,37 @@ public class JavinizerClientTests
     }
 
     [Fact]
+    public async Task ScanAsync_ErrorBody_IncludesErrorsDetail()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.JavinizerSettings.Add(new JavinizerSettings { BaseUrl = "http://localhost:8765", ApiToken = "testtoken" });
+            await db.SaveChangesAsync();
+        }
+
+        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.BadRequest,
+            """{"error":"Invalid request","code":"INVALID_REQUEST","errors":["path is required","bad flag"]}""");
+        var client = new JavinizerClient(new FakeHttpClientFactory(handler), factory, new ConfigurationBuilder().Build());
+        var result = await client.ScanAsync("", recursive: false);
+
+        Assert.False(result.Success);
+        Assert.Equal("javinizer-go returned 400: Invalid request: path is required; bad flag", result.ErrorMessage);
+    }
+
+    [Theory]
+    [InlineData("""{"error":"Movie not found"}""", "Movie not found")]
+    [InlineData("""{"error":"Bad","errors":["a","b"]}""", "Bad: a; b")]
+    [InlineData("""{"errors":["only detail"]}""", "only detail")]
+    [InlineData("""{"code":"X"}""", null)]
+    public void ErrorResponseDto_Describe_CombinesErrorAndErrors(string json, string? expected)
+    {
+        var dto = System.Text.Json.JsonSerializer.Deserialize<ErrorResponseDto>(json)!;
+
+        Assert.Equal(expected, dto.Describe());
+    }
+
+    [Fact]
     public async Task TestConnectionAsync_ReturnsFailure_WhenServerReturns500()
     {
         using var factory = new TestDbContextFactory();
@@ -184,7 +215,7 @@ public class JavinizerClientTests
             await db.SaveChangesAsync();
         }
 
-        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.InternalServerError, "{\"message\":\"Internal error\"}");
+        var handler = FakeHttpMessageHandler.ReturningStatus(HttpStatusCode.InternalServerError, "{\"error\":\"Internal error\"}");
         var client = new JavinizerClient(new FakeHttpClientFactory(handler), factory, new ConfigurationBuilder().Build());
         var result = await client.TestConnectionAsync();
 

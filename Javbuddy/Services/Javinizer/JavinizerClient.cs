@@ -349,5 +349,5 @@ public class JavinizerClient : ApiClientBase<JavinizerSettings>, IJavinizerClien
     }
 
     private static Task<string> ReadErrorAsync(HttpResponseMessage response, CancellationToken ct) =>
-        ReadJsonErrorAsync<ErrorResponseDto>(response, e => e.Message ?? e.Error, ct);
+        ReadJsonErrorAsync<ErrorResponseDto>(response, e => e.Describe(), ct);
 }
