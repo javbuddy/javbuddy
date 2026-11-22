@@ -90,7 +90,10 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
 
         time.Advance(Minute - TimeSpan.FromSeconds(1));
 
+        // Had the startup delay ended, the loop would have ticked and gone back to waiting on a new timer.
+        Assert.False(await time.TryWaitForTimerAsync(TimeSpan.FromMilliseconds(100)), "the loop ticked before the startup delay ended");
         Assert.Equal(0, task.Runs);
+        Assert.False(tracker.IsRunning("Soon"));
     }
 
     [Fact]
@@ -117,8 +120,12 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
 
         await time.AdvanceWhenWaitingAsync(Minute);
         await probe.WaitForRunAsync();
+        await time.WaitForTimerAsync(); // the tick has decided about every task
 
+        // A launch claims the task at once, so a task that had been launched would still be running or have run.
         Assert.Equal(0, waiting.Runs);
+        Assert.False(tracker.IsRunning("Waiting"));
+        Assert.Null(tracker.GetLastCompletion("Waiting"));
     }
 
     [Fact]
@@ -138,7 +145,9 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
 
         await time.AdvanceWhenWaitingAsync(Minute); // the second tick: the probe runs again, the task is not yet due
         await probe.WaitForRunAsync();
+        await time.WaitForTimerAsync(); // the second tick has decided about every task
 
+        Assert.False(tracker.IsRunning("No history"));
         Assert.Equal(1, noHistory.Runs);
         Assert.Equal(2, probe.Runs);
     }
@@ -170,6 +179,9 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
         await started.WaitAsync(Failsafe);
         await time.AdvanceWhenWaitingAsync(Minute);
         await time.AdvanceWhenWaitingAsync(Minute);
+        await time.WaitForTimerAsync(); // the third tick is over
+        // A launch from tick two or three would start on the background runner a moment later.
+        Assert.False(await started.WaitAsync(TimeSpan.FromMilliseconds(100)), "the running task was started again");
         Assert.Equal(1, slow.Runs);
 
         release.SetResult("done");
@@ -202,6 +214,7 @@ public sealed class ScheduledTaskHostedServiceTests : IAsyncDisposable
         await time.AdvanceWhenWaitingAsync(Minute);
         await time.WaitForTimerAsync(); // the loop got back to waiting after the failed tick
         Assert.Equal(0, flaky.Runs);
+        Assert.False(tracker.IsRunning("Flaky"));
         time.Advance(Minute);
         await flaky.WaitForRunAsync();
 

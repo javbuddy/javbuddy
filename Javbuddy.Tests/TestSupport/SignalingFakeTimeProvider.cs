@@ -21,6 +21,10 @@ public sealed class SignalingFakeTimeProvider() : FakeTimeProvider(DateTimeOffse
     /// timeout is only a failsafe against a hung test.</summary>
     public Task WaitForTimerAsync() => timerCreated.WaitAsync(Failsafe);
 
+    /// <summary>For asserting that the code under test did NOT start waiting on the clock again: an absence can only be
+    /// observed by waiting, so this waits up to <paramref name="within"/> and reports whether a timer appeared.</summary>
+    public Task<bool> TryWaitForTimerAsync(TimeSpan within) => timerCreated.WaitAsync(within);
+
     /// <summary>Waits for the code under test to start waiting on the clock, then moves it forward by <paramref name="by"/>.</summary>
     public async Task AdvanceWhenWaitingAsync(TimeSpan by)
     {
