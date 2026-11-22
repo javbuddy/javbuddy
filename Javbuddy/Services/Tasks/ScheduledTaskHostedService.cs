@@ -7,14 +7,18 @@ namespace Javbuddy.Services.Tasks;
 /// <summary>Wakes up once a minute, and for each registered IScheduledTask, runs it if its
 /// interval has elapsed since its last recorded run (or it has never run). One shared loop
 /// rather than one timer per task, since checking "is it due" is cheap and this scales fine to
-/// however many tasks get registered later.</summary>
-public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ILogger<ScheduledTaskHostedService> logger) : BackgroundService
+/// however many tasks get registered later. A due task is queued on <see cref="BackgroundJobRunner"/>
+/// rather than awaited, so a long one (Library Rescan, Image Cache) never holds up the short periodic
+/// ones (qBittorrent Sync, backups); <see cref="ScheduledTaskRunner"/> keeps each task to one run at a time.</summary>
+public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ScheduledTaskLauncher launcher, ScheduledTaskRunTracker tracker, ILogger<ScheduledTaskHostedService> logger) : BackgroundService
 {
     private static readonly TimeSpan TickInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan StartupDelay = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan PruneInterval = TimeSpan.FromDays(1);
 
     private readonly IServiceScopeFactory scopeFactory = scopeFactory;
+    private readonly ScheduledTaskLauncher launcher = launcher;
+    private readonly ScheduledTaskRunTracker tracker = tracker;
     private readonly ILogger<ScheduledTaskHostedService> logger = logger;
 
     // A task that has never run (lastRun is null: a new task, or a fresh/reset database) used to count
@@ -89,6 +93,8 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ILogg
 
         foreach (var task in tasks)
         {
+            if (tracker.IsRunning(task.Name)) continue;
+
             bool due;
             // The once-a-minute "is it due" check would otherwise be a one-query trace per task every
             // minute; only an actual run is worth tracing.
@@ -113,7 +119,7 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, ILogg
             {
                 logger.LogInformation("Running scheduled task {TaskName}.", task.Name);
             }
-            await runner.RunAsync(task, ct);
+            _ = launcher.Queue(task.Name);
         }
     }
 }
