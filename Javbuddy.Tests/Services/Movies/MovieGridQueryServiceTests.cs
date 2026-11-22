@@ -46,6 +46,23 @@ public sealed class MovieGridQueryServiceTests : IDisposable
     private static MovieGridFilter Attr(ActorAttributeSelection selection) => new(ActorAttributes: selection);
 
     [Fact]
+    public async Task TextAndCodePrefixFilters_TreatPercentAndUnderscoreAsLiterals()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.AddRange(
+                new Movie { Code = "AAA-001", Title = "100% Real" },
+                new Movie { Code = "AAA-002", Title = "100 Percent" },
+                new Movie { Code = "A_B-003", Title = "axb" },
+                new Movie { Code = "AXB-004", Title = "other" });
+            db.SaveChanges();
+        }
+
+        Assert.Equal(["AAA-001"], Codes(await service.GetRangeAsync(new MovieGridFilter(Text: "0% R"), CodeAscending, 0, 10)));
+        Assert.Equal(["A_B-003"], Codes(await service.GetRangeAsync(new MovieGridFilter(CodePrefix: "A_B"), CodeAscending, 0, 10)));
+    }
+
+    [Fact]
     public async Task GetRangeAsync_FlagsMoviesWithAnUnidentifiedPerformer()
     {
         using (var db = factory.CreateDbContext())

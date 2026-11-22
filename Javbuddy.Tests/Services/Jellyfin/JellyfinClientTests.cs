@@ -241,6 +241,7 @@ public class JellyfinClientTests
 
         var handler = new FakeHttpMessageHandler((req, _) =>
         {
+            Assert.Equal("MediaBrowser Token=\"testkey\"", req.Headers.GetValues("Authorization").Single());
             if (req.RequestUri?.AbsolutePath.StartsWith("/Persons/") == true)
             {
                 return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
@@ -350,6 +351,8 @@ public class JellyfinClientTests
         var handler = new FakeHttpMessageHandler((req, _) =>
         {
             urls.Add(req.RequestUri!.PathAndQuery);
+            Assert.DoesNotContain("apikey", req.RequestUri!.Query, StringComparison.OrdinalIgnoreCase);
+            Assert.StartsWith("MediaBrowser Token=", req.Headers.GetValues("Authorization").Single());
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new StringContent(ItemsJson(2)) });
         });
         var client = await CreateLookupClientAsync(handler);

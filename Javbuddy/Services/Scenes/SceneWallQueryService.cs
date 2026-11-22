@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.SceneMedia;
 using Javbuddy.Services.Tags;
@@ -637,8 +638,8 @@ public sealed partial class SceneWallQueryService(
         return query;
     }
 
-    /// <summary>LIKE, as on the Movies grid, for SQLite's case-insensitive ASCII matching.</summary>
-    private static string TextPattern(SceneWallFilter filter) => $"%{filter.Text!.Trim()}%";
+    /// <summary>LIKE (with % and _ taken literally), as on the Movies grid, for SQLite's case-insensitive ASCII matching.</summary>
+    private static string TextPattern(SceneWallFilter filter) => SqlLike.Contains(filter.Text!.Trim());
 
     private static IQueryable<Scene> Filter(AppDbContext db, SceneWallFilter filter)
     {
@@ -670,10 +671,10 @@ public sealed partial class SceneWallQueryService(
         {
             var pattern = TextPattern(filter);
             query = query.Where(s =>
-                (s.Title != null && EF.Functions.Like(s.Title, pattern))
-                || (s.Movie.Code != null && EF.Functions.Like(s.Movie.Code, pattern))
-                || (s.Movie.MetaTitle != null && EF.Functions.Like(s.Movie.MetaTitle, pattern))
-                || (s.Movie.Title != null && EF.Functions.Like(s.Movie.Title, pattern)));
+                (s.Title != null && EF.Functions.Like(s.Title, pattern, SqlLike.EscapeChar))
+                || (s.Movie.Code != null && EF.Functions.Like(s.Movie.Code, pattern, SqlLike.EscapeChar))
+                || (s.Movie.MetaTitle != null && EF.Functions.Like(s.Movie.MetaTitle, pattern, SqlLike.EscapeChar))
+                || (s.Movie.Title != null && EF.Functions.Like(s.Movie.Title, pattern, SqlLike.EscapeChar)));
         }
         if (filter.FavoritesOnly)
         {
@@ -712,10 +713,10 @@ public sealed partial class SceneWallQueryService(
         {
             var pattern = TextPattern(filter);
             query = query.Where(h =>
-                (h.Title != null && EF.Functions.Like(h.Title, pattern))
-                || (h.Movie.Code != null && EF.Functions.Like(h.Movie.Code, pattern))
-                || (h.Movie.MetaTitle != null && EF.Functions.Like(h.Movie.MetaTitle, pattern))
-                || (h.Movie.Title != null && EF.Functions.Like(h.Movie.Title, pattern)));
+                (h.Title != null && EF.Functions.Like(h.Title, pattern, SqlLike.EscapeChar))
+                || (h.Movie.Code != null && EF.Functions.Like(h.Movie.Code, pattern, SqlLike.EscapeChar))
+                || (h.Movie.MetaTitle != null && EF.Functions.Like(h.Movie.MetaTitle, pattern, SqlLike.EscapeChar))
+                || (h.Movie.Title != null && EF.Functions.Like(h.Movie.Title, pattern, SqlLike.EscapeChar)));
         }
         if (filter.FavoritesOnly)
         {
@@ -774,9 +775,9 @@ public sealed partial class SceneWallQueryService(
         {
             var pattern = TextPattern(filter);
             query = query.Where(a =>
-                (a.Movie.Code != null && EF.Functions.Like(a.Movie.Code, pattern))
-                || (a.Movie.MetaTitle != null && EF.Functions.Like(a.Movie.MetaTitle, pattern))
-                || (a.Movie.Title != null && EF.Functions.Like(a.Movie.Title, pattern)));
+                (a.Movie.Code != null && EF.Functions.Like(a.Movie.Code, pattern, SqlLike.EscapeChar))
+                || (a.Movie.MetaTitle != null && EF.Functions.Like(a.Movie.MetaTitle, pattern, SqlLike.EscapeChar))
+                || (a.Movie.Title != null && EF.Functions.Like(a.Movie.Title, pattern, SqlLike.EscapeChar)));
         }
         if (filter.FavoritesOnly)
         {

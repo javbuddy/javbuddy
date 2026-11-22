@@ -2,6 +2,7 @@ using Javbuddy.Components.Shared;
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Tags;
 using Javbuddy.Services.Torrents;
 using Microsoft.EntityFrameworkCore;
@@ -495,16 +496,16 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
         query = MovieFilterPredicates.WhereActorAttributes(query, filter.ActorAttributes ?? ActorAttributeSelection.Empty, DateOnly.FromDateTime(DateTime.UtcNow));
         if (!string.IsNullOrWhiteSpace(filter.Text))
         {
-            var term = filter.Text.Trim();
+            var pattern = SqlLike.Contains(filter.Text.Trim());
             query = query.Where(m =>
-                (m.Code != null && EF.Functions.Like(m.Code, $"%{term}%"))
-                || (m.MetaTitle != null && EF.Functions.Like(m.MetaTitle, $"%{term}%"))
-                || (m.Title != null && EF.Functions.Like(m.Title, $"%{term}%")));
+                (m.Code != null && EF.Functions.Like(m.Code, pattern, SqlLike.EscapeChar))
+                || (m.MetaTitle != null && EF.Functions.Like(m.MetaTitle, pattern, SqlLike.EscapeChar))
+                || (m.Title != null && EF.Functions.Like(m.Title, pattern, SqlLike.EscapeChar)));
         }
         if (!string.IsNullOrWhiteSpace(filter.CodePrefix))
         {
-            var codePrefix = filter.CodePrefix;
-            query = query.Where(m => m.Code != null && EF.Functions.Like(m.Code, $"{codePrefix}%"));
+            var codePrefix = SqlLike.StartsWith(filter.CodePrefix);
+            query = query.Where(m => m.Code != null && EF.Functions.Like(m.Code, codePrefix, SqlLike.EscapeChar));
         }
 
         return query;

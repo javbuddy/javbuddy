@@ -13,7 +13,9 @@ public sealed class BlockedAddressException(string host) : Exception($"{host} re
 /// redirects and a DNS name that resolves to an internal address.</summary>
 public static class PublicAddressGuard
 {
-    public static SocketsHttpHandler CreateHandler() => new() { ConnectCallback = ConnectAsync };
+    /// <summary>Proxies are bypassed: through one, the connection callback would see the proxy's address instead of
+    /// the image host's, and the check would block every download or prove nothing.</summary>
+    public static SocketsHttpHandler CreateHandler() => new() { ConnectCallback = ConnectAsync, UseProxy = false };
 
     public static bool IsPublic(IPAddress address)
     {

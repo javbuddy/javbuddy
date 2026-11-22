@@ -6,6 +6,9 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **The Movies grid text and code-prefix filters and the Scenes, Highlights and Apex wall search treat `%` and `_` as ordinary characters**, like the header search.
+- **Image downloads from URLs (imports, providers, .nfo) bypass any HTTP(S)_PROXY**, so the private-address check sees the image host rather than the proxy. Behind a proxy-only network, remote image downloads will fail.
+- **Actor thumbnails from a movie's .nfo must be a supported image type** (.jpg, .jpeg, .png, .webp, .jfif); older `.tbn`, `.gif` and `.bmp` thumbs are no longer used, and provider/.nfo image URLs on a private network address are no longer fetched.
 - **The docs now say that backups contain the saved integration secrets in plain text** (qBittorrent password, Prowlarr, Jellyfin and javinizer-go keys) and that the download endpoint has no login, so keep backups private or put Javbuddy behind an authenticating proxy.
 - **The header search treats `%` and `_` as ordinary characters.** Typing `a_b` no longer matches `axb`, and `100%` no longer matches every title containing `100`.
 - **The Jellyfin API key is sent in an `Authorization: MediaBrowser Token="…"` header instead of the `?apikey=` query string**, so it no longer ends up in request URLs that logs, traces or proxies record. Like the other integrations' credentials, it now travels in a header.
