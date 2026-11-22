@@ -54,7 +54,7 @@ public class ImageCacheMaintenanceServiceTests
         var stats = await service.GetStatsAsync();
 
         Assert.Equal(1, stats.MovieImageRows);
-        Assert.Equal(0, stats.ActorImageRows);
+        Assert.Equal(1, stats.ActorImageRows);
         Assert.Equal(2, stats.FileCount);
         Assert.Equal(15, stats.TotalBytes);
     }
@@ -204,6 +204,33 @@ public class ImageCacheMaintenanceServiceTests
         Assert.False(File.Exists(cache.GetStoragePath(storageIds[0])));
         Assert.False(File.Exists(cache.GetStoragePath(storageIds[1])));
         Assert.All(storageIds.Skip(2), storageId => Assert.True(File.Exists(cache.GetStoragePath(storageId))));
+    }
+
+    [Fact]
+    public async Task EnforceSizeLimitAsync_EvictsTheRowsOfEveryEvictedFile_AcrossBatches()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot { Settings = ImageCacheSettings.Default with { MaxSizeBytes = 100 } };
+        var storageIds = Enumerable.Range(0, 1100).Select(_ => Guid.NewGuid()).ToList();
+        using (var db = factory.CreateDbContext())
+        {
+            for (var i = 0; i < storageIds.Count; i++)
+            {
+                db.CachedImages.Add(new CachedImage { Code = $"ABC-{i}", Role = "poster", Variant = "thumb", StorageId = storageIds[i] });
+                var path = cache.GetStoragePath(storageIds[i]);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await File.WriteAllTextAsync(path, "x");
+                File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(i - storageIds.Count));
+            }
+            db.SaveChanges();
+        }
+
+        await new ImageCacheMaintenanceService(cache, factory, new ImageCacheSizeTracker()).EnforceSizeLimitAsync(0);
+
+        // 1100 bytes against a 100-byte limit evicts down to 90 bytes, so 1010 files and rows go.
+        using var verifyDb = factory.CreateDbContext();
+        Assert.Equal(90, verifyDb.CachedImages.Count());
+        Assert.Equal(90, ILocalImageCache.EnumerateFileInfos(cache.RootPath).Count());
     }
 
     [Fact]

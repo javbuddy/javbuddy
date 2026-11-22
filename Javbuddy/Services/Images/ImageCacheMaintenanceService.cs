@@ -37,6 +37,9 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
     /// a full cache isn't rescanned on the very next conversion.</summary>
     public const double EvictionTargetRatio = 0.9;
 
+    // Under SQLite's bound-parameter limit.
+    private const int EvictionRowBatchSize = 500;
+
     private readonly ILocalImageCache imageCache = imageCache;
     private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
     private readonly ImageCacheSizeTracker sizeTracker = sizeTracker;
@@ -45,7 +48,7 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movieImageRows = await db.CachedImages.CountAsync(ct);
-        var actorImageRows = 0;
+        var actorImageRows = await db.ActorImages.CountAsync(ct);
 
         // The walk sees the true size anyway, so it also re-baselines the size tracker, dropping
         // the overcount from deletions outside eviction. It skips that rather than wait when an
@@ -128,6 +131,9 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
         {
             var targetBytes = (long)(maxSizeBytes * EvictionTargetRatio);
             await using var db = await dbFactory.CreateDbContextAsync(ct);
+            // Rows go in batches rather than one statement per evicted file; a batch's files are deleted
+            // first, so cancelling between batches never leaves a row for a file that is already gone.
+            var evictedStorageIds = new List<Guid>(EvictionRowBatchSize);
             foreach (var file in files)
             {
                 ct.ThrowIfCancellationRequested();
@@ -138,11 +144,24 @@ public class ImageCacheMaintenanceService(ILocalImageCache imageCache, IDbContex
 
                 File.Delete(file.FullName);
                 totalBytes -= file.Length;
-                await db.CachedImages.Where(image => image.StorageId == storageId).ExecuteDeleteAsync(ct);
+                evictedStorageIds.Add(storageId);
+                if (evictedStorageIds.Count >= EvictionRowBatchSize)
+                {
+                    await DeleteRowsAsync(db, evictedStorageIds, ct);
+                }
             }
+            await DeleteRowsAsync(db, evictedStorageIds, ct);
         }
 
         sizeTracker.Rebase(snapshot, totalBytes);
+    }
+
+    private static async Task DeleteRowsAsync(AppDbContext db, List<Guid> storageIds, CancellationToken ct)
+    {
+        if (storageIds.Count == 0) return;
+        var batch = storageIds.ToList();
+        storageIds.Clear();
+        await db.CachedImages.Where(image => batch.Contains(image.StorageId)).ExecuteDeleteAsync(ct);
     }
 
     public async Task PurgeAsync(CancellationToken ct = default)
