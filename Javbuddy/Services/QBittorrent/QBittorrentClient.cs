@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http.Headers;
 using Javbuddy.Data;
 using Javbuddy.Models;
@@ -73,8 +75,10 @@ public static class QBittorrentEnvConfig
 /// GetSettingsAsync stays bespoke (not EffectiveSettingsResolver) because Category is independently
 /// overridable regardless of whether the connection fields (BaseUrl/Username/Password) come
 /// from env or the DB row — a shape EffectiveSettingsResolver's single env-or-DB switch doesn't fit.</summary>
-public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextFactory<AppDbContext> dbFactory, IConfiguration configuration) : ApiClientBase<QBittorrentSettings>(httpClientFactory, dbFactory, configuration), IQBittorrentClient
+public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextFactory<AppDbContext> dbFactory, IConfiguration configuration, QBittorrentSessionCache? sessionCache = null) : ApiClientBase<QBittorrentSettings>(httpClientFactory, dbFactory, configuration), IQBittorrentClient
 {
+    private readonly QBittorrentSessionCache sessions = sessionCache ?? new();
+
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
     protected override string ServiceName => "qBittorrent";
@@ -91,15 +95,15 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
         return await ExecuteAsync(TimeSpan.FromSeconds(15), ct,
             async (client, token) =>
             {
-                var sid = await LoginAsync(client, settings, token);
-                if (sid is null)
+                // An explicit test always tries a real login, so it also lifts a "login rejected" block.
+                sessions.Forget(settings);
+                using var response = await SendAuthenticatedAsync(client, settings, sid =>
+                    BuildRequest(HttpMethod.Get, settings, "/api/v2/app/version", sid), token);
+                if (response is null)
                 {
                     return new QBittorrentTestResult(false, "Reached the server, but the login was rejected.");
                 }
 
-                using var request = new HttpRequestMessage(HttpMethod.Get, CombineUrl(settings.BaseUrl!, "/api/v2/app/version"));
-                AddAuthHeaders(request, settings.BaseUrl!, sid);
-                using var response = await client.SendAsync(request, token);
                 if (response.IsSuccessStatusCode)
                 {
                     string? version = null;
@@ -159,20 +163,16 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
         return await ExecuteAsync(RequestTimeout, ct,
             async (client, token) =>
             {
-                var sid = await LoginAsync(client, settings, token);
-                if (sid is null)
-                {
-                    return new QBittorrentAddResult(false, "Could not log in to qBittorrent — check the username/password.");
-                }
+                const string LoginFailed = "Could not log in to qBittorrent — check the username/password.";
 
                 // Idempotent — makes sure the movie-code tag exists before tagging the new torrent
                 // with it, so QBittorrentSyncTask can later correlate this grab to a live torrent.
-                using (var createTagsRequest = new HttpRequestMessage(HttpMethod.Post, CombineUrl(settings.BaseUrl!, "/api/v2/torrents/createTags")))
+                using (var createTagsResponse = await SendAuthenticatedAsync(client, settings, sid =>
+                    BuildRequest(HttpMethod.Post, settings, "/api/v2/torrents/createTags", sid,
+                        new FormUrlEncodedContent(new Dictionary<string, string> { ["tags"] = movieCode })), token))
                 {
-                    AddAuthHeaders(createTagsRequest, settings.BaseUrl!, sid);
-                    createTagsRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["tags"] = movieCode });
-                    using var createTagsResponse = await client.SendAsync(createTagsRequest, token);
                     // Best-effort — some qBittorrent versions auto-create tags on add anyway.
+                    if (createTagsResponse is null) return new QBittorrentAddResult(false, LoginFailed);
                 }
 
                 var category = settings.Category;
@@ -180,19 +180,17 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
                 {
                     // Idempotent — qBittorrent errors if the category doesn't exist yet on add, and
                     // simply no-ops (or 409s) if it's already there.
-                    using var createCategoryRequest = new HttpRequestMessage(HttpMethod.Post, CombineUrl(settings.BaseUrl!, "/api/v2/torrents/createCategory"));
-                    AddAuthHeaders(createCategoryRequest, settings.BaseUrl!, sid);
-                    createCategoryRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["category"] = category });
-                    using var createCategoryResponse = await client.SendAsync(createCategoryRequest, token);
+                    using var createCategoryResponse = await SendAuthenticatedAsync(client, settings, sid =>
+                        BuildRequest(HttpMethod.Post, settings, "/api/v2/torrents/createCategory", sid,
+                            new FormUrlEncodedContent(new Dictionary<string, string> { ["category"] = category })), token);
+                    if (createCategoryResponse is null) return new QBittorrentAddResult(false, LoginFailed);
                 }
 
-                // Not wrapped in its own `using` — HttpRequestMessage.Dispose() below disposes its
-                // Content along with it.
-                using var addRequest = new HttpRequestMessage(HttpMethod.Post, CombineUrl(settings.BaseUrl!, "/api/v2/torrents/add"));
-                AddAuthHeaders(addRequest, settings.BaseUrl!, sid);
-                addRequest.Content = buildAddContent(settings);
+                // The request (and so its Content) is rebuilt if the session has to be renewed.
+                using var addResponse = await SendAuthenticatedAsync(client, settings, sid =>
+                    BuildRequest(HttpMethod.Post, settings, "/api/v2/torrents/add", sid, buildAddContent(settings)), token);
+                if (addResponse is null) return new QBittorrentAddResult(false, LoginFailed);
 
-                using var addResponse = await client.SendAsync(addRequest, token);
                 var body = await addResponse.Content.ReadAsStringAsync(token);
 
                 if (!addResponse.IsSuccessStatusCode)
@@ -218,20 +216,17 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
         return await ExecuteAsync(RequestTimeout, ct,
             async (client, token) =>
             {
-                var sid = await LoginAsync(client, settings, token);
-                if (sid is null) return QBittorrentTorrentsResult.Failure("qBittorrent login was rejected.");
-
-                var infoUrl = CombineUrl(settings.BaseUrl!, "/api/v2/torrents/info");
+                var infoPath = "/api/v2/torrents/info";
                 if (!string.IsNullOrWhiteSpace(settings.Category))
                 {
                     // Scoped to our category (when one is configured) so torrents added outside
                     // this app don't show up in the Queue/History pages or get touched by the sync.
-                    infoUrl += $"?category={Uri.EscapeDataString(settings.Category)}";
+                    infoPath += $"?category={Uri.EscapeDataString(settings.Category)}";
                 }
 
-                using var request = new HttpRequestMessage(HttpMethod.Get, infoUrl);
-                AddAuthHeaders(request, settings.BaseUrl!, sid);
-                using var response = await client.SendAsync(request, token);
+                using var response = await SendAuthenticatedAsync(client, settings, sid =>
+                    BuildRequest(HttpMethod.Get, settings, infoPath, sid), token);
+                if (response is null) return QBittorrentTorrentsResult.Failure("qBittorrent login was rejected.");
                 if (!response.IsSuccessStatusCode) return QBittorrentTorrentsResult.Failure($"qBittorrent returned {(int)response.StatusCode}.");
 
                 var torrents = await response.Content.ReadFromJsonAsync<List<QBittorrentTorrentDto>>(cancellationToken: token);
@@ -248,20 +243,65 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
         return await ExecuteAsync(RequestTimeout, ct,
             async (client, token) =>
             {
-                var sid = await LoginAsync(client, settings, token);
-                if (sid is null) return false;
-
-                using var request = new HttpRequestMessage(HttpMethod.Post, CombineUrl(settings.BaseUrl!, "/api/v2/torrents/delete"));
-                AddAuthHeaders(request, settings.BaseUrl!, sid);
-                request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
-                {
-                    ["hashes"] = hash,
-                    ["deleteFiles"] = deleteFiles ? "true" : "false"
-                });
-                using var response = await client.SendAsync(request, token);
-                return response.IsSuccessStatusCode;
+                using var response = await SendAuthenticatedAsync(client, settings, sid =>
+                    BuildRequest(HttpMethod.Post, settings, "/api/v2/torrents/delete", sid,
+                        new FormUrlEncodedContent(new Dictionary<string, string>
+                        {
+                            ["hashes"] = hash,
+                            ["deleteFiles"] = deleteFiles ? "true" : "false"
+                        })), token);
+                return response is { IsSuccessStatusCode: true };
             },
             _ => false);
+    }
+
+    private static HttpRequestMessage BuildRequest(HttpMethod method, QBittorrentSettings settings, string pathAndQuery, string sid, HttpContent? content = null)
+    {
+        var request = new HttpRequestMessage(method, CombineUrl(settings.BaseUrl!, pathAndQuery)) { Content = content };
+        AddAuthHeaders(request, settings.BaseUrl!, sid);
+        return request;
+    }
+
+    /// <summary>Sends a request under the cached session for these credentials, logging in only when
+    /// there is none. qBittorrent answers 403 once a session has expired, so a 403 is retried once
+    /// after a fresh login. Returns null when the login is rejected; that is remembered, and no
+    /// further login is attempted (a wrong password would trip qBittorrent's WebUI ban) until the
+    /// connection settings change or <see cref="TestConnectionAsync"/> is run. The caller disposes the response.</summary>
+    private async Task<HttpResponseMessage?> SendAuthenticatedAsync(HttpClient client, QBittorrentSettings settings, Func<string, HttpRequestMessage> buildRequest, CancellationToken ct)
+    {
+        if (sessions.IsLoginRejected(settings)) return null;
+
+        var sid = sessions.TryGetSid(settings);
+        var fresh = sid is null;
+        if (sid is null)
+        {
+            sid = await LoginAsync(client, settings, ct);
+            if (sid is null)
+            {
+                sessions.MarkLoginRejected(settings);
+                return null;
+            }
+            sessions.SetSid(settings, sid);
+        }
+
+        using (var request = buildRequest(sid))
+        {
+            var response = await client.SendAsync(request, ct);
+            if (response.StatusCode != HttpStatusCode.Forbidden || fresh) return response;
+            response.Dispose();
+        }
+
+        sessions.Forget(settings);
+        sid = await LoginAsync(client, settings, ct);
+        if (sid is null)
+        {
+            sessions.MarkLoginRejected(settings);
+            return null;
+        }
+        sessions.SetSid(settings, sid);
+
+        using var retry = buildRequest(sid);
+        return await client.SendAsync(retry, ct);
     }
 
     /// <summary>Logs in and returns the SID cookie value, or null if the login was rejected.</summary>
@@ -329,5 +369,42 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
             Password = QBittorrentEnvConfig.GetPassword(Configuration),
             Category = category
         };
+    }
+}
+
+/// <summary>Process-wide qBittorrent session state, keyed by the connection credentials so changing
+/// the URL, username or password starts from scratch. Singleton because <see cref="QBittorrentClient"/>
+/// is scoped, and the Queue page polls every few seconds.</summary>
+public class QBittorrentSessionCache
+{
+    private readonly ConcurrentDictionary<(string, string, string), string> sids = new();
+    private readonly ConcurrentDictionary<(string, string, string), bool> rejected = new();
+
+    private static (string, string, string) KeyOf(QBittorrentSettings s) => (s.BaseUrl ?? "", s.Username ?? "", s.Password ?? "");
+
+    public string? TryGetSid(QBittorrentSettings settings) => sids.GetValueOrDefault(KeyOf(settings));
+
+    public void SetSid(QBittorrentSettings settings, string sid)
+    {
+        var key = KeyOf(settings);
+        sids[key] = sid;
+        rejected.TryRemove(key, out _);
+    }
+
+    public bool IsLoginRejected(QBittorrentSettings settings) => rejected.ContainsKey(KeyOf(settings));
+
+    public void MarkLoginRejected(QBittorrentSettings settings)
+    {
+        var key = KeyOf(settings);
+        sids.TryRemove(key, out _);
+        rejected[key] = true;
+    }
+
+    /// <summary>Drops the cached session and any "login rejected" mark, so the next call logs in again.</summary>
+    public void Forget(QBittorrentSettings settings)
+    {
+        var key = KeyOf(settings);
+        sids.TryRemove(key, out _);
+        rejected.TryRemove(key, out _);
     }
 }

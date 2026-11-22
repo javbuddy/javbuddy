@@ -99,6 +99,7 @@ public static class ServiceRegistration
         services.AddScoped<ILocalLibraryClient, LocalLibraryClient>();
         services.AddSingleton<MediaProbeGate>();
         services.AddScoped<IMediaInfoProber, MediaInfoProber>();
+        services.AddSingleton<QBittorrentSessionCache>();
         services.AddScoped<IQBittorrentClient, QBittorrentClient>();
         services.AddScoped<ITorrentGrabService, TorrentGrabService>();
         services.AddScoped<ITorrentQueueService, TorrentQueueService>();

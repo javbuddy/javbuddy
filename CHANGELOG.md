@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **qBittorrent sessions are reused instead of logging in on every call.** Javbuddy logs in again only when qBittorrent reports the session expired, and after a rejected login (wrong credentials) it stops retrying, so it no longer trips qBittorrent's WebUI ban. Fixing the credentials in Settings, or pressing Test connection, resumes it.
 - **javinizer-go error messages now include the per-item details** it sends in `errors` (e.g. "Invalid request: path is required"), instead of only the summary.
 - **A non-JSON response from an integration (an HTML proxy or login page served with a 200) is reported as "Unexpected response from {service}."** instead of throwing, so it no longer silently stops the Activity Queue live progress updates.
 

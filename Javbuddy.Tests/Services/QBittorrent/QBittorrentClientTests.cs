@@ -8,6 +8,106 @@ namespace Javbuddy.Tests.Services.QBittorrent;
 
 public class QBittorrentClientTests
 {
+    private static async Task<TestDbContextFactory> SeededFactoryAsync()
+    {
+        var factory = new TestDbContextFactory();
+        await using var db = await factory.CreateDbContextAsync();
+        db.QBittorrentSettings.Add(new QBittorrentSettings
+        {
+            BaseUrl = "http://localhost:8080",
+            Username = "admin",
+            Password = "adminadmin"
+        });
+        await db.SaveChangesAsync();
+        return factory;
+    }
+
+    /// <summary>Fake qBittorrent: hands out sequential SIDs on login (or rejects it), and answers
+    /// /torrents/info with 403 unless the request carries the SID the server currently accepts.</summary>
+    private sealed class FakeQBittorrent
+    {
+        public int Logins;
+        public bool AcceptLogin = true;
+        public string ValidSid = "sid-1";
+
+        public FakeHttpMessageHandler Handler => new((req, _) =>
+        {
+            if (req.RequestUri?.AbsolutePath == "/api/v2/auth/login")
+            {
+                Logins++;
+                if (!AcceptLogin) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("Fails.") });
+                var login = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("Ok.") };
+                login.Headers.Add("Set-Cookie", $"SID=sid-{Logins}; Path=/");
+                return Task.FromResult(login);
+            }
+
+            if (req.Headers.GetValues("Cookie").FirstOrDefault() != $"SID={ValidSid}")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Forbidden));
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+            });
+        });
+    }
+
+    [Fact]
+    public async Task GetTorrentsAsync_ReusesCachedSession_AcrossCallsAndClients()
+    {
+        using var factory = await SeededFactoryAsync();
+        var server = new FakeQBittorrent();
+        var cache = new QBittorrentSessionCache();
+        var http = new FakeHttpClientFactory(server.Handler);
+
+        for (var i = 0; i < 3; i++)
+        {
+            var client = new QBittorrentClient(http, factory, new ConfigurationBuilder().Build(), cache);
+            Assert.True((await client.GetTorrentsAsync()).Success);
+        }
+
+        Assert.Equal(1, server.Logins);
+    }
+
+    [Fact]
+    public async Task GetTorrentsAsync_ExpiredSession_ReLogsInOnceOn403AndRetries()
+    {
+        using var factory = await SeededFactoryAsync();
+        var server = new FakeQBittorrent();
+        var client = new QBittorrentClient(new FakeHttpClientFactory(server.Handler), factory, new ConfigurationBuilder().Build(), new QBittorrentSessionCache());
+
+        Assert.True((await client.GetTorrentsAsync()).Success);
+        server.ValidSid = "sid-2";
+        Assert.True((await client.GetTorrentsAsync()).Success);
+
+        Assert.Equal(2, server.Logins);
+    }
+
+    [Fact]
+    public async Task GetTorrentsAsync_RejectedLogin_IsNotRetriedUntilTestConnection()
+    {
+        using var factory = await SeededFactoryAsync();
+        var server = new FakeQBittorrent { AcceptLogin = false };
+        var client = new QBittorrentClient(new FakeHttpClientFactory(server.Handler), factory, new ConfigurationBuilder().Build(), new QBittorrentSessionCache());
+
+        for (var i = 0; i < 3; i++)
+        {
+            var result = await client.GetTorrentsAsync();
+            Assert.False(result.Success);
+            Assert.Equal("qBittorrent login was rejected.", result.ErrorMessage);
+        }
+        Assert.Equal(1, server.Logins);
+
+        // Credentials fixed on the qBittorrent side: an explicit connection test tries again and lifts the block.
+        server.AcceptLogin = true;
+        server.ValidSid = "sid-2";
+        Assert.True((await client.TestConnectionAsync()).Success);
+        Assert.Equal(2, server.Logins);
+        Assert.True((await client.GetTorrentsAsync()).Success);
+        Assert.Equal(2, server.Logins);
+    }
+
     [Fact]
     public async Task GetTorrentsAsync_NonJsonBody_ReturnsUnexpectedResponseFailure()
     {
