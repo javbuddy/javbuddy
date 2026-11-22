@@ -60,10 +60,11 @@
     private bool busy;
     private string? message;
     private bool failed;
-    private CancellationTokenSource? pollCts;
+    private VideoJobFollower follower = null!;
 
     protected override void OnInitialized()
     {
+        follower = new VideoJobFollower(InvokeAsync);
         // Reattach to a write that's still running (e.g. the player was closed and reopened).
         if (ChapterWriter.GetRunningJob(MovieId) is { } job)
         {
@@ -111,56 +112,32 @@
         }
     }
 
+    // Progress lives on the job (written from the ffmpeg thread), so re-render once a second
+    // until the job's Task finishes.
     private void Follow(VideoRepairJob job)
     {
         runningJob = job;
         message = null;
-        pollCts?.Cancel();
-        pollCts = new CancellationTokenSource();
-        _ = PollAsync(job, pollCts.Token);
-    }
-
-    // Progress lives on the job (written from the ffmpeg thread), so re-render once a second
-    // until the job's Task finishes.
-    private async Task PollAsync(VideoRepairJob job, CancellationToken ct)
-    {
-        try
-        {
-            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
-            while (job.Task is { IsCompleted: false } && await timer.WaitForNextTickAsync(ct))
+        follower.Follow(job, "Writing chapters",
+            onTick: () =>
             {
-                await InvokeAsync(StateHasChanged);
-            }
-            if (ct.IsCancellationRequested || job.Task is null) return;
-
-            string text;
-            bool isError;
-            try
-            {
-                var result = await job.Task;
-                (text, isError) = result.Success
-                    ? ($"Chapters written into {job.FileName}.", false)
-                    : (result.ErrorMessage ?? "Writing chapters failed.", true);
-            }
-            catch (OperationCanceledException)
-            {
-                (text, isError) = ("Writing chapters was cancelled.", true);
-            }
-            catch (Exception)
-            {
-                (text, isError) = ("Writing chapters failed; see the server log.", true);
-            }
-
-            await InvokeAsync(() =>
+                StateHasChanged();
+                return Task.CompletedTask;
+            },
+            onFinished: error =>
             {
                 runningJob = null;
-                Show(text, isError);
+                if (error is null)
+                {
+                    Show($"Chapters written into {job.FileName}.", isError: false);
+                }
+                else
+                {
+                    Show(error, isError: true);
+                }
                 StateHasChanged();
+                return Task.CompletedTask;
             });
-        }
-        catch (OperationCanceledException)
-        {
-        }
     }
 
     private void Show(string text, bool isError)
@@ -171,7 +148,6 @@
 
     public void Dispose()
     {
-        pollCts?.Cancel();
-        pollCts?.Dispose();
+        follower.Dispose();
     }
 }

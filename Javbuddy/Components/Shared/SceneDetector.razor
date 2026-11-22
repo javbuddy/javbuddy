@@ -85,13 +85,14 @@
     private string? message;
     private bool failed;
     private OpeningPrompt? openingPrompt;
-    private CancellationTokenSource? pollCts;
+    private VideoJobFollower follower = null!;
     // Whether the followed scan listed anything, so "none found" isn't said after accepting them all.
     private bool foundDuringScan;
     private int loads;
 
     protected override async Task OnInitializedAsync()
     {
+        follower = new VideoJobFollower(InvokeAsync);
         await LoadSuggestionsAsync();
         if (Detection.GetRunningJob(MovieId) is { } job)
         {
@@ -144,42 +145,13 @@
     {
         runningJob = job;
         foundDuringScan = suggestions.Count > 0;
-        pollCts?.Cancel();
-        pollCts = new CancellationTokenSource();
-        _ = PollAsync(job, pollCts.Token);
-    }
-
-    private async Task PollAsync(VideoRepairJob job, CancellationToken ct)
-    {
-        try
-        {
-            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
-            while (job.Task is { IsCompleted: false } && await timer.WaitForNextTickAsync(ct))
+        follower.Follow(job, "Scene detection",
+            onTick: async () =>
             {
-                await InvokeAsync(async () =>
-                {
-                    await RefreshSuggestionsAsync();
-                    StateHasChanged();
-                });
-            }
-            if (ct.IsCancellationRequested || job.Task is null) return;
-
-            string? error;
-            try
-            {
-                var result = await job.Task;
-                error = result.Success ? null : result.ErrorMessage ?? "Scene detection failed.";
-            }
-            catch (OperationCanceledException)
-            {
-                error = "Scene detection was cancelled.";
-            }
-            catch (Exception)
-            {
-                error = "Scene detection failed; see the server log.";
-            }
-
-            await InvokeAsync(async () =>
+                await RefreshSuggestionsAsync();
+                StateHasChanged();
+            },
+            onFinished: async error =>
             {
                 runningJob = null;
                 await LoadSuggestionsAsync();
@@ -193,10 +165,6 @@
                 }
                 StateHasChanged();
             });
-        }
-        catch (OperationCanceledException)
-        {
-        }
     }
 
     private bool AsksForOpeningScene(SceneSuggestionItem suggestion) =>
@@ -310,7 +278,6 @@
 
     public void Dispose()
     {
-        pollCts?.Cancel();
-        pollCts?.Dispose();
+        follower.Dispose();
     }
 }
