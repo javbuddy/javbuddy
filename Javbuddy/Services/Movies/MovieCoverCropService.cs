@@ -150,7 +150,7 @@ public class MovieCoverCropService(
             var remoteUrl = movie?.MetaBackdropUrl ?? movie?.MetaCoverUrl;
             if (!string.IsNullOrWhiteSpace(remoteUrl))
             {
-                var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(), remoteUrl, ct);
+                var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(RemoteImageDownloader.ImportClientName), remoteUrl, ct);
                 if (download.Success) return download.Bytes;
                 logger.LogWarning(download.Error, "Failed to download remote backdrop for {Code} from {Url}: {Failure}", code, remoteUrl, download.Failure);
             }
@@ -170,7 +170,7 @@ public class MovieCoverCropService(
             var remoteUrl = movie?.MetaCoverUrl;
             if (!string.IsNullOrWhiteSpace(remoteUrl))
             {
-                var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(), remoteUrl, ct);
+                var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(RemoteImageDownloader.ImportClientName), remoteUrl, ct);
                 if (download.Success) return download.Bytes;
                 logger.LogWarning(download.Error, "Failed to download remote poster for {Code} from {Url}: {Failure}", code, remoteUrl, download.Failure);
             }

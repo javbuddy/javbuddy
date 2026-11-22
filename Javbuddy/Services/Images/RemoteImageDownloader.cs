@@ -50,8 +50,9 @@ public static class RemoteImageDownloader
         || mediaType.StartsWith("image/", StringComparison.Ordinal)
         || mediaType is "application/octet-stream" or "binary/octet-stream";
 
-    /// <summary>Downloads an image a metadata provider handed us (<paramref name="url"/> is not user-typed, so this takes the
-    /// plain client rather than the public-address-only import one) with the size cap, timeout and media-type check.</summary>
+    /// <summary>Downloads an image a metadata provider handed us (<paramref name="url"/> is not user-typed, but it can still come from a local .nfo or a
+    /// scraped page, so callers pass the public-address-only <see cref="ImportClientName"/> client) with the size cap, timeout
+    /// and media-type check.</summary>
     public static Task<RemoteImageDownloadResult> DownloadProviderImageAsync(HttpClient client, string? url, CancellationToken ct)
     {
         var failure = TryParseUrl(url, out var uri);
@@ -86,7 +87,7 @@ public static class RemoteImageDownloader
         return RemoteImageDownloadFailure.None;
     }
 
-    /// <summary>Name of the IHttpClientFactory client for user-supplied image URLs; its handler
+    /// <summary>Name of the IHttpClientFactory client for user-supplied and provider/.nfo image URLs; its handler
     /// refuses local and private addresses (<see cref="PublicAddressGuard"/>).</summary>
     public const string ImportClientName = "UserImageImport";
 

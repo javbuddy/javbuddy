@@ -628,7 +628,7 @@ public class ActorImageCacheService(
             return (null, null);
         }
 
-        var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(), remoteImageUrl, ct);
+        var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(RemoteImageDownloader.ImportClientName), remoteImageUrl, ct);
         if (download.Bytes is not { } sourceBytes)
         {
             logger?.LogWarning(download.Error, "Failed to download remote actor image for actor {ActorId} from {Url}: {Failure}", actorId, remoteImageUrl, download.Failure);

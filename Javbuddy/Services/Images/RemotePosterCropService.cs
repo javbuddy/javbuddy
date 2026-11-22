@@ -58,7 +58,7 @@ public class RemotePosterCropService(IHttpClientFactory httpClientFactory, ILoca
         var existingList = await db.CachedImages.AsNoTracking().Where(c =>
             c.Code == code && c.Role == LocalImageCacheService.RolePoster && c.Index == 0).ToListAsync(ct);
 
-        var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(), coverUrl, ct);
+        var download = await RemoteImageDownloader.DownloadProviderImageAsync(httpClientFactory.CreateClient(RemoteImageDownloader.ImportClientName), coverUrl, ct);
         if (download.Bytes is not { } sourceBytes) return null;
 
         byte[] thumbBytes;

@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Provider and .nfo image downloads (movie covers, posters, actor photos) can no longer reach private addresses.** They now use the same public-address-only HTTP client as "Import image from URL", so a cover URL in a local .nfo can't make the server fetch from loopback, the LAN or cloud metadata addresses.
 - **An actor `<thumb>` in a movie's .nfo can no longer point at files outside the movie's folder.** The check normalizes the folder and requires a path separator, so `../ABC-1234/x.jpg` from `ABC-123` is refused, and only supported image types are returned.
 - **The clip editor and Movie Detail's scenes section reload a movie's clips from one effective-actors load** (as Movie Detail itself does) instead of one per scenes, highlights and apexes service, after every edit and whenever generated media lands.
 - **Movie Detail loads a movie's scenes, highlights and apexes from one load of its effective actors** instead of three, and **"Play all" / "Shuffle" on the Scenes wall read a light playlist** (id, title, times and Jellyfin ids of the clips with a local video) instead of building every clip card in the library.

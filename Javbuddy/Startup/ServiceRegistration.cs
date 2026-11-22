@@ -76,7 +76,7 @@ public static class ServiceRegistration
             .ConfigureHttpClient(client => client.DefaultRequestHeaders.UserAgent.ParseAdd(DefaultUserAgent))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false });
         // "Import image from URL" (actor portrait, movie cover, movie extrafanart) fetches a URL the user
-        // pasted; its handler refuses local and private addresses so the field can't be used to reach
+        // pasted, and provider image downloads fetch URLs scraped or read from a local .nfo; its handler refuses local and private addresses so the field can't be used to reach
         // the server itself or its network (see PublicAddressGuard).
         services.AddHttpClient(RemoteImageDownloader.ImportClientName)
             .ConfigureHttpClient(client => client.DefaultRequestHeaders.UserAgent.ParseAdd(DefaultUserAgent))
