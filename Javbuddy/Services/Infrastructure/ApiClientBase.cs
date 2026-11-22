@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Javbuddy.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,7 +6,7 @@ namespace Javbuddy.Services.Infrastructure;
 
 /// <summary>Shared plumbing for the external-integration clients (Javinizer, Jellyfin,
 /// Prowlarr, QBittorrent): URL joining, base/external URL resolution, and the
-/// CTS-timeout + "timed out"/"could not reach" error-mapping wrapper that used to be hand-copied
+/// CTS-timeout + "timed out"/"could not reach"/"unexpected response" error-mapping wrapper that used to be hand-copied
 /// into every method of every client. Auth and per-endpoint request/response shape stay in the
 /// derived client, since those genuinely differ per integration (Bearer token, API-key header,
 /// API-key query param, cookie session).</summary>
@@ -69,6 +70,11 @@ public abstract class ApiClientBase<TSettings>(IHttpClientFactory httpClientFact
         catch (HttpRequestException ex)
         {
             return onFailure($"Could not reach {ServiceName}: {ex.Message}");
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            // A 2xx with a non-JSON body (an HTML proxy/login page) or an unsupported content type.
+            return onFailure($"Unexpected response from {ServiceName}.");
         }
     }
 

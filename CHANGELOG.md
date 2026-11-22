@@ -6,6 +6,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **A non-JSON response from an integration (an HTML proxy or login page served with a 200) is reported as "Unexpected response from {service}."** instead of throwing, so it no longer silently stops the Activity Queue live progress updates.
+
 - **The Movies grid text and code-prefix filters and the Scenes, Highlights and Apex wall search treat `%` and `_` as ordinary characters**, like the header search.
 - **Image downloads from URLs (imports, providers, .nfo) bypass any HTTP(S)_PROXY**, so the private-address check sees the image host rather than the proxy. Behind a proxy-only network, remote image downloads will fail.
 - **Actor thumbnails from a movie's .nfo must be a supported image type** (.jpg, .jpeg, .png, .webp, .jfif); older `.tbn`, `.gif` and `.bmp` thumbs are no longer used, and provider/.nfo image URLs on a private network address are no longer fetched.

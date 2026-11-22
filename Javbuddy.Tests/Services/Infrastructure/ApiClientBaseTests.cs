@@ -108,6 +108,41 @@ public class ApiClientBaseTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_MapsNonJsonBody_ToUnexpectedResponseMessage()
+    {
+        var handler = new FakeHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("<html>login</html>", System.Text.Encoding.UTF8, "application/json")
+        }));
+        var client = new TestApiClient(new FakeHttpClientFactory(handler), settings: null);
+
+        var result = await client.ExecuteTestAsync(
+            TimeSpan.FromSeconds(5),
+            async (http, ct) =>
+            {
+                using var response = await http.GetAsync("http://example.test/", ct);
+                var body = await response.Content.ReadFromJsonAsync<List<string>>(cancellationToken: ct);
+                return string.Join(",", body!);
+            },
+            failure => failure);
+
+        Assert.Equal("Unexpected response from TestService.", result);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_MapsNotSupportedException_ToUnexpectedResponseMessage()
+    {
+        var client = new TestApiClient(Substitute.For<IHttpClientFactory>(), settings: null);
+
+        var result = await client.ExecuteTestAsync(
+            TimeSpan.FromSeconds(5),
+            (_, _) => throw new NotSupportedException("content type"),
+            failure => failure);
+
+        Assert.Equal("Unexpected response from TestService.", result);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_MapsTimeoutToTimedOutMessage_WithoutCancellingCallersToken()
     {
         var client = new TestApiClient(Substitute.For<IHttpClientFactory>(), settings: null);

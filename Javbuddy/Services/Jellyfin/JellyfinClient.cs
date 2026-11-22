@@ -141,15 +141,8 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
                     return null;
                 }
 
-                try
-                {
-                    var info = await response.Content.ReadFromJsonAsync<JellyfinSystemInfoDto>(cancellationToken: token);
-                    return info?.Id;
-                }
-                catch (System.Text.Json.JsonException)
-                {
-                    return null;
-                }
+                var info = await response.Content.ReadFromJsonAsync<JellyfinSystemInfoDto>(cancellationToken: token);
+                return info?.Id;
             },
             _ => null);
 
@@ -188,37 +181,30 @@ public class JellyfinClient : ApiClientBase<JellyfinSettings>, IJellyfinClient
                 var trimmed = name.Trim();
                 var url = CombineUrl(settings.BaseUrl!, $"/Persons/{Uri.EscapeDataString(trimmed)}");
 
-                try
+                using var response = await GetAsync(client, url, settings.ApiKey!, token);
+                if (response.IsSuccessStatusCode)
                 {
-                    using var response = await GetAsync(client, url, settings.ApiKey!, token);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        return await response.Content.ReadFromJsonAsync<JellyfinPersonDto>(cancellationToken: token);
-                    }
-
-                    var searchUrl = CombineUrl(settings.BaseUrl!, "/Persons")
-                        + $"?searchTerm={Uri.EscapeDataString(trimmed)}&limit=5";
-
-                    using var searchResponse = await GetAsync(client, searchUrl, settings.ApiKey!, token);
-                    if (searchResponse.IsSuccessStatusCode)
-                    {
-                        var queryResult = await searchResponse.Content.ReadFromJsonAsync<JellyfinQueryResultDto>(cancellationToken: token);
-                        var matched = queryResult?.Items?
-                            .FirstOrDefault(i => string.Equals(i.Name, trimmed, StringComparison.OrdinalIgnoreCase));
-                        if (matched is not null && !string.IsNullOrWhiteSpace(matched.Id))
-                        {
-                            return new JellyfinPersonDto
-                            {
-                                Id = matched.Id,
-                                Name = matched.Name,
-                                ServerId = matched.ServerId
-                            };
-                        }
-                    }
+                    return await response.Content.ReadFromJsonAsync<JellyfinPersonDto>(cancellationToken: token);
                 }
-                catch (System.Text.Json.JsonException)
+
+                var searchUrl = CombineUrl(settings.BaseUrl!, "/Persons")
+                    + $"?searchTerm={Uri.EscapeDataString(trimmed)}&limit=5";
+
+                using var searchResponse = await GetAsync(client, searchUrl, settings.ApiKey!, token);
+                if (searchResponse.IsSuccessStatusCode)
                 {
-                    return null;
+                    var queryResult = await searchResponse.Content.ReadFromJsonAsync<JellyfinQueryResultDto>(cancellationToken: token);
+                    var matched = queryResult?.Items?
+                        .FirstOrDefault(i => string.Equals(i.Name, trimmed, StringComparison.OrdinalIgnoreCase));
+                    if (matched is not null && !string.IsNullOrWhiteSpace(matched.Id))
+                    {
+                        return new JellyfinPersonDto
+                        {
+                            Id = matched.Id,
+                            Name = matched.Name,
+                            ServerId = matched.ServerId
+                        };
+                    }
                 }
 
                 return null;

@@ -9,6 +9,43 @@ namespace Javbuddy.Tests.Services.QBittorrent;
 public class QBittorrentClientTests
 {
     [Fact]
+    public async Task GetTorrentsAsync_NonJsonBody_ReturnsUnexpectedResponseFailure()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.QBittorrentSettings.Add(new QBittorrentSettings
+            {
+                BaseUrl = "http://localhost:8080",
+                Username = "admin",
+                Password = "adminadmin"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var handler = new FakeHttpMessageHandler((req, _) =>
+        {
+            if (req.RequestUri?.AbsolutePath == "/api/v2/auth/login")
+            {
+                var login = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("Ok.") };
+                login.Headers.Add("Set-Cookie", "SID=fake-sid-123; Path=/");
+                return Task.FromResult(login);
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("<html>proxy login</html>", System.Text.Encoding.UTF8, "application/json")
+            });
+        });
+
+        var client = new QBittorrentClient(new FakeHttpClientFactory(handler), factory, new ConfigurationBuilder().Build());
+        var result = await client.GetTorrentsAsync();
+
+        Assert.False(result.Success);
+        Assert.Equal("Unexpected response from qBittorrent.", result.ErrorMessage);
+    }
+
+    [Fact]
     public async Task TestConnectionAsync_ReturnsSuccess_WithVersion()
     {
         using var factory = new TestDbContextFactory();
