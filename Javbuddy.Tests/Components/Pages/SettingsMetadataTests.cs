@@ -114,7 +114,7 @@ public class SettingsMetadataTests : BunitContext
         var sectionOf = (string tile) => cut.FindAll("section.metadata-section").Single(sec => sec.TextContent.Contains(tile)).QuerySelector("h2")!.TextContent;
         Assert.Equal("Sources", sectionOf("r18.dev"));
         Assert.Equal("Discovery", sectionOf("Studio sources"));
-        Assert.Contains("2 of 2 enabled", cut.Markup);
+        Assert.Contains("0 of 2 enabled", cut.Markup);
 
         // Verify StatusTiles
         Assert.Contains("Local Library", cut.Markup);
@@ -375,8 +375,9 @@ public class SettingsMetadataTests : BunitContext
         var cut = Render<SettingsMetadata>();
 
         cut.FindAll(".status-tile").Single(t => t.TextContent.Contains("Studio sources")).Click();
-        cut.Find("#discovery-Moodyz").Change(false);
-        cut.Find("#discovery-Moodyz").Closest("form")!.Submit();
+        Assert.False(cut.Find("#discovery-S1").HasAttribute("checked"));
+        cut.Find("#discovery-S1").Change(true);
+        cut.Find("#discovery-S1").Closest("form")!.Submit();
 
         cut.WaitForAssertion(() => Assert.Contains("1 of 2 enabled", cut.Markup));
         await using var db = await factory.CreateDbContextAsync();

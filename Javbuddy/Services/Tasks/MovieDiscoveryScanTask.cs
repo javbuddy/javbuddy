@@ -2,7 +2,7 @@ using Javbuddy.Services.MovieDiscovery;
 
 namespace Javbuddy.Services.Tasks;
 
-public class MovieDiscoveryScanTask(IMovieDiscoveryService discoveryService) : IScheduledTask
+public class MovieDiscoveryScanTask(IMovieDiscoveryService discoveryService, IDiscoverySettingsService settings) : IScheduledTask
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromDays(7);
 
@@ -10,12 +10,14 @@ public class MovieDiscoveryScanTask(IMovieDiscoveryService discoveryService) : I
 
     public string Description =>
         "Scans studio sites (currently S1) for new and upcoming releases not yet tracked, " +
-        "surfacing them on Movies > Discover.";
+        "surfacing them on Movies > Discover. Does nothing until a source is enabled in Settings > Metadata.";
 
     public TimeSpan GetInterval() => DefaultInterval;
 
     public async Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress)
     {
+        if (!await settings.IsAnyEnabledAsync(ct)) return "discovery is off (enable a source in Settings > Metadata)";
+
         var result = await discoveryService.RunScanAsync(progress, ct);
         return $"found {result.TotalFound}, {result.NewCount} new, {result.AlreadyTrackedCount} already tracked";
     }

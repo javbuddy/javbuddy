@@ -15,7 +15,10 @@
                 <div class="nav-subitems">
                     <NavLink class="nav-sublink" href="add/new">Add New</NavLink>
                     <NavLink class="nav-sublink" href="add/import">Library Import</NavLink>
-                    <NavLink class="nav-sublink" href="movies/discover">Discover</NavLink>
+                    @if (discoveryEnabled)
+                    {
+                        <NavLink class="nav-sublink" href="movies/discover">Discover</NavLink>
+                    }
                     <NavLink class="nav-sublink" href="movies/tags">Tags</NavLink>
                     <NavLink class="nav-sublink" href="movies/scenes">Scenes</NavLink>
                     <NavLink class="nav-sublink" href="movies/review">Review</NavLink>
@@ -144,8 +147,10 @@
     [Inject] private TorrentChangeNotifier TorrentChangeNotifier { get; set; } = default!;
     [Inject] private ScheduledTaskChangeNotifier ScheduledTaskChangeNotifier { get; set; } = default!;
     [Inject] private TaskActivityTracker TaskActivities { get; set; } = default!;
+    [Inject] private Javbuddy.Services.MovieDiscovery.IDiscoverySettingsService DiscoverySettings { get; set; } = default!;
     [Inject] private ILogger<NavMenu> Logger { get; set; } = default!;
 
+    private bool discoveryEnabled;
     private int activeTorrentCount;
     private ScheduledTaskRun? activeTask;
     private TaskActivity? manualActivity;
@@ -161,9 +166,22 @@
         Nav.LocationChanged += OnLocationChanged;
         await LoadActiveTorrentCountAsync();
         await LoadActiveTaskAsync();
+        discoveryEnabled = await DiscoverySettings.IsAnyEnabledAsync();
     }
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+    // Re-read on navigation so enabling discovery in Settings shows the Discover link without a reload.
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => _ = InvokeAsync(async () =>
+    {
+        try
+        {
+            discoveryEnabled = await DiscoverySettings.IsAnyEnabledAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not refresh the Discover nav link");
+        }
+        StateHasChanged();
+    });
 
     private async Task LoadActiveTorrentCountAsync()
     {

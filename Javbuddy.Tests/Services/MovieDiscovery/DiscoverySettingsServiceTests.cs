@@ -16,7 +16,7 @@ public class DiscoverySettingsServiceTests
     }
 
     [Fact]
-    public async Task GetSourcesAsync_NoRows_EverySourceIsEnabled()
+    public async Task GetSourcesAsync_NoRows_EverySourceIsDisabled()
     {
         using var factory = new TestDbContextFactory();
         var service = new DiscoverySettingsService([Source("S1", "/s1.png"), Source("Moodyz")], factory);
@@ -24,7 +24,8 @@ public class DiscoverySettingsServiceTests
         var sources = await service.GetSourcesAsync();
 
         Assert.Equal(["S1", "Moodyz"], sources.Select(s => s.SourceName));
-        Assert.All(sources, s => Assert.True(s.Enabled));
+        Assert.All(sources, s => Assert.False(s.Enabled));
+        Assert.False(await service.IsAnyEnabledAsync());
         Assert.Equal("/s1.png", sources[0].LogoUrl);
     }
 
@@ -35,6 +36,7 @@ public class DiscoverySettingsServiceTests
         var service = new DiscoverySettingsService([Source("S1"), Source("Moodyz")], factory);
 
         await service.SaveAsync(new Dictionary<string, bool> { ["S1"] = false, ["Moodyz"] = true });
+        Assert.True(await service.IsAnyEnabledAsync());
         var afterDisable = await service.GetSourcesAsync();
         await service.SaveAsync(new Dictionary<string, bool> { ["S1"] = true });
         var afterEnable = await service.GetSourcesAsync();
@@ -65,7 +67,7 @@ public class DiscoverySettingsServiceTests
         var disabled = Source("Off");
         var enabled = Source("On");
         enabled.ScanAsync(Arg.Any<CancellationToken>()).Returns([new DiscoveredMovieItem("SIVR-501", "Title", "S1", "https://example.com/c.jpg", [], [], null, false)]);
-        await new DiscoverySettingsService([disabled, enabled], factory).SaveAsync(new Dictionary<string, bool> { ["Off"] = false });
+        await new DiscoverySettingsService([disabled, enabled], factory).SaveAsync(new Dictionary<string, bool> { ["Off"] = false, ["On"] = true });
         var service = new MovieDiscoveryService([disabled, enabled], factory, Substitute.For<Javbuddy.Services.Movies.IMovieAddService>(), TimeProvider.System);
 
         var result = await service.RunScanAsync();

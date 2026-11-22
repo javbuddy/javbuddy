@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** movie discovery is now opt-in and off by default. If you use Movies > Discover, open Settings > Metadata > Studio sources after upgrading and enable your sources; until you do, the Discover link is hidden and the weekly Movie Discovery Scan does nothing. Sources you had saved as on or off keep that setting; a source you never touched is now off. Releases already found stay listed on Movies > Discover.
+
 ### Added
 
 - **`R18Dev__Enabled` environment variable** turns the r18.dev metadata source on or off, like the Jellyfin, DeoVR and trickplay overrides. Set, it overrides the Enable setting in Settings > Metadata, which then shows it read-only.

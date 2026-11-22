@@ -7,6 +7,7 @@ using Javbuddy.Services.MovieDiscovery;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Pages;
@@ -18,6 +19,29 @@ public class MovieDiscoverTests : BunitContext
         // Each studio section's VirtualizedGrid imports its JS module on first render; nothing here
         // exercises the module itself.
         JSInterop.Mode = JSRuntimeMode.Loose;
+        SetDiscoveryEnabled(true);
+    }
+
+    private void SetDiscoveryEnabled(bool enabled)
+    {
+        var settings = Substitute.For<IDiscoverySettingsService>();
+        settings.IsAnyEnabledAsync(Arg.Any<CancellationToken>()).Returns(enabled);
+        Services.AddSingleton(settings);
+    }
+
+    [Fact]
+    public void MovieDiscover_DiscoveryOff_ShowsEnableNoticeAndDisablesScanNow()
+    {
+        Services.RemoveAll<IDiscoverySettingsService>();
+        SetDiscoveryEnabled(false);
+        var discoveryService = Substitute.For<IMovieDiscoveryService>();
+        discoveryService.GetCandidateSectionsAsync(Arg.Any<CancellationToken>()).Returns([]);
+        Services.AddSingleton(discoveryService);
+
+        var cut = Render<MovieDiscover>();
+
+        Assert.Contains("Movie discovery is off", cut.Find(".discover-disabled-notice").TextContent);
+        Assert.True(cut.Find(".discover-top-bar-actions button").HasAttribute("disabled"));
     }
 
     private static DiscoveredMovieCandidate Candidate(int id, string code, string title = "Title", bool isUpcoming = false, DateTime? releaseDate = null) =>

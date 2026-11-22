@@ -9,8 +9,12 @@ public sealed record DiscoverySourceStatus(string SourceName, string? LogoUrl, b
 
 public interface IDiscoverySettingsService
 {
-    /// <summary>Every registered source with its enabled flag (enabled unless a row says otherwise).</summary>
+    /// <summary>Every registered source with its enabled flag (disabled unless a row says otherwise).</summary>
     Task<IReadOnlyList<DiscoverySourceStatus>> GetSourcesAsync(CancellationToken ct = default);
+
+    /// <summary>Whether discovery is on, i.e. at least one registered source is enabled. Discovery is off until the
+    /// user enables a source; the Discover entry points and the scan follow this.</summary>
+    Task<bool> IsAnyEnabledAsync(CancellationToken ct = default);
 
     /// <summary>Saves the enabled flag of each named source; names that aren't registered are ignored.</summary>
     Task SaveAsync(IReadOnlyDictionary<string, bool> enabledBySource, CancellationToken ct = default);
@@ -24,9 +28,12 @@ public class DiscoverySettingsService(IEnumerable<IStudioDiscoverySource> source
     public async Task<IReadOnlyList<DiscoverySourceStatus>> GetSourcesAsync(CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var disabled = await DisabledSourceNamesAsync(db, ct);
-        return sources.Select(s => new DiscoverySourceStatus(s.SourceName, s.Logo?.Url, !disabled.Contains(s.SourceName))).ToList();
+        var enabled = await EnabledSourceNamesAsync(db, ct);
+        return sources.Select(s => new DiscoverySourceStatus(s.SourceName, s.Logo?.Url, enabled.Contains(s.SourceName))).ToList();
     }
+
+    public async Task<bool> IsAnyEnabledAsync(CancellationToken ct = default) =>
+        (await GetSourcesAsync(ct)).Any(s => s.Enabled);
 
     public async Task SaveAsync(IReadOnlyDictionary<string, bool> enabledBySource, CancellationToken ct = default)
     {
@@ -51,8 +58,8 @@ public class DiscoverySettingsService(IEnumerable<IStudioDiscoverySource> source
         await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>Names of sources switched off; the scan skips exactly these.</summary>
-    public static async Task<HashSet<string>> DisabledSourceNamesAsync(AppDbContext db, CancellationToken ct = default) =>
-        (await db.DiscoverySourceSettings.AsNoTracking().Where(s => !s.Enabled).Select(s => s.SourceName).ToListAsync(ct))
+    /// <summary>Names of sources switched on; the scan runs exactly these (a source with no row is off).</summary>
+    public static async Task<HashSet<string>> EnabledSourceNamesAsync(AppDbContext db, CancellationToken ct = default) =>
+        (await db.DiscoverySourceSettings.AsNoTracking().Where(s => s.Enabled).Select(s => s.SourceName).ToListAsync(ct))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }

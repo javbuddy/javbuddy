@@ -20,19 +20,19 @@ public class DiscoverySourcesSettingsTests(E2EFixture fixture)
         await Expect(sources.Locator(".status-tile-title", new() { HasText = "r18.dev" })).ToBeVisibleAsync();
 
         var tile = page.Locator(".status-tile", new() { HasText = "Studio sources" });
-        await Expect(tile).ToContainTextAsync("4 of 4 enabled");
+        await Expect(tile).ToContainTextAsync("0 of 4 enabled");
         await tile.ClickAsync();
-        await page.GetByLabel("Moodyz").UncheckAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).Last.ClickAsync();
-        await Expect(tile).ToContainTextAsync("3 of 4 enabled");
-
-        await page.ReloadAsync();
-        await Expect(page.Locator(".status-tile", new() { HasText = "Studio sources" })).ToContainTextAsync("3 of 4 enabled");
-
-        // restore, so the shared fixture's later tests see every source enabled
-        await page.Locator(".status-tile", new() { HasText = "Studio sources" }).ClickAsync();
         await page.GetByLabel("Moodyz").CheckAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).Last.ClickAsync();
-        await Expect(page.Locator(".status-tile", new() { HasText = "Studio sources" })).ToContainTextAsync("4 of 4 enabled");
+        await Expect(tile).ToContainTextAsync("1 of 4 enabled");
+
+        await page.ReloadAsync();
+        await Expect(page.Locator(".status-tile", new() { HasText = "Studio sources" })).ToContainTextAsync("1 of 4 enabled");
+
+        // restore, so the shared fixture's later tests see discovery off again (the default)
+        await page.Locator(".status-tile", new() { HasText = "Studio sources" }).ClickAsync();
+        await page.GetByLabel("Moodyz").UncheckAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Save", Exact = true }).Last.ClickAsync();
+        await Expect(page.Locator(".status-tile", new() { HasText = "Studio sources" })).ToContainTextAsync("0 of 4 enabled");
     }
 }

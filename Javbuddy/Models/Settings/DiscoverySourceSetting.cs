@@ -2,9 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Javbuddy.Models;
 
-/// <summary>Whether one studio discovery source (Movies &gt; Discover) is scanned. A source with no row is
-/// enabled, so a newly registered source works without being switched on first. Disabling only stops the
-/// scan; candidates already found stay listed.</summary>
+/// <summary>Whether one studio discovery source (Movies &gt; Discover) is scanned. Discovery is opt-in: a source
+/// with no row is disabled until the user switches it on in Settings. Disabling only stops the scan; candidates already found stay listed.</summary>
 public class DiscoverySourceSetting
 {
     public int Id { get; set; }
@@ -13,5 +12,5 @@ public class DiscoverySourceSetting
     [Required, StringLength(100)]
     public string SourceName { get; set; } = string.Empty;
 
-    public bool Enabled { get; set; } = true;
+    public bool Enabled { get; set; }
 }

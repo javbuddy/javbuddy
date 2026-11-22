@@ -50,7 +50,7 @@ else
         <section class="metadata-section">
             <h2 class="metadata-section-title">Discovery</h2>
             <div class="metadata-grid">
-                <StatusTile Title="Studio sources" Description="The studio sites Movies &gt; Discover scans for new and upcoming releases." Configured="discoverySources.Any(x => x.Enabled)" ConfiguredLabel="Enabled" NotConfiguredLabel="All disabled" Summary="@DiscoverySummary" OnOpen="OpenDiscoveryModal" />
+                <StatusTile Title="Studio sources" Description="The studio sites Movies &gt; Discover scans for new and upcoming releases." Configured="discoverySources.Any(x => x.Enabled)" ConfiguredLabel="Enabled" NotConfiguredLabel="Off" Summary="@DiscoverySummary" OnOpen="OpenDiscoveryModal" />
             </div>
         </section>
 
@@ -148,8 +148,9 @@ else
 {
     <SlideOverDrawer Show="showDiscoveryModal" Title="Studio sources" OnClose="CloseDiscoveryModal">
         <p class="text-muted">
-            Movies &gt; Discover scans each enabled studio site for new and upcoming releases. Switching a
-            source off only stops it being scanned; releases already found stay listed.
+            Movie discovery is off until you enable a source here. Movies &gt; Discover then scans each enabled
+            studio site for new and upcoming releases. Switching a source off only stops it being scanned;
+            releases already found stay listed.
         </p>
 
         <EditForm Model="discoveryEdits" OnValidSubmit="SaveDiscovery" FormName="discovery-sources">

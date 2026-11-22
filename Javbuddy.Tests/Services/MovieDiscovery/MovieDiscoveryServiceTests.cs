@@ -18,10 +18,32 @@ public class MovieDiscoveryServiceTests
         DateTime? releaseDate = null) =>
         new(code, title, "S1 NO.1 STYLE", "https://example.com/cover.jpg", galleryImageUrls ?? [], actressNames ?? [], releaseDate, isUpcoming);
 
+    private static async Task EnableSourcesAsync(TestDbContextFactory factory, params string[] names)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        db.DiscoverySourceSettings.AddRange(names.Select(n => new DiscoverySourceSetting { SourceName = n, Enabled = true }));
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task RunScanAsync_NoSourceEnabled_ScansNothing()
+    {
+        using var factory = new TestDbContextFactory();
+        var source = Substitute.For<IStudioDiscoverySource>();
+        source.SourceName.Returns("S1");
+        var service = new MovieDiscoveryService([source], factory, Substitute.For<IMovieAddService>(), TimeProvider.System);
+
+        var result = await service.RunScanAsync();
+
+        Assert.Equal(0, result.TotalFound);
+        await source.DidNotReceiveWithAnyArgs().ScanAsync(default);
+    }
+
     [Fact]
     public async Task RunScanAsync_NewCode_InsertsCandidateAsNew()
     {
         using var factory = new TestDbContextFactory();
+        await EnableSourcesAsync(factory, "S1");
         var source = Substitute.For<IStudioDiscoverySource>();
         source.SourceName.Returns("S1");
         source.ScanAsync(Arg.Any<CancellationToken>()).Returns([Item("SIVR-501", galleryImageUrls: ["https://example.com/one.jpg", "https://example.com/two.jpg"])]);
@@ -47,6 +69,7 @@ public class MovieDiscoveryServiceTests
     public async Task RunScanAsync_CodeAlreadyInLibrary_MarksExistingCandidateAddedAndDoesNotCreateNew()
     {
         using var factory = new TestDbContextFactory();
+        await EnableSourcesAsync(factory, "S1");
         await using (var db = await factory.CreateDbContextAsync())
         {
             db.Movies.Add(new Movie { Code = "SIVR-501" });
@@ -74,6 +97,7 @@ public class MovieDiscoveryServiceTests
     public async Task RunScanAsync_SeenAgainAfterDismissed_DoesNotResetStatusToNew()
     {
         using var factory = new TestDbContextFactory();
+        await EnableSourcesAsync(factory, "S1");
         await using (var db = await factory.CreateDbContextAsync())
         {
             db.DiscoveredMovieCandidates.Add(new DiscoveredMovieCandidate
@@ -110,6 +134,7 @@ public class MovieDiscoveryServiceTests
     public async Task RunScanAsync_OneSourceThrows_StillReturnsResultsFromOtherSources()
     {
         using var factory = new TestDbContextFactory();
+        await EnableSourcesAsync(factory, "Broken", "S1");
 
         var failingSource = Substitute.For<IStudioDiscoverySource>();
         failingSource.SourceName.Returns("Broken");
@@ -132,6 +157,7 @@ public class MovieDiscoveryServiceTests
     public async Task RunScanAsync_CancelledDuringASourceScan_PropagatesInsteadOfBeingLoggedAsASourceFailure()
     {
         using var factory = new TestDbContextFactory();
+        await EnableSourcesAsync(factory, "S1");
         using var cts = new CancellationTokenSource();
 
         var source = Substitute.For<IStudioDiscoverySource>();

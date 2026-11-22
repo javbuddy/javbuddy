@@ -94,12 +94,12 @@ public class MovieDiscoveryService(
     {
         var found = new List<(IStudioDiscoverySource Source, DiscoveredMovieItem Item)>();
 
-        HashSet<string> disabled;
+        HashSet<string> enabled;
         await using (var settingsDb = await dbFactory.CreateDbContextAsync(ct))
         {
-            disabled = await DiscoverySettingsService.DisabledSourceNamesAsync(settingsDb, ct);
+            enabled = await DiscoverySettingsService.EnabledSourceNamesAsync(settingsDb, ct);
         }
-        var enabledSources = sources.Where(s => !disabled.Contains(s.SourceName)).ToList();
+        var enabledSources = sources.Where(s => enabled.Contains(s.SourceName)).ToList();
 
         for (var i = 0; i < enabledSources.Count; i++)
         {

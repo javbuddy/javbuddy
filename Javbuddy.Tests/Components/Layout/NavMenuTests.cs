@@ -22,6 +22,8 @@ namespace Javbuddy.Tests.Components.Layout;
 /// <see cref="ScheduledTaskChangeNotifier"/> the same way.</summary>
 public class NavMenuTests : BunitContext
 {
+    private readonly Javbuddy.Services.MovieDiscovery.IDiscoverySettingsService discoverySettings = Substitute.For<Javbuddy.Services.MovieDiscovery.IDiscoverySettingsService>();
+
     private sealed class FakeTask(string name, bool showInTasksUi = true) : IScheduledTask
     {
         public string Name { get; } = name;
@@ -33,6 +35,7 @@ public class NavMenuTests : BunitContext
 
     private TestDbContextFactory SetUpServices(TorrentChangeNotifier? notifier = null, ScheduledTaskChangeNotifier? taskNotifier = null, params IScheduledTask[] tasks)
     {
+        Services.AddSingleton(discoverySettings);
         var factory = new TestDbContextFactory();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
         Services.AddSingleton(notifier ?? new TorrentChangeNotifier());
@@ -299,5 +302,20 @@ public class NavMenuTests : BunitContext
             Assert.Contains("Repaired BBB-002.mp4 (BBB-002).", cut.Find(".active-task-message").TextContent);
             Assert.Single(cut.FindAll(".active-task-result"));
         });
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void MoviesSection_ShowsTheDiscoverLinkOnlyWhenDiscoveryIsEnabled(bool enabled, bool expectLink)
+    {
+        discoverySettings.IsAnyEnabledAsync(Arg.Any<CancellationToken>()).Returns(enabled);
+        using var factory = SetUpServices();
+        Services.GetRequiredService<NavigationManager>().NavigateTo("movies/tags");
+
+        var cut = Render<NavMenu>();
+
+        Assert.Contains("add/new", cut.Markup);
+        Assert.Equal(expectLink, cut.Markup.Contains("movies/discover"));
     }
 }
