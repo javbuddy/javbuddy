@@ -93,4 +93,18 @@ public sealed class BackupSettingsServiceTests
         await fresh.GetEffectiveAsync();
         Assert.Equal(7, fresh.GetEffectiveCached().FrequencyDays);
     }
+
+    [Fact]
+    public async Task GetEffectiveAsync_ReadStartedBeforeASave_DoesNotOverwriteTheSavedValue()
+    {
+        using var env = new BackupTestEnvironment();
+        await env.Settings.SaveAsync(new BackupSettings { Enabled = false, RetentionDays = 10, FrequencyDays = 1 });
+        var fresh = new BackupSettingsService(env.Factory, env.Configuration);
+
+        var read = fresh.GetEffectiveAsync();
+        await fresh.SaveAsync(new BackupSettings { Enabled = true, RetentionDays = 10, FrequencyDays = 5 });
+        await read;
+
+        Assert.Equal(5, fresh.GetEffectiveCached().FrequencyDays);
+    }
 }

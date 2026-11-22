@@ -46,10 +46,21 @@ public sealed class BackupSettingsService(IDbContextFactory<AppDbContext> dbFact
             existing.FrequencyDays = ClampDays(form.FrequencyDays);
         });
 
+    private readonly Lock cacheGate = new();
     private volatile BackupSettings? cached;
+    private int version;
 
-    public async Task<BackupSettings> GetEffectiveAsync(CancellationToken ct = default) =>
-        cached = Apply(await GetStoredAsync(ct));
+    public async Task<BackupSettings> GetEffectiveAsync(CancellationToken ct = default)
+    {
+        var versionBefore = Volatile.Read(ref version);
+        var effective = Apply(await GetStoredAsync(ct));
+        // A save that landed while this read was in flight already cached newer values; don't overwrite them.
+        lock (cacheGate)
+        {
+            if (versionBefore == version) cached = effective;
+        }
+        return effective;
+    }
 
     public BackupSettings GetEffectiveCached()
     {
@@ -75,7 +86,11 @@ public sealed class BackupSettingsService(IDbContextFactory<AppDbContext> dbFact
             FrequencyDays = ClampDays(settings.FrequencyDays),
         };
         await repository.SaveAsync(clamped, ct);
-        cached = Apply(clamped);
+        lock (cacheGate)
+        {
+            version++;
+            cached = Apply(clamped);
+        }
     }
 
     public bool IsSetByEnvironment(string field) => field == nameof(BackupSettings.Enabled)
