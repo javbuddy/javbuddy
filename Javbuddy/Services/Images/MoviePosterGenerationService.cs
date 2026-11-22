@@ -80,10 +80,12 @@ public class MoviePosterGenerationService(
                     continue;
                 }
 
-                using var bitmap = SKBitmap.Decode(framePath);
-                if (bitmap is not null)
+                // Every full-frame decode runs under the gate, like the other image conversions, so a burst of
+                // generations can't stack their native bitmaps.
+                var score = await ImageConversionGate.RunAsync(() => ScoreFrame(framePath), ct);
+                if (score is { } value)
                 {
-                    candidates.Add((framePath, FrameScorer.Score(bitmap)));
+                    candidates.Add((framePath, value));
                 }
                 else
                 {
@@ -103,13 +105,13 @@ public class MoviePosterGenerationService(
 
             // Everything that can fail on a bad frame happens before the first file is written, so a failure never
             // leaves a lone fanart.webp behind (which would block generating it later).
-            var poster = needPoster ? CropToPoster(posterSource) : null;
+            var poster = needPoster ? await ImageConversionGate.RunAsync(() => CropToPoster(posterSource), ct) : null;
             if (needPoster && poster is null)
             {
                 return OperationResult.Fail("The video's frames are too small to make a poster from.");
             }
 
-            var fanart = needFanart ? EncodeWebp(fanartSource) : null;
+            var fanart = needFanart ? await ImageConversionGate.RunAsync(() => EncodeWebp(fanartSource), ct) : null;
             if (needFanart && fanart is null)
             {
                 return OperationResult.Fail("Couldn't convert the extracted frame to WebP.");
@@ -130,6 +132,13 @@ public class MoviePosterGenerationService(
 
         await localLibraryClient.SyncImagesSignatureAsync(movieId, ct);
         return OperationResult.Ok();
+    }
+
+    /// <summary>The frame's sharpness/exposure score, or null when it can't be decoded.</summary>
+    private static double? ScoreFrame(string framePath)
+    {
+        using var bitmap = SKBitmap.Decode(framePath);
+        return bitmap is null ? null : FrameScorer.Score(bitmap);
     }
 
     /// <summary>The frame re-encoded as WebP bytes, or null when it can't be decoded or encoded.</summary>

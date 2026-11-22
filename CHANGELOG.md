@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Generating a poster or extrafanart stills no longer bypasses the image-conversion limit.** The frame scoring and encoding decodes now wait for a free slot like every other image conversion, so a batch of generations can't pile up native image memory.
 - **Rescans no longer fully decode every poster.jpg.** The aspect ratio is read from the image header, and a poster is only decoded (under the image-conversion limit) when it actually needs cropping.
 - **Jellyfin Link Sync no longer waits out a timeout per item while Jellyfin is down.** It checks the connection first and skips the run if Jellyfin is unreachable, and stops after three failed lookups in a row.
 - **Library Rescan does far less filesystem work.** The subtitle, trailer, .nfo and image checks now run as one pass that finds each movie's folder once instead of four times, the run is skipped entirely when no library root is reachable, and .nfo conflict detection loads the library in chunks instead of all at once.

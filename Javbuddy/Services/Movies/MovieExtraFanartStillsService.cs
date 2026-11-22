@@ -121,14 +121,14 @@ public class MovieExtraFanartStillsService(
                         continue;
                     }
 
-                    using var bitmap = SKBitmap.Decode(framePath);
-                    if (bitmap is null)
+                    // Every full-frame decode runs under the gate, like the other image conversions.
+                    var frameScore = await ImageConversionGate.RunAsync(() => ScoreFrame(framePath), ct);
+                    if (frameScore is not { } score)
                     {
                         firstError ??= "the extracted frame couldn't be decoded";
                         continue;
                     }
 
-                    var score = FrameScorer.Score(bitmap);
                     if (best is null || score > best.Value.Score) best = (at, score, framePath);
                 }
                 if (best is null) continue;
@@ -136,7 +136,7 @@ public class MovieExtraFanartStillsService(
                 var chosenPath = Path.Combine(scratch, $"{id}.webp");
                 File.Move(best.Value.Path, chosenPath, overwrite: true);
                 foreach (var other in Directory.EnumerateFiles(scratch, $"{id}-*.webp")) File.Delete(other);
-                var preview = EncodeWebp(chosenPath, PreviewWidth, PreviewQuality);
+                var preview = await ImageConversionGate.RunAsync(() => EncodeWebp(chosenPath, PreviewWidth, PreviewQuality), ct);
                 if (preview is null) continue;
 
                 var still = new ExtraFanartStill(id, best.Value.Seconds, preview);
@@ -173,7 +173,8 @@ public class MovieExtraFanartStillsService(
         var encoded = new List<byte[]>();
         foreach (var still in chosen)
         {
-            var bytes = EncodeWebp(preview.FramePath(still.Id), maxWidth: null, quality);
+            var framePath = preview.FramePath(still.Id);
+            var bytes = await ImageConversionGate.RunAsync(() => EncodeWebp(framePath, maxWidth: null, quality), ct);
             if (bytes is null) return ExtraFanartResult.Fail("Couldn't convert an extracted frame to WebP.");
             // The limits AddAsync enforces, checked before Replace all deletes anything.
             if (bytes.LongLength > uploadSettings.MaxSizeBytes) return ExtraFanartResult.Fail($"A still is larger than {uploadSettings.MaxSizeMb} MB; lower the quality.");
@@ -211,6 +212,12 @@ public class MovieExtraFanartStillsService(
         var start = durationSeconds * EdgeSkipFraction;
         var slot = durationSeconds * (1 - 2 * EdgeSkipFraction) / count;
         return Enumerable.Range(0, count).Select(i => new[] { start + slot * (i + 0.25), start + slot * (i + 0.75) }).ToList();
+    }
+
+    private static double? ScoreFrame(string framePath)
+    {
+        using var bitmap = SKBitmap.Decode(framePath);
+        return bitmap is null ? null : FrameScorer.Score(bitmap);
     }
 
     private static byte[]? EncodeWebp(string sourcePath, int? maxWidth, int quality)
