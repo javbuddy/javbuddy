@@ -117,6 +117,33 @@ public class ActorPhotosTests : BunitContext
     }
 
     [Fact]
+    public void ResetFilters_DuringAPendingTextFilter_ClearsTheBoxAndDropsTheFilter()
+    {
+        var photos = new List<GlobalActorPhotoItem>
+        {
+            new(1, 101, "Mikami Yua", 10, "Summer Gravure", 1.5, DateTime.UtcNow),
+            new(2, 102, "Fukada Eimi", null, null, 1.33, DateTime.UtcNow),
+        };
+        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .Returns(photos);
+        photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
+            .Returns(new List<ActorWithPhotoCountSummary>());
+
+        var cut = Render<ActorPhotos>();
+        cut.Find("input[type='search']").Input("Fukada");
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".actor-photo-tile")));
+        cut.Find("input[type='search']").Input("zzz");
+
+        // Reset while the "zzz" filter is still pending: it must not apply afterwards.
+        cut.Find("button.btn-outline-secondary.dropdown-clear, [aria-label='Reset all filters']").Click();
+
+        Assert.Equal("", cut.Find("input[type='search']").GetAttribute("value") ?? "");
+        Assert.Equal(2, cut.FindAll(".actor-photo-tile").Count);
+        Thread.Sleep(500);
+        Assert.Equal(2, cut.FindAll(".actor-photo-tile").Count);
+    }
+
+    [Fact]
     public void ClickingPhoto_OpensLightbox_AndHandlesNextPrevClose()
     {
         var photos = new List<GlobalActorPhotoItem>

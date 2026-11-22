@@ -263,6 +263,28 @@ public class TagNormalizationTests
     }
 
     [Fact]
+    public async Task ApplyToLibraryAsync_AcrossSeveralChunks_CreatesEachTagOnceAndLinksEveryMovie()
+    {
+        using var factory = new TestDbContextFactory();
+        const int movieCount = 1100; // More than two chunks.
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.AddRange(Enumerable.Range(0, movieCount).Select(i => new Movie { Code = $"BIG-{i:0000}", MetaGenres = "Solo, Brand New" }));
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            Assert.Equal(movieCount, await TagNormalization.ApplyToLibraryAsync(db));
+        }
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.Equal(["Brand New", "Solo"], (await verifyDb.Tags.OrderBy(t => t.Name).Select(t => t.Name).ToListAsync()).ToArray());
+        Assert.Equal(movieCount * 2, await verifyDb.MovieTags.CountAsync());
+        Assert.All(await verifyDb.Movies.Select(m => m.MetaGenres).ToListAsync(), g => Assert.Equal("Brand New, Solo", g));
+    }
+
+    [Fact]
     public async Task ApplyToMovieAsync_AutoIgnoresNonLatinScript_WhenSettingEnabled()
     {
         using var factory = new TestDbContextFactory();

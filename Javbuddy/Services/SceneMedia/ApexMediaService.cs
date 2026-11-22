@@ -42,10 +42,6 @@ public static class ClipMediaExtensions
     public static bool IsMissingMedia(this ISceneMediaService media, long? thumbVersion, long? previewVersion) =>
         IsMissing(media.ServesVariant, thumbVersion, previewVersion);
 
-    /// <inheritdoc cref="IsMissingMedia(IApexMediaService, long?, long?)"/>
-    public static bool IsMissingMedia(this IHighlightMediaService media, long? thumbVersion, long? previewVersion) =>
-        IsMissing(media.ServesVariant, thumbVersion, previewVersion);
-
     private static bool IsMissing(Func<string, bool> servesVariant, long? thumbVersion, long? previewVersion) =>
         (thumbVersion is null && servesVariant(SceneMediaService.VariantThumb)) || (previewVersion is null && servesVariant(SceneMediaService.VariantPreview));
 }

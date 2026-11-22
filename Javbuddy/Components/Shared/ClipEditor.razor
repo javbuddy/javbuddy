@@ -328,7 +328,8 @@
             {
                 await SceneMedia.EnsureQueuedAsync(MovieId);
             }
-            if (highlights.Any(h => HighlightMedia.IsMissingMedia(h.ThumbVersion, h.PreviewVersion)))
+            // Highlights always ask: queueing also covers their trickplay, which no image-cache mode switches off.
+            if (highlights.Any(h => h.ThumbVersion is null || h.PreviewVersion is null))
             {
                 await HighlightMedia.EnsureQueuedAsync(MovieId);
             }

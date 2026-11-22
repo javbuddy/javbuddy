@@ -231,12 +231,11 @@ else
 
     private async Task OnTextFilterInput(ChangeEventArgs e)
     {
-        var value = e.Value?.ToString() ?? "";
+        textFilter = e.Value?.ToString() ?? "";
 
         // A newer keystroke supersedes this one, so the filter, sort and regrouping run once typing pauses.
         await textFilterDebouncer.RunAsync(_ =>
         {
-            textFilter = value;
             RebuildPhotos();
             return Task.CompletedTask;
         });

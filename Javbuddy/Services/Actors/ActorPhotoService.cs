@@ -2,6 +2,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Common;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using SkiaSharp;
 
@@ -127,16 +128,17 @@ public sealed class ActorPhotoService(
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var normalized = search.Trim().ToLower();
+            var pattern = SqlLike.Contains(search.Trim());
+            const string esc = SqlLike.EscapeChar;
             query = query.Where(p =>
                 (p.Actor != null && (
-                    (p.Actor.FirstName != null && p.Actor.FirstName.ToLower().Contains(normalized)) ||
-                    (p.Actor.LastName != null && p.Actor.LastName.ToLower().Contains(normalized)) ||
-                    (p.Actor.LastName != null && p.Actor.FirstName != null && (p.Actor.LastName + " " + p.Actor.FirstName).ToLower().Contains(normalized)) ||
-                    (p.Actor.FirstName != null && p.Actor.LastName != null && (p.Actor.FirstName + " " + p.Actor.LastName).ToLower().Contains(normalized)) ||
-                    (p.Actor.JapaneseNameKanji != null && p.Actor.JapaneseNameKanji.ToLower().Contains(normalized)) ||
-                    (p.Actor.JapaneseNameKana != null && p.Actor.JapaneseNameKana.ToLower().Contains(normalized)))) ||
-                (p.Album != null && p.Album.Name.ToLower().Contains(normalized)));
+                    (p.Actor.FirstName != null && EF.Functions.Like(p.Actor.FirstName, pattern, esc)) ||
+                    (p.Actor.LastName != null && EF.Functions.Like(p.Actor.LastName, pattern, esc)) ||
+                    (p.Actor.LastName != null && p.Actor.FirstName != null && EF.Functions.Like(p.Actor.LastName + " " + p.Actor.FirstName, pattern, esc)) ||
+                    (p.Actor.FirstName != null && p.Actor.LastName != null && EF.Functions.Like(p.Actor.FirstName + " " + p.Actor.LastName, pattern, esc)) ||
+                    (p.Actor.JapaneseNameKanji != null && EF.Functions.Like(p.Actor.JapaneseNameKanji, pattern, esc)) ||
+                    (p.Actor.JapaneseNameKana != null && EF.Functions.Like(p.Actor.JapaneseNameKana, pattern, esc)))) ||
+                (p.Album != null && EF.Functions.Like(p.Album.Name, pattern, esc)));
         }
 
         query = sort switch

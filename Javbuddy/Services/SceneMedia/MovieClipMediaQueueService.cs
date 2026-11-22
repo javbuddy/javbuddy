@@ -20,7 +20,8 @@ public class MovieClipMediaQueueService(ISceneMediaService sceneMedia, IHighligh
         {
             await sceneMedia.EnsureQueuedAsync(movieId, ct);
         }
-        if (highlights.Any(h => highlightMedia.IsMissingMedia(h.ThumbVersion, h.PreviewVersion)))
+        // Highlights always ask: queueing also covers their trickplay, which no image-cache mode switches off.
+        if (highlights.Any(h => h.ThumbVersion is null || h.PreviewVersion is null))
         {
             await highlightMedia.EnsureQueuedAsync(movieId, ct);
         }

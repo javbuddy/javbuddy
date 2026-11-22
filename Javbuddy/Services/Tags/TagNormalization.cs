@@ -76,7 +76,7 @@ public static class TagNormalization
     {
         var context = await LoadContextAsync(db, ct);
         // Only the id and the genre text are needed: the movies are not tracked, and the changed MetaGenres
-        // values are written back with ExecuteUpdate below instead of through full-row updates.
+        // values are written back with ExecuteUpdate below.
         var movies = await db.Movies
             .AsNoTracking()
             .Where(m => m.MetaGenres != null && m.MetaGenres != "")

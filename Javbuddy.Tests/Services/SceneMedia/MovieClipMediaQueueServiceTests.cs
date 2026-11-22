@@ -90,29 +90,34 @@ public class MovieClipMediaQueueServiceTests
     }
 
     [Fact]
-    public async Task ScenesAndHighlightsWithoutAPreviewInThumbnailsMode_AreNotAReasonToQueue()
+    public async Task ScenesWithoutAPreviewInThumbnailsMode_AreNotAReasonToQueue()
     {
         sceneMedia.ServesVariant(Arg.Any<string>()).Returns(false);
         sceneMedia.ServesVariant("thumb").Returns(true);
-        highlightMedia.ServesVariant(Arg.Any<string>()).Returns(false);
-        highlightMedia.ServesVariant("thumb").Returns(true);
 
-        await service.EnsureQueuedAsync(7, [Scene(1, null)], [Highlight(1, null)], []);
+        await service.EnsureQueuedAsync(7, [Scene(1, null)], [], []);
 
         await sceneMedia.DidNotReceiveWithAnyArgs().EnsureQueuedAsync(default, default);
-        await highlightMedia.DidNotReceiveWithAnyArgs().EnsureQueuedAsync(default, default);
     }
 
     [Fact]
-    public async Task ScenesAndHighlightsWithNoMediaWhenTheCacheIsDisabled_AreNotAReasonToQueue()
+    public async Task ScenesWithNoMediaWhenTheCacheIsDisabled_AreNotAReasonToQueue()
     {
         sceneMedia.ServesVariant(Arg.Any<string>()).Returns(false);
-        highlightMedia.ServesVariant(Arg.Any<string>()).Returns(false);
 
-        await service.EnsureQueuedAsync(7, [Scene(null, null)], [Highlight(null, null)], []);
+        await service.EnsureQueuedAsync(7, [Scene(null, null)], [], []);
 
         await sceneMedia.DidNotReceiveWithAnyArgs().EnsureQueuedAsync(default, default);
-        await highlightMedia.DidNotReceiveWithAnyArgs().EnsureQueuedAsync(default, default);
+    }
+
+    [Fact]
+    public async Task HighlightsWithNoMediaWhenTheCacheIsDisabled_StillQueue_ForTheirTrickplay()
+    {
+        highlightMedia.ServesVariant(Arg.Any<string>()).Returns(false);
+
+        await service.EnsureQueuedAsync(7, [], [Highlight(null, null)], []);
+
+        await highlightMedia.Received(1).EnsureQueuedAsync(7, Arg.Any<CancellationToken>());
     }
 
     [Fact]

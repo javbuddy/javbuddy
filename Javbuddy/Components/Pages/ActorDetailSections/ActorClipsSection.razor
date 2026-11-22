@@ -169,7 +169,7 @@
                 total = page.TotalCount;
                 highlightCards = append ? [.. highlightCards, .. page.Cards] : [.. page.Cards];
                 if (!queueMissingMedia) break;
-                foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion)), HighlightMedia.IsMissingMedia))
+                foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion)), (thumb, preview) => thumb is null || preview is null))
                 {
                     await HighlightMedia.EnsureQueuedAsync(movieId);
                 }

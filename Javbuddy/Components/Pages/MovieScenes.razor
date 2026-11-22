@@ -754,7 +754,7 @@
             windowStart = skip;
             loaded = true;
             if (!queueMissingMedia) return true;
-            foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion)), HighlightMedia.IsMissingMedia))
+            foreach (var movieId in MoviesMissingMedia(page.Cards.Select(c => (c.MovieId, c.ThumbVersion, c.PreviewVersion)), (thumb, preview) => thumb is null || preview is null))
             {
                 await HighlightMedia.EnsureQueuedAsync(movieId);
             }
