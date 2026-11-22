@@ -629,7 +629,14 @@ public class ImageCacheTaskTests
         var preview = new CachedImage { Code = "ABC-123", Role = "scene", Index = 1, Variant = "preview", StorageId = Guid.NewGuid() };
         using (var db = factory.CreateDbContext())
         {
-            db.Movies.Add(new Movie { Code = "ABC-123" });
+            var movie = new Movie { Code = "ABC-123" };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            // The row's Index is its scene's id, so the scene must exist for the row to be kept.
+            var scene = new Scene { MovieId = movie.Id, StartSeconds = 0 };
+            db.Scenes.Add(scene);
+            db.SaveChanges();
+            preview.Index = scene.Id;
             db.CachedImages.Add(preview);
             db.SaveChanges();
         }
@@ -728,6 +735,67 @@ public class ImageCacheTaskTests
         using var verifyDb = factory.CreateDbContext();
         var remaining = Assert.Single(verifyDb.CachedImages);
         Assert.Equal(0, remaining.Index);
+    }
+
+    [Fact]
+    public async Task RunAsync_SceneHighlightAndApexRowsOfDeletedItems_ArePruned_AndLiveOnesKept()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        int liveScene, liveHighlight, liveApex;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "ABC-123" };
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            var scene = new Scene { MovieId = movie.Id, StartSeconds = 0 };
+            var highlight = new MovieHighlight { MovieId = movie.Id, StartSeconds = 0, EndSeconds = 5 };
+            var apex = new MovieApex { MovieId = movie.Id, Seconds = 3 };
+            db.AddRange(scene, highlight, apex);
+            db.SaveChanges();
+            (liveScene, liveHighlight, liveApex) = (scene.Id, highlight.Id, apex.Id);
+
+            foreach (var (role, id) in new[] { ("scene", liveScene), ("highlight", liveHighlight), ("apex", liveApex) })
+            {
+                db.CachedImages.Add(new CachedImage { Code = "ABC-123", Role = role, Index = id, Variant = "thumb", StorageId = Guid.NewGuid() });
+                db.CachedImages.Add(new CachedImage { Code = "ABC-123", Role = role, Index = id + 1000, Variant = "thumb", StorageId = Guid.NewGuid() });
+            }
+            db.SaveChanges();
+        }
+
+        await CreateTask(factory, cache).RunAsync(CancellationToken.None, NoopProgress);
+
+        using var verifyDb = factory.CreateDbContext();
+        var kept = verifyDb.CachedImages.ToList();
+        Assert.Equal(3, kept.Count);
+        Assert.All(kept, c => Assert.True(c.Index < 1000));
+    }
+
+    [Fact]
+    public async Task RunAsync_ExtrafanartFolderIsListedOncePerMovie_NotOncePerImage()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "ABC-123" });
+            db.SaveChanges();
+        }
+
+        var localLibraryClient = CreateLocalLibraryClient();
+        localLibraryClient.ListExtraFanartFileNamesAsync("ABC-123", Arg.Any<CancellationToken>())
+            .Returns(new List<string> { "a.jpg", "b.jpg", "c.jpg" });
+        localLibraryClient.ResolveMovieFolderPathAsync("ABC-123", Arg.Any<CancellationToken>()).Returns("/lib/ABC-123");
+        var movieService = Substitute.For<ILocalImageCacheService>();
+        movieService.GetOrCreateBothAsync(default!, default!, default, default).ReturnsForAnyArgs(((string?)null, (string?)null));
+        movieService.GetOrCreateBothFromSourceAsync(default!, default!, default, default, default).ReturnsForAnyArgs(("/t", "/f"));
+
+        await CreateTask(factory, cache, movieImageCacheService: movieService, localLibraryClient: localLibraryClient)
+            .RunAsync(CancellationToken.None, NoopProgress);
+
+        await localLibraryClient.Received(1).ListExtraFanartFileNamesAsync("ABC-123", Arg.Any<CancellationToken>());
+        await movieService.Received(1).GetOrCreateBothFromSourceAsync("ABC-123", LocalImageCacheService.RoleExtraFanart, 2,
+            Path.Combine("/lib/ABC-123", "extrafanart", "c.jpg"), Arg.Any<CancellationToken>());
     }
 
     [Fact]

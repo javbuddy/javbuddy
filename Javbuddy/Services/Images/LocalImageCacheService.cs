@@ -21,6 +21,11 @@ public interface ILocalImageCacheService
     /// avoiding redundant network/disk reads and duplicate decodes.</summary>
     Task<(string? ThumbPath, string? FullPath)> GetOrCreateBothAsync(string code, string role, int index, CancellationToken ct = default);
 
+    /// <summary>As <see cref="GetOrCreateBothAsync"/>, for a caller that
+    /// already knows the source file (null if none) — skips resolving it again, which for extrafanart means
+    /// listing the folder once per image.</summary>
+    Task<(string? ThumbPath, string? FullPath)> GetOrCreateBothFromSourceAsync(string code, string role, int index, string? srcPath, CancellationToken ct = default);
+
     /// <summary>The movie's local source image for this role/index (e.g. its poster.jpg), without
     /// touching the cache. Null if there's none.</summary>
     Task<string?> ResolveSourcePathAsync(string code, string role, int index, CancellationToken ct = default);
@@ -81,9 +86,11 @@ public class LocalImageCacheService(ILocalLibraryClient localLibraryClient, ILoc
         return variant == VariantThumb ? thumbPath : fullPath;
     }
 
-    public async Task<(string? ThumbPath, string? FullPath)> GetOrCreateBothAsync(string code, string role, int index, CancellationToken ct = default)
+    public async Task<(string? ThumbPath, string? FullPath)> GetOrCreateBothAsync(string code, string role, int index, CancellationToken ct = default) =>
+        await GetOrCreateBothFromSourceAsync(code, role, index, await ResolveSourcePathAsync(code, role, index, ct), ct);
+
+    public async Task<(string? ThumbPath, string? FullPath)> GetOrCreateBothFromSourceAsync(string code, string role, int index, string? srcPath, CancellationToken ct = default)
     {
-        var srcPath = await ResolveSourcePathAsync(code, role, index, ct);
         var srcInfo = srcPath is not null ? new FileInfo(srcPath) : null;
         var srcExists = srcInfo is { Exists: true };
 

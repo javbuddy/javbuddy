@@ -5,6 +5,7 @@ using Javbuddy.Services.DeoVr;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.LocalLibrary;
+using Javbuddy.Services.SceneMedia;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -71,10 +72,10 @@ public class ImageCacheTask(
         // First, and cheap: it only reads thumbnails already on disk, so an upgraded library gets its poster
         // placeholders straight away instead of after the (slow) conversion passes below.
         var hashesBackfilled = await BackfillPosterBlurHashesAsync(progress, ct);
-        var (movieCodes, moviesProcessed, moviesFailed, sourcelessRoles, allRootsOffline) = await CacheMoviesAsync(progress, ct);
+        var (movieCodes, moviesProcessed, moviesFailed, sourcelessRoles, allRootsOffline, extraFanartCounts) = await CacheMoviesAsync(progress, ct);
         var (actorIds, actorsProcessed, actorsFailed) = await CacheActorsAsync(progress, ct);
         var (photoIds, photosProcessed, photosFailed) = await CacheActorPhotosAsync(progress, ct);
-        var (rowsPruned, filesPruned) = await CleanupAsync(movieCodes, actorIds, sourcelessRoles, allRootsOffline, startedAt, ct);
+        var (rowsPruned, filesPruned) = await CleanupAsync(movieCodes, actorIds, sourcelessRoles, allRootsOffline, extraFanartCounts, startedAt, ct);
 
         var imagesProcessed = moviesProcessed + actorsProcessed + photosProcessed;
         var imagesFailed = moviesFailed + actorsFailed + photosFailed;
@@ -146,7 +147,7 @@ public class ImageCacheTask(
     /// matching local folder at all (Missing, nothing downloaded yet) is simply skipped by
     /// CacheMovieBothAsync below (GetOrCreateBothAsync returns null — no local source, not an
     /// error).</summary>
-    private async Task<(List<string> Codes, int Processed, int Failed, HashSet<(string Code, string Role)> SourcelessRoles, bool AllRootsOffline)> CacheMoviesAsync(IProgress<TaskProgress> progress, CancellationToken ct)
+    private async Task<(List<string> Codes, int Processed, int Failed, HashSet<(string Code, string Role)> SourcelessRoles, bool AllRootsOffline, Dictionary<string, int> ExtraFanartCounts)> CacheMoviesAsync(IProgress<TaskProgress> progress, CancellationToken ct)
     {
         const string stage = "Caching movie images";
         progress.Report(new TaskProgress(0, null, stage));
@@ -175,6 +176,7 @@ public class ImageCacheTask(
         // (an index beyond the folder's current file count) is already handled by CleanupAsync
         // via ListExtraFanartFileNamesAsync.
         var sourcelessRoles = new HashSet<(string Code, string Role)>();
+        var extraFanartCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
         var deoVrEnabled = deoVrSettingsService is not null && (await deoVrSettingsService.GetEffectiveAsync(ct)).Enabled;
         var deoVrThumbnails = deoVrEnabled ? deoVrThumbnailService : null;
@@ -223,6 +225,8 @@ public class ImageCacheTask(
                 }
             }
 
+            // Listed once here and reused for every image and for CleanupAsync's stale-index check, rather
+            // than re-listed per image (each a directory enumeration, slow on a network share).
             List<string> extraNames;
             try
             {
@@ -232,12 +236,14 @@ public class ImageCacheTask(
             {
                 extraNames = new List<string>();
             }
+            extraFanartCounts[code] = extraNames.Count;
 
-            for (var i = 0; i < extraNames.Count; i++)
+            var extraFolder = extraNames.Count > 0 ? await localLibraryClient.ResolveMovieFolderPathAsync(code, ct) : null;
+            for (var i = 0; extraFolder is not null && i < extraNames.Count; i++)
             {
                 if (ct.IsCancellationRequested) break;
 
-                switch (await CacheMovieBothAsync(code, LocalImageCacheService.RoleExtraFanart, i, ct))
+                switch (await CacheMovieBothAsync(code, LocalImageCacheService.RoleExtraFanart, i, ct, Path.Combine(extraFolder, "extrafanart", extraNames[i])))
                 {
                     case true: processed += 2; break;
                     case false: failed += 2; break;
@@ -245,7 +251,7 @@ public class ImageCacheTask(
             }
         }
 
-        return (codes, processed, failed, sourcelessRoles, allRootsOffline);
+        return (codes, processed, failed, sourcelessRoles, allRootsOffline, extraFanartCounts);
     }
 
     private async Task<(List<int> ActorIds, int Processed, int Failed)> CacheActorsAsync(IProgress<TaskProgress> progress, CancellationToken ct)
@@ -281,11 +287,13 @@ public class ImageCacheTask(
 
     /// <summary>Converts/caches both Thumb and Full images in a single decode pass if a local source exists
     /// (GetOrCreateBothAsync skips the work if both cached copies are already fresh).</summary>
-    private async Task<bool?> CacheMovieBothAsync(string code, string role, int index, CancellationToken ct)
+    private async Task<bool?> CacheMovieBothAsync(string code, string role, int index, CancellationToken ct, string? knownSourcePath = null)
     {
         try
         {
-            var (thumb, full) = await movieImageCacheService.GetOrCreateBothAsync(code, role, index, ct);
+            var (thumb, full) = knownSourcePath is null
+                ? await movieImageCacheService.GetOrCreateBothAsync(code, role, index, ct)
+                : await movieImageCacheService.GetOrCreateBothFromSourceAsync(code, role, index, knownSourcePath, ct);
             return thumb is not null || full is not null ? true : null;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -394,7 +402,7 @@ public class ImageCacheTask(
     /// for files neither table references any more — computing one combined "kept" StorageId set
     /// up front so this single sweep can't mistake the other kind of image for garbage the way two
     /// separate sweeps had to guard against.</summary>
-    private async Task<(int RowsPruned, int FilesPruned)> CleanupAsync(List<string> liveCodes, List<int> liveActorIds, HashSet<(string Code, string Role)> sourcelessRoles, bool allRootsOffline, DateTime startedAt, CancellationToken ct)
+    private async Task<(int RowsPruned, int FilesPruned)> CleanupAsync(List<string> liveCodes, List<int> liveActorIds, HashSet<(string Code, string Role)> sourcelessRoles, bool allRootsOffline, Dictionary<string, int> extraFanartCounts, DateTime startedAt, CancellationToken ct)
     {
         var liveCodeSet = new HashSet<string>(liveCodes, StringComparer.OrdinalIgnoreCase);
         var liveActorIdSet = liveActorIds.ToHashSet();
@@ -404,7 +412,18 @@ public class ImageCacheTask(
         var allActorImages = await db.ActorImages.ToListAsync(ct);
         var allActorPhotos = await db.ActorPhotos.ToListAsync(ct);
 
+        // Read after the cached rows, so a scene created while this ran (its media row can only be newer than
+        // the load above, or its scene was already there) is never mistaken for a deleted one.
+        var liveSceneIds = (await db.Scenes.Select(x => x.Id).ToListAsync(ct)).ToHashSet();
+        var liveHighlightIds = (await db.MovieHighlights.Select(x => x.Id).ToListAsync(ct)).ToHashSet();
+        var liveApexIds = (await db.MovieApexes.Select(x => x.Id).ToListAsync(ct)).ToHashSet();
+
         var imagesToDelete = new List<CachedImage>(allCachedImages.Where(c => !liveCodeSet.Contains(c.Code)));
+        // The Index of a scene, highlight or apex row is that item's id, and deleting the item doesn't delete its media.
+        imagesToDelete.AddRange(allCachedImages.Except(imagesToDelete).Where(c =>
+            (c.Role == SceneMediaService.Role && !liveSceneIds.Contains(c.Index))
+            || (c.Role == HighlightMediaService.Role && !liveHighlightIds.Contains(c.Index))
+            || (c.Role == ApexMediaService.Role && !liveApexIds.Contains(c.Index))));
         imagesToDelete.AddRange(allCachedImages.Except(imagesToDelete)
             .Where(c => c.SourceUrl == null && sourcelessRoles.Contains((c.Code, c.Role))
                 // A DeoVR request can cache a timeline from a trickplay set saved after the movie pass found none;
@@ -413,7 +432,8 @@ public class ImageCacheTask(
 
         if (!allRootsOffline)
         {
-            var extraCountsByCode = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            // Seeded with the counts the caching pass already listed, so a code is only re-listed if that pass never reached it.
+            var extraCountsByCode = new Dictionary<string, int>(extraFanartCounts, StringComparer.OrdinalIgnoreCase);
             var remainingExtraFanart = allCachedImages.Except(imagesToDelete)
                 .Where(c => c.Role == LocalImageCacheService.RoleExtraFanart)
                 .GroupBy(c => c.Code, StringComparer.OrdinalIgnoreCase);
