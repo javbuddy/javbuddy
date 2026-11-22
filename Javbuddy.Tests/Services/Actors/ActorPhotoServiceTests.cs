@@ -428,6 +428,34 @@ public class ActorPhotoServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetGlobalPhotosAsync_ActorSort_OrdersByDisplayName_NewestFirstWithinAnActor()
+    {
+        using var factory = new TestDbContextFactory();
+        var now = DateTime.UtcNow;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            // Display names: "Madonna" (no last name, so a last-name sort would put her first),
+            // "Mikami Yua" and "Fukada Eimi".
+            var madonna = new Actor { FirstName = "Madonna" };
+            var mikami = new Actor { FirstName = "Yua", LastName = "Mikami" };
+            var fukada = new Actor { FirstName = "Eimi", LastName = "Fukada" };
+            db.Actors.AddRange(madonna, mikami, fukada);
+            await db.SaveChangesAsync();
+            db.ActorPhotos.AddRange(
+                new ActorPhoto { ActorId = mikami.Id, AspectRatio = 1.0, UploadedAt = now.AddHours(-3) },
+                new ActorPhoto { ActorId = madonna.Id, AspectRatio = 2.0, UploadedAt = now.AddHours(-2) },
+                new ActorPhoto { ActorId = mikami.Id, AspectRatio = 3.0, UploadedAt = now.AddHours(-1) },
+                new ActorPhoto { ActorId = fukada.Id, AspectRatio = 4.0, UploadedAt = now });
+            await db.SaveChangesAsync();
+        }
+
+        var photos = await CreateService(factory).GetGlobalPhotosAsync(new GlobalPhotoFilter(Sort: "actor"));
+
+        Assert.Equal(["Fukada Eimi", "Madonna", "Mikami Yua", "Mikami Yua"], photos.Select(p => p.ActorDisplayName));
+        Assert.Equal([3.0, 1.0], photos.Skip(2).Select(p => p.AspectRatio));
+    }
+
+    [Fact]
     public async Task GetGlobalPhotosAsync_ReportsHasOriginal_OnlyForPhotosWithSourceStorageId()
     {
         using var factory = new TestDbContextFactory();

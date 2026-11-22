@@ -167,7 +167,7 @@ public sealed class ActorPhotoService(
         query = sort switch
         {
             "oldest" => query.OrderBy(p => p.UploadedAt).ThenBy(p => p.Id),
-            "actor" => query.OrderBy(p => p.Actor != null ? p.Actor.LastName : "").ThenBy(p => p.Actor != null ? p.Actor.FirstName : "").ThenByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id),
+            // "actor" is newest first here and regrouped by display name below.
             _ => query.OrderByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id)
         };
 
@@ -188,7 +188,7 @@ public sealed class ActorPhotoService(
             })
             .ToListAsync(ct);
 
-        return raw
+        var items = raw
             .Select(p => new GlobalActorPhotoItem(
                 p.Id,
                 p.ActorId,
@@ -200,6 +200,10 @@ public sealed class ActorPhotoService(
                 p.IsFavorite,
                 p.HasOriginal))
             .ToList();
+
+        // The display name (a one-name actor sorts under her name, a placeholder under its label) has no SQL form.
+        // OrderBy is stable, so each actor's photos stay newest first.
+        return sort == "actor" ? [.. items.OrderBy(p => p.ActorDisplayName)] : items;
     }
 
     public async Task<IReadOnlyList<ActorWithPhotoCountSummary>> GetActorsWithPhotosAsync(CancellationToken ct = default)

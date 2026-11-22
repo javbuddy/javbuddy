@@ -334,8 +334,8 @@ else
         await RebuildPhotosAsync();
     }
 
-    // Asks the service for the photos the current filters match (filtered and sorted in SQL); only a "random"
-    // sort is applied here, since it is seeded per click and has no stable SQL form.
+    // Asks the service for the photos the current filters match, filtered and sorted; only a "random"
+    // sort is applied here, since it is seeded per click.
     private async Task RebuildPhotosAsync()
     {
         var version = ++queryVersion;
@@ -349,15 +349,10 @@ else
         // A newer query (or a dispose) supersedes this one.
         if (disposed || version != queryVersion) return;
 
-        // Random is seeded per click and the actor order is by display name (a one-name actor sorts under her
-        // name, a placeholder under its label), neither of which SQL can order by, so both are applied here to
-        // the already filtered list.
-        ApplyPhotos(sort switch
-        {
-            "random" => [.. photos.OrderBy(p => HashCode.Combine(p.Id, randomSeed))],
-            "actor" => [.. photos.OrderBy(p => p.ActorDisplayName).ThenByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id)],
-            _ => [.. photos],
-        });
+        // Random is seeded per click and has no stable SQL form, so it is applied here to the already filtered list.
+        ApplyPhotos(sort == "random"
+            ? [.. photos.OrderBy(p => HashCode.Combine(p.Id, randomSeed))]
+            : [.. photos]);
         StateHasChanged();
     }
 
