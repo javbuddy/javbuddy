@@ -1929,4 +1929,71 @@ public class LocalLibraryClientTests
         using var verifyDb = factory.CreateDbContext();
         Assert.Null(verifyDb.Movies.Single(m => m.Id == movieId).VrType);
     }
+
+    [Fact]
+    public async Task ResolveActorImagePathAsync_ParentTraversalThumb_DoesNotEscapeTheMovieFolder()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        var sibling = root.AddMovieFolder("OTHER-1");
+        await File.WriteAllTextAsync(Path.Combine(sibling, "secret.jpg"), "x");
+        // The NFO <thumb> branch only runs once the movie has a non-empty actors folder.
+        Directory.CreateDirectory(Path.Combine(folder, ".actors"));
+        await File.WriteAllTextAsync(Path.Combine(folder, ".actors", "unrelated.jpg"), "x");
+        await File.WriteAllTextAsync(Path.Combine(folder, "ABC-123.nfo"), """
+            <movie>
+              <title>ABC-123</title>
+              <actor><name>Alpha</name><thumb>../OTHER-1/secret.jpg</thumb></actor>
+            </movie>
+            """);
+
+        var client = CreateClientFor(factory, root);
+
+        // Both the NFO <thumb> branch and the explicit relative-candidate branch must reject "../".
+        Assert.Null(await client.ResolveActorImagePathAsync("ABC-123", "Alpha"));
+        Assert.Null(await client.ResolveActorImagePathAsync("ABC-123", "../OTHER-1/secret.jpg"));
+    }
+
+    [Fact]
+    public async Task ResolveActorImagePathAsync_RelativeNfoThumbInsideTheMovieFolder_Resolves()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        var thumb = Path.Combine(folder, "thumbs", "alpha.jpg");
+        Directory.CreateDirectory(Path.GetDirectoryName(thumb)!);
+        await File.WriteAllTextAsync(thumb, "x");
+        // The NFO <thumb> branch only runs once the movie has a non-empty actors folder.
+        Directory.CreateDirectory(Path.Combine(folder, ".actors"));
+        await File.WriteAllTextAsync(Path.Combine(folder, ".actors", "unrelated.jpg"), "x");
+        await File.WriteAllTextAsync(Path.Combine(folder, "ABC-123.nfo"), """
+            <movie>
+              <title>ABC-123</title>
+              <actor><name>Alpha</name><thumb>thumbs/alpha.jpg</thumb></actor>
+            </movie>
+            """);
+
+        var client = CreateClientFor(factory, root);
+
+        Assert.Equal(thumb, await client.ResolveActorImagePathAsync("ABC-123", "Alpha"));
+    }
+
+    [Fact]
+    public async Task ResolveActorImagePathAsync_BareFileNameCandidate_ResolvesInTheActorsFolderOnly()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        var actorsDir = Path.Combine(folder, ".actors");
+        Directory.CreateDirectory(actorsDir);
+        var inActors = Path.Combine(actorsDir, "face.jpg");
+        await File.WriteAllTextAsync(inActors, "x");
+        await File.WriteAllTextAsync(Path.Combine(folder, "outside.jpg"), "x");
+
+        var client = CreateClientFor(factory, root);
+
+        Assert.Equal(inActors, await client.ResolveActorImagePathAsync("ABC-123", ["face.jpg"]));
+        Assert.Null(await client.ResolveActorImagePathAsync("ABC-123", ["outside.jpg"]));
+    }
 }

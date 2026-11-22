@@ -1355,4 +1355,29 @@ public class ActorImageCacheServiceTests
 
         http.Received(1).CreateClient(RemoteImageDownloader.ImportClientName);
     }
+
+    [Fact]
+    public async Task DownloadAndCacheRemoteImageAsync_UsesTheGuardedImportClient()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        int actorId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Noa", LastName = "Araki" };
+            db.Actors.Add(actor);
+            await db.SaveChangesAsync();
+            actorId = actor.Id;
+        }
+        var sampleBytes = CreateSampleImageBytes(300, 300);
+        var http = Substitute.For<IHttpClientFactory>();
+        http.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient(new FakeHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(sampleBytes) }))));
+        var service = new ActorImageCacheService(Substitute.For<ILocalLibraryClient>(), cache, factory,
+            Substitute.For<IImageCacheMaintenanceService>(), http);
+
+        await service.DownloadAndCacheRemoteImageAsync(actorId, "https://pics.dmm.co.jp/mono/actjpgs/araki_noa.jpg");
+
+        http.Received(1).CreateClient(RemoteImageDownloader.ImportClientName);
+    }
 }

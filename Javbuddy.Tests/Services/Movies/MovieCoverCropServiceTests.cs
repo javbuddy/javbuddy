@@ -519,4 +519,26 @@ public class MovieCoverCropServiceTests
 
         http.Received(1).CreateClient(RemoteImageDownloader.ImportClientName);
     }
+
+    [Theory]
+    [InlineData("backdrop")]
+    [InlineData("poster")]
+    public async Task GetSourceBytesAsync_RemoteSource_UsesTheGuardedImportClient(string sourceKey)
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.Add(new Movie { Code = "IPX-535", Title = "T", MetaBackdropUrl = "https://example.com/backdrop.jpg", MetaCoverUrl = "https://example.com/cover.jpg" });
+            await db.SaveChangesAsync();
+        }
+        var http = Substitute.For<IHttpClientFactory>();
+        http.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient(Responding(() => new ByteArrayContent([1, 2, 3]))));
+        var service = new MovieCoverCropService(factory, Substitute.For<ILocalLibraryClient>(), Substitute.For<ILocalImageCache>(),
+            Substitute.For<IImageCacheMaintenanceService>(), http);
+
+        var bytes = await service.GetSourceBytesAsync("IPX-535", sourceKey);
+
+        Assert.NotNull(bytes);
+        http.Received(1).CreateClient(RemoteImageDownloader.ImportClientName);
+    }
 }

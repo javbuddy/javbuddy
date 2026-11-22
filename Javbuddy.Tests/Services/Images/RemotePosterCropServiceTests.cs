@@ -170,4 +170,17 @@ public class RemotePosterCropServiceTests : IDisposable
         Assert.Null(path);
         Assert.Equal(0, hits[0]);
     }
+
+    [Fact]
+    public async Task GetOrCreateAsync_UsesTheGuardedImportClient()
+    {
+        var handler = Serving(LandscapeCover());
+        var http = Substitute.For<IHttpClientFactory>();
+        http.CreateClient(Arg.Any<string>()).Returns(_ => new HttpClient(handler, disposeHandler: false));
+        var service = new RemotePosterCropService(http, cache, factory, maintenance, new InFlightImageConversions());
+
+        await service.GetOrCreateAsync("ABC-123", CoverUrl, LocalImageCacheService.VariantThumb);
+
+        http.Received(1).CreateClient(RemoteImageDownloader.ImportClientName);
+    }
 }
