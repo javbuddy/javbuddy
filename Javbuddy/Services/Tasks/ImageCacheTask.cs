@@ -58,6 +58,9 @@ public class ImageCacheTask(
     private readonly IDeoVrThumbnailService? deoVrThumbnailService = deoVrThumbnailService;
     private readonly IDeoVrTimelineService? deoVrTimelineService = deoVrTimelineService;
 
+    // Under SQLite's bound-parameter limit, so one IN (...) list per statement is always valid.
+    private const int DeleteBatchSize = 500;
+
     public string Name => "Image Cache";
 
     public string Description =>
@@ -408,9 +411,17 @@ public class ImageCacheTask(
         var liveActorIdSet = liveActorIds.ToHashSet();
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var allCachedImages = await db.CachedImages.ToListAsync(ct);
-        var allActorImages = await db.ActorImages.ToListAsync(ct);
-        var allActorPhotos = await db.ActorPhotos.ToListAsync(ct);
+        // Untracked, and only the columns the sweep reads: these tables hold a row per cached image, so
+        // tracking whole entities would pin the full set (plus snapshots) in the change tracker for the run.
+        var allCachedImages = await db.CachedImages.AsNoTracking()
+            .Select(c => new CachedImage { Id = c.Id, Code = c.Code, Role = c.Role, Index = c.Index, Variant = c.Variant, StorageId = c.StorageId, SourceUrl = c.SourceUrl, UpdatedAt = c.UpdatedAt })
+            .ToListAsync(ct);
+        var allActorImages = await db.ActorImages.AsNoTracking()
+            .Select(a => new ActorImage { Id = a.Id, ActorId = a.ActorId, StorageId = a.StorageId, SourceStorageId = a.SourceStorageId, SourceExtension = a.SourceExtension })
+            .ToListAsync(ct);
+        var allActorPhotos = await db.ActorPhotos.AsNoTracking()
+            .Select(p => new ActorPhoto { Id = p.Id, ActorId = p.ActorId, ThumbStorageId = p.ThumbStorageId, FullStorageId = p.FullStorageId, SourceStorageId = p.SourceStorageId, SourceExtension = p.SourceExtension })
+            .ToListAsync(ct);
 
         // Read after the cached rows, so a scene created while this ran (its media row can only be newer than
         // the load above, or its scene was already there) is never mistaken for a deleted one.
@@ -489,10 +500,18 @@ public class ImageCacheTask(
             if (photo.SourceStorageId is { } sourceStorageId && dataStore is not null) await dataStore.DeleteAsync(sourceStorageId, photo.SourceExtension, ct);
         }
 
-        if (imagesToDelete.Count > 0) db.CachedImages.RemoveRange(imagesToDelete);
-        if (actorImagesToDelete.Count > 0) db.ActorImages.RemoveRange(actorImagesToDelete);
-        if (actorPhotosToDelete.Count > 0) db.ActorPhotos.RemoveRange(actorPhotosToDelete);
-        if (imagesToDelete.Count > 0 || actorImagesToDelete.Count > 0 || actorPhotosToDelete.Count > 0) await db.SaveChangesAsync(ct);
+        foreach (var ids in imagesToDelete.Select(row => row.Id).Chunk(DeleteBatchSize))
+        {
+            await db.CachedImages.Where(row => ids.Contains(row.Id)).ExecuteDeleteAsync(ct);
+        }
+        foreach (var ids in actorImagesToDelete.Select(row => row.Id).Chunk(DeleteBatchSize))
+        {
+            await db.ActorImages.Where(row => ids.Contains(row.Id)).ExecuteDeleteAsync(ct);
+        }
+        foreach (var ids in actorPhotosToDelete.Select(row => row.Id).Chunk(DeleteBatchSize))
+        {
+            await db.ActorPhotos.Where(row => ids.Contains(row.Id)).ExecuteDeleteAsync(ct);
+        }
 
         filesPruned += SweepUnreferencedFiles(keptFileNames, ct);
 

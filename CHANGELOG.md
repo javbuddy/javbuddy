@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **The Image Cache cleanup no longer loads its three image tables tracked.** It reads only the columns it needs without change tracking and deletes orphaned rows in batches, so a large cache no longer holds every row in memory for the sweep.
 - **The Image Cache task lists each movie's extrafanart folder once instead of once per image, and now prunes cached scene, highlight and apex media whose item was deleted.** Previously those rows and files were only removed when the whole movie was.
 - **Generating a poster or extrafanart stills no longer bypasses the image-conversion limit.** The frame scoring and encoding decodes now wait for a free slot like every other image conversion, so a batch of generations can't pile up native image memory.
 - **Rescans no longer fully decode every poster.jpg.** The aspect ratio is read from the image header, and a poster is only decoded (under the image-conversion limit) when it actually needs cropping.

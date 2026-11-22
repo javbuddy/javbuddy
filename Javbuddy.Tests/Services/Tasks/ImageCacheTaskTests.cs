@@ -799,6 +799,29 @@ public class ImageCacheTaskTests
     }
 
     [Fact]
+    public async Task RunAsync_PrunesMoreOrphanedRowsThanOneDeleteBatch()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        using (var db = factory.CreateDbContext())
+        {
+            db.Movies.Add(new Movie { Code = "KEEP-001" });
+            db.CachedImages.Add(new CachedImage { Code = "KEEP-001", Role = LocalImageCacheService.RolePoster, Variant = "thumb", StorageId = Guid.NewGuid(), SourceUrl = "custom" });
+            for (var i = 0; i < 1200; i++)
+            {
+                db.CachedImages.Add(new CachedImage { Code = "GONE-001", Role = LocalImageCacheService.RoleExtraFanart, Index = i, Variant = "thumb", StorageId = Guid.NewGuid() });
+            }
+            db.SaveChanges();
+        }
+
+        var summary = await CreateTask(factory, cache).RunAsync(CancellationToken.None, NoopProgress);
+
+        using var verifyDb = factory.CreateDbContext();
+        Assert.Equal("KEEP-001", Assert.Single(verifyDb.CachedImages).Code);
+        Assert.Contains("pruned 1200 orphaned rows", summary);
+    }
+
+    [Fact]
     public async Task RunAsync_MissingMovieWithCustomOrRemoteSourceUrl_IsNotPrunedAsSourceless()
     {
         // A Missing movie with a remote or custom cropped poster has SourceUrl set.
