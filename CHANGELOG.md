@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Actor discovery is faster on a large library.** Scanning reads movies' .nfo files several at a time, merges candidates by name through an index instead of comparing each against all the others, and importing no longer searches the library again for a headshot the scan already found.
 - **Image cache eviction deletes its database rows in batches** instead of one statement per evicted file, and the cache stats now count actor image rows instead of always reporting 0.
 - **The Image Cache cleanup no longer loads its three image tables tracked.** It reads only the columns it needs without change tracking and deletes orphaned rows in batches, so a large cache no longer holds every row in memory for the sweep.
 - **The Image Cache task lists each movie's extrafanart folder once instead of once per image, and now prunes cached scene, highlight and apex media whose item was deleted.** Previously those rows and files were only removed when the whole movie was.

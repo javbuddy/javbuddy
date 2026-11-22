@@ -218,6 +218,68 @@ public class ActorDiscoveryServiceTests
     }
 
     [Fact]
+    public async Task ScanFromMoviesAsync_ConsolidatesCandidatesSharingAnyName_AcrossManyMovies()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.AddRange(
+                new Movie { Code = "AAA-001" },
+                new Movie { Code = "AAA-002" },
+                new Movie { Code = "AAA-003" },
+                new Movie { Code = "AAA-004" });
+            for (var i = 0; i < 300; i++) db.Movies.Add(new Movie { Code = $"BBB-{i:000}" });
+            await db.SaveChangesAsync();
+        }
+
+        var localLibraryClient = Substitute.For<ILocalLibraryClient>();
+        localLibraryClient.GetMovieActorsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns([]);
+        // The kanji alone links the first two movies' entries; a reversed name links the third; the fourth is unrelated.
+        localLibraryClient.GetMovieActorsAsync("AAA-001", Arg.Any<CancellationToken>())
+            .Returns([new LocalActorMetadata { Name = "Yua Mikami", AltName = "三上悠亜" }]);
+        localLibraryClient.GetMovieActorsAsync("AAA-002", Arg.Any<CancellationToken>())
+            .Returns([new LocalActorMetadata { Name = "三上悠亜" }]);
+        localLibraryClient.GetMovieActorsAsync("AAA-003", Arg.Any<CancellationToken>())
+            .Returns([new LocalActorMetadata { Name = "Mikami Yua" }]);
+        localLibraryClient.GetMovieActorsAsync("AAA-004", Arg.Any<CancellationToken>())
+            .Returns([new LocalActorMetadata { Name = "Someone Else" }]);
+        localLibraryClient.ResolveActorImagePathAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+            .Returns((string?)null);
+
+        var service = new ActorDiscoveryService(factory, localLibraryClient, Substitute.For<IActorImageCacheService>());
+        var scan = await service.ScanFromMoviesAsync();
+
+        Assert.Equal(2, scan.TotalFound);
+        var yua = Assert.Single(scan.Candidates, c => c.JapaneseKanji == "三上悠亜");
+        Assert.Equal(["AAA-001", "AAA-002", "AAA-003"], yua.MovieCodes.Order());
+    }
+
+    [Fact]
+    public async Task ImportCandidatesAsync_DoesNotSearchAgainForAHeadshotTheScanAlreadyFound()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.Add(new Movie { Code = "SIVR-505", MetaActresses = "Araki Noa" });
+            await db.SaveChangesAsync();
+        }
+
+        var candidate = DiscoveredActorCandidate.FromName("Araki Noa", "SIVR-505");
+        candidate.HasLocalHeadshot = true;
+        candidate.LocalHeadshotMovieCode = "SIVR-505";
+
+        var localLibraryClient = Substitute.For<ILocalLibraryClient>();
+        var imageCacheService = Substitute.For<IActorImageCacheService>();
+        imageCacheService.GetOrCreateBothAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(("/cache/thumb.webp", "/cache/full.webp"));
+
+        var result = await new ActorDiscoveryService(factory, localLibraryClient, imageCacheService).ImportCandidatesAsync([candidate]);
+
+        Assert.Equal(1, result.ImagesCached);
+        await localLibraryClient.DidNotReceive().ResolveActorImagePathAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task ImportCandidatesAsync_ImportsOnlySelectedCandidates()
     {
         using var factory = new TestDbContextFactory();

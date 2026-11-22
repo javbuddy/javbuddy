@@ -195,6 +195,8 @@ public class ActorDiscoveryService(
         };
     }
 
+    private const int NfoReadConcurrency = 4;
+
     public Task<ActorScanResult> ScanFromMoviesAsync(CancellationToken ct) => ScanFromMoviesAsync(null, ct);
 
     public async Task<ActorScanResult> ScanFromMoviesAsync(IProgress<TaskProgress>? progress = null, CancellationToken ct = default)
@@ -212,16 +214,34 @@ public class ActorDiscoveryService(
         var totalMovies = movies.Count;
         progress?.Report(new TaskProgress(0, totalMovies, "Scanning movies"));
 
+        // The .nfo reads are independent file reads (slow one at a time over a network share), so they run a few at a
+        // time; the candidates are still built below in movie order, so the result doesn't depend on which finishes first.
+        var movieActorLists = new List<LocalActorMetadata>[totalMovies];
+        var read = 0;
+        using (var gate = new SemaphoreSlim(NfoReadConcurrency))
+        {
+            await Task.WhenAll(movies.Select(async (movie, index) =>
+            {
+                await gate.WaitAsync(ct);
+                try
+                {
+                    movieActorLists[index] = movie.Code is not null
+                        ? await localLibraryClient.GetMovieActorsAsync(movie.Code, ct)
+                        : [];
+                }
+                finally
+                {
+                    gate.Release();
+                    progress?.Report(new TaskProgress(Interlocked.Increment(ref read), totalMovies, "Scanning movies"));
+                }
+            }));
+        }
+
         for (var i = 0; i < totalMovies; i++)
         {
             ct.ThrowIfCancellationRequested();
             var movie = movies[i];
-            progress?.Report(new TaskProgress(i + 1, totalMovies, "Scanning movies"));
-            await Task.Yield();
-
-            var movieActors = movie.Code is not null
-                ? await localLibraryClient.GetMovieActorsAsync(movie.Code, ct)
-                : [];
+            var movieActors = movieActorLists[i];
 
             var processedNamesInMovie = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -417,8 +437,12 @@ public class ActorDiscoveryService(
                 progress?.Report(new TaskProgress(i + 1, totalImagesToProcess, "Importing headshots"));
                 await Task.Yield();
 
-                var localImage = await FindLocalActorImageAsync(candidate, candidate.DisplayName, ct);
-                var hasLocalFile = candidate.HasLocalHeadshot || localImage.Found;
+                // The scan already searched this candidate's movies for a headshot and recorded the outcome, so a
+                // candidate that has one isn't searched for again (each search resolves folders on the library share).
+                var localImage = candidate.HasLocalHeadshot
+                    ? (Found: true, MovieCode: candidate.LocalHeadshotMovieCode, LocalFilePath: (string?)null)
+                    : await FindLocalActorImageAsync(candidate, candidate.DisplayName, ct);
+                var hasLocalFile = localImage.Found;
                 if (hasLocalFile)
                 {
                     try
@@ -658,20 +682,74 @@ public class ActorDiscoveryService(
     private static List<DiscoveredActorCandidate> ConsolidateCandidates(List<DiscoveredActorCandidate> candidates)
     {
         var result = new List<DiscoveredActorCandidate>();
+        // Narrows each candidate's possible matches to the entries sharing a name key, instead of testing it against
+        // every entry so far (quadratic in the number of distinct actors). The first entry that passes the real
+        // CandidateMatchesCandidate test still wins, as before.
+        var index = new Dictionary<string, List<int>>();
 
         foreach (var c in candidates)
         {
-            var match = result.FirstOrDefault(r => CandidateMatchesCandidate(r, c));
-            if (match is not null)
+            var match = -1;
+            foreach (var key in LookupKeys(c))
             {
-                match.MergeFrom(c);
+                if (!index.TryGetValue(key, out var positions)) continue;
+                foreach (var position in positions)
+                {
+                    if ((match < 0 || position < match) && CandidateMatchesCandidate(result[position], c)) match = position;
+                }
+            }
+
+            if (match >= 0)
+            {
+                result[match].MergeFrom(c);
+                // The merge can add names, so the entry is findable by them too (its old keys stay valid).
+                AddToIndex(index, match, result[match]);
             }
             else
             {
                 result.Add(c);
+                AddToIndex(index, result.Count - 1, c);
             }
         }
 
         return result;
+    }
+
+    private static string Key(string kind, string? value) => kind + "|" + value?.Trim().ToUpperInvariant();
+
+    /// <summary>The keys an entry is stored under. Together with <see cref="LookupKeys"/> this covers every rule of
+    /// <see cref="CandidateMatchesCandidate"/>: any pair that rule accepts shares at least one key.</summary>
+    private static IEnumerable<string> IndexKeys(DiscoveredActorCandidate entry)
+    {
+        yield return Key("N", entry.DisplayName);
+        if (!string.IsNullOrWhiteSpace(entry.LastName))
+        {
+            yield return Key("S", entry.FirstName + "|" + entry.LastName);
+            yield return Key("R", $"{entry.FirstName} {entry.LastName}");
+        }
+        if (!string.IsNullOrWhiteSpace(entry.JapaneseKanji)) yield return Key("K", entry.JapaneseKanji.CompactName());
+        if (!string.IsNullOrWhiteSpace(entry.JapaneseKana)) yield return Key("A", entry.JapaneseKana.CompactName());
+    }
+
+    private static IEnumerable<string> LookupKeys(DiscoveredActorCandidate candidate)
+    {
+        yield return Key("N", candidate.DisplayName);
+        yield return Key("R", candidate.DisplayName);
+        if (!string.IsNullOrWhiteSpace(candidate.LastName))
+        {
+            yield return Key("S", candidate.LastName + "|" + candidate.FirstName);
+            yield return Key("N", $"{candidate.FirstName} {candidate.LastName}");
+        }
+        if (!string.IsNullOrWhiteSpace(candidate.JapaneseKanji)) yield return Key("K", candidate.JapaneseKanji.CompactName());
+        if (!string.IsNullOrWhiteSpace(candidate.JapaneseKana)) yield return Key("A", candidate.JapaneseKana.CompactName());
+    }
+
+    private static void AddToIndex(Dictionary<string, List<int>> index, int position, DiscoveredActorCandidate entry)
+    {
+        foreach (var key in IndexKeys(entry))
+        {
+            if (!index.TryGetValue(key, out var positions)) index[key] = positions = [];
+            if (!positions.Contains(position)) positions.Add(position);
+        }
     }
 }
