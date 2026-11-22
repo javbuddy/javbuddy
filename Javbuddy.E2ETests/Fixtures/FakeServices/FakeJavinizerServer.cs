@@ -49,7 +49,7 @@ public sealed class FakeJavinizerServer : FakeHttpServer
 
             if (ScrapeError is not null)
             {
-                return Results.Json(new ErrorResponseDto { Message = ScrapeError }, statusCode: StatusCodes.Status502BadGateway);
+                return Results.Json(new ErrorResponseDto { Error = ScrapeError }, statusCode: StatusCodes.Status502BadGateway);
             }
 
             var movie = ScrapeResponses.GetOrAdd(code, BuildDefaultMovie);
