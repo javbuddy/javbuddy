@@ -113,20 +113,11 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
                 .ToListAsync(ct))
             .ToLookup(h => h.MovieId);
         var ids = highlightsByMovie.SelectMany(g => g).Select(h => h.Id).ToList();
-        var media = (await db.CachedImages.AsNoTracking()
-                .Where(c => c.Role == HighlightMediaService.Role && ids.Contains(c.Index))
-                .ToListAsync(ct))
-            .ToLookup(c => (c.Index, c.Variant));
-
         // Only media /highlight-image would serve counts (as for scenes).
-        long? MediaVersion(MovieHighlight highlight, string variant)
-        {
-            if (highlightMedia is not null && !highlightMedia.ServesVariant(variant)) return null;
-            var window = HighlightMediaService.Window(highlight.StartSeconds, highlight.EndSeconds);
-            var row = media[(highlight.Id, variant)].FirstOrDefault();
-            var current = row is not null && (highlightMedia?.IsCurrent(row, window) ?? (row.SceneStartMs == window.StartMs && row.SceneEndMs == window.EndMs));
-            return current ? row!.UpdatedAt.Ticks : null;
-        }
+        var media = await ClipAssignments.LoadClipMediaVersionsAsync(db, HighlightMediaService.Role, ids,
+            highlightMedia is null ? null : highlightMedia.ServesVariant, highlightMedia is null ? null : highlightMedia.IsCurrent, ct);
+        long? MediaVersion(MovieHighlight highlight, string variant) =>
+            media.Of(highlight.Id, variant, HighlightMediaService.Window(highlight.StartSeconds, highlight.EndSeconds));
 
         var castCounts = (await db.MovieActors.Where(ma => movies.Contains(ma.MovieId)).GroupBy(ma => ma.MovieId).Select(g => new { MovieId = g.Key, Count = g.Count() }).ToListAsync(ct))
             .ToDictionary(g => g.MovieId, g => g.Count);

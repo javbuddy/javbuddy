@@ -127,23 +127,13 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
             .Include(s => s.SceneTags).ThenInclude(st => st.Tag).ThenInclude(t => t.ParentTag)
             .ToListAsync(ct);
         var sceneIds = scenes.Select(s => s.Id).ToList();
-        var media = (await db.CachedImages.AsNoTracking()
-                .Where(c => c.Role == SceneMediaService.Role && sceneIds.Contains(c.Index))
-                .ToListAsync(ct))
-            .ToLookup(c => (c.Index, c.Variant));
-
-        // Only media /scene-image would serve counts: sampled for the scene's current range
-        //, a variant the current cache mode serves, unexpired and still
-        // on disk. Anything else would show as a broken image. Without a media service
-        // (tests), whatever is cached for the range counts.
-        long? MediaVersion(ResolvedScene resolved, string variant)
-        {
-            if (sceneMedia is not null && !sceneMedia.ServesVariant(variant)) return null;
-            var window = SceneMediaService.Window(resolved.Scene.StartSeconds, resolved.EffectiveEndSeconds);
-            var row = media[(resolved.Scene.Id, variant)].FirstOrDefault();
-            var current = row is not null && (sceneMedia?.IsCurrent(row, window) ?? (row.SceneStartMs == window.StartMs && row.SceneEndMs == window.EndMs));
-            return current ? row!.UpdatedAt.Ticks : null;
-        }
+        // Only media /scene-image would serve counts: sampled for the scene's current range, a variant
+        // the current cache mode serves, unexpired and still on disk. Anything else would show as a
+        // broken image. Without a media service (tests), whatever is cached for the range counts.
+        var media = await ClipAssignments.LoadClipMediaVersionsAsync(db, SceneMediaService.Role, sceneIds,
+            sceneMedia is null ? null : sceneMedia.ServesVariant, sceneMedia is null ? null : sceneMedia.IsCurrent, ct);
+        long? MediaVersion(ResolvedScene resolved, string variant) =>
+            media.Of(resolved.Scene.Id, variant, SceneMediaService.Window(resolved.Scene.StartSeconds, resolved.EffectiveEndSeconds));
 
         var scenesByMovie = scenes.ToLookup(s => s.MovieId);
         return ids.ToDictionary(id => id, id => (IReadOnlyList<SceneItem>)SceneRanges.ResolveEffectiveRanges(scenesByMovie[id].ToList(), durations.GetValueOrDefault(id))

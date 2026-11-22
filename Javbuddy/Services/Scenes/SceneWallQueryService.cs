@@ -349,20 +349,11 @@ public sealed partial class SceneWallQueryService(
         var apexSeconds = await ApexSecondsByMovieAsync(db, movieIds, ct);
         // Only the apexes matter to a highlight's roll-up, so no scenes are loaded.
         var rollups = await RollupsAsync(movieIds.ToDictionary(id => id, _ => (IReadOnlyList<SceneItem>)[]), await ClipAssignments.LoadEffectiveActorsAsync(db, movieIds, ct), ct);
-        var media = (await db.CachedImages.AsNoTracking()
-                .Where(c => c.Role == HighlightMediaService.Role && ids.Contains(c.Index))
-                .ToListAsync(ct))
-            .ToLookup(c => (c.Index, c.Variant));
-
         // Only media /highlight-image would serve counts (as for scene cards).
-        long? MediaVersion(int id, double start, double end, string variant)
-        {
-            if (highlightMedia is not null && !highlightMedia.ServesVariant(variant)) return null;
-            var window = HighlightMediaService.Window(start, end);
-            var row = media[(id, variant)].FirstOrDefault();
-            var current = row is not null && (highlightMedia?.IsCurrent(row, window) ?? (row.SceneStartMs == window.StartMs && row.SceneEndMs == window.EndMs));
-            return current ? row!.UpdatedAt.Ticks : null;
-        }
+        var media = await ClipAssignments.LoadClipMediaVersionsAsync(db, HighlightMediaService.Role, ids,
+            highlightMedia is null ? null : highlightMedia.ServesVariant, highlightMedia is null ? null : highlightMedia.IsCurrent, ct);
+        long? MediaVersion(int id, double start, double end, string variant) =>
+            media.Of(id, variant, HighlightMediaService.Window(start, end));
 
         var cards = page.Select(p =>
         {

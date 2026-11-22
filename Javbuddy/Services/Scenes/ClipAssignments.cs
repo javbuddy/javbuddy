@@ -1,4 +1,6 @@
 using Javbuddy.Data;
+using Javbuddy.Models;
+using Javbuddy.Services.SceneMedia;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Scenes;
@@ -7,6 +9,21 @@ namespace Javbuddy.Services.Scenes;
 /// loading what they inherit.</summary>
 internal static class ClipAssignments
 {
+    /// <summary>The cached thumb/preview rows of the given scenes, highlights or apexes (<paramref name="role"/>),
+    /// from one query, ready to answer which media version each card should show.</summary>
+    /// <param name="servesVariant">Whether the media endpoint would serve a variant under the current cache mode;
+    /// null (tests without a media service) serves every variant.</param>
+    /// <param name="isCurrent">Whether a row is current for a window (unexpired, still on disk);
+    /// null (tests) falls back to the row matching the window.</param>
+    public static async Task<ClipMediaVersions> LoadClipMediaVersionsAsync(AppDbContext db, string role, IReadOnlyCollection<int> clipIds,
+        Func<string, bool>? servesVariant, Func<CachedImage, SceneMediaWindow, bool>? isCurrent, CancellationToken ct)
+    {
+        var rows = clipIds.Count == 0
+            ? []
+            : await db.CachedImages.AsNoTracking().Where(c => c.Role == role && clipIds.Contains(c.Index)).ToListAsync(ct);
+        return new ClipMediaVersions(rows.ToLookup(c => (c.Index, c.Variant)), servesVariant, isCurrent);
+    }
+
     public static async Task<ApexActorOptions> LoadActorOptionsAsync(AppDbContext db, int movieId, CancellationToken ct) =>
         new(await LoadCastAsync(db, movieId, ct));
 
@@ -116,5 +133,22 @@ internal static class ClipAssignments
         return movieIds.Distinct().ToDictionary(
             id => id,
             id => (IReadOnlyList<SceneActorItem>)byMovie[id].OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList());
+    }
+}
+
+/// <summary>What <see cref="ClipAssignments.LoadClipMediaVersionsAsync"/> loaded.</summary>
+internal sealed class ClipMediaVersions(
+    ILookup<(int Index, string Variant), CachedImage> rows,
+    Func<string, bool>? servesVariant,
+    Func<CachedImage, SceneMediaWindow, bool>? isCurrent)
+{
+    /// <summary>The cache row's version (ticks) when the media endpoint would serve that variant for the clip's current
+    /// window, else null: anything else would show as a broken image.</summary>
+    public long? Of(int clipId, string variant, SceneMediaWindow window)
+    {
+        if (servesVariant is not null && !servesVariant(variant)) return null;
+        var row = rows[(clipId, variant)].FirstOrDefault();
+        var current = row is not null && (isCurrent?.Invoke(row, window) ?? (row.SceneStartMs == window.StartMs && row.SceneEndMs == window.EndMs));
+        return current ? row!.UpdatedAt.Ticks : null;
     }
 }

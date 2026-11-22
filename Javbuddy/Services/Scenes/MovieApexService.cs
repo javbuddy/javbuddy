@@ -136,22 +136,13 @@ public class MovieApexService(
             .OrderBy(a => a.Seconds).ThenBy(a => a.Id)
             .ToListAsync(ct);
         var ids = apexes.Select(a => a.Id).ToList();
-        var media = (apexMedia is not null && (apexMedia.ServesPreview || apexMedia.ServesVariant(SceneMediaService.VariantThumb))
-                ? await db.CachedImages.AsNoTracking()
-                    .Where(c => c.Role == ApexMediaService.Role && ids.Contains(c.Index))
-                    .ToListAsync(ct)
-                : [])
-            .ToLookup(c => (c.Index, c.Variant));
-
         // Only media /apex-image would serve counts (as for highlights): a variant the current cache mode
-        // keeps, sampled for the apex's current time.
-        long? MediaVersion(MovieApex apex, string variant, bool served) =>
-            served && media[(apex.Id, variant)].FirstOrDefault() is { } row && apexMedia!.IsCurrent(row, ApexMediaService.Window(apex.Seconds))
-                ? row.UpdatedAt.Ticks
-                : null;
-
-        var servesThumb = apexMedia?.ServesVariant(SceneMediaService.VariantThumb) == true;
-        var servesPreview = apexMedia?.ServesPreview == true;
+        // keeps, sampled for the apex's current time. Nothing is loaded when nothing is served.
+        var anyServed = apexMedia is not null && (apexMedia.ServesPreview || apexMedia.ServesVariant(SceneMediaService.VariantThumb));
+        var media = await ClipAssignments.LoadClipMediaVersionsAsync(db, ApexMediaService.Role, anyServed ? ids : [],
+            variant => variant == SceneMediaService.VariantPreview ? apexMedia?.ServesPreview == true : apexMedia?.ServesVariant(variant) == true,
+            (row, window) => apexMedia!.IsCurrent(row, window), ct);
+        long? MediaVersion(MovieApex apex, string variant) => media.Of(apex.Id, variant, ApexMediaService.Window(apex.Seconds));
 
         var castCounts = (await db.MovieActors.Where(ma => movies.Contains(ma.MovieId)).GroupBy(ma => ma.MovieId).Select(g => new { MovieId = g.Key, Count = g.Count() }).ToListAsync(ct))
             .ToDictionary(g => g.MovieId, g => g.Count);
@@ -173,8 +164,8 @@ public class MovieApexService(
                         .ToList(),
                     EffectiveActors = effective[movieId].Apexes.GetValueOrDefault(a.Id, EffectiveActors.None),
                     CastCount = castCount,
-                    ThumbVersion = MediaVersion(a, SceneMediaService.VariantThumb, servesThumb),
-                    PreviewVersion = MediaVersion(a, SceneMediaService.VariantPreview, servesPreview),
+                    ThumbVersion = MediaVersion(a, SceneMediaService.VariantThumb),
+                    PreviewVersion = MediaVersion(a, SceneMediaService.VariantPreview),
                     OwnLeadInSeconds = a.LeadInSeconds,
                     OwnTailSeconds = a.TailSeconds,
                     Window = ApexRanges.Resolve(a.LeadInSeconds, a.TailSeconds, defaultWindow),
