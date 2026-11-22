@@ -217,9 +217,12 @@ public sealed class SceneWallQueryService(
             .ToListAsync(ct);
 
         // Resolved per movie (positions and effective ends depend on the movie's other scenes).
-        var itemsByMovie = await sceneService.GetScenesForMoviesAsync(page.Select(p => p.MovieId).Distinct().ToList(), ct);
+        // One load of the movies' effective actors serves the scenes and the highlights and apexes the roll-up reads.
+        var movieIds = page.Select(p => p.MovieId).Distinct().ToList();
+        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movieIds, ct);
+        var itemsByMovie = await sceneService.GetScenesForMoviesAsync(movieIds, effective, ct);
         var apexSeconds = await ApexSecondsByMovieAsync(db, itemsByMovie.Keys, ct);
-        var rollups = await RollupsAsync(itemsByMovie, ct);
+        var rollups = await RollupsAsync(itemsByMovie, effective, ct);
 
         var cards = page
             .Select(p => (Row: p, Item: itemsByMovie[p.MovieId].FirstOrDefault(i => i.Id == p.Id)))
@@ -334,17 +337,18 @@ public sealed class SceneWallQueryService(
 
         var apexSeconds = await ApexSecondsByMovieAsync(db, movieIds, ct);
         // Only the apexes matter to a highlight's roll-up, so no scenes are loaded.
-        var rollups = await RollupsAsync(movieIds.ToDictionary(id => id, _ => (IReadOnlyList<SceneItem>)[]), ct);
-        var media = await db.CachedImages.AsNoTracking()
-            .Where(c => c.Role == HighlightMediaService.Role && ids.Contains(c.Index))
-            .ToListAsync(ct);
+        var rollups = await RollupsAsync(movieIds.ToDictionary(id => id, _ => (IReadOnlyList<SceneItem>)[]), await ClipAssignments.LoadEffectiveActorsAsync(db, movieIds, ct), ct);
+        var media = (await db.CachedImages.AsNoTracking()
+                .Where(c => c.Role == HighlightMediaService.Role && ids.Contains(c.Index))
+                .ToListAsync(ct))
+            .ToLookup(c => (c.Index, c.Variant));
 
         // Only media /highlight-image would serve counts (as for scene cards).
         long? MediaVersion(int id, double start, double end, string variant)
         {
             if (highlightMedia is not null && !highlightMedia.ServesVariant(variant)) return null;
             var window = HighlightMediaService.Window(start, end);
-            var row = media.FirstOrDefault(m => m.Index == id && m.Variant == variant);
+            var row = media[(id, variant)].FirstOrDefault();
             var current = row is not null && (highlightMedia?.IsCurrent(row, window) ?? (row.SceneStartMs == window.StartMs && row.SceneEndMs == window.EndMs));
             return current ? row!.UpdatedAt.Ticks : null;
         }
@@ -466,11 +470,11 @@ public sealed class SceneWallQueryService(
 
     /// <summary>Each movie's tag roll-up over the given scenes and all its highlights and apexes,
     /// so the sources ("highlight 2", "apex 3") number them as Movie Detail does.</summary>
-    private async Task<Dictionary<int, ClipRollupResult>> RollupsAsync(IReadOnlyDictionary<int, IReadOnlyList<SceneItem>> scenesByMovie, CancellationToken ct)
+    private async Task<Dictionary<int, ClipRollupResult>> RollupsAsync(IReadOnlyDictionary<int, IReadOnlyList<SceneItem>> scenesByMovie, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct)
     {
         var movieIds = scenesByMovie.Keys.ToList();
-        var highlightsByMovie = await highlights.GetHighlightsForMoviesAsync(movieIds, ct);
-        var apexesByMovie = await apexes.GetApexesForMoviesAsync(movieIds, ct);
+        var highlightsByMovie = await highlights.GetHighlightsForMoviesAsync(movieIds, effective, ct);
+        var apexesByMovie = await apexes.GetApexesForMoviesAsync(movieIds, effective, ct);
         return scenesByMovie.ToDictionary(kv => kv.Key, kv => ClipRollup.Compute(kv.Value, highlightsByMovie[kv.Key], apexesByMovie[kv.Key]));
     }
 

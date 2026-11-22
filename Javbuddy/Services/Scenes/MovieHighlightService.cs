@@ -57,6 +57,9 @@ public interface IMovieHighlightService
     /// fixed number of queries however many movies there are. Every id is in the result.</summary>
     Task<IReadOnlyDictionary<int, IReadOnlyList<HighlightItem>>> GetHighlightsForMoviesAsync(IReadOnlyCollection<int> movieIds, CancellationToken ct = default);
 
+    /// <summary>As above, from effective actors the caller already loaded for the same movies.</summary>
+    Task<IReadOnlyDictionary<int, IReadOnlyList<HighlightItem>>> GetHighlightsForMoviesAsync(IReadOnlyCollection<int> movieIds, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct = default);
+
     /// <summary>The cast the highlight form picks actors from.</summary>
     Task<ApexActorOptions> GetActorOptionsAsync(int movieId, CancellationToken ct = default);
 
@@ -91,6 +94,18 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
     {
         var movies = movieIds.Distinct().ToList();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await GetHighlightsForMoviesAsync(db, movies, await ClipAssignments.LoadEffectiveActorsAsync(db, movies, ct), ct);
+    }
+
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<HighlightItem>>> GetHighlightsForMoviesAsync(IReadOnlyCollection<int> movieIds, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct = default)
+    {
+        var movies = movieIds.Distinct().ToList();
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await GetHighlightsForMoviesAsync(db, movies, effective, ct);
+    }
+
+    private async Task<IReadOnlyDictionary<int, IReadOnlyList<HighlightItem>>> GetHighlightsForMoviesAsync(AppDbContext db, List<int> movies, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct)
+    {
         var highlightsByMovie = (await db.MovieHighlights.AsNoTracking()
                 .Include(h => h.HighlightTags).ThenInclude(ht => ht.Tag).ThenInclude(t => t.ParentTag)
                 .Include(h => h.HighlightActors).ThenInclude(ha => ha.MovieActor).ThenInclude(ma => ma.Actor)
@@ -98,21 +113,21 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
                 .ToListAsync(ct))
             .ToLookup(h => h.MovieId);
         var ids = highlightsByMovie.SelectMany(g => g).Select(h => h.Id).ToList();
-        var media = await db.CachedImages.AsNoTracking()
-            .Where(c => c.Role == HighlightMediaService.Role && ids.Contains(c.Index))
-            .ToListAsync(ct);
+        var media = (await db.CachedImages.AsNoTracking()
+                .Where(c => c.Role == HighlightMediaService.Role && ids.Contains(c.Index))
+                .ToListAsync(ct))
+            .ToLookup(c => (c.Index, c.Variant));
 
         // Only media /highlight-image would serve counts (as for scenes).
         long? MediaVersion(MovieHighlight highlight, string variant)
         {
             if (highlightMedia is not null && !highlightMedia.ServesVariant(variant)) return null;
             var window = HighlightMediaService.Window(highlight.StartSeconds, highlight.EndSeconds);
-            var row = media.FirstOrDefault(m => m.Index == highlight.Id && m.Variant == variant);
+            var row = media[(highlight.Id, variant)].FirstOrDefault();
             var current = row is not null && (highlightMedia?.IsCurrent(row, window) ?? (row.SceneStartMs == window.StartMs && row.SceneEndMs == window.EndMs));
             return current ? row!.UpdatedAt.Ticks : null;
         }
 
-        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movies, ct);
         var castCounts = (await db.MovieActors.Where(ma => movies.Contains(ma.MovieId)).GroupBy(ma => ma.MovieId).Select(g => new { MovieId = g.Key, Count = g.Count() }).ToListAsync(ct))
             .ToDictionary(g => g.MovieId, g => g.Count);
         return movies.ToDictionary(movieId => movieId, movieId =>

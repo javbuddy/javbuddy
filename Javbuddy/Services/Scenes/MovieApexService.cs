@@ -73,6 +73,9 @@ public interface IMovieApexService
     /// number of queries however many movies there are. Every id is in the result.</summary>
     Task<IReadOnlyDictionary<int, IReadOnlyList<ApexItem>>> GetApexesForMoviesAsync(IReadOnlyCollection<int> movieIds, CancellationToken ct = default);
 
+    /// <summary>As above, from effective actors the caller already loaded for the same movies.</summary>
+    Task<IReadOnlyDictionary<int, IReadOnlyList<ApexItem>>> GetApexesForMoviesAsync(IReadOnlyCollection<int> movieIds, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct = default);
+
     /// <summary>The cast the apex form picks actors from.</summary>
     Task<ApexActorOptions> GetActorOptionsAsync(int movieId, CancellationToken ct = default);
 
@@ -114,6 +117,18 @@ public class MovieApexService(
     {
         var movies = movieIds.Distinct().ToList();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await GetApexesForMoviesAsync(db, movies, await ClipAssignments.LoadEffectiveActorsAsync(db, movies, ct), ct);
+    }
+
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<ApexItem>>> GetApexesForMoviesAsync(IReadOnlyCollection<int> movieIds, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct = default)
+    {
+        var movies = movieIds.Distinct().ToList();
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await GetApexesForMoviesAsync(db, movies, effective, ct);
+    }
+
+    private async Task<IReadOnlyDictionary<int, IReadOnlyList<ApexItem>>> GetApexesForMoviesAsync(AppDbContext db, List<int> movies, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct)
+    {
         var apexes = await db.MovieApexes.AsNoTracking()
             .Include(a => a.ApexTags).ThenInclude(at => at.Tag).ThenInclude(t => t.ParentTag)
             .Include(a => a.ApexActors).ThenInclude(aa => aa.MovieActor).ThenInclude(ma => ma.Actor)
@@ -121,23 +136,23 @@ public class MovieApexService(
             .OrderBy(a => a.Seconds).ThenBy(a => a.Id)
             .ToListAsync(ct);
         var ids = apexes.Select(a => a.Id).ToList();
-        var media = apexMedia is not null && (apexMedia.ServesPreview || apexMedia.ServesVariant(SceneMediaService.VariantThumb))
-            ? await db.CachedImages.AsNoTracking()
-                .Where(c => c.Role == ApexMediaService.Role && ids.Contains(c.Index))
-                .ToListAsync(ct)
-            : [];
+        var media = (apexMedia is not null && (apexMedia.ServesPreview || apexMedia.ServesVariant(SceneMediaService.VariantThumb))
+                ? await db.CachedImages.AsNoTracking()
+                    .Where(c => c.Role == ApexMediaService.Role && ids.Contains(c.Index))
+                    .ToListAsync(ct)
+                : [])
+            .ToLookup(c => (c.Index, c.Variant));
 
         // Only media /apex-image would serve counts (as for highlights): a variant the current cache mode
         // keeps, sampled for the apex's current time.
         long? MediaVersion(MovieApex apex, string variant, bool served) =>
-            served && media.FirstOrDefault(m => m.Index == apex.Id && m.Variant == variant) is { } row && apexMedia!.IsCurrent(row, ApexMediaService.Window(apex.Seconds))
+            served && media[(apex.Id, variant)].FirstOrDefault() is { } row && apexMedia!.IsCurrent(row, ApexMediaService.Window(apex.Seconds))
                 ? row.UpdatedAt.Ticks
                 : null;
 
         var servesThumb = apexMedia?.ServesVariant(SceneMediaService.VariantThumb) == true;
         var servesPreview = apexMedia?.ServesPreview == true;
 
-        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, movies, ct);
         var castCounts = (await db.MovieActors.Where(ma => movies.Contains(ma.MovieId)).GroupBy(ma => ma.MovieId).Select(g => new { MovieId = g.Key, Count = g.Count() }).ToListAsync(ct))
             .ToDictionary(g => g.MovieId, g => g.Count);
         var defaultWindow = await GetDefaultWindowAsync(ct);

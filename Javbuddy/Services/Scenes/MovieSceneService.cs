@@ -59,6 +59,10 @@ public interface IMovieSceneService
     /// number of queries however many movies there are. Every id is in the result.</summary>
     Task<IReadOnlyDictionary<int, IReadOnlyList<SceneItem>>> GetScenesForMoviesAsync(IReadOnlyCollection<int> movieIds, CancellationToken ct = default);
 
+    /// <summary>As above, from effective actors the caller already loaded (<see cref="ClipAssignments"/>) for the
+    /// same movies, so a caller reading scenes, highlights and apexes together loads them once.</summary>
+    Task<IReadOnlyDictionary<int, IReadOnlyList<SceneItem>>> GetScenesForMoviesAsync(IReadOnlyCollection<int> movieIds, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct = default);
+
     Task<SceneOperationResult> AddSceneAsync(int movieId, double startSeconds, double? endSeconds, string? title, CancellationToken ct = default);
 
     Task<SceneOperationResult> UpdateSceneAsync(int sceneId, double startSeconds, double? endSeconds, string? title, CancellationToken ct = default);
@@ -103,6 +107,18 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
     {
         var ids = movieIds.Distinct().ToList();
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await GetScenesForMoviesAsync(db, ids, await ClipAssignments.LoadEffectiveActorsAsync(db, ids, ct), ct);
+    }
+
+    public async Task<IReadOnlyDictionary<int, IReadOnlyList<SceneItem>>> GetScenesForMoviesAsync(IReadOnlyCollection<int> movieIds, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct = default)
+    {
+        var ids = movieIds.Distinct().ToList();
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        return await GetScenesForMoviesAsync(db, ids, effective, ct);
+    }
+
+    private async Task<IReadOnlyDictionary<int, IReadOnlyList<SceneItem>>> GetScenesForMoviesAsync(AppDbContext db, List<int> ids, IReadOnlyDictionary<int, ClipActorsResult> effective, CancellationToken ct)
+    {
         var durations = (await db.Movies.Where(m => ids.Contains(m.Id)).Select(m => new { m.Id, m.MediaDurationSeconds }).ToListAsync(ct))
             .ToDictionary(m => m.Id, m => m.MediaDurationSeconds);
         var scenes = await db.Scenes.AsNoTracking()
@@ -111,9 +127,10 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
             .Include(s => s.SceneTags).ThenInclude(st => st.Tag).ThenInclude(t => t.ParentTag)
             .ToListAsync(ct);
         var sceneIds = scenes.Select(s => s.Id).ToList();
-        var media = await db.CachedImages.AsNoTracking()
-            .Where(c => c.Role == SceneMediaService.Role && sceneIds.Contains(c.Index))
-            .ToListAsync(ct);
+        var media = (await db.CachedImages.AsNoTracking()
+                .Where(c => c.Role == SceneMediaService.Role && sceneIds.Contains(c.Index))
+                .ToListAsync(ct))
+            .ToLookup(c => (c.Index, c.Variant));
 
         // Only media /scene-image would serve counts: sampled for the scene's current range
         //, a variant the current cache mode serves, unexpired and still
@@ -123,12 +140,11 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
         {
             if (sceneMedia is not null && !sceneMedia.ServesVariant(variant)) return null;
             var window = SceneMediaService.Window(resolved.Scene.StartSeconds, resolved.EffectiveEndSeconds);
-            var row = media.FirstOrDefault(m => m.Index == resolved.Scene.Id && m.Variant == variant);
+            var row = media[(resolved.Scene.Id, variant)].FirstOrDefault();
             var current = row is not null && (sceneMedia?.IsCurrent(row, window) ?? (row.SceneStartMs == window.StartMs && row.SceneEndMs == window.EndMs));
             return current ? row!.UpdatedAt.Ticks : null;
         }
 
-        var effective = await ClipAssignments.LoadEffectiveActorsAsync(db, ids, ct);
         var scenesByMovie = scenes.ToLookup(s => s.MovieId);
         return ids.ToDictionary(id => id, id => (IReadOnlyList<SceneItem>)SceneRanges.ResolveEffectiveRanges(scenesByMovie[id].ToList(), durations.GetValueOrDefault(id))
             .Select(r => new SceneItem(r.Scene.Id, r.Position, r.DisplayTitle, r.Scene.Title, r.Scene.StartSeconds, r.Scene.EndSeconds, r.EffectiveEndSeconds)

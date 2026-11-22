@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **The Scenes wall loads each page's clips once instead of three times.** One load of the movies' effective actors now serves the scenes, highlights and apexes (and their tag roll-up), instead of one per service, and the clip media lookups use a dictionary instead of scanning the list per clip.
 - **Tag discovery, "Apply Rules to Library" and "Strip Ignored Tags" no longer load the whole Movies table tracked.** They read only each movie's id and genre text, work through the library in chunks of 500 in short transactions, and write the changed genre text with `ExecuteUpdate`, so other writers are not blocked for the whole pass.
 - **The Actor Photos filter box waits for a pause in typing** before filtering, sorting and regrouping every photo, and the photo search in the service now ignores case.
 - **The movie filters' actor picker loads only the columns an actor's name needs** instead of every full actor row.
