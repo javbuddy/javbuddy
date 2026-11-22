@@ -29,4 +29,17 @@ public static class EnvConfig
         var scalar = configuration[key];
         return string.IsNullOrWhiteSpace(scalar) ? [] : parseScalar(scalar);
     }
+
+    /// <summary>A polling interval setting: a positive number in the unit <paramref name="fromValue"/> converts
+    /// (e.g. <c>TimeSpan.FromSeconds</c>), raised to <paramref name="minimum"/>. An unset, malformed or
+    /// non-positive value falls back to <paramref name="defaultInterval"/>.</summary>
+    public static TimeSpan GetInterval(IConfiguration configuration, string key, Func<double, TimeSpan> fromValue, TimeSpan defaultInterval, TimeSpan minimum)
+    {
+        if (double.TryParse(configuration[key], out var value) && value > 0)
+        {
+            var interval = fromValue(value);
+            return interval < minimum ? minimum : interval;
+        }
+        return defaultInterval;
+    }
 }

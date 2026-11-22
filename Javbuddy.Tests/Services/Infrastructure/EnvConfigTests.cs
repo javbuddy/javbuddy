@@ -53,4 +53,31 @@ public class EnvConfigTests
     {
         Assert.Empty(EnvConfig.GetList(Config(), "X:Names", _ => ["unused"]));
     }
+
+    private static readonly TimeSpan Default = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Minimum = TimeSpan.FromSeconds(10);
+
+    [Fact]
+    public void GetInterval_ConvertsThePositiveValueInTheGivenUnit()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(2), EnvConfig.GetInterval(Config(("X:Every", "120")), "X:Every", TimeSpan.FromSeconds, Default, Minimum));
+        Assert.Equal(TimeSpan.FromHours(2), EnvConfig.GetInterval(Config(("X:Every", "2")), "X:Every", TimeSpan.FromHours, Default, Minimum));
+    }
+
+    [Fact]
+    public void GetInterval_RaisesAValueBelowTheMinimum()
+    {
+        Assert.Equal(Minimum, EnvConfig.GetInterval(Config(("X:Every", "1")), "X:Every", TimeSpan.FromSeconds, Default, Minimum));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("0")]
+    [InlineData("-5")]
+    public void GetInterval_FallsBackToTheDefaultWhenUnsetMalformedOrNotPositive(string? raw)
+    {
+        Assert.Equal(Default, EnvConfig.GetInterval(Config(("X:Every", raw)), "X:Every", TimeSpan.FromSeconds, Default, Minimum));
+    }
 }

@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.QBittorrent;
 using Javbuddy.Services.Torrents;
 using Microsoft.EntityFrameworkCore;
@@ -41,16 +42,8 @@ public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContex
     // row and a "Running scheduled task" log line for every single run would just be noise.
     public bool RecordRunHistory => false;
 
-    public TimeSpan GetInterval()
-    {
-        var configured = configuration["QBittorrent:SyncIntervalSeconds"];
-        if (double.TryParse(configured, out var seconds) && seconds > 0)
-        {
-            var interval = TimeSpan.FromSeconds(seconds);
-            return interval < MinimumInterval ? MinimumInterval : interval;
-        }
-        return DefaultInterval;
-    }
+    public TimeSpan GetInterval() =>
+        EnvConfig.GetInterval(configuration, "QBittorrent:SyncIntervalSeconds", TimeSpan.FromSeconds, DefaultInterval, MinimumInterval);
 
     public async Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress)
     {

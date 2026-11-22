@@ -92,47 +92,33 @@ public class SystemStatusService(
     public async Task<List<SubServiceHealth>> GetSubServiceHealthAsync(ConfiguredIntegrations configured, CancellationToken ct = default)
     {
         var results = await Task.WhenAll(
-            CheckAsync("javinizer-go", configured.Javinizer, async () =>
-            {
-                var result = javinizerClient.TestConnectionAsync(ct);
-                var url = javinizerClient.GetExternalUrlAsync(ct);
-                await Task.WhenAll(result, url);
-                return new SubServiceHealth("javinizer-go", true, result.Result.Success, result.Result.Message, url.Result, result.Result.Version);
-            }),
-            CheckAsync("Prowlarr", configured.Prowlarr, async () =>
-            {
-                var result = prowlarrClient.TestConnectionAsync(ct);
-                var url = prowlarrClient.GetExternalUrlAsync(ct);
-                await Task.WhenAll(result, url);
-                return new SubServiceHealth("Prowlarr", true, result.Result.Success, result.Result.Message, url.Result, result.Result.Version);
-            }),
-            CheckAsync("qBittorrent", configured.QBittorrent, async () =>
-            {
-                var result = qBittorrentClient.TestConnectionAsync(ct);
-                var url = qBittorrentClient.GetExternalUrlAsync(ct);
-                await Task.WhenAll(result, url);
-                return new SubServiceHealth("qBittorrent", true, result.Result.Success, result.Result.Message, url.Result, result.Result.Version);
-            }),
-            CheckAsync("Jellyfin", configured.Jellyfin, async () =>
-            {
-                var result = jellyfinClient.TestConnectionAsync(ct);
-                var url = jellyfinClient.GetExternalUrlAsync(ct);
-                await Task.WhenAll(result, url);
-                return new SubServiceHealth("Jellyfin", true, result.Result.Success, result.Result.Message, url.Result, result.Result.Version);
-            }),
-            CheckAsync("Challenge solver", configured.ChallengeSolver, async () =>
-            {
-                var result = challengeSolverClient.TestConnectionAsync(ct);
-                var url = challengeSolverClient.GetExternalUrlAsync(ct);
-                await Task.WhenAll(result, url);
-                return new SubServiceHealth("Challenge solver", true, result.Result.Success, result.Result.Message, url.Result, result.Result.Version);
-            }));
+            CheckClientAsync("javinizer-go", configured.Javinizer, () => javinizerClient.TestConnectionAsync(ct), () => javinizerClient.GetExternalUrlAsync(ct), r => (r.Success, r.Message, r.Version)),
+            CheckClientAsync("Prowlarr", configured.Prowlarr, () => prowlarrClient.TestConnectionAsync(ct), () => prowlarrClient.GetExternalUrlAsync(ct), r => (r.Success, r.Message, r.Version)),
+            CheckClientAsync("qBittorrent", configured.QBittorrent, () => qBittorrentClient.TestConnectionAsync(ct), () => qBittorrentClient.GetExternalUrlAsync(ct), r => (r.Success, r.Message, r.Version)),
+            CheckClientAsync("Jellyfin", configured.Jellyfin, () => jellyfinClient.TestConnectionAsync(ct), () => jellyfinClient.GetExternalUrlAsync(ct), r => (r.Success, r.Message, r.Version)),
+            CheckClientAsync("Challenge solver", configured.ChallengeSolver, () => challengeSolverClient.TestConnectionAsync(ct), () => challengeSolverClient.GetExternalUrlAsync(ct), r => (r.Success, r.Message, r.Version)));
 
         return [.. results];
     }
 
-    private static Task<SubServiceHealth> CheckAsync(string name, bool configured, Func<Task<SubServiceHealth>> test) =>
-        configured
-            ? test()
-            : Task.FromResult(new SubServiceHealth(name, false, false, "Not configured.", null));
+    /// <summary>Tests one integration (and fetches its external URL) in parallel, or reports it as
+    /// not configured without calling it. <paramref name="unpack"/> adapts each client's own result record.</summary>
+    private static async Task<SubServiceHealth> CheckClientAsync<TResult>(
+        string name,
+        bool configured,
+        Func<Task<TResult>> test,
+        Func<Task<string?>> externalUrl,
+        Func<TResult, (bool Success, string Message, string? Version)> unpack)
+    {
+        if (!configured)
+        {
+            return new SubServiceHealth(name, false, false, "Not configured.", null);
+        }
+
+        var result = test();
+        var url = externalUrl();
+        await Task.WhenAll(result, url);
+        var (success, message, version) = unpack(result.Result);
+        return new SubServiceHealth(name, true, success, message, url.Result, version);
+    }
 }

@@ -1,5 +1,6 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.Movies;
 using Microsoft.EntityFrameworkCore;
@@ -28,16 +29,8 @@ public class JellyfinLinkSyncTask(
     public string Description =>
         "Links movies and actors not yet matched to Jellyfin items so \"Open in Jellyfin\" works.";
 
-    public TimeSpan GetInterval()
-    {
-        var configured = configuration["Jellyfin:LinkSyncIntervalHours"];
-        if (double.TryParse(configured, out var hours) && hours > 0)
-        {
-            var interval = TimeSpan.FromHours(hours);
-            return interval < MinimumInterval ? MinimumInterval : interval;
-        }
-        return DefaultInterval;
-    }
+    public TimeSpan GetInterval() =>
+        EnvConfig.GetInterval(configuration, "Jellyfin:LinkSyncIntervalHours", TimeSpan.FromHours, DefaultInterval, MinimumInterval);
 
     public async Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress)
     {
