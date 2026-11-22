@@ -11,7 +11,6 @@ using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
 using Javbuddy.Services.MediaInfo;
-using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Metrics;
 using Javbuddy.Services.MinnanoAv;
 using Javbuddy.Services.Monitoring;

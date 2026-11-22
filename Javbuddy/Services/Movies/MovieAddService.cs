@@ -3,7 +3,6 @@ using Javbuddy.Models;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
-using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Tags;
 using Microsoft.EntityFrameworkCore;
 
