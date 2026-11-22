@@ -20,6 +20,71 @@ public class ImageConverterTests
     }
 
     [Fact]
+    public async Task EnsureLocalPosterCroppedAsync_PortraitPoster_LeavesTheFileUntouched()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"poster-{Guid.NewGuid():N}.jpg");
+        try
+        {
+            using (var bitmap = new SKBitmap(300, 400))
+            using (var image = SKImage.FromBitmap(bitmap))
+            using (var data = image.Encode(SKEncodedImageFormat.Jpeg, 90))
+            {
+                await File.WriteAllBytesAsync(path, data.ToArray());
+            }
+            var before = await File.ReadAllBytesAsync(path);
+
+            Assert.False(await ImageConverter.EnsureLocalPosterCroppedAsync(path));
+
+            Assert.Equal(before, await File.ReadAllBytesAsync(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task EnsureLocalPosterCroppedAsync_LandscapePoster_CropsItToTheCover()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"poster-{Guid.NewGuid():N}.jpg");
+        try
+        {
+            using (var bitmap = new SKBitmap(800, 538))
+            using (var image = SKImage.FromBitmap(bitmap))
+            using (var data = image.Encode(SKEncodedImageFormat.Jpeg, 90))
+            {
+                await File.WriteAllBytesAsync(path, data.ToArray());
+            }
+
+            Assert.True(await ImageConverter.EnsureLocalPosterCroppedAsync(path));
+
+            using var cropped = SKBitmap.Decode(path);
+            Assert.True(cropped.Width < cropped.Height);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task EnsureLocalPosterCroppedAsync_MissingOrUnreadableFile_ReturnsFalse()
+    {
+        Assert.False(await ImageConverter.EnsureLocalPosterCroppedAsync("/nonexistent/poster.jpg"));
+
+        var path = Path.Combine(Path.GetTempPath(), $"poster-{Guid.NewGuid():N}.jpg");
+        try
+        {
+            await File.WriteAllTextAsync(path, "not an image");
+            Assert.False(await ImageConverter.EnsureLocalPosterCroppedAsync(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public void ConvertBytesToBothWebP_RecordsAnImageConvertSpan()
     {
         var sourceBytes = CreateSampleImageBytes(64, 48, SKColors.CornflowerBlue);

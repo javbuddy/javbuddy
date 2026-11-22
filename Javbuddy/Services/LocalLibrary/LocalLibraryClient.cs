@@ -955,7 +955,7 @@ public class LocalLibraryClient(
             var posterPath = Path.Combine(result.FolderPath, "poster.jpg");
             if (File.Exists(posterPath))
             {
-                ImageConverter.EnsureLocalPosterCropped(posterPath);
+                await ImageConverter.EnsureLocalPosterCroppedAsync(posterPath, ct);
             }
         }
 

@@ -279,10 +279,31 @@ public static class ImageConverter
     }
 
     /// <summary>Checks if a physical poster image on disk is landscape (aspect ratio > 1.05),
-    /// and if so, crops it to the front cover and overwrites the file as JPEG. Returns true if cropped.</summary>
-    public static bool EnsureLocalPosterCropped(string posterFilePath)
+    /// and if so, crops it to the front cover and overwrites the file as JPEG. Returns true if cropped.
+    /// A poster that needs no crop (nearly all of them, on every rescan) is only header-probed; the
+    /// full decode a crop needs runs under <see cref="ImageConversionGate"/>.</summary>
+    public static async Task<bool> EnsureLocalPosterCroppedAsync(string posterFilePath, CancellationToken ct = default) =>
+        LocalPosterIsLandscape(posterFilePath)
+        && await ImageConversionGate.RunAsync(() => CropLocalPoster(posterFilePath), ct);
+
+    /// <summary>Whether the poster's aspect ratio calls for a crop, read from the image header alone
+    /// (<see cref="SKCodec"/>) — no pixels are decoded.</summary>
+    private static bool LocalPosterIsLandscape(string posterFilePath)
     {
         if (!File.Exists(posterFilePath)) return false;
+        try
+        {
+            using var codec = SKCodec.Create(posterFilePath);
+            return codec is not null && codec.Info.Height > 0 && (double)codec.Info.Width / codec.Info.Height > 1.05;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool CropLocalPoster(string posterFilePath)
+    {
         try
         {
             using var original = SKBitmap.Decode(posterFilePath);

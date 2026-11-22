@@ -90,7 +90,7 @@ public class MovieRescanService(
                     var posterPath = Path.Combine(local.FolderPath, "poster.jpg");
                     if (File.Exists(posterPath))
                     {
-                        ImageConverter.EnsureLocalPosterCropped(posterPath);
+                        await ImageConverter.EnsureLocalPosterCroppedAsync(posterPath, ct);
                     }
                 }
 
