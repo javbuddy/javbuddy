@@ -559,4 +559,19 @@ public class ScheduledTaskRunnerTests
         Assert.False(tracker.IsRunning("Flaky"));
         Assert.True(await runner.RunAsync(task, CancellationToken.None));
     }
+
+    [Fact]
+    public async Task RunAsync_TaskWithoutHistory_RecordsItsLastCompletionInMemory()
+    {
+        using var factory = new TestDbContextFactory();
+        var tracker = new ScheduledTaskRunTracker();
+        var task = new FakeTask("Sync", (_, _) => Task.FromResult<string?>(null), recordRunHistory: false);
+        var before = DateTime.UtcNow;
+
+        await CreateRunner(factory, tracker: tracker).RunAsync(task, CancellationToken.None);
+
+        Assert.True(tracker.GetLastCompletion("Sync") >= before);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Empty(await db.ScheduledTaskRuns.ToListAsync());
+    }
 }

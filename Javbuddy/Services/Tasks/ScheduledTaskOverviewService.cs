@@ -26,7 +26,8 @@ public interface IScheduledTaskOverviewService
 /// next due time, plus the 30 most recently queued runs of those tasks.</summary>
 public class ScheduledTaskOverviewService(
     IDbContextFactory<AppDbContext> dbFactory,
-    IEnumerable<IScheduledTask> scheduledTasks) : IScheduledTaskOverviewService
+    IEnumerable<IScheduledTask> scheduledTasks,
+    ScheduledTaskRunTracker tracker) : IScheduledTaskOverviewService
 {
     private const int HistoryLimit = 30;
 
@@ -46,8 +47,8 @@ public class ScheduledTaskOverviewService(
                 .FirstOrDefaultAsync(ct);
 
             var interval = task.GetInterval();
-            var lastExecution = lastRun?.EndedAt;
-            var lastDuration = lastRun is { StartedAt: not null, EndedAt: not null }
+            var lastExecution = ScheduledTaskRunTracker.Latest(lastRun?.EndedAt, tracker.GetLastCompletion(task.Name));
+            var lastDuration = lastRun is { StartedAt: not null, EndedAt: not null } && lastRun.EndedAt == lastExecution
                 ? lastRun.EndedAt!.Value - lastRun.StartedAt!.Value
                 : (TimeSpan?)null;
             var nextExecution = (lastExecution ?? DateTime.UtcNow) + interval;

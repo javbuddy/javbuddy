@@ -38,7 +38,7 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
         }
         finally
         {
-            tracker.End(task.Name);
+            tracker.End(task.Name, DateTime.UtcNow);
         }
         return true;
     }

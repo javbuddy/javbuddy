@@ -32,7 +32,7 @@ public class ScheduledTaskOverviewServiceTests
         await AddRunAsync(factory, "sync", t0.AddHours(-3), t0.AddHours(-3), t0.AddHours(-3).AddMinutes(2));
         await AddRunAsync(factory, "sync", t0, t0, t0.AddMinutes(5));
         await AddRunAsync(factory, "sync", t0.AddHours(1));
-        var service = new ScheduledTaskOverviewService(factory, [Task("sync", TimeSpan.FromHours(6))]);
+        var service = new ScheduledTaskOverviewService(factory, [Task("sync", TimeSpan.FromHours(6))], new ScheduledTaskRunTracker());
 
         var overview = await service.GetOverviewAsync();
 
@@ -47,7 +47,7 @@ public class ScheduledTaskOverviewServiceTests
     public async Task GetOverviewAsync_NeverRunTask_HasNoLastExecutionAndIsDueOneIntervalFromNow()
     {
         using var factory = new TestDbContextFactory();
-        var service = new ScheduledTaskOverviewService(factory, [Task("new", TimeSpan.FromHours(1))]);
+        var service = new ScheduledTaskOverviewService(factory, [Task("new", TimeSpan.FromHours(1))], new ScheduledTaskRunTracker());
 
         var before = DateTime.UtcNow;
         var row = Assert.Single((await service.GetOverviewAsync()).Rows);
@@ -67,7 +67,7 @@ public class ScheduledTaskOverviewServiceTests
             await AddRunAsync(factory, "visible", t0.AddMinutes(i));
         }
         await AddRunAsync(factory, "hidden", t0.AddDays(1));
-        var service = new ScheduledTaskOverviewService(factory, [Task("visible", TimeSpan.FromHours(1)), Task("hidden", TimeSpan.FromHours(1), show: false)]);
+        var service = new ScheduledTaskOverviewService(factory, [Task("visible", TimeSpan.FromHours(1)), Task("hidden", TimeSpan.FromHours(1), show: false)], new ScheduledTaskRunTracker());
 
         var overview = await service.GetOverviewAsync();
 
@@ -86,7 +86,7 @@ public class ScheduledTaskOverviewServiceTests
         await AddRunAsync(factory, "visible", t0, t0.AddMinutes(5));
         await AddRunAsync(factory, "visible", t0, t0, t0.AddMinutes(2));
         await AddRunAsync(factory, "hidden", t0, t0.AddMinutes(9));
-        var service = new ScheduledTaskOverviewService(factory, [Task("visible", TimeSpan.FromHours(1)), Task("hidden", TimeSpan.FromHours(1), show: false)]);
+        var service = new ScheduledTaskOverviewService(factory, [Task("visible", TimeSpan.FromHours(1)), Task("hidden", TimeSpan.FromHours(1), show: false)], new ScheduledTaskRunTracker());
 
         var active = await service.GetActiveRunAsync();
 
@@ -102,7 +102,7 @@ public class ScheduledTaskOverviewServiceTests
         await AddRunAsync(factory, "sync", t0, t0, t0.AddMinutes(1));
         await AddRunAsync(factory, "sync", t0.AddHours(1));
         await AddRunAsync(factory, "other", t0.AddHours(5), t0.AddHours(5), t0.AddHours(6));
-        var service = new ScheduledTaskOverviewService(factory, []);
+        var service = new ScheduledTaskOverviewService(factory, [], new ScheduledTaskRunTracker());
 
         var state = await service.GetRunStateAsync("sync");
 

@@ -100,15 +100,18 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, Sched
             // minute; only an actual run is worth tracing.
             using (SuppressInstrumentationScope.Begin())
             {
-                DateTime? lastRun;
-                await using (var db = await dbFactory.CreateDbContextAsync(ct))
+                // A task without run history has no row to read, so its in-memory last completion is all there is.
+                DateTime? lastRun = null;
+                if (task.RecordRunHistory)
                 {
+                    await using var db = await dbFactory.CreateDbContextAsync(ct);
                     lastRun = await db.ScheduledTaskRuns
                         .Where(r => r.TaskName == task.Name && r.EndedAt != null)
                         .OrderByDescending(r => r.EndedAt)
                         .Select(r => r.EndedAt)
                         .FirstOrDefaultAsync(ct);
                 }
+                lastRun = ScheduledTaskRunTracker.Latest(lastRun, tracker.GetLastCompletion(task.Name));
 
                 due = IsDue(lastRun, DateTime.UtcNow, processStartUtc, task.GetInterval(), task.RunImmediatelyWhenNeverRun);
             }
