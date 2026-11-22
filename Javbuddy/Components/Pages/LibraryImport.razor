@@ -13,7 +13,7 @@
 <div class="import-tips">
     <h2>Some tips to ensure the import goes smoothly:</h2>
     <ul>
-        <li>Scans the root directories configured on the <a href="settings/connections">Connections</a> page (or the <code>LocalLibrary__RootPaths</code> environment variable) — nothing happens until at least one is set.</li>
+        <li>Scans the root directories configured on the <a href="settings/metadata">Metadata</a> page (or the <code>LocalLibrary__RootPaths</code> environment variable) — nothing happens until at least one is set.</li>
         <li>Each immediate subfolder of a root is treated as one movie, named after its release code, e.g. <code>D:\media\movies\vr\SIVR-505\</code> → <code>SIVR-505</code>.</li>
         <li>Every discovered movie is added as <strong>Got</strong>, since the file is already sitting on disk — its .nfo/poster/fanart are picked up the same way as the movie page's "Fetch from local" button.</li>
         <li>This does not touch anything already on your list — matches are counted as "already tracked" and skipped.</li>
@@ -161,9 +161,21 @@ else
         }
         finally
         {
+            var finished = pollCts;
             pollCts = null;
+            finished?.Dispose();
         }
     }
 
-    public void Dispose() => pollCts?.Cancel();
+    public void Dispose()
+    {
+        try
+        {
+            pollCts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The poll loop finished and disposed it first.
+        }
+    }
 }

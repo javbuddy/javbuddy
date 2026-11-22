@@ -275,9 +275,7 @@ else
 
     private async Task LoadAsync()
     {
-        localLibraryStatus = await ConnectionStatusService.GetLocalLibraryStatusAsync();
         settings = await R18DevSettingsService.GetAsync();
-        mediaInfoSettings = await MediaInfoSettingsService.GetAsync();
         minnanoAvSettings = await MinnanoAvSettingsService.GetAsync();
         if (MinnanoAvSolverEnv is { } minnanoAvSolver) minnanoAvSettings.UseChallengeSolver = minnanoAvSolver;
         discoverySources = await DiscoverySettingsService.GetSourcesAsync();

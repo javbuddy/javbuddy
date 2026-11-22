@@ -276,7 +276,8 @@ public sealed class SceneWallQueryService(
             attributes)
         {
             ApexTags = await ApexTagOptionsAsync(db, ct),
-            ActorTags = await ActorTagOptionsAsync(db.SceneEffectiveActorTags.Select(r => r.Tag), ct),
+            ActorTags = await ActorTagOptionsAsync(
+                db.SceneEffectiveActorTags.Where(r => includeHidden || !r.Scene.IsHiddenFromOverview).Select(r => r.Tag), ct),
         };
     }
 
@@ -445,7 +446,7 @@ public sealed class SceneWallQueryService(
             attributes)
         {
             ApexTags = await ApexTagOptionsAsync(db, ct),
-            ActorTags = await ActorTagOptionsAsync(db.HighlightEffectiveActorTags.Select(r => r.Tag), ct),
+            ActorTags = await ActorTagOptionsAsync(db.ApexEffectiveActorTags.Select(r => r.Tag), ct),
         };
     }
 
@@ -505,7 +506,7 @@ public sealed class SceneWallQueryService(
             attributes)
         {
             ApexTags = await ApexTagOptionsAsync(db, ct),
-            ActorTags = await ActorTagOptionsAsync(db.ApexEffectiveActorTags.Select(r => r.Tag), ct),
+            ActorTags = await ActorTagOptionsAsync(db.HighlightEffectiveActorTags.Select(r => r.Tag), ct),
         };
     }
 

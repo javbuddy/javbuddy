@@ -112,7 +112,7 @@ public sealed class SceneMediaQueue(IServiceScopeFactory scopeFactory, ILogger<S
                 };
                 if (movieId is { } id)
                 {
-                    Generated?.Invoke(id);
+                    RaiseGenerated(id);
                 }
                 span.SetOutcome(movieId is null ? "skipped" : "success");
             }
@@ -124,6 +124,24 @@ public sealed class SceneMediaQueue(IServiceScopeFactory scopeFactory, ILogger<S
             {
                 span.SetOutcome("failure", ex);
                 logger.LogWarning(ex, "Generating media for {Kind} {Id} failed", job.Kind, job.Id);
+            }
+        }
+    }
+
+    // Each subscriber runs in its own try/catch, so one that throws can't stop the rest, nor be
+    // logged as a failed generation.
+    private void RaiseGenerated(int movieId)
+    {
+        if (Generated is not { } handlers) return;
+        foreach (var handler in handlers.GetInvocationList().Cast<Action<int>>())
+        {
+            try
+            {
+                handler(movieId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "A media-generated subscriber failed for movie {MovieId}", movieId);
             }
         }
     }

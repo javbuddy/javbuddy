@@ -173,14 +173,23 @@ else
         }
         finally
         {
+            var finished = pollCts;
             pollCts = null;
+            finished?.Dispose();
         }
     }
 
     public void Dispose()
     {
         ScheduledTaskChangeNotifier.Changed -= OnScheduledTasksChangedElsewhere;
-        pollCts?.Cancel();
+        try
+        {
+            pollCts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The poll loop finished and disposed it first.
+        }
     }
 
     private void OnScheduledTasksChangedElsewhere()

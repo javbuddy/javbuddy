@@ -27,7 +27,8 @@ public class MovieAddService(
     IMediaServerClient mediaServerClient,
     ILocalLibraryClient localLibraryClient,
     IJavinizerClient javinizerClient,
-    MovieChangeNotifier movieChangeNotifier) : IMovieAddService
+    MovieChangeNotifier movieChangeNotifier,
+    ILogger<MovieAddService> logger) : IMovieAddService
 {
     private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
     private readonly IMediaServerClient mediaServerClient = mediaServerClient;
@@ -68,7 +69,7 @@ public class MovieAddService(
         }
 
         // Metadata: local library folders first, javinizer-go as fallback.
-        var local = await localLibraryClient.TryGetMetadataAsync(code);
+        var local = await localLibraryClient.TryGetMetadataAsync(code, ct);
         if (local.Found && local.Metadata is not null)
         {
             await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -83,6 +84,22 @@ public class MovieAddService(
                     await TagNormalization.ApplyToMovieAsync(db, tracked, local.Metadata.Genres, ct);
                 }
                 await db.SaveChangesAsync(ct);
+            }
+
+            // Metadata alone leaves MovieFiles, FileCount and VrType empty for a folder that already exists.
+            // The rescan syncs the files and derives the VR format from them.
+            // The movie and its metadata are saved by now, so a failed sync must not fail the add.
+            try
+            {
+                var sync = await localLibraryClient.RefreshMediaInfoOnlyAsync(movie.Id, ct);
+                if (!sync.Success)
+                {
+                    logger.LogInformation("Syncing the files of {Code} after adding it: {Message}", code, sync.ErrorMessage);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning(ex, "Syncing the files of {Code} after adding it failed", code);
             }
             return new MovieAddResult(movie, true, null);
         }

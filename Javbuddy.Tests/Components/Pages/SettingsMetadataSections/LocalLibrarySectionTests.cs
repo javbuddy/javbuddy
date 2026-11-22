@@ -39,4 +39,28 @@ public class LocalLibrarySectionTests : BunitContext
             ["Local Library", "MediaInfo", "Trickplay", "New movie artwork"],
             cut.FindAll(".card-title").Select(t => t.TextContent));
     }
+
+    [Fact]
+    public void Save_RaisesOnSaved()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        Services.AddSingleton<IDbContextFactory<AppDbContext>>(dbFactory);
+        Services.AddSingleton<IConnectionSettingsSaveService>(new ConnectionSettingsSaveService(dbFactory));
+        Services.AddSingleton(Substitute.For<IConfiguration>());
+        Services.AddSingleton<IMediaInfoSettingsService>(new MediaInfoSettingsService(dbFactory));
+        var trickplay = Substitute.For<ITrickplaySettingsService>();
+        trickplay.GetStoredAsync(Arg.Any<CancellationToken>()).Returns(new TrickplaySettings());
+        trickplay.GetEffectiveAsync(Arg.Any<CancellationToken>()).Returns(new TrickplaySettings());
+        Services.AddSingleton(trickplay);
+        var artwork = Substitute.For<INewMovieArtworkSettingsService>();
+        artwork.GetStoredAsync(Arg.Any<CancellationToken>()).Returns(new NewMovieArtworkSettings());
+        artwork.GetEffectiveAsync(Arg.Any<CancellationToken>()).Returns(new NewMovieArtworkSettings());
+        Services.AddSingleton(artwork);
+        var saved = 0;
+
+        var cut = Render<LocalLibrarySection>(p => p.Add(c => c.OnSaved, () => saved++));
+        cut.Find("form").Submit();
+
+        Assert.Equal(1, saved);
+    }
 }

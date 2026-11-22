@@ -35,6 +35,23 @@ public class SceneMediaQueueTests
     }
 
     [Fact]
+    public async Task AThrowingSubscriber_DoesNotStopTheOthers()
+    {
+        var (queue, _, highlights) = Create();
+        highlights.GenerateAsync(5, Arg.Any<CancellationToken>()).Returns(9);
+        var generated = new TaskCompletionSource<int>();
+        queue.Generated += _ => throw new InvalidOperationException("boom");
+        queue.Generated += id => generated.TrySetResult(id);
+        await queue.StartAsync(CancellationToken.None);
+
+        queue.EnqueueHighlight(5, 9, Window);
+
+        Assert.Equal(9, await generated.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        await queue.StopAsync(CancellationToken.None);
+        queue.Dispose();
+    }
+
+    [Fact]
     public async Task SameIdOfDifferentKinds_AreSeparateJobs_FailureMemoryIsPerKind()
     {
         var (queue, scenes, highlights) = Create();

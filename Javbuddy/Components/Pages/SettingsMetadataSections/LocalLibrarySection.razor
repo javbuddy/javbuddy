@@ -83,5 +83,6 @@
         saved = false;
         await ConnectionSettingsSaveService.SaveLocalLibraryAsync(settings!);
         saved = true;
+        await OnSaved.InvokeAsync();
     }
 }

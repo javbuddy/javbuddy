@@ -1,4 +1,5 @@
 using Javbuddy.Models;
+using Javbuddy.Services.Common;
 using Javbuddy.Services.Javinizer;
 using Javbuddy.Services.Jellyfin;
 using Javbuddy.Services.LocalLibrary;
@@ -7,6 +8,7 @@ using Javbuddy.Services.MediaServer;
 using Javbuddy.Services.Movies;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Services.Movies;
@@ -40,7 +42,7 @@ public class MovieAddServiceTests
                 .Returns(new JavinizerScrapeResult(false, null, "not configured"));
         }
 
-        return new MovieAddService(factory, jellyfinClient, localLibraryClient, javinizerClient, new MovieChangeNotifier());
+        return new MovieAddService(factory, jellyfinClient, localLibraryClient, javinizerClient, new MovieChangeNotifier(), NullLogger<MovieAddService>.Instance);
     }
 
     [Fact]
@@ -119,6 +121,34 @@ public class MovieAddServiceTests
         var movie = await db.Movies.SingleAsync();
         Assert.Equal(MovieStatus.Missing, movie.Status);
         Assert.Equal("item-1", movie.JellyfinItemId);
+    }
+
+    [Fact]
+    public async Task AddAsync_LocalFolderFound_FileSyncThrows_StillSucceeds()
+    {
+        using var factory = new TestDbContextFactory();
+        var localLibraryClient = Substitute.For<ILocalLibraryClient>();
+        localLibraryClient.TryGetMetadataAsync("ABC-123", Arg.Any<CancellationToken>())
+            .Returns(new LocalLookupResult(true, "/media/ABC-123", new LocalMovieMetadata { Title = "Local Title" }, null));
+        localLibraryClient.RefreshMediaInfoOnlyAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns<OperationResult>(_ => throw new UnauthorizedAccessException());
+
+        var result = await CreateService(factory, localLibraryClient: localLibraryClient).AddAsync("ABC-123");
+
+        Assert.True(result.MetadataFound);
+    }
+
+    [Fact]
+    public async Task AddAsync_LocalFolderFound_SyncsTheMovieFiles()
+    {
+        using var factory = new TestDbContextFactory();
+        var localLibraryClient = Substitute.For<ILocalLibraryClient>();
+        localLibraryClient.TryGetMetadataAsync("ABC-123", Arg.Any<CancellationToken>())
+            .Returns(new LocalLookupResult(true, "/media/ABC-123", new LocalMovieMetadata { Title = "Local Title" }, null));
+
+        var result = await CreateService(factory, localLibraryClient: localLibraryClient).AddAsync("ABC-123");
+
+        await localLibraryClient.Received(1).RefreshMediaInfoOnlyAsync(result.Movie.Id, Arg.Any<CancellationToken>());
     }
 
     [Fact]

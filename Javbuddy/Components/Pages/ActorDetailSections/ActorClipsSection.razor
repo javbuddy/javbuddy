@@ -199,16 +199,17 @@
     private void OnMediaGenerated(int movieId)
     {
         if (disposed) return;
-        var shown = Kind switch
-        {
-            PlayerClipKind.Highlight => highlightCards.Select(c => c.MovieId),
-            PlayerClipKind.Apex => apexCards.Select(c => c.MovieId),
-            _ => sceneCards.Select(c => c.MovieId),
-        };
-        if (!shown.Contains(movieId)) return;
+        // The component state is read on the circuit, not on the generation thread.
         _ = InvokeAsync(async () =>
         {
             if (disposed) return;
+            var shown = Kind switch
+            {
+                PlayerClipKind.Highlight => highlightCards.Select(c => c.MovieId),
+                PlayerClipKind.Apex => apexCards.Select(c => c.MovieId),
+                _ => sceneCards.Select(c => c.MovieId),
+            };
+            if (!shown.Contains(movieId)) return;
             if (await LoadAsync(0, Math.Max(LoadedCount, PageSize), append: false, queueMissingMedia: false))
             {
                 StateHasChanged();

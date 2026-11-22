@@ -328,6 +328,11 @@ else
         {
             // Catch unexpected background exceptions to protect the circuit
         }
+        finally
+        {
+            // Dispose() only cancels; the load is the last user of the source, so it disposes it.
+            slowSectionsCts?.Dispose();
+        }
     }
 
     private static int UsedPercent(DiskSpaceInfo location) => location.TotalBytes <= 0

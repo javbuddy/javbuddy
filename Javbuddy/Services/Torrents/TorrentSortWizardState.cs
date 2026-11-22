@@ -160,5 +160,6 @@ public sealed class TorrentSortWizardState : IAsyncDisposable
         await Scrape.DisposeAsync();
         await Merge.DisposeAsync();
         await Organize.DisposeAsync();
+        EditModal.CancelPreview();
     }
 }

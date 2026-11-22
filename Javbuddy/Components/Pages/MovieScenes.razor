@@ -799,16 +799,17 @@
     private void OnMediaGenerated(int movieId)
     {
         if (disposed) return;
-        var shown = CurrentView switch
-        {
-            WallView.Highlights => highlightCards.Select(c => c.MovieId),
-            WallView.Apexes => apexCards.Select(c => c.MovieId),
-            _ => cards.Select(c => c.MovieId),
-        };
-        if (!shown.Contains(movieId)) return;
+        // The component state is read on the circuit, not on the generation thread.
         _ = InvokeAsync(async () =>
         {
             if (disposed) return;
+            var shown = CurrentView switch
+            {
+                WallView.Highlights => highlightCards.Select(c => c.MovieId),
+                WallView.Apexes => apexCards.Select(c => c.MovieId),
+                _ => cards.Select(c => c.MovieId),
+            };
+            if (!shown.Contains(movieId)) return;
             if (await LoadWindowAsync(windowStart, WindowCount, queueMissingMedia: false))
             {
                 StateHasChanged();

@@ -279,6 +279,14 @@ public sealed class MovieEditModalState(
         session.NotifyStateChanged();
     }
 
+    /// <summary>Cancels an in-flight live preview when the wizard goes away. The request disposes its own
+    /// source when it finishes.</summary>
+    public void CancelPreview()
+    {
+        previewCts?.Cancel();
+        previewGeneration++;
+    }
+
     private void ResetPreview()
     {
         previewCts?.Cancel();

@@ -52,6 +52,31 @@ public sealed class ActorTagFilterTests : IDisposable
         (await wall.GetApexPageAsync(filter, SceneWallSort.ReleaseDate, 1, 0, 50)).Cards.Select(c => c.ApexId).Order().ToArray();
 
     [Fact]
+    public async Task Options_ListTheActorTagsOfTheirOwnView()
+    {
+        await SeedAsync();
+        int tall;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var tag = new Tag { Name = "Tall", IsActorTag = true };
+            db.Tags.Add(tag);
+            await db.SaveChangesAsync();
+            tall = tag.Id;
+            // Set on the highlight only: the scene around it inherits it, the apex inside it doesn't.
+            db.HighlightActorTags.Add(new HighlightActorTag { HighlightId = highlight, MovieId = movieId, ActorId = aika, TagId = tall });
+            await db.SaveChangesAsync();
+        }
+
+        var scenes = (await wall.GetOptionsAsync()).ActorTags.Select(o => o.Id);
+        var highlights = (await wall.GetHighlightOptionsAsync()).ActorTags.Select(o => o.Id);
+        var apexes = (await wall.GetApexOptionsAsync()).ActorTags.Select(o => o.Id);
+
+        Assert.Contains(tall, scenes);
+        Assert.Contains(tall, highlights);
+        Assert.DoesNotContain(tall, apexes);
+    }
+
+    [Fact]
     public async Task WithoutActors_AnyActorWithTheTagMatches_AtEveryLevel()
     {
         await SeedAsync();

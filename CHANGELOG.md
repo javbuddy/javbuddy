@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **The Scenes wall's Highlights and Apexes views list the right actor tags.** Their actor-tag filter options were swapped, so picking a tag could return nothing or hide valid ones; the Scenes view's options now also skip hidden scenes.
+- **Adding a movie whose folder already exists fills in its files and VR format.** Previously the file list, file count and VR type stayed empty until a rescan.
+- **Saving the Local Library settings refreshes its tile on Metadata settings** right away, and the page no longer queries the status twice on load.
+- **Library Import's tip links to Metadata settings**, where the root directories are configured, instead of Connections.
+- **A throwing media-generated subscriber no longer stops the others**, and the Scenes wall and actor clips read their cards on the circuit when media finishes generating.
+- **Leaving the torrent sort wizard cancels an in-flight live preview,** and Library Import, System Tasks and System Status dispose their cancellation sources.
 - **Upgrading a database with case-only duplicate image or candidate codes no longer blocks startup.** The `CodeColumnsNoCase` migration now drops the later duplicate cached-image and discovered-candidate rows (disposable cache data) before rebuilding its unique indexes, including when restoring an older backup.
 - **The Downloading badge and count now match Activity > Queue.** A torrent that was removed from qBittorrent or already sorted no longer keeps its movie marked Downloading or inflates the count.
 - **An offline library folder no longer turns its movies back to Missing.** When one of several library roots is unreachable (an unmounted share), both the scheduled rescan and a movie's manual rescan leave movies on that root untouched instead of clearing their file, MediaInfo and image data.
