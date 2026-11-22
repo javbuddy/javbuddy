@@ -97,6 +97,41 @@ public class SystemStatusTests : BunitContext
     }
 
     [Fact]
+    public async Task LeavingThePage_AfterTheSlowSectionsLoaded_DoesNotThrow()
+    {
+        SetUpServices();
+
+        var cut = Render<SystemStatus>();
+        cut.WaitForAssertion(() => Assert.Contains("No sub-services configured.", cut.Markup));
+        await Task.Delay(300); // let the whole background load finish, not just its first section
+
+        var exception = Record.Exception(() => cut.Instance.Dispose());
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void SlowHealthReport_DoesNotShowNoSubServicesConfigured_ButChecksTheServicesOnceItLoads()
+    {
+        SetUpServices();
+        var report = new TaskCompletionSource<SystemHealthReport>();
+        var configured = ConfiguredIntegrations.None with { Javinizer = true };
+        var status = Substitute.For<ISystemStatusService>();
+        status.GetHealthReportAsync(Arg.Any<CancellationToken>()).Returns(report.Task);
+        status.GetSubServiceHealthAsync(configured, Arg.Any<CancellationToken>())
+            .Returns([new SubServiceHealth("javinizer-go", true, true, "Connected successfully.", null)]);
+        Services.AddScoped(_ => status);
+
+        var cut = Render<SystemStatus>();
+        Assert.DoesNotContain("No sub-services configured.", cut.Markup);
+
+        report.SetResult(new SystemHealthReport("1", [], configured));
+
+        cut.WaitForAssertion(() => Assert.Contains("javinizer-go", cut.FindAll(".health-table").Last().TextContent));
+        Assert.DoesNotContain("No sub-services configured.", cut.Markup);
+    }
+
+    [Fact]
     public void HealthyConfiguredService_LinksToItsExternalUrl_WithoutTheRedundantSuccessMessage()
     {
         var (factory, javinizer, _, _, _) = SetUpServices();

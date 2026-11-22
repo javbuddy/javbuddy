@@ -277,6 +277,7 @@ else
 
     private ConfiguredIntegrations configuredFlags = ConfiguredIntegrations.None;
     private CancellationTokenSource? slowSectionsCts;
+    private bool initialized;
 
     protected override async Task OnInitializedAsync()
     {
@@ -288,6 +289,7 @@ else
         migrationVersion = report.MigrationVersion;
         configuredFlags = report.Configured;
         healthMessages = report.Messages.ToList();
+        initialized = true;
     }
 
     // Sub-service health (network calls to each integration) and the image cache file-count scan
@@ -295,9 +297,13 @@ else
     // attached, rather than in OnInitializedAsync, so prerendering isn't blocked on them and the
     // rest of the page (Health, About) renders immediately with these sections still showing their
     // own LoadingIndicator. Same pattern as ActivityQueue.razor's LivePollLoopAsync.
+    //
+    // The first render happens at OnInitializedAsync's first await, before configuredFlags is
+    // loaded, so wait for `initialized` rather than firstRender; otherwise every integration looks
+    // unconfigured and "No sub-services configured." shows until a manual refresh.
     protected override void OnAfterRender(bool firstRender)
     {
-        if (firstRender)
+        if (initialized && slowSectionsCts is null)
         {
             slowSectionsCts = new CancellationTokenSource();
             _ = LoadSlowSectionsAsync(slowSectionsCts.Token);
@@ -327,11 +333,6 @@ else
         catch (Exception)
         {
             // Catch unexpected background exceptions to protect the circuit
-        }
-        finally
-        {
-            // Dispose() only cancels; the load is the last user of the source, so it disposes it.
-            slowSectionsCts?.Dispose();
         }
     }
 
@@ -402,6 +403,8 @@ else
         return directory;
     }
 
+    // The source has no timer or linked tokens, so it is only cancelled, never disposed: disposing
+    // it after the load finished made this Cancel() throw ObjectDisposedException.
     public void Dispose()
     {
         slowSectionsCts?.Cancel();

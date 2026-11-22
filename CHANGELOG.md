@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Status page no longer shows "No sub-services configured." on first load.** The sub-service checks started before the page knew which integrations were configured; they now wait for that, so the services appear without a refresh (#196).
+- **Leaving the Status page no longer throws "The CancellationTokenSource has been disposed."** after its background checks finished, e.g. when navigating to Tasks (#197).
+
 ## [0.9.0] - 2026-11-22
 
 ### Changed
