@@ -62,6 +62,8 @@ public static class TagNormalization
         }
     }
 
+    private const int LibraryChunkSize = 500;
+
     /// <summary>Reprocesses every movie's current Movie.MetaGenres against the current rules/
     /// ignore list. Backs three distinct Tags-page actions that all reduce to the same
     /// operation: the initial library discovery/backfill pass, "Apply Rules to Library" (a newly
@@ -73,8 +75,12 @@ public static class TagNormalization
     public static async Task<int> ApplyToLibraryAsync(AppDbContext db, CancellationToken ct = default)
     {
         var context = await LoadContextAsync(db, ct);
+        // Only the id and the genre text are needed: the movies are not tracked, and the changed MetaGenres
+        // values are written back with ExecuteUpdate below instead of through full-row updates.
         var movies = await db.Movies
+            .AsNoTracking()
             .Where(m => m.MetaGenres != null && m.MetaGenres != "")
+            .Select(m => new { m.Id, m.MetaGenres })
             .ToListAsync(ct);
 
         // One query for every movie's current links instead of one query per movie — the same
@@ -84,9 +90,30 @@ public static class TagNormalization
             .GroupBy(link => link.MovieId)
             .ToDictionary(group => group.Key, group => group.ToList());
 
-        foreach (var movie in movies)
+        // Chunked, each chunk in its own short transaction, so other writers get in between chunks instead of
+        // waiting out one library-sized batch.
+        foreach (var chunk in movies.Chunk(LibraryChunkSize))
         {
-            await ApplyToMovieAsync(db, movie, SplitGenres(movie.MetaGenres), context, linksByMovie.GetValueOrDefault(movie.Id, []), ct);
+            await using var transaction = await db.Database.BeginTransactionAsync(ct);
+
+            var newGenres = new List<(int Id, string? MetaGenres)>();
+            foreach (var row in chunk)
+            {
+                var stub = new Movie { Id = row.Id, MetaGenres = row.MetaGenres };
+                await ApplyToMovieAsync(db, stub, SplitGenres(row.MetaGenres), context, linksByMovie.GetValueOrDefault(row.Id, []), ct);
+                if (stub.MetaGenres != row.MetaGenres)
+                {
+                    newGenres.Add((row.Id, stub.MetaGenres));
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+            foreach (var (id, metaGenres) in newGenres)
+            {
+                await db.Movies.Where(m => m.Id == id).ExecuteUpdateAsync(set => set.SetProperty(m => m.MetaGenres, metaGenres), ct);
+            }
+
+            await transaction.CommitAsync(ct);
         }
 
         await ApplyToSceneTagsAsync(db, context, ct);
@@ -351,7 +378,9 @@ public static class TagNormalization
         }
         foreach (var newTag in resolvedNewTags)
         {
-            db.MovieTags.Add(new MovieTag { Movie = movie, Tag = newTag });
+            // A movie that already has an Id (the library pass hands over an untracked stub) is linked by id, so
+            // the link doesn't attach it to the change tracker.
+            db.MovieTags.Add(movie.Id != 0 ? new MovieTag { MovieId = movie.Id, Tag = newTag } : new MovieTag { Movie = movie, Tag = newTag });
         }
 
         var tagsById = context.KnownTags.Where(t => t.Id != 0).ToDictionary(t => t.Id);
