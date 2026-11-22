@@ -161,19 +161,6 @@ public class MovieStreamServiceTests : IDisposable
     }
 
     [Theory]
-    [InlineData("/media/jav/ABC-123/ABC-123.mp4", true)]
-    [InlineData("/media/jav/ABC-123/../ABC-123/ABC-123.mp4", true)]
-    [InlineData("/media/jav/../secret/file.mp4", false)]
-    [InlineData("/media/jav2/ABC-123/ABC-123.mp4", false)]
-    [InlineData("/media/jav", false)]
-    public void IsUnderAnyRoot_NormalizesBothSides(string path, bool expected)
-    {
-        if (OperatingSystem.IsWindows()) return;
-
-        Assert.Equal(expected, MovieStreamService.IsUnderAnyRoot(path, ["", "/media/jav/"]));
-    }
-
-    [Theory]
     [InlineData("a.MP4", "video/mp4")]
     [InlineData("a.m4v", "video/mp4")]
     [InlineData("a.mkv", "video/x-matroska")]

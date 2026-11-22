@@ -1,4 +1,5 @@
 using Javbuddy.Data;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.LocalLibrary;
 using Microsoft.EntityFrameworkCore;
 
@@ -72,23 +73,7 @@ public sealed class MovieStreamService(IDbContextFactory<AppDbContext> dbFactory
         if (file is null) return null;
 
         var roots = await localLibraryClient.GetRootPathsAsync(ct);
-        return IsUnderAnyRoot(file.Path, roots) ? Path.GetFullPath(file.Path) : null;
-    }
-
-    /// <summary>Whether path resolves to somewhere inside one of roots, after normalizing both — so
-    /// neither ".." segments nor a sibling folder sharing a root's name prefix ("/media/jav2" against
-    /// root "/media/jav") gets through.</summary>
-    public static bool IsUnderAnyRoot(string path, IEnumerable<string> roots)
-    {
-        var full = Path.GetFullPath(path);
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        foreach (var root in roots)
-        {
-            if (string.IsNullOrWhiteSpace(root)) continue;
-            var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
-            if (full.StartsWith(fullRoot, comparison)) return true;
-        }
-        return false;
+        return PathContainment.IsInsideAny(file.Path, roots) ? Path.GetFullPath(file.Path) : null;
     }
 
     /// <summary>The Content-Type a video file is served with, by extension. Browsers sniff the

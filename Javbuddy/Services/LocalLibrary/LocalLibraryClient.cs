@@ -708,10 +708,8 @@ public class LocalLibraryClient(
     /// the folder's name prefix ("ABC-1234" against "ABC-123") don't pass.</summary>
     public static bool IsImageFileInside(string folder, string path)
     {
-        var fullFolder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar;
         var fullPath = Path.GetFullPath(path);
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        return fullPath.StartsWith(fullFolder, comparison)
+        return PathContainment.IsInside(folder, fullPath)
             && ActorImageMatching.IsSupportedImageExtension(Path.GetExtension(fullPath))
             && File.Exists(fullPath);
     }
