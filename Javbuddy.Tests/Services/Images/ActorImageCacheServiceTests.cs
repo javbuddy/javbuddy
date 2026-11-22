@@ -628,6 +628,38 @@ public class ActorImageCacheServiceTests
     }
 
     [Fact]
+    public async Task TransferImagesAsync_DuplicateSourcePortrait_DeletesItsStoredOriginal_ButKeepsTheTargets()
+    {
+        using var factory = new TestDbContextFactory();
+        using var cache = new TempCacheRoot();
+        var dataStore = Substitute.For<IActorImageDataStore>();
+        Guid sourceOriginal = Guid.NewGuid(), targetOriginal = Guid.NewGuid();
+        int sourceId, targetId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var source = new Actor { FirstName = "Source" };
+            var target = new Actor { FirstName = "Target" };
+            db.Actors.AddRange(source, target);
+            await db.SaveChangesAsync();
+            sourceId = source.Id;
+            targetId = target.Id;
+            db.ActorImages.AddRange(
+                new ActorImage { ActorId = sourceId, Variant = "thumb", SourceMovieCode = "SRC-001", StorageId = Guid.NewGuid(), SourceStorageId = sourceOriginal, SourceExtension = ".png" },
+                new ActorImage { ActorId = sourceId, Variant = "full", SourceMovieCode = "SRC-001", StorageId = Guid.NewGuid(), SourceStorageId = sourceOriginal, SourceExtension = ".png" },
+                new ActorImage { ActorId = targetId, Variant = "thumb", SourceMovieCode = "TGT-001", StorageId = Guid.NewGuid(), SourceStorageId = targetOriginal, SourceExtension = ".png" },
+                new ActorImage { ActorId = targetId, Variant = "full", SourceMovieCode = "TGT-001", StorageId = Guid.NewGuid(), SourceStorageId = targetOriginal, SourceExtension = ".png" });
+            await db.SaveChangesAsync();
+        }
+
+        var service = new ActorImageCacheService(Substitute.For<ILocalLibraryClient>(), cache, factory,
+            Substitute.For<IImageCacheMaintenanceService>(), dataStore: dataStore);
+        await service.TransferImagesAsync(sourceId, targetId);
+
+        await dataStore.Received(1).DeleteAsync(sourceOriginal, ".png", Arg.Any<CancellationToken>());
+        await dataStore.DidNotReceive().DeleteAsync(targetOriginal, Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task TransferImagesAsync_LocalImageOnSourceSupersedesRemoteFallbackOnTarget()
     {
         using var factory = new TestDbContextFactory();

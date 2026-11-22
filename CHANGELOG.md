@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Merging actors no longer leaves the discarded portrait's original file behind** when the target already had a portrait.
 - **Actor portraits no longer leak files when several requests ask for the same actor at once.** Concurrent cache misses now share one conversion instead of racing on the cache files and orphaning a stored original.
 - **Searching actors by full name now works** ("Hatano Yui" or "Yui Hatano"), in the actor search and the merge dialog. Searching names with accented or non-ASCII letters no longer silently misses, and `%` or `_` in a search are matched literally. Tag searches got the same case-matching fix.
 - **Merging two actors no longer deletes the merged-away actor's photo gallery.** Their albums and photos now move to the actor they were merged into, as already happened for unidentified performers.

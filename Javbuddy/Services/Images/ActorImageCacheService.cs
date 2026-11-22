@@ -487,6 +487,13 @@ public class ActorImageCacheService(
         if (sourceImages.Count == 0) return;
 
         var targetImages = await db.ActorImages.Where(a => a.ActorId == targetActorId).ToListAsync(ct);
+        var discardedSources = new List<(Guid Id, string? Extension)>();
+        void Discard(ActorImage image)
+        {
+            TryDeleteStorageFile(image.StorageId);
+            if (image.SourceStorageId is { } sourceId) discardedSources.Add((sourceId, image.SourceExtension));
+            db.ActorImages.Remove(image);
+        }
         var targetHasCustom = targetImages.Any(a => a.SourceMovieCode == SourceMovieCodeCustom);
         var sourceHasCustom = sourceImages.Any(a => a.SourceMovieCode == SourceMovieCodeCustom);
 
@@ -497,8 +504,7 @@ public class ActorImageCacheService(
                 // Target's custom images take precedence; discard source's custom images
                 foreach (var img in sourceImages.Where(a => a.SourceMovieCode == SourceMovieCodeCustom))
                 {
-                    TryDeleteStorageFile(img.StorageId);
-                    db.ActorImages.Remove(img);
+                    Discard(img);
                 }
             }
             else
@@ -506,8 +512,7 @@ public class ActorImageCacheService(
                 // Source's custom images supersede target's existing non-custom images
                 foreach (var targetImg in targetImages)
                 {
-                    TryDeleteStorageFile(targetImg.StorageId);
-                    db.ActorImages.Remove(targetImg);
+                    Discard(targetImg);
                 }
                 foreach (var img in sourceImages.Where(a => a.SourceMovieCode == SourceMovieCodeCustom))
                 {
@@ -533,20 +538,30 @@ public class ActorImageCacheService(
             else if (targetMatch.SourceMovieCode == SourceMovieCodeRemote && srcImg.SourceMovieCode != SourceMovieCodeRemote)
             {
                 // Source's local movie image supersedes target's remote fallback image
-                TryDeleteStorageFile(targetMatch.StorageId);
-                db.ActorImages.Remove(targetMatch);
+                Discard(targetMatch);
                 targetNonCustomImages.Remove(targetMatch);
                 srcImg.ActorId = targetActorId;
                 targetNonCustomImages.Add(srcImg);
             }
             else
             {
-                TryDeleteStorageFile(srcImg.StorageId);
-                db.ActorImages.Remove(srcImg);
+                Discard(srcImg);
             }
         }
 
         await db.SaveChangesAsync(ct);
+
+        // A removed row's stored original is only deleted once nothing else points at it: the thumb and full rows
+        // of one portrait share a source, and the gallery's photos keep their own.
+        foreach (var (sourceId, extension) in discardedSources.DistinctBy(source => source.Id))
+        {
+            if (await db.ActorImages.AnyAsync(image => image.SourceStorageId == sourceId, ct)
+                || await db.ActorPhotos.AnyAsync(photo => photo.SourceStorageId == sourceId, ct))
+            {
+                continue;
+            }
+            await DeleteSourceAsync(sourceId, extension);
+        }
     }
 
     public async Task<(string? ThumbPath, string? FullPath)> DownloadAndCacheRemoteImageAsync(
