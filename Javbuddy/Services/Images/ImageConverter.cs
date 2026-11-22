@@ -482,9 +482,19 @@ public static class ImageConverter
             // Fall back
         }
 
-        var full = SKBitmap.Decode(sourceBytes)
-            ?? throw new InvalidOperationException("Could not decode image bytes.");
-        return DownscaleOwned(full, fallbackMaxEdge);
+        // SKBitmap.Decode(bytes) throws ArgumentNullException (from its null codec) instead of returning null
+        // for bytes that aren't an image, so callers catching InvalidOperationException would miss it.
+        SKBitmap? full;
+        try
+        {
+            full = SKBitmap.Decode(sourceBytes);
+        }
+        catch (ArgumentNullException)
+        {
+            full = null;
+        }
+
+        return DownscaleOwned(full ?? throw new InvalidOperationException("Could not decode image bytes."), fallbackMaxEdge);
     }
 
     private static SKBitmap? DecodeWithCodec(SKCodec codec, int? maxEdge)

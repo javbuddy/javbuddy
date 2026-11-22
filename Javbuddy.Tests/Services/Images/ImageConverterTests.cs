@@ -20,6 +20,12 @@ public class ImageConverterTests
     }
 
     [Fact]
+    public void CropCoverToBothWebP_BytesThatAreNotAnImage_ThrowsInvalidOperation()
+    {
+        Assert.Throws<InvalidOperationException>(() => ImageConverter.CropCoverToBothWebP([1, 2, 3, 4]));
+    }
+
+    [Fact]
     public async Task EnsureLocalPosterCroppedAsync_PortraitPoster_LeavesTheFileUntouched()
     {
         var path = Path.Combine(Path.GetTempPath(), $"poster-{Guid.NewGuid():N}.jpg");
