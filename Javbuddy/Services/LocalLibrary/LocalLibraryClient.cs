@@ -546,7 +546,7 @@ public class LocalLibraryClient(
             if (normalizedCandidate.Contains('/'))
             {
                 var directPath = Path.GetFullPath(Path.Combine(folder, normalizedCandidate));
-                if (directPath.StartsWith(folder, StringComparison.OrdinalIgnoreCase) && File.Exists(directPath))
+                if (IsImageFileInside(folder, directPath))
                 {
                     logger.LogDebug("Resolved actor image via direct candidate path for {Code}: {Path}", code, directPath);
                     return directPath;
@@ -555,7 +555,7 @@ public class LocalLibraryClient(
             else if (actorsFolder is not null)
             {
                 var inActors = Path.Combine(actorsFolder, normalizedCandidate);
-                if (File.Exists(inActors))
+                if (IsImageFileInside(actorsFolder, inActors))
                 {
                     logger.LogDebug("Resolved actor image via direct actor folder file for {Code}: {Path}", code, inActors);
                     return inActors;
@@ -609,7 +609,7 @@ public class LocalLibraryClient(
                 {
                     var thumbRel = matchingNfoActor.Thumb.Replace('\\', '/').TrimStart('/');
                     var thumbDirect = Path.GetFullPath(Path.Combine(folder, thumbRel));
-                    if (thumbDirect.StartsWith(folder, StringComparison.OrdinalIgnoreCase) && File.Exists(thumbDirect))
+                    if (IsImageFileInside(folder, thumbDirect))
                     {
                         logger.LogDebug("Resolved actor image via NFO thumb path for {Code}: {Path}", code, thumbDirect);
                         return thumbDirect;
@@ -701,6 +701,19 @@ public class LocalLibraryClient(
 
         var metadata = await LocalNfoParser.ParseAsync(nfoPath, ct);
         return metadata?.Actors ?? [];
+    }
+
+    /// <summary>Whether path is an existing supported image file strictly inside folder. Both are
+    /// normalized and folder gets a trailing separator, so ".." segments and a sibling folder sharing
+    /// the folder's name prefix ("ABC-1234" against "ABC-123") don't pass.</summary>
+    public static bool IsImageFileInside(string folder, string path)
+    {
+        var fullFolder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)) + Path.DirectorySeparatorChar;
+        var fullPath = Path.GetFullPath(path);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return fullPath.StartsWith(fullFolder, comparison)
+            && ActorImageMatching.IsSupportedImageExtension(Path.GetExtension(fullPath))
+            && File.Exists(fullPath);
     }
 
     private static bool IsSafePathSegment(string? value) =>

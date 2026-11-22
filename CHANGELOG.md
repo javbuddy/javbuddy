@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **An actor `<thumb>` in a movie's .nfo can no longer point at files outside the movie's folder.** The check normalizes the folder and requires a path separator, so `../ABC-1234/x.jpg` from `ABC-123` is refused, and only supported image types are returned.
 - **The clip editor and Movie Detail's scenes section reload a movie's clips from one effective-actors load** (as Movie Detail itself does) instead of one per scenes, highlights and apexes service, after every edit and whenever generated media lands.
 - **Movie Detail loads a movie's scenes, highlights and apexes from one load of its effective actors** instead of three, and **"Play all" / "Shuffle" on the Scenes wall read a light playlist** (id, title, times and Jellyfin ids of the clips with a local video) instead of building every clip card in the library.
 - **The Actor Photos page filters and sorts in the database.** It asks the photo service for the photos its filters match (actor, album, favorites, text, sort), instead of loading every photo once and re-filtering the list in C# on each change; "Random" and the actor-name order are still applied in the page. The text filter now also matches kanji/kana names and ignores ASCII case only.
