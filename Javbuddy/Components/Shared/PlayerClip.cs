@@ -32,6 +32,10 @@ public sealed record PlayerClip(
         new(PlayerClipKind.Highlight, card.HighlightId, card.MovieId, card.Code, card.DisplayTitle, card.StartSeconds, card.EndSeconds,
             card.JellyfinItemId, card.JellyfinServerId, card.DurationSeconds);
 
+    public static PlayerClip FromPlaylist(PlayerClipKind kind, WallPlaylistClip clip) =>
+        new(kind, clip.Id, clip.MovieId, clip.Code, clip.DisplayTitle, clip.StartSeconds, clip.EndSeconds,
+            clip.JellyfinItemId, clip.JellyfinServerId, clip.DurationSeconds);
+
     /// <summary>The few seconds around an apex, see ApexRanges.ClipFor.</summary>
     public static PlayerClip FromApex(ApexWallCard card)
     {

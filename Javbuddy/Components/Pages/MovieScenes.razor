@@ -826,16 +826,23 @@
 
     private bool CanPlayAll => loaded && !loading && total > 0;
 
-    // Every clip the current filters match, not just the loaded cards, in the wall's order or shuffled.
-    // Clips of movies without a local video file are left out: the player would stop on its error there.
+    // Every clip the current filters match, not just the loaded cards, in the wall's order or shuffled. Read as a
+    // light playlist, not as cards. Clips of movies without a local video file are left out: the player would stop
+    // on its error there.
     private async Task PlayAllAsync(bool shuffle)
     {
         var clips = (CurrentView switch
             {
-                WallView.Highlights => (await SceneWall.GetHighlightPageAsync(CurrentFilter, sort, randomSeed, 0, total)).Cards.Where(c => c.HasLocalVideo).Select(PlayerClip.FromHighlight),
-                WallView.Apexes => (await SceneWall.GetApexPageAsync(CurrentFilter, sort, randomSeed, 0, total)).Cards.Where(c => c.HasLocalVideo).Select(PlayerClip.FromApex),
-                _ => (await SceneWall.GetPageAsync(CurrentFilter, sort, randomSeed, 0, total)).Cards.Where(c => c.HasLocalVideo).Select(PlayerClip.FromScene),
+                WallView.Highlights => await SceneWall.GetHighlightPlaylistAsync(CurrentFilter, sort, randomSeed),
+                WallView.Apexes => await SceneWall.GetApexPlaylistAsync(CurrentFilter, sort, randomSeed),
+                _ => await SceneWall.GetScenePlaylistAsync(CurrentFilter, sort, randomSeed),
             })
+            .Select(c => PlayerClip.FromPlaylist(CurrentView switch
+            {
+                WallView.Highlights => PlayerClipKind.Highlight,
+                WallView.Apexes => PlayerClipKind.Apex,
+                _ => PlayerClipKind.Scene,
+            }, c))
             .ToArray();
         if (clips.Length == 0) return;
         if (shuffle) Random.Shared.Shuffle(clips);

@@ -48,6 +48,7 @@ public class MovieDetailTests : BunitContext
         Services.AddSingleton<IMovieSceneService>(new MovieSceneService(factory));
         Services.AddSingleton<IMovieHighlightService>(new MovieHighlightService(factory));
         Services.AddSingleton<IMovieApexService>(new MovieApexService(factory));
+        Services.AddSingleton<IMovieClipService>(sp => new MovieClipService(factory, sp.GetRequiredService<IMovieSceneService>(), sp.GetRequiredService<IMovieHighlightService>(), sp.GetRequiredService<IMovieApexService>()));
         Services.AddSingleton<IActorTagService>(new ActorTagService(factory));
         Services.AddSingleton(Substitute.For<ISceneChapterImportService>());
         Services.AddSingleton(Substitute.For<ISceneChapterWriteService>());
@@ -2218,6 +2219,7 @@ public class MovieDetailTests : BunitContext
         IMovieSceneService Scenes,
         IMovieHighlightService Highlights,
         IMovieApexService Apexes,
+        IMovieClipService Clips,
         IImageServingService ImageServing,
         IJellyfinClient Jellyfin);
 
@@ -2241,20 +2243,21 @@ public class MovieDetailTests : BunitContext
         var apexes = Substitute.For<IMovieApexService>();
         apexes.GetApexesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<ApexItem>>([]));
         Services.AddSingleton(apexes);
+        var clips = Substitute.For<IMovieClipService>();
+        clips.GetClipsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(new MovieClips([], [], []));
+        Services.AddSingleton(clips);
 
         var jellyfin = Services.GetRequiredService<IJellyfinClient>();
         jellyfin.GetWebUrlAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("http://jellyfin/web");
         imageServing.GetPosterVersionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("v1");
-        return new ReadSpies(query, scenes, highlights, apexes, imageServing, jellyfin);
+        return new ReadSpies(query, scenes, highlights, apexes, clips, imageServing, jellyfin);
     }
 
     private static async Task AssertEveryPartReadTimesAsync(ReadSpies spies, ILocalLibraryClient library, int times, int castTimes)
     {
         await spies.Query.Received(times).GetByCodeAsync("ABC-123", Arg.Any<CancellationToken>());
         await spies.ImageServing.Received(times).GetPosterVersionAsync("ABC-123", Arg.Any<CancellationToken>());
-        await spies.Scenes.Received(times).GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
-        await spies.Highlights.Received(times).GetHighlightsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
-        await spies.Apexes.Received(times).GetApexesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Clips.Received(times).GetClipsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         await spies.Jellyfin.Received(times).GetWebUrlAsync("item", "server", Arg.Any<CancellationToken>());
         await library.Received(times).ListExtraFanartFileNamesAsync("ABC-123", Arg.Any<CancellationToken>());
         await spies.Query.Received(castTimes).GetCastAsync(Arg.Any<Movie>(), Arg.Any<CancellationToken>());
@@ -2292,10 +2295,8 @@ public class MovieDetailTests : BunitContext
         cut.WaitForAssertion(() => Assert.Contains(cut.FindAll("button.movie-detail-badge"), b => b.TextContent.Trim() == "Solo"));
         await spies.Query.Received(2).GetByCodeAsync("ABC-123", Arg.Any<CancellationToken>());
         await spies.ImageServing.Received(1).GetPosterVersionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
-        await spies.Scenes.Received(1).GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Clips.Received(1).GetClipsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         await spies.Scenes.Received(1).GetCastOptionsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
-        await spies.Highlights.Received(1).GetHighlightsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
-        await spies.Apexes.Received(1).GetApexesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         await spies.Jellyfin.Received(1).GetWebUrlAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
         await spies.Query.Received(1).GetCastAsync(Arg.Any<Movie>(), Arg.Any<CancellationToken>());
         await localLibraryClient.Received(1).ListExtraFanartFileNamesAsync("ABC-123", Arg.Any<CancellationToken>());
@@ -2321,7 +2322,7 @@ public class MovieDetailTests : BunitContext
         Assert.Contains("Mark as Got", cut.Markup);
         await spies.Query.Received(2).GetByCodeAsync("ABC-123", Arg.Any<CancellationToken>());
         await spies.ImageServing.Received(1).GetPosterVersionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
-        await spies.Scenes.Received(1).GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Clips.Received(1).GetClipsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         await spies.Jellyfin.Received(1).GetWebUrlAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
         await spies.Query.Received(1).GetCastAsync(Arg.Any<Movie>(), Arg.Any<CancellationToken>());
         await localLibraryClient.Received(1).ListExtraFanartFileNamesAsync("ABC-123", Arg.Any<CancellationToken>());
@@ -2347,7 +2348,7 @@ public class MovieDetailTests : BunitContext
 
         cut.WaitForAssertion(() => Assert.Contains(cut.FindAll(".movie-detail-cast-name"), n => n.TextContent.Trim() == "Hatano Yui"));
         await spies.Query.Received(2).GetCastAsync(Arg.Any<Movie>(), Arg.Any<CancellationToken>());
-        await spies.Scenes.Received(2).GetScenesAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await spies.Clips.Received(2).GetClipsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         await spies.Scenes.Received(2).GetCastOptionsAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
         await spies.ImageServing.Received(1).GetPosterVersionAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         await spies.Jellyfin.Received(1).GetWebUrlAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());

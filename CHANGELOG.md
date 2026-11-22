@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Movie Detail loads a movie's scenes, highlights and apexes from one load of its effective actors** instead of three, and **"Play all" / "Shuffle" on the Scenes wall read a light playlist** (id, title, times and Jellyfin ids of the clips with a local video) instead of building every clip card in the library.
 - **The Actor Photos page filters and sorts in the database.** It asks the photo service for the photos its filters match (actor, album, favorites, text, sort), instead of loading every photo once and re-filtering the list in C# on each change; "Random" is still shuffled in the page.
 - **Tag discovery, "Apply Rules to Library" and "Strip Ignored Tags" now run as background jobs.** They keep going if you leave the Tags page, report their progress and result in the sidebar, and a second pass is refused while one runs.
 - **Scenes no longer re-queue media checks that cannot produce anything.** With the image cache in Thumbnails or Disabled mode, Movie Detail, the Scenes wall, Actor Detail and the clip editor now skip asking for scene media the mode never keeps, as apexes already did (one shared `IsMissingMedia` check). Highlights still ask, since that also queues their trickplay.

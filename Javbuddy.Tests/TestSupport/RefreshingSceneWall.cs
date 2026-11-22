@@ -49,4 +49,22 @@ public sealed class RefreshingSceneWall(IDbContextFactory<AppDbContext> factory,
         await RefreshAsync(ct);
         return await inner.GetApexOptionsAsync(ct);
     }
+
+    public async Task<IReadOnlyList<WallPlaylistClip>> GetScenePlaylistAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, CancellationToken ct = default)
+    {
+        await RefreshAsync(ct);
+        return await inner.GetScenePlaylistAsync(filter, sort, randomSeed, ct);
+    }
+
+    public async Task<IReadOnlyList<WallPlaylistClip>> GetHighlightPlaylistAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, CancellationToken ct = default)
+    {
+        await RefreshAsync(ct);
+        return await inner.GetHighlightPlaylistAsync(filter, sort, randomSeed, ct);
+    }
+
+    public async Task<IReadOnlyList<WallPlaylistClip>> GetApexPlaylistAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, CancellationToken ct = default)
+    {
+        await RefreshAsync(ct);
+        return await inner.GetApexPlaylistAsync(filter, sort, randomSeed, ct);
+    }
 }

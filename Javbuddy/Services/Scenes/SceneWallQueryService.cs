@@ -183,6 +183,16 @@ public interface ISceneWallQueryService
 
     /// <summary>Actors of apexes and studios of movies with apexes; the apex tags are in ApexTags, Tags is empty.</summary>
     Task<SceneWallOptions> GetApexOptionsAsync(CancellationToken ct = default);
+
+    /// <summary>Every scene the filter matches, in the wall's order, that has a local video — just what the player
+    /// needs for "Play all", without the cards' tags, media and roll-ups.</summary>
+    Task<IReadOnlyList<WallPlaylistClip>> GetScenePlaylistAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, CancellationToken ct = default);
+
+    /// <summary>The same for the highlight view.</summary>
+    Task<IReadOnlyList<WallPlaylistClip>> GetHighlightPlaylistAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, CancellationToken ct = default);
+
+    /// <summary>The same for the apex view; each clip is the few seconds around the apex.</summary>
+    Task<IReadOnlyList<WallPlaylistClip>> GetApexPlaylistAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, CancellationToken ct = default);
 }
 
 /// <summary>The library-wide scene wall's query. Filtering, ordering and paging run in
@@ -191,7 +201,7 @@ public interface ISceneWallQueryService
 /// highlight media variants the cards advertise. Apex cards resolve their position, tags,
 /// actors and preview through apexService the way Movie Detail does. Scene and highlight
 /// cards carry their rolled-up tags, computed per movie by ClipRollup as the clip editor does.</summary>
-public sealed class SceneWallQueryService(
+public sealed partial class SceneWallQueryService(
     IDbContextFactory<AppDbContext> dbFactory,
     IMovieSceneService sceneService,
     IHighlightMediaService? highlightMedia = null,

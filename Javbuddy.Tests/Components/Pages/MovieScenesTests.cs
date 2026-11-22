@@ -672,6 +672,10 @@ public class MovieScenesTests : BunitContext
             .Returns(new SceneWallPage(firstPage, all.Count));
         wall.GetPageAsync(Arg.Any<SceneWallFilter>(), Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Is(0), Arg.Is(all.Count), Arg.Any<CancellationToken>())
             .Returns(new SceneWallPage(all, all.Count));
+        wall.GetScenePlaylistAsync(Arg.Any<SceneWallFilter>(), Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(all.Where(c => c.HasLocalVideo)
+                .Select(c => new WallPlaylistClip(c.SceneId, c.MovieId, c.Code, c.DisplayTitle, c.StartSeconds, c.EffectiveEndSeconds, c.JellyfinItemId, c.JellyfinServerId, c.DurationSeconds))
+                .ToList());
     }
 
     private static ClipPlayerModal Player(IRenderedComponent<MovieScenes> cut) => cut.FindComponent<ClipPlayerModal>().Instance;
@@ -685,8 +689,10 @@ public class MovieScenesTests : BunitContext
 
         ClickButton(cut, "Play all");
 
-        // All three, not just the two loaded cards, with the wall's filters and sort.
-        await wall.Received(1).GetPageAsync(Arg.Any<SceneWallFilter>(), SceneWallSort.ReleaseDate, Arg.Any<int>(), Arg.Is(0), Arg.Is(3), Arg.Any<CancellationToken>());
+        // All three, not just the two loaded cards, with the wall's filters and sort, read as a playlist rather
+        // than as cards.
+        await wall.Received(1).GetScenePlaylistAsync(Arg.Any<SceneWallFilter>(), SceneWallSort.ReleaseDate, Arg.Any<int>(), Arg.Any<CancellationToken>());
+        await wall.DidNotReceive().GetPageAsync(Arg.Any<SceneWallFilter>(), Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Is(3), Arg.Any<CancellationToken>());
         Assert.Equal((PlayerClip.FromScene(all[0]), 1, 3), (Player(cut).Clip, Player(cut).Position, Player(cut).Count));
 
         await cut.InvokeAsync(() => Player(cut).OnEnded.InvokeAsync());
@@ -748,6 +754,8 @@ public class MovieScenesTests : BunitContext
         HighlightWallCard[] all = [HCard(1, "ABC-1"), HCard(2, "ABC-2")];
         wall.GetHighlightPageAsync(Arg.Any<SceneWallFilter>(), Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Is(0), Arg.Any<int>(), Arg.Any<CancellationToken>())
             .Returns(new HighlightWallPage(all, 2));
+        wall.GetHighlightPlaylistAsync(Arg.Any<SceneWallFilter>(), Arg.Any<SceneWallSort>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(all.Select(c => new WallPlaylistClip(c.HighlightId, c.MovieId, c.Code, c.DisplayTitle, c.StartSeconds, c.EndSeconds, c.JellyfinItemId, c.JellyfinServerId, c.DurationSeconds)).ToList());
         OpenHighlightsView();
         var cut = Render<MovieScenes>();
 

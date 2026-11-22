@@ -1,3 +1,4 @@
+using Javbuddy.Components.Shared;
 using Javbuddy.Models;
 using Javbuddy.Services.Movies;
 using Javbuddy.Services.SceneMedia;
@@ -752,5 +753,61 @@ public sealed class SceneWallQueryServiceTests : IDisposable
         Assert.Equal([new SceneWallOption(roughId, "Play › Rough")], options.ApexTags);
         Assert.Equal(options.ApexTags, (await wall.GetOptionsAsync()).ApexTags);
         Assert.Equal(options.ApexTags, (await wall.GetHighlightOptionsAsync()).ApexTags);
+    }
+
+    // --- Play all playlists ---
+
+    [Fact]
+    public async Task Playlists_NameAndTimeEveryClipTheWayTheCardsDo()
+    {
+        await SeedAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            foreach (var movie in db.Movies) movie.LocalFileSizeBytes = 1;
+            await db.SaveChangesAsync();
+        }
+        await AddHighlightAsync(oldMovieId, 590, 610, "Crossing", tags: [bathId], actors: [aikaId]);
+        await AddHighlightAsync(oldMovieId, 700, 710, tags: [roughId]);
+        await AddHighlightAsync(oldMovieId, 30, 45); // untitled, in Intro: Aika and Bath
+        await AddHighlightAsync(newMovieId, 5, 9);
+        await AddApexAsync(oldMovieId, 100, tagIds: [bathId], actorIds: [aikaId]);
+        await AddApexAsync(oldMovieId, 700);
+        await AddApexAsync(newMovieId, 2, tagIds: [roughId]);
+        var filter = new SceneWallFilter();
+        const SceneWallSort sort = SceneWallSort.ReleaseDate;
+
+        var scenePlaylist = await wall.GetScenePlaylistAsync(filter, sort, 1);
+        var highlightPlaylist = await wall.GetHighlightPlaylistAsync(filter, sort, 1);
+        var apexPlaylist = await wall.GetApexPlaylistAsync(filter, sort, 1);
+
+        Assert.Equal((await wall.GetPageAsync(filter, sort, 1, 0, 50)).Cards.Select(PlayerClip.FromScene),
+            scenePlaylist.Select(c => PlayerClip.FromPlaylist(PlayerClipKind.Scene, c)));
+        Assert.Equal((await wall.GetHighlightPageAsync(filter, sort, 1, 0, 50)).Cards.Select(PlayerClip.FromHighlight),
+            highlightPlaylist.Select(c => PlayerClip.FromPlaylist(PlayerClipKind.Highlight, c)));
+        Assert.Equal((await wall.GetApexPageAsync(filter, sort, 1, 0, 50)).Cards.Select(PlayerClip.FromApex),
+            apexPlaylist.Select(c => PlayerClip.FromPlaylist(PlayerClipKind.Apex, c)));
+        Assert.Equal(3, scenePlaylist.Count);
+        Assert.Equal(4, highlightPlaylist.Count);
+        Assert.Equal(3, apexPlaylist.Count);
+    }
+
+    [Fact]
+    public async Task Playlists_LeaveOutMoviesWithoutALocalVideo_AndFollowTheFilter()
+    {
+        await SeedAsync();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.Single(m => m.Id == newMovieId).LocalFileSizeBytes = 1;
+            await db.SaveChangesAsync();
+        }
+        await AddHighlightAsync(oldMovieId, 30, 45, "Skipped");
+        await AddHighlightAsync(newMovieId, 5, 9, "Kept");
+        await AddApexAsync(oldMovieId, 100);
+
+        var scenes = await wall.GetScenePlaylistAsync(new SceneWallFilter(), SceneWallSort.ReleaseDate, 1);
+        Assert.Equal("NEW-001", Assert.Single(scenes).Code);
+        Assert.Equal("Kept", Assert.Single(await wall.GetHighlightPlaylistAsync(new SceneWallFilter(), SceneWallSort.ReleaseDate, 1)).DisplayTitle);
+        Assert.Empty(await wall.GetApexPlaylistAsync(new SceneWallFilter(), SceneWallSort.ReleaseDate, 1));
+        Assert.Empty(await wall.GetScenePlaylistAsync(new SceneWallFilter(TagIds: [bathId]), SceneWallSort.ReleaseDate, 1));
     }
 }

@@ -8,8 +8,7 @@
 @inject IJellyfinClient JellyfinClient
 @inject IR18DevReleaseBrowseService ReleaseBrowseService
 @inject IMovieSceneService SceneService
-@inject IMovieHighlightService HighlightService
-@inject IMovieApexService ApexService
+@inject IMovieClipService ClipService
 @inject Javbuddy.Services.SceneMedia.IMovieClipMediaQueueService ClipMediaQueue
 @rendermode InteractiveServer
 
@@ -353,9 +352,7 @@ else
 
         if (parts.HasFlag(MovieParts.Clips))
         {
-            scenes = await SceneService.GetScenesAsync(movie.Id);
-            highlights = await HighlightService.GetHighlightsAsync(movie.Id);
-            apexes = await ApexService.GetApexesAsync(movie.Id);
+            (scenes, highlights, apexes) = await ClipService.GetClipsAsync(movie.Id);
         }
         if (parts.HasFlag(MovieParts.SceneCast))
         {
