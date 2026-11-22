@@ -21,8 +21,11 @@ public class TorrentQueueService(
 {
     // RemovedFromClientAt/SortedAt (not Status) is the source of truth for "in the queue": an
     // errored torrent stays in it until removed or sorted.
-    private static IQueryable<TorrentDownload> Active(AppDbContext db) =>
-        db.TorrentDownloads.Where(d => d.RemovedFromClientAt == null && d.SortedAt == null);
+    // Shared with the movie grids' Downloading badge so the two can't drift apart.
+    internal static IQueryable<TorrentDownload> Active(IQueryable<TorrentDownload> downloads) =>
+        downloads.Where(d => d.RemovedFromClientAt == null && d.SortedAt == null);
+
+    private static IQueryable<TorrentDownload> Active(AppDbContext db) => Active(db.TorrentDownloads);
 
     public async Task<List<TorrentDownload>> GetActiveAsync(CancellationToken ct = default)
     {

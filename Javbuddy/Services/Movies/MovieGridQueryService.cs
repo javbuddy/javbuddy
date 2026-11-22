@@ -3,6 +3,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Images;
 using Javbuddy.Services.Tags;
+using Javbuddy.Services.Torrents;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Movies;
@@ -400,7 +401,7 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
     /// <summary>Shared with Actor Detail's poster grid.</summary>
     internal static async Task<HashSet<string>> QueryDownloadingCodesAsync(AppDbContext db, CancellationToken ct)
     {
-        var codes = await db.TorrentDownloads
+        var codes = await TorrentQueueService.Active(db.TorrentDownloads)
             .Where(t => t.Status == TorrentDownloadStatus.Queued
                 || t.Status == TorrentDownloadStatus.Downloading
                 || t.Status == TorrentDownloadStatus.Seeding

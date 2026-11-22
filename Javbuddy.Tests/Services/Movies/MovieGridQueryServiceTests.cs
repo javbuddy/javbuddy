@@ -520,6 +520,25 @@ public sealed class MovieGridQueryServiceTests : IDisposable
         Assert.Contains("abc-001", codes);
     }
 
+    [Fact]
+    public async Task DownloadingCodes_ExcludeRemovedFromClientAndSortedTorrents()
+    {
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "ABC-001" };
+            db.Movies.Add(movie);
+            db.TorrentDownloads.AddRange(
+                new TorrentDownload { Movie = movie, MovieCode = "ABC-001", Status = TorrentDownloadStatus.Downloading },
+                new TorrentDownload { Movie = movie, MovieCode = "ABC-002", Status = TorrentDownloadStatus.Downloading, RemovedFromClientAt = DateTime.UtcNow },
+                new TorrentDownload { Movie = movie, MovieCode = "ABC-003", Status = TorrentDownloadStatus.Seeding, SortedAt = DateTime.UtcNow });
+            db.SaveChanges();
+        }
+
+        var codes = await service.GetDownloadingCodesAsync();
+
+        Assert.True(codes.SetEquals(["ABC-001"]));
+    }
+
     private static void AddMovie(AppDbContext db, string code, params Tag[] tags)
     {
         var movie = new Movie { Code = code, MetaGenres = string.Join(", ", tags.Select(t => t.Name)) };
