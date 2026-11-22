@@ -183,7 +183,7 @@ Per-integration subfolders (`Services/<Integration>/`):
 |---|---|---|
 | `Javinizer/` | `JavinizerClient`, `JavinizerDtos`, `MovieMetadataMapper`, `MovieMetadataImportOptions` | Scraper client and the mapping of its results onto movies; the TorrentSort wizard and `PathMappingService` that use it live in `Torrents/` |
 | `Jellyfin/` | `JellyfinClient`, `JellyfinDtos`, `JellyfinMetadataMapper` | Media server integration (links only) |
-| `MediaServer/` | `IMediaServerClient` and its lookup/test result records | The generic media-server contract `JellyfinClient` implements; `MovieAddService` looks movies up through it |
+| `MediaServer/` | `MediaServerModels.cs`: the media-server lookup/test result records | Shared by `IMediaServerClient` (declared in `Jellyfin/JellyfinClient.cs`, its only implementation) and `MovieAddService`, which looks movies up through it |
 | `Prowlarr/` | `ProwlarrClient`, `ProwlarrDtos` | Torrent indexer integration |
 | `QBittorrent/` | `QBittorrentClient`, `QBittorrentDtos` | Torrent client integration |
 | `LocalLibrary/` | `LocalLibraryClient`, `LocalNfoParser`, `LocalLibraryDtos`, `LocalLibraryMetadataMapper` | Local filesystem scanning and the movie .nfo parser; the image cache built on it lives in `Images/`, the .nfo writer in `Nfo/` |
