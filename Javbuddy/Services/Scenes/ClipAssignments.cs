@@ -7,7 +7,7 @@ namespace Javbuddy.Services.Scenes;
 
 /// <summary>Actor rules scenes, highlights and apexes share: the cast they pick from, the cast check, and
 /// loading what they inherit.</summary>
-internal static class ClipAssignments
+public static class ClipAssignments
 {
     /// <summary>The cached thumb/preview rows of the given scenes, highlights or apexes (<paramref name="role"/>),
     /// from one query, ready to answer which media version each card should show.</summary>
@@ -137,7 +137,7 @@ internal static class ClipAssignments
 }
 
 /// <summary>What <see cref="ClipAssignments.LoadClipMediaVersionsAsync"/> loaded.</summary>
-internal sealed class ClipMediaVersions(
+public sealed class ClipMediaVersions(
     ILookup<(int Index, string Variant), CachedImage> rows,
     Func<string, bool>? servesVariant,
     Func<CachedImage, SceneMediaWindow, bool>? isCurrent)
