@@ -26,6 +26,20 @@ public static class PlaywrightExtensions
         }
     }
 
+    /// <summary>Filters the actor photos page by <paramref name="text"/> and returns the filter box. The
+    /// box is debounced, so a fill returns before the filter applies, and the unfiltered grid can already
+    /// satisfy a tile-count assertion; a rebuild landing later would then replace the tiles and close the
+    /// lightbox. It therefore filters to a non-match first and waits for the empty state, so the grid that
+    /// appears for <paramref name="text"/> can only be its own result.</summary>
+    public static async Task<ILocator> FilterActorPhotosAsync(this IPage page, string text)
+    {
+        var search = page.GetByPlaceholder("Filter by actor or album…");
+        await search.FillAsync("no-matching-actor-filter-sentinel");
+        await Assertions.Expect(page.GetByText("No photos match your current filters.")).ToBeVisibleAsync();
+        await search.FillAsync(text);
+        return search;
+    }
+
     // blazor.web.js's per-element handler store, a `_blazorEvents_<n>` property it sets on an element
     // when it attaches an @on… handler (EventDelegator.eventsCollectionKey). Prerendered markup never
     // has it, so it marks DOM the circuit owns. Internal: recheck it after a framework upgrade if

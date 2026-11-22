@@ -53,8 +53,7 @@ public class ActorPhotosLoadingTests(E2EFixture fixture)
             };
             await page.GotoInteractiveAsync("/actors/photos");
             // Filtering also makes this independent of other tests' photos in the shared fixture.
-            var search = page.GetByPlaceholder("Filter by actor or album…");
-            await search.FillAsync(actor.FirstName!);
+            var search = await page.FilterActorPhotosAsync(actor.FirstName!);
             await Expect(page.Locator(".actor-photo-tile")).ToHaveCountAsync(120);
             await page.WaitForFunctionAsync("() => document.querySelector('.actor-photo-tile-img')?.naturalWidth > 0");
             Assert.InRange(photoRequests.Count, 1, withoutObserver ? 250 : 100);

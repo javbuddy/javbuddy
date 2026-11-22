@@ -39,7 +39,7 @@ public class GalleryLightboxZoomFlowTests(E2EFixture fixture)
             var page = await fixture.NewPageAsync();
             await page.SetViewportSizeAsync(1440, 900);
             await page.GotoInteractiveAsync("/actors/photos");
-            await page.GetByPlaceholder("Filter by actor or album…").FillAsync(actor.FirstName!);
+            await page.FilterActorPhotosAsync(actor.FirstName!);
             await Expect(page.Locator(".actor-photo-tile")).ToHaveCountAsync(3);
             await page.Locator(".actor-photo-tile").First.ClickAsync();
             await Expect(page.Locator(".gallery-index")).ToHaveTextAsync("1 / 3");
