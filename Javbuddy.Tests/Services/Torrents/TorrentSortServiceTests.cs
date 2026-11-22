@@ -7,7 +7,6 @@ using Javbuddy.Services.Movies;
 using Javbuddy.Services.QBittorrent;
 using Javbuddy.Services.Torrents;
 using Javbuddy.Tests.TestSupport;
-using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Services.Torrents;
@@ -29,7 +28,6 @@ public class TorrentSortServiceTests
             qBittorrentClient ?? Substitute.For<IQBittorrentClient>(),
             factory,
             changeNotifier ?? new TorrentChangeNotifier(),
-            NullLogger<TorrentSortService>.Instance,
             movieChangeNotifier);
 
     /// <summary>A no-op IPathMappingService substitute that returns whatever path it was given

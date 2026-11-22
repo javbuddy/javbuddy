@@ -145,12 +145,6 @@ public class MovieService(
     IActorImageCacheService? actorImageCache = null,
     IActorPhotoService? actorPhotos = null) : IMovieService
 {
-    private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
-    private readonly MovieChangeNotifier? movieChangeNotifier = movieChangeNotifier;
-    private readonly INfoSyncService? nfoSyncService = nfoSyncService;
-    private readonly IJavinizerClient? javinizerClient = javinizerClient;
-    private readonly ITrickplayTrigger? trickplayTrigger = trickplayTrigger;
-    private readonly ILocalLibraryClient? localLibraryClient = localLibraryClient;
 
     public async Task<OperationResult> SetVrTypeAsync(int movieId, int fileId, string? vrType, bool detect = false, CancellationToken ct = default)
     {

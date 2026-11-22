@@ -12,12 +12,6 @@ namespace Javbuddy.Services.Tasks;
 /// a manual "Run Now" click get identical history tracking.</summary>
 public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, JavbuddyMetrics metrics, ScheduledTaskChangeNotifier changeNotifier, ScheduledTaskCancellationRegistry cancellationRegistry, ScheduledTaskRunTracker tracker, ILogger<ScheduledTaskRunner> logger)
 {
-    private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
-    private readonly JavbuddyMetrics metrics = metrics;
-    private readonly ScheduledTaskChangeNotifier changeNotifier = changeNotifier;
-    private readonly ScheduledTaskCancellationRegistry cancellationRegistry = cancellationRegistry;
-    private readonly ScheduledTaskRunTracker tracker = tracker;
-    private readonly ILogger<ScheduledTaskRunner> logger = logger;
 
     private static readonly TimeSpan RunRetention = TimeSpan.FromDays(90);
 
@@ -304,9 +298,6 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
     {
         private static readonly TimeSpan MinInterval = TimeSpan.FromSeconds(1);
 
-        private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
-        private readonly int runId = runId;
-        private readonly ScheduledTaskChangeNotifier changeNotifier = changeNotifier;
         private readonly SemaphoreSlim writeGate = new(1, 1);
         private DateTime lastWriteUtc = DateTime.MinValue;
         private TaskProgress? latest;

@@ -46,17 +46,7 @@ public class ImageCacheTask(
 {
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromHours(24);
 
-    private readonly ILocalLibraryClient localLibraryClient = localLibraryClient;
-    private readonly ILocalImageCacheService movieImageCacheService = movieImageCacheService;
-    private readonly IActorImageCacheService actorImageCacheService = actorImageCacheService;
-    private readonly ILocalImageCache imageCache = imageCache;
-    private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
-    private readonly IActorImageDataStore? dataStore = dataStore;
     private readonly ILogger<ImageCacheTask> logger = logger ?? NullLogger<ImageCacheTask>.Instance;
-    private readonly IActorPhotoService? actorPhotoService = actorPhotoService;
-    private readonly IDeoVrSettingsService? deoVrSettingsService = deoVrSettingsService;
-    private readonly IDeoVrThumbnailService? deoVrThumbnailService = deoVrThumbnailService;
-    private readonly IDeoVrTimelineService? deoVrTimelineService = deoVrTimelineService;
 
     // Under SQLite's bound-parameter limit, so one IN (...) list per statement is always valid.
     private const int DeleteBatchSize = 500;

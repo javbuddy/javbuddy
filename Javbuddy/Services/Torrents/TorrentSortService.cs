@@ -14,7 +14,6 @@ namespace Javbuddy.Services.Torrents;
 public record TorrentScanResult(bool Success, List<FileInfoDto>? Files, string? ErrorMessage);
 public record TorrentBatchScrapeStartResult(bool Success, string? JobId, string? ErrorMessage);
 
-
 /// <summary>The poster to crop, with its pixel size (crop bounds are measured on it). Normally
 /// javinizer-go's full-size <c>{id}-full.jpg</c>; <paramref name="IsFullSize"/> is false when only
 /// the already-cropped <c>{id}.jpg</c> exists (a legacy envelope), which javinizer-go's crop
@@ -92,20 +91,10 @@ public class TorrentSortService(
     IQBittorrentClient qBittorrentClient,
     IDbContextFactory<AppDbContext> dbFactory,
     TorrentChangeNotifier changeNotifier,
-    ILogger<TorrentSortService> logger,
     MovieChangeNotifier? movieChangeNotifier = null) : ITorrentSortService
 {
     private static readonly TimeSpan OrganizePollInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan OrganizePollTimeout = TimeSpan.FromMinutes(45);
-
-    private readonly IJavinizerClient javinizerClient = javinizerClient;
-    private readonly ILocalLibraryClient localLibraryClient = localLibraryClient;
-    private readonly IPathMappingService pathMappingService = pathMappingService;
-    private readonly IQBittorrentClient qBittorrentClient = qBittorrentClient;
-    private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
-    private readonly TorrentChangeNotifier changeNotifier = changeNotifier;
-    private readonly ILogger<TorrentSortService> logger = logger;
-    private readonly MovieChangeNotifier? movieChangeNotifier = movieChangeNotifier;
 
     public async Task<TorrentScanResult> ScanAsync(int torrentDownloadId, string path, CancellationToken ct = default)
     {

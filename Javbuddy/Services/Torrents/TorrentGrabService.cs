@@ -9,7 +9,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Torrents;
 
-
 public interface ITorrentGrabService
 {
     Task<OperationResult> GrabAsync(Movie movie, ReleaseResourceDto release, CancellationToken ct = default);
@@ -42,12 +41,6 @@ public class TorrentGrabService(
     /// <summary>A real .torrent file is a few hundred KB at most.</summary>
     private const long MaxTorrentFileBytes = 10L * 1024 * 1024;
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromSeconds(30);
-
-    private readonly IQBittorrentClient qBittorrentClient = qBittorrentClient;
-    private readonly IHttpClientFactory httpClientFactory = httpClientFactory;
-    private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
-    private readonly TorrentChangeNotifier changeNotifier = changeNotifier;
-    private readonly JavbuddyMetrics metrics = metrics;
 
     public async Task<OperationResult> GrabAsync(Movie movie, ReleaseResourceDto release, CancellationToken ct = default)
     {

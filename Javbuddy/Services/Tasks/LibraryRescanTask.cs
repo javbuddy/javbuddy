@@ -60,12 +60,6 @@ public class LibraryRescanTask(
     private static readonly TimeSpan DefaultInterval = TimeSpan.FromHours(24);
     private const int MaxConcurrency = 4;
 
-    private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
-    private readonly ILocalLibraryClient localLibraryClient = localLibraryClient;
-    private readonly ILogger<LibraryRescanTask> logger = logger;
-    private readonly INfoSyncService? nfoSyncService = nfoSyncService;
-    private readonly MovieChangeNotifier? movieChangeNotifier = movieChangeNotifier;
-    private readonly NewMovieArtworkSignal? newMovieArtworkSignal = newMovieArtworkSignal;
     private readonly TimeSpan notifyThrottle = movieChangeNotifyInterval ?? TimeSpan.FromSeconds(2);
 
     public string Name => "Library Rescan";
