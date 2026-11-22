@@ -10,19 +10,40 @@ namespace Javbuddy.Services.Tasks;
 /// <summary>Wraps a single IScheduledTask execution with a persisted ScheduledTaskRun row —
 /// queued/started/ended, success/failure, and a summary — so both the automatic scheduler and
 /// a manual "Run Now" click get identical history tracking.</summary>
-public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, JavbuddyMetrics metrics, ScheduledTaskChangeNotifier changeNotifier, ScheduledTaskCancellationRegistry cancellationRegistry, ILogger<ScheduledTaskRunner> logger)
+public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, JavbuddyMetrics metrics, ScheduledTaskChangeNotifier changeNotifier, ScheduledTaskCancellationRegistry cancellationRegistry, ScheduledTaskRunTracker tracker, ILogger<ScheduledTaskRunner> logger)
 {
     private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
     private readonly JavbuddyMetrics metrics = metrics;
     private readonly ScheduledTaskChangeNotifier changeNotifier = changeNotifier;
     private readonly ScheduledTaskCancellationRegistry cancellationRegistry = cancellationRegistry;
+    private readonly ScheduledTaskRunTracker tracker = tracker;
     private readonly ILogger<ScheduledTaskRunner> logger = logger;
 
     private static readonly TimeSpan RunRetention = TimeSpan.FromDays(90);
 
     /// <param name="onRecorded">Called once the run's "queued" row is saved (at once for a task that records no
     /// history), so the caller that queued it knows a refresh will find it.</param>
-    public async Task RunAsync(IScheduledTask task, CancellationToken ct, Action? onRecorded = null)
+    /// <returns>False when the task is already running (from any caller): nothing is run or recorded.</returns>
+    public async Task<bool> RunAsync(IScheduledTask task, CancellationToken ct, Action? onRecorded = null)
+    {
+        if (!tracker.TryBegin(task.Name))
+        {
+            logger.LogInformation("Scheduled task {TaskName} is already running; not starting it again.", task.Name);
+            return false;
+        }
+
+        try
+        {
+            await RunClaimedAsync(task, ct, onRecorded);
+        }
+        finally
+        {
+            tracker.End(task.Name);
+        }
+        return true;
+    }
+
+    private async Task RunClaimedAsync(IScheduledTask task, CancellationToken ct, Action? onRecorded)
     {
         // Its own trace, so a run started from a click doesn't hang under the click's span.
         using var activity = JavbuddyTracing.StartRoot($"task {task.Name}", new KeyValuePair<string, object?>("javbuddy.task.name", task.Name));

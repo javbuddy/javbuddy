@@ -277,6 +277,7 @@ public static class ServiceRegistration
         services.AddSingleton<IBackupSettingsService, BackupSettingsService>();
         services.AddSingleton<IBackupService, BackupService>();
         services.AddSingleton<ScheduledTaskCancellationRegistry>();
+        services.AddSingleton<ScheduledTaskRunTracker>();
         services.AddScoped<ScheduledTaskRunner>();
         services.AddScoped<IScheduledTaskOverviewService, ScheduledTaskOverviewService>();
         services.AddHostedService<ScheduledTaskHostedService>();

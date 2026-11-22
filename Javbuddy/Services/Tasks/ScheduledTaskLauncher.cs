@@ -7,20 +7,24 @@ namespace Javbuddy.Services.Tasks;
 /// The run goes through <see cref="ScheduledTaskRunner"/> (so it gets the same history row as a
 /// scheduled run) on <see cref="BackgroundJobRunner"/>, so it keeps going after the page that
 /// queued it is gone.</summary>
-public sealed class ScheduledTaskLauncher(BackgroundJobRunner jobs)
+public sealed class ScheduledTaskLauncher(BackgroundJobRunner jobs, ScheduledTaskRunTracker tracker)
 {
     private readonly BackgroundJobRunner jobs = jobs;
+    private readonly ScheduledTaskRunTracker tracker = tracker;
 
     public Task Queue(string taskName) => Queue(taskName, onRecorded: null);
 
     /// <summary>Queues the run and returns once its "queued" row is saved, so a page that reloads the
     /// run list right after is sure to find it. Also returns when the job ends first (an unknown task
-    /// name, or a failure before the row).</summary>
-    public async Task QueueAndWaitUntilRecordedAsync(string taskName)
+    /// name, or a failure before the row). Returns false, queueing nothing, when the task is already running.</summary>
+    public async Task<bool> QueueAndWaitUntilRecordedAsync(string taskName)
     {
+        if (tracker.IsRunning(taskName)) return false;
+
         var recorded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var job = Queue(taskName, () => recorded.TrySetResult());
         await Task.WhenAny(recorded.Task, job);
+        return true;
     }
 
     private Task Queue(string taskName, Action? onRecorded) => jobs.Enqueue(taskName, async (services, ct) =>

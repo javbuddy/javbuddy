@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **The same scheduled task can no longer run twice at once.** The scheduler, System > Tasks, Library Import and Activity > Queue now share one guard, so two Library Rescans no longer race to import the same code and fail partway. Run now reports that the task is already running.
 - **The Scenes wall's Highlights and Apexes views list the right actor tags.** Their actor-tag filter options were swapped, so picking a tag could return nothing or hide valid ones; the Scenes view's options now also skip hidden scenes.
 - **Adding a movie whose folder already exists fills in its files and VR format.** Previously the file list, file count and VR type stayed empty until a rescan.
 - **Saving the Local Library settings refreshes its tile on Metadata settings** right away, and the page no longer queries the status twice on load.

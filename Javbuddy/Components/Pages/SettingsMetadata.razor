@@ -368,16 +368,19 @@ else
         importMessage = null;
         StateHasChanged();
 
+        var queued = false;
         try
         {
-            await TaskLauncher.QueueAndWaitUntilRecordedAsync("r18.dev Dump Import");
+            queued = await TaskLauncher.QueueAndWaitUntilRecordedAsync("r18.dev Dump Import");
         }
         finally
         {
             importing = false;
         }
         await LoadAsync();
-        importMessage = "Import queued — see System → Tasks for progress and the result.";
+        importMessage = queued
+            ? "Import queued — see System → Tasks for progress and the result."
+            : "An import is already running — see System → Tasks for progress and the result.";
     }
 
     private void OpenMinnanoAvModal()

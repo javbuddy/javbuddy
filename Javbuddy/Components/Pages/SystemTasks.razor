@@ -14,6 +14,11 @@
 
 <h1 class="data-page-title tasks-section-title">Scheduled</h1>
 
+@if (alreadyRunningNotice is not null)
+{
+    <div class="alert alert-info">@alreadyRunningNotice</div>
+}
+
 @if (scheduledRows is null)
 {
     <LoadingIndicator />
@@ -131,6 +136,7 @@ else
     private readonly HashSet<string> runningTasks = new();
     private readonly HashSet<int> cancellingRunIds = new();
     private string? justQueued;
+    private string? alreadyRunningNotice;
     private CancellationTokenSource? pollCts;
 
     protected override async Task OnInitializedAsync()
@@ -240,13 +246,18 @@ else
 
     private async Task RunNow(string taskName)
     {
+        alreadyRunningNotice = null;
         runningTasks.Add(taskName);
         justQueued = taskName;
         StateHasChanged();
 
         // Queued on application-owned background execution so the run keeps going (and gets
         // recorded) even after this click handler returns — a full sync can take minutes.
-        await TaskLauncher.QueueAndWaitUntilRecordedAsync(taskName);
+        if (!await TaskLauncher.QueueAndWaitUntilRecordedAsync(taskName))
+        {
+            justQueued = null;
+            alreadyRunningNotice = $"{taskName} is already running.";
+        }
 
         // The "queued" row exists now, so the refresh finds it.
         runningTasks.Remove(taskName);

@@ -23,8 +23,8 @@ public class ScheduledTaskRunnerTests
         public Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress) => run(ct, progress);
     }
 
-    private static ScheduledTaskRunner CreateRunner(TestDbContextFactory factory, JavbuddyMetrics? metrics = null, ScheduledTaskChangeNotifier? notifier = null, ScheduledTaskCancellationRegistry? registry = null) =>
-        new(factory, metrics ?? new JavbuddyMetrics(), notifier ?? new ScheduledTaskChangeNotifier(), registry ?? new ScheduledTaskCancellationRegistry(), Substitute.For<ILogger<ScheduledTaskRunner>>());
+    private static ScheduledTaskRunner CreateRunner(TestDbContextFactory factory, JavbuddyMetrics? metrics = null, ScheduledTaskChangeNotifier? notifier = null, ScheduledTaskCancellationRegistry? registry = null, ScheduledTaskRunTracker? tracker = null) =>
+        new(factory, metrics ?? new JavbuddyMetrics(), notifier ?? new ScheduledTaskChangeNotifier(), registry ?? new ScheduledTaskCancellationRegistry(), tracker ?? new ScheduledTaskRunTracker(), Substitute.For<ILogger<ScheduledTaskRunner>>());
 
     // A task run starts its own trace, so it's picked out by its (test-unique) name rather than by TraceCapture's parent.
     private static async Task<Activity> RunTracedAsync(ScheduledTaskRunner runner, IScheduledTask task)
@@ -224,7 +224,7 @@ public class ScheduledTaskRunnerTests
         var logger = Substitute.For<ILogger<ScheduledTaskRunner>>();
         var task = new FakeTask("frequent-failing-task", (_, _) => throw new InvalidOperationException("boom"), recordRunHistory: false);
 
-        await new ScheduledTaskRunner(factory, new JavbuddyMetrics(), new ScheduledTaskChangeNotifier(), new ScheduledTaskCancellationRegistry(), logger).RunAsync(task, CancellationToken.None);
+        await new ScheduledTaskRunner(factory, new JavbuddyMetrics(), new ScheduledTaskChangeNotifier(), new ScheduledTaskCancellationRegistry(), new ScheduledTaskRunTracker(), logger).RunAsync(task, CancellationToken.None);
 
         await using var db = await factory.CreateDbContextAsync();
         Assert.Empty(db.ScheduledTaskRuns);
@@ -516,5 +516,47 @@ public class ScheduledTaskRunnerTests
         var runId = (await db.ScheduledTaskRuns.SingleAsync()).Id;
         Assert.False(registry.IsActive(runId));
         Assert.False(registry.TryCancel(runId));
+    }
+
+    [Fact]
+    public async Task RunAsync_TaskAlreadyRunning_IsRejectedWithoutARowOrASecondExecution()
+    {
+        using var factory = new TestDbContextFactory();
+        var tracker = new ScheduledTaskRunTracker();
+        var started = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        var executions = 0;
+        var task = new FakeTask("Library Rescan", async (_, _) =>
+        {
+            Interlocked.Increment(ref executions);
+            started.SetResult();
+            await release.Task;
+            return "done";
+        });
+
+        var first = CreateRunner(factory, tracker: tracker).RunAsync(task, CancellationToken.None);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        var second = await CreateRunner(factory, tracker: tracker).RunAsync(task, CancellationToken.None);
+        release.SetResult();
+
+        Assert.False(second);
+        Assert.True(await first);
+        Assert.Equal(1, executions);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Single(await db.ScheduledTaskRuns.ToListAsync());
+    }
+
+    [Fact]
+    public async Task RunAsync_ReleasesTheTaskAfterAFailure_SoItCanRunAgain()
+    {
+        using var factory = new TestDbContextFactory();
+        var tracker = new ScheduledTaskRunTracker();
+        var runner = CreateRunner(factory, tracker: tracker);
+        var task = new FakeTask("Flaky", (_, _) => throw new InvalidOperationException("boom"));
+
+        Assert.True(await runner.RunAsync(task, CancellationToken.None));
+        Assert.False(tracker.IsRunning("Flaky"));
+        Assert.True(await runner.RunAsync(task, CancellationToken.None));
     }
 }

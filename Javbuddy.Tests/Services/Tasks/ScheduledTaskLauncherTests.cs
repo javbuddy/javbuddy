@@ -29,12 +29,13 @@ public class ScheduledTaskLauncherTests
         services.AddSingleton(new ScheduledTaskChangeNotifier());
         services.AddSingleton(Substitute.For<ILogger<ScheduledTaskRunner>>());
         services.AddSingleton<ScheduledTaskCancellationRegistry>();
+        services.AddSingleton<ScheduledTaskRunTracker>();
         services.AddScoped<ScheduledTaskRunner>();
         foreach (var task in tasks) services.AddSingleton(task);
         var provider = services.BuildServiceProvider();
 
         var runner = new BackgroundJobRunner(provider.GetRequiredService<IServiceScopeFactory>(), Substitute.For<ILogger<BackgroundJobRunner>>());
-        return (new ScheduledTaskLauncher(runner), runner);
+        return (new ScheduledTaskLauncher(runner, provider.GetRequiredService<ScheduledTaskRunTracker>()), runner);
     }
 
     [Fact]
@@ -142,5 +143,25 @@ public class ScheduledTaskLauncherTests
 
         release.SetResult(null);
         await runner.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task QueueAndWaitUntilRecorded_TaskAlreadyRunning_ReturnsFalseWithoutQueueing()
+    {
+        using var factory = new TestDbContextFactory();
+        var started = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        var (launcher, _) = CreateLauncher(factory, new FakeTask("Library Rescan", async ct =>
+        {
+            started.TrySetResult();
+            await release.Task;
+            return "done";
+        }));
+
+        Assert.True(await launcher.QueueAndWaitUntilRecordedAsync("Library Rescan"));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.False(await launcher.QueueAndWaitUntilRecordedAsync("Library Rescan"));
+        release.SetResult();
     }
 }

@@ -41,6 +41,7 @@ public class SystemTasksTests : BunitContext
         Services.AddSingleton(Substitute.For<ILogger<SystemTasks>>());
         Services.AddSingleton(Substitute.For<ILogger<ScheduledTaskRunner>>());
         Services.AddSingleton(registry);
+        Services.AddSingleton<ScheduledTaskRunTracker>();
         Services.AddScoped<ScheduledTaskRunner>();
         Services.AddScoped<IScheduledTaskOverviewService, ScheduledTaskOverviewService>();
         Services.AddSingleton(Substitute.For<ILogger<BackgroundJobRunner>>());

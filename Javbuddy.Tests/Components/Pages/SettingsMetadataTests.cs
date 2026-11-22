@@ -39,6 +39,7 @@ public class SettingsMetadataTests : BunitContext
 
         Services.AddSingleton<ILogger<BackgroundJobRunner>>(NullLogger<BackgroundJobRunner>.Instance);
         Services.AddSingleton<BackgroundJobRunner>();
+        Services.AddSingleton<ScheduledTaskRunTracker>();
         Services.AddSingleton<ScheduledTaskLauncher>();
         Services.AddSingleton<ActorBatchEnrichmentLauncher>();
 
