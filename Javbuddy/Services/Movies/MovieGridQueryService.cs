@@ -385,10 +385,12 @@ public sealed class MovieGridQueryService(IDbContextFactory<AppDbContext> dbFact
             db.Actors.Where(a => a.PlaceholderMovieId == null && db.MovieActors.Any(ma => ma.ActorId == a.Id && ma.Movie.Status == MovieStatus.Got && ma.Movie.MovieFiles.Any())), ct);
     }
 
-    // DisplayName is computed in C#, so the actors are loaded first and named and sorted here.
+    // DisplayName is computed in C#, so only the columns it reads are loaded; the actors are named and sorted here.
     private static async Task<List<MovieActorOption>> LoadActorOptionsAsync(IQueryable<Actor> actors, CancellationToken ct) =>
-        (await actors.AsNoTracking().ToListAsync(ct))
-            .Select(a => new MovieActorOption(a.Id, a.DisplayName))
+        (await actors.AsNoTracking()
+            .Select(a => new { a.Id, a.FirstName, a.LastName, a.PlaceholderMovieId })
+            .ToListAsync(ct))
+            .Select(a => new MovieActorOption(a.Id, new Actor { FirstName = a.FirstName, LastName = a.LastName, PlaceholderMovieId = a.PlaceholderMovieId }.DisplayName))
             .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
