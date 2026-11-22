@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Upgrading a database with case-only duplicate image or candidate codes no longer blocks startup.** The `CodeColumnsNoCase` migration now drops the later duplicate cached-image and discovered-candidate rows (disposable cache data) before rebuilding its unique indexes, including when restoring an older backup.
 - **The Downloading badge and count now match Activity > Queue.** A torrent that was removed from qBittorrent or already sorted no longer keeps its movie marked Downloading or inflates the count.
 - **An offline library folder no longer turns its movies back to Missing.** When one of several library roots is unreachable (an unmounted share), both the scheduled rescan and a movie's manual rescan leave movies on that root untouched instead of clearing their file, MediaInfo and image data.
 - **A qBittorrent outage no longer wipes Activity > Queue tracking.** When qBittorrent is unreachable, rejects the login or returns an error, the background sync now skips that run instead of marking every tracked download as removed.
