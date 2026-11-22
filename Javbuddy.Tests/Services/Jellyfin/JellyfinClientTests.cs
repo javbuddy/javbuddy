@@ -214,6 +214,7 @@ public class JellyfinClientTests
         var handler = new FakeHttpMessageHandler((req, _) =>
         {
             Assert.Equal("/Persons/Yua%20Mikami", req.RequestUri?.PathAndQuery);
+            Assert.Equal("MediaBrowser Token=\"testkey\"", req.Headers.GetValues("Authorization").Single());
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
             {
                 Content = new StringContent("{\"Id\":\"person-123\",\"Name\":\"Yua Mikami\",\"ServerId\":\"server-1\"}")

@@ -8,7 +8,7 @@ namespace Javbuddy.Services.Images;
 public sealed class BlockedAddressException(string host) : Exception($"{host} resolves to a local or private network address.");
 
 /// <summary>Keeps the "import image from URL" flows (actor portrait, movie cover, movie
-/// extrafanart) from being pointed at the server itself or its private network. The check runs
+/// extrafanart) and provider/.nfo image downloads from being pointed at the server itself or its private network. The check runs
 /// in the connection callback, on the addresses actually connected to, so it also covers
 /// redirects and a DNS name that resolves to an internal address.</summary>
 public static class PublicAddressGuard
