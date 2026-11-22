@@ -11,7 +11,6 @@ public class R18DevImportTask(IR18DevDumpImporter importer, IR18DevSettingsServi
     private static readonly TimeSpan Interval = TimeSpan.FromDays(7);
 
     private readonly IR18DevDumpImporter importer = importer;
-    private readonly IR18DevSettingsService settingsService = settingsService;
 
     public string Name => "r18.dev Dump Import";
 
