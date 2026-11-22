@@ -9,14 +9,14 @@
 <PageTitle>Photos · Actors · Javbuddy</PageTitle>
 
 <div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="mb-0">Photos @(allPhotos is not null ? $"({allPhotos.Count})" : "")</h1>
+    <h1 class="mb-0">Photos @(totalPhotoCount is { } total ? $"({total})" : "")</h1>
 </div>
 
-@if (allPhotos is null)
+@if (totalPhotoCount is null)
 {
     <LoadingIndicator />
 }
-else if (allPhotos.Count == 0)
+else if (totalPhotoCount == 0)
 {
     <p class="text-muted">No actor photos uploaded yet. You can upload photos on any actor's detail page.</p>
 }
@@ -174,7 +174,9 @@ else
 }
 
 @code {
-    private List<GlobalActorPhotoItem>? allPhotos;
+    // Every photo there is, unfiltered (the header count and the empty state); the filtered list is queried from the service.
+    private int? totalPhotoCount;
+    private int queryVersion;
     private List<ActorWithPhotoCountSummary>? actorsWithPhotos;
     private string textFilter = "";
     private readonly Debouncer textFilterDebouncer = new();
@@ -224,9 +226,9 @@ else
 
     private async Task LoadDataAsync()
     {
-        allPhotos = (await ActorPhotoService.GetGlobalPhotosAsync()).ToList();
         actorsWithPhotos = (await ActorPhotoService.GetActorsWithPhotosAsync()).ToList();
-        RebuildPhotos();
+        await RebuildPhotosAsync();
+        totalPhotoCount = FilteredPhotos.Count;
     }
 
     private async Task OnTextFilterInput(ChangeEventArgs e)
@@ -234,11 +236,7 @@ else
         textFilter = e.Value?.ToString() ?? "";
 
         // A newer keystroke supersedes this one, so the filter, sort and regrouping run once typing pauses.
-        await textFilterDebouncer.RunAsync(_ =>
-        {
-            RebuildPhotos();
-            return Task.CompletedTask;
-        });
+        await textFilterDebouncer.RunAsync(_ => RebuildPhotosAsync());
     }
 
     private void ToggleFilterDropdown()
@@ -277,33 +275,33 @@ else
         StateHasChanged();
     }
 
-    private void SetActorFilter(int? actorId)
+    private async Task SetActorFilter(int? actorId)
     {
         selectedActorId = actorId;
         showFilterDropdown = false;
-        RebuildPhotos();
+        await RebuildPhotosAsync();
     }
 
-    private void SetAlbumFilter(AlbumFilterOption option)
+    private async Task SetAlbumFilter(AlbumFilterOption option)
     {
         albumFilter = option;
         showFilterDropdown = false;
-        RebuildPhotos();
+        await RebuildPhotosAsync();
     }
 
-    private void ToggleFavoritesOnly()
+    private async Task ToggleFavoritesOnly()
     {
         favoritesOnly = !favoritesOnly;
         showFilterDropdown = false;
-        RebuildPhotos();
+        await RebuildPhotosAsync();
     }
 
-    private void SetSort(string sortOption)
+    private async Task SetSort(string sortOption)
     {
         sort = sortOption;
         randomSeed = Random.Shared.Next();
         showSortDropdown = false;
-        RebuildPhotos();
+        await RebuildPhotosAsync();
     }
 
     private static string SortLabel(string sortOption) => sortOption switch
@@ -325,7 +323,7 @@ else
         + (albumFilter != AlbumFilterOption.All ? 1 : 0)
         + (favoritesOnly ? 1 : 0);
 
-    private void ResetFilters()
+    private async Task ResetFilters()
     {
         textFilterDebouncer.Cancel();
         textFilter = "";
@@ -333,12 +331,31 @@ else
         albumFilter = AlbumFilterOption.All;
         favoritesOnly = false;
         showFilterDropdown = false;
-        RebuildPhotos();
+        await RebuildPhotosAsync();
     }
 
-    private void RebuildPhotos(bool resetVisibleCount = true)
+    // Asks the service for the photos the current filters match (filtered and sorted in SQL); only a "random"
+    // sort is applied here, since it is seeded per click and has no stable SQL form.
+    private async Task RebuildPhotosAsync()
     {
-        FilteredPhotos = GetFilteredPhotos();
+        var version = ++queryVersion;
+        var photos = await ActorPhotoService.GetGlobalPhotosAsync(new GlobalPhotoFilter(
+            ActorId: selectedActorId,
+            UncategorizedOnly: albumFilter == AlbumFilterOption.Uncategorized,
+            InAlbumOnly: albumFilter == AlbumFilterOption.InAlbum,
+            FavoritesOnly: favoritesOnly,
+            Search: string.IsNullOrWhiteSpace(textFilter) ? null : textFilter.Trim(),
+            Sort: sort == "random" ? null : sort));
+        // A newer query (or a dispose) supersedes this one.
+        if (disposed || version != queryVersion) return;
+
+        ApplyPhotos(sort == "random" ? [.. photos.OrderBy(p => HashCode.Combine(p.Id, randomSeed))] : [.. photos]);
+        StateHasChanged();
+    }
+
+    private void ApplyPhotos(List<GlobalActorPhotoItem> photos, bool resetVisibleCount = true)
+    {
+        FilteredPhotos = photos;
         allTimelineGroups = GetTimelineGroups();
         if (resetVisibleCount) visiblePhotoCount = PhotoBatchSize;
         gridGeneration++;
@@ -424,47 +441,6 @@ else
 
             return height;
         }
-    }
-
-    private List<GlobalActorPhotoItem> GetFilteredPhotos()
-    {
-        if (allPhotos is null) return [];
-        var query = allPhotos.AsEnumerable();
-
-        if (!string.IsNullOrWhiteSpace(textFilter))
-        {
-            var search = textFilter.Trim();
-            query = query.Where(p =>
-                p.ActorDisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
-                || (p.AlbumName is not null && p.AlbumName.Contains(search, StringComparison.OrdinalIgnoreCase)));
-        }
-
-        if (selectedActorId.HasValue)
-        {
-            query = query.Where(p => p.ActorId == selectedActorId.Value);
-        }
-
-        if (albumFilter == AlbumFilterOption.InAlbum)
-        {
-            query = query.Where(p => p.AlbumId.HasValue);
-        }
-        else if (albumFilter == AlbumFilterOption.Uncategorized)
-        {
-            query = query.Where(p => !p.AlbumId.HasValue);
-        }
-
-        if (favoritesOnly)
-        {
-            query = query.Where(p => p.IsFavorite);
-        }
-
-        return sort switch
-        {
-            "oldest" => query.OrderBy(p => p.UploadedAt).ThenBy(p => p.Id).ToList(),
-            "actor" => query.OrderBy(p => p.ActorDisplayName).ThenByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id).ToList(),
-            "random" => query.OrderBy(p => HashCode.Combine(p.Id, randomSeed)).ToList(),
-            _ => query.OrderByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id).ToList()
-        };
     }
 
     private IReadOnlyList<TimelineGroup> GetTimelineGroups()
@@ -592,8 +568,8 @@ else
             var result = await ActorPhotoService.DeletePhotoAsync(photoToDelete.ActorId, photoToDelete.Id);
             if (result.Success)
             {
-                allPhotos?.RemoveAll(p => p.Id == photoToDelete.Id);
-                RebuildPhotos(resetVisibleCount: false);
+                totalPhotoCount = totalPhotoCount is { } total ? total - 1 : null;
+                ApplyPhotos([.. FilteredPhotos.Where(p => p.Id != photoToDelete.Id)], resetVisibleCount: false);
                 var photos = FilteredPhotos;
                 if (photos.Count == 0)
                 {

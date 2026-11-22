@@ -17,11 +17,39 @@ public class ActorPhotosTests : BunitContext
         Services.AddSingleton(photoService);
     }
 
+    // Stands in for the service's SQL filtering and sorting, so the page's own wiring (which filter it asks for) is
+    // what the tests exercise.
+    private void ServePhotos(IEnumerable<GlobalActorPhotoItem> photos)
+    {
+        var all = photos.ToList();
+        photoService.GetGlobalPhotosAsync(Arg.Any<GlobalPhotoFilter>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                var f = call.Arg<GlobalPhotoFilter>();
+                var query = all.AsEnumerable();
+                if (f.ActorId is { } actorId) query = query.Where(p => p.ActorId == actorId);
+                if (f.UncategorizedOnly) query = query.Where(p => p.AlbumId is null);
+                if (f.InAlbumOnly) query = query.Where(p => p.AlbumId is not null);
+                if (f.FavoritesOnly) query = query.Where(p => p.IsFavorite);
+                if (f.Search is { } search)
+                {
+                    query = query.Where(p => p.ActorDisplayName.Contains(search, StringComparison.OrdinalIgnoreCase)
+                        || (p.AlbumName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+                }
+                IReadOnlyList<GlobalActorPhotoItem> result = f.Sort switch
+                {
+                    "oldest" => [.. query.OrderBy(p => p.UploadedAt).ThenBy(p => p.Id)],
+                    "actor" => [.. query.OrderBy(p => p.ActorDisplayName).ThenByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id)],
+                    _ => [.. query.OrderByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id)],
+                };
+                return Task.FromResult(result);
+            });
+    }
+
     [Fact]
     public void EmptyLibrary_ShowsNoPhotosMessage()
     {
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(new List<GlobalActorPhotoItem>());
+        ServePhotos(new List<GlobalActorPhotoItem>());
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -47,8 +75,7 @@ public class ActorPhotosTests : BunitContext
             new(101, "Mikami Yua", 2)
         };
 
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(actors);
 
@@ -91,8 +118,7 @@ public class ActorPhotosTests : BunitContext
             new(2, 102, "Fukada Eimi", null, null, 1.33, DateTime.UtcNow),
         };
 
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -113,7 +139,7 @@ public class ActorPhotosTests : BunitContext
 
         // Click Reset filters
         cut.Find("button.btn-link").Click();
-        Assert.Equal(2, cut.FindAll(".actor-photo-tile").Count);
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".actor-photo-tile").Count));
     }
 
     [Fact]
@@ -124,8 +150,7 @@ public class ActorPhotosTests : BunitContext
             new(1, 101, "Mikami Yua", 10, "Summer Gravure", 1.5, DateTime.UtcNow),
             new(2, 102, "Fukada Eimi", null, null, 1.33, DateTime.UtcNow),
         };
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -137,8 +162,8 @@ public class ActorPhotosTests : BunitContext
         // Reset while the "zzz" filter is still pending: it must not apply afterwards.
         cut.Find("button.btn-outline-secondary.dropdown-clear, [aria-label='Reset all filters']").Click();
 
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".actor-photo-tile").Count));
         Assert.Equal("", cut.Find("input[type='search']").GetAttribute("value") ?? "");
-        Assert.Equal(2, cut.FindAll(".actor-photo-tile").Count);
         Thread.Sleep(500);
         Assert.Equal(2, cut.FindAll(".actor-photo-tile").Count);
     }
@@ -152,8 +177,7 @@ public class ActorPhotosTests : BunitContext
             new(2, 102, "Fukada Eimi", null, null, 1.33, DateTime.UtcNow),
         };
 
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -199,8 +223,7 @@ public class ActorPhotosTests : BunitContext
             new(1, 101, "Mikami Yua", null, null, 1.5, DateTime.UtcNow)
         };
 
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -220,8 +243,7 @@ public class ActorPhotosTests : BunitContext
             new(1, 101, "Mikami Yua", null, null, 1.5, DateTime.UtcNow)
         };
 
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
         photoService.DeletePhotoAsync(101, 1, Arg.Any<CancellationToken>())
@@ -246,8 +268,7 @@ public class ActorPhotosTests : BunitContext
         {
             new(1, 101, "Mikami Yua", null, null, 1.5, DateTime.UtcNow, HasOriginal: false)
         };
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -266,8 +287,7 @@ public class ActorPhotosTests : BunitContext
             new(1, 101, "Mikami Yua", null, null, 1.5, DateTime.UtcNow.AddMinutes(-5), HasOriginal: true),
             new(2, 102, "Fukada Eimi", null, null, 1.33, DateTime.UtcNow, HasOriginal: true),
         };
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -303,8 +323,7 @@ public class ActorPhotosTests : BunitContext
             new(3, 103, "Hashimoto Arina", null, null, 1.0, now),
         };
 
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -367,8 +386,7 @@ public class ActorPhotosTests : BunitContext
             new(2, 102, "Fukada Eimi", null, null, 1.33, DateTime.UtcNow)
         };
 
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -397,8 +415,7 @@ public class ActorPhotosTests : BunitContext
             .Select(i => new GlobalActorPhotoItem(i, 101, "Mikami Yua", null, null, 1.0, DateTime.UtcNow.AddMinutes(-i)))
             .ToList();
 
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -474,7 +491,7 @@ public class ActorPhotosTests : BunitContext
         cut.Find("input[type='search']").Input("No matching album");
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".actor-photo-tile")));
         cut.Find("button.btn-link").Click();
-        Assert.Equal(120, cut.FindAll(".actor-photo-tile").Count);
+        cut.WaitForAssertion(() => Assert.Equal(120, cut.FindAll(".actor-photo-tile").Count));
         Assert.Equal("/actor-photo/1/thumb", cut.Find(".actor-photo-tile-img").GetAttribute("data-src"));
     }
 
@@ -558,8 +575,7 @@ public class ActorPhotosTests : BunitContext
                 (i <= 50 ? september : i <= 100 ? september.AddMonths(-1) : i <= 150 ? september.AddMonths(-2) : september.AddMonths(-3))
                     .AddMinutes(-i)))
             .ToList();
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
 
@@ -599,8 +615,7 @@ public class ActorPhotosTests : BunitContext
                 i == 250 ? "Hidden Album" : null, 1.0,
                 (i <= 80 ? september : september.AddMonths(-1)).AddMinutes(-i)))
             .ToList();
-        photoService.GetGlobalPhotosAsync(Arg.Any<int?>(), Arg.Any<int?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-            .Returns(photos);
+        ServePhotos(photos);
         photoService.GetActorsWithPhotosAsync(Arg.Any<CancellationToken>())
             .Returns(new List<ActorWithPhotoCountSummary>());
     }

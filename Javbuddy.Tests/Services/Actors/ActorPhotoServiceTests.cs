@@ -414,6 +414,13 @@ public class ActorPhotoServiceTests : IDisposable
         Assert.Single(await service.GetGlobalPhotosAsync(search: "fukada eimi"));
         Assert.Single(await service.GetGlobalPhotosAsync(search: "SUMMER gravure"));
 
+        // 7c. The filter record: in an album only, and the actor sort groups an actor's photos newest first
+        var inAlbum = await service.GetGlobalPhotosAsync(new GlobalPhotoFilter(InAlbumOnly: true));
+        Assert.Equal(album1Id, Assert.Single(inAlbum).AlbumId);
+        var byActor = await service.GetGlobalPhotosAsync(new GlobalPhotoFilter(Sort: "actor"));
+        Assert.Equal(["Fukada Eimi", "Mikami Yua", "Mikami Yua"], byActor.Select(p => p.ActorDisplayName).ToArray());
+        Assert.Equal([0.75, 1.5], byActor.Skip(1).Select(p => p.AspectRatio).ToArray());
+
         // 8. Sort oldest first
         var oldest = await service.GetGlobalPhotosAsync(sort: "oldest");
         Assert.Equal(1.5, oldest[0].AspectRatio);

@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **The Actor Photos page filters and sorts in the database.** It asks the photo service for the photos its filters match (actor, album, favorites, text, sort), instead of loading every photo once and re-filtering the list in C# on each change; "Random" is still shuffled in the page.
 - **Tag discovery, "Apply Rules to Library" and "Strip Ignored Tags" now run as background jobs.** They keep going if you leave the Tags page, report their progress and result in the sidebar, and a second pass is refused while one runs.
 - **Scenes no longer re-queue media checks that cannot produce anything.** With the image cache in Thumbnails or Disabled mode, Movie Detail, the Scenes wall, Actor Detail and the clip editor now skip asking for scene media the mode never keeps, as apexes already did (one shared `IsMissingMedia` check). Highlights still ask, since that also queues their trickplay.
 - **The Scenes wall loads each page's movies' effective actors once instead of up to three times.** One load now serves the scenes, highlights and apexes (and their tag roll-up), instead of one per service, and the clip media lookups use a dictionary instead of scanning the list per clip.

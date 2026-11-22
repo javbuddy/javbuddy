@@ -39,6 +39,17 @@ public sealed record ActorPhotoUploadItem(Func<Stream> OpenStream, long Length)
         new(() => new MemoryStream(bytes), bytes.LongLength);
 }
 
+/// <summary>What <see cref="IActorPhotoService.GetGlobalPhotosAsync(GlobalPhotoFilter, CancellationToken)"/> returns.
+/// Sort is "newest" (default), "oldest" or "actor"; Search matches an actor's names or an album's name, ignoring ASCII case.</summary>
+public sealed record GlobalPhotoFilter(
+    int? ActorId = null,
+    int? AlbumId = null,
+    bool UncategorizedOnly = false,
+    bool InAlbumOnly = false,
+    bool FavoritesOnly = false,
+    string? Search = null,
+    string? Sort = null);
+
 public interface IActorPhotoService
 {
     Task<ActorPhotoGalleryData> GetGalleryAsync(int actorId, CancellationToken ct = default);
@@ -50,6 +61,10 @@ public interface IActorPhotoService
         string? search = null,
         string? sort = null,
         CancellationToken ct = default);
+
+    /// <summary>The Photos page's query: every filter and the sort run in SQL.</summary>
+    Task<IReadOnlyList<GlobalActorPhotoItem>> GetGlobalPhotosAsync(GlobalPhotoFilter filter, CancellationToken ct = default);
+
     Task<IReadOnlyList<ActorWithPhotoCountSummary>> GetActorsWithPhotosAsync(CancellationToken ct = default);
     Task<int> GetTotalPhotoCountAsync(CancellationToken ct = default);
     Task<OperationResult> UploadAsync(int actorId, IReadOnlyList<byte[]> images, int? albumId, CancellationToken ct = default);
@@ -95,15 +110,19 @@ public sealed class ActorPhotoService(
         return new ActorPhotoGalleryData(albums, photos);
     }
 
-    public async Task<IReadOnlyList<GlobalActorPhotoItem>> GetGlobalPhotosAsync(
+    public Task<IReadOnlyList<GlobalActorPhotoItem>> GetGlobalPhotosAsync(
         int? actorId = null,
         int? albumId = null,
         bool uncategorizedOnly = false,
         bool favoritesOnly = false,
         string? search = null,
         string? sort = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        GetGlobalPhotosAsync(new GlobalPhotoFilter(actorId, albumId, uncategorizedOnly, FavoritesOnly: favoritesOnly, Search: search, Sort: sort), ct);
+
+    public async Task<IReadOnlyList<GlobalActorPhotoItem>> GetGlobalPhotosAsync(GlobalPhotoFilter filter, CancellationToken ct = default)
     {
+        var (actorId, albumId, uncategorizedOnly, inAlbumOnly, favoritesOnly, search, sort) = filter;
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var query = db.ActorPhotos.AsNoTracking().Include(p => p.Actor).Include(p => p.Album).AsQueryable();
 
@@ -119,6 +138,10 @@ public sealed class ActorPhotoService(
         else if (uncategorizedOnly)
         {
             query = query.Where(p => p.AlbumId == null);
+        }
+        else if (inAlbumOnly)
+        {
+            query = query.Where(p => p.AlbumId != null);
         }
 
         if (favoritesOnly)
@@ -143,9 +166,9 @@ public sealed class ActorPhotoService(
 
         query = sort switch
         {
-            "oldest" => query.OrderBy(p => p.UploadedAt),
-            "actor" => query.OrderBy(p => p.Actor != null ? p.Actor.LastName : "").ThenBy(p => p.Actor != null ? p.Actor.FirstName : "").ThenByDescending(p => p.UploadedAt),
-            _ => query.OrderByDescending(p => p.UploadedAt)
+            "oldest" => query.OrderBy(p => p.UploadedAt).ThenBy(p => p.Id),
+            "actor" => query.OrderBy(p => p.Actor != null ? p.Actor.LastName : "").ThenBy(p => p.Actor != null ? p.Actor.FirstName : "").ThenByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id),
+            _ => query.OrderByDescending(p => p.UploadedAt).ThenByDescending(p => p.Id)
         };
 
         var raw = await query
