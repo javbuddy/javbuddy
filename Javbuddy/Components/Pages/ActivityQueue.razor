@@ -1,13 +1,11 @@
 @page "/activity/queue"
 @using Javbuddy.Models
 @using Javbuddy.Services.QBittorrent
-@using Javbuddy.Services.Tasks
 @using Javbuddy.Services.Torrents
 @implements IAsyncDisposable
 @inject ITorrentQueueService QueueService
 @inject IQBittorrentClient QBittorrentClient
 @inject TorrentChangeNotifier ChangeNotifier
-@inject IServiceScopeFactory ScopeFactory
 @inject TimeProvider TimeProvider
 @rendermode InteractiveServer
 
@@ -160,9 +158,7 @@ else
     {
         if (rows is null || !NeedsLivePoll(rows)) return;
 
-        var result = await QBittorrentClient.GetTorrentsAsync(ct);
-        if (!result.Success) return;
-        TorrentLiveProgress.Apply(rows, result.Torrents);
+        if (!await QueueService.ApplyLiveProgressAsync(rows, ct)) return;
 
         await InvokeAsync(StateHasChanged);
     }
@@ -172,16 +168,7 @@ else
         refreshing = true;
         try
         {
-            using (var scope = ScopeFactory.CreateScope())
-            {
-                var task = scope.ServiceProvider.GetServices<IScheduledTask>().FirstOrDefault(t => t is QBittorrentSyncTask);
-                if (task is not null)
-                {
-                    var runner = scope.ServiceProvider.GetRequiredService<ScheduledTaskRunner>();
-                    await runner.RunAsync(task, CancellationToken.None);
-                }
-            }
-
+            await QueueService.RefreshAsync();
             await LoadAsync();
         }
         finally

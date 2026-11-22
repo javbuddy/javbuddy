@@ -25,7 +25,9 @@ public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContex
     private readonly IConfiguration configuration = configuration;
     private readonly TorrentChangeNotifier changeNotifier = changeNotifier;
 
-    public string Name => "qBittorrent Sync";
+    public const string TaskName = "qBittorrent Sync";
+
+    public string Name => TaskName;
 
     public string Description =>
         "Reconciles tracked torrent downloads against qBittorrent's live torrent list — fills in hashes, " +

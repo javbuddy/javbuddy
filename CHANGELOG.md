@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Activity > Queue's Refresh goes through the task launcher.** It no longer runs the qBittorrent sync itself with no cancellation, so it can't overlap a scheduled sync and stops with the app; the live progress poll moved into the queue service.
 - **The backup scheduler no longer reads the database on its own loop.** The backup settings are loaded at startup and refreshed when saved, so the once-a-minute check never blocks on synchronous SQLite I/O.
 - **The same scheduled task can no longer run twice at once.** The scheduler, System > Tasks, Library Import and Activity > Queue now share one guard, so two Library Rescans no longer race to import the same code and fail partway. Run now reports that the task is already running.
 - **A long task no longer stalls the short ones.** Due tasks start in the background instead of one after another, so a Library Rescan or Image Cache run no longer delays the qBittorrent sync or a backup.

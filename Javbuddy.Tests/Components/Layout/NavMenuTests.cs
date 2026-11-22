@@ -2,6 +2,7 @@ using Bunit;
 using Javbuddy.Components.Layout;
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.Monitoring;
 using Javbuddy.Services.Tasks;
 using Javbuddy.Services.Torrents;
@@ -40,6 +41,10 @@ public class NavMenuTests : BunitContext
         Services.AddSingleton(new TaskActivityTracker(scheduledTaskNotifier, TimeProvider.System));
         Services.AddSingleton(Substitute.For<ILogger<NavMenu>>());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.QBittorrent.IQBittorrentClient>());
+        Services.AddSingleton<ScheduledTaskRunTracker>();
+        Services.AddSingleton(Substitute.For<ILogger<BackgroundJobRunner>>());
+        Services.AddSingleton<BackgroundJobRunner>();
+        Services.AddSingleton<ScheduledTaskLauncher>();
         Services.AddScoped<ITorrentQueueService, TorrentQueueService>();
         Services.AddScoped<IScheduledTaskOverviewService, ScheduledTaskOverviewService>();
         foreach (var task in tasks)

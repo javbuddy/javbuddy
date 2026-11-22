@@ -2,11 +2,14 @@ using Bunit;
 using Javbuddy.Components.Pages;
 using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
 using Javbuddy.Services.QBittorrent;
+using Javbuddy.Services.Tasks;
 using Javbuddy.Services.Torrents;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 
@@ -29,6 +32,10 @@ public class ActivityQueueTests : BunitContext
         Services.AddSingleton<TimeProvider>(clock);
         qbittorrent = Substitute.For<IQBittorrentClient>();
         Services.AddSingleton(qbittorrent);
+        Services.AddSingleton<ScheduledTaskRunTracker>();
+        Services.AddSingleton(Substitute.For<ILogger<BackgroundJobRunner>>());
+        Services.AddSingleton<BackgroundJobRunner>();
+        Services.AddSingleton<ScheduledTaskLauncher>();
         Services.AddScoped<ITorrentQueueService, TorrentQueueService>();
 
         return factory;

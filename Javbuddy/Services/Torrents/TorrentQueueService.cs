@@ -1,6 +1,7 @@
 using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.QBittorrent;
+using Javbuddy.Services.Tasks;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Torrents;
@@ -10,6 +11,14 @@ public interface ITorrentQueueService
     Task<List<TorrentDownload>> GetActiveAsync(CancellationToken ct = default);
     Task<int> GetActiveCountAsync(CancellationToken ct = default);
     Task RemoveAsync(IReadOnlyCollection<int> ids, CancellationToken ct = default);
+
+    /// <summary>Runs the qBittorrent sync now, through the scheduled-task launcher, and returns once it has ended
+    /// (at once when a sync is already running).</summary>
+    Task RefreshAsync(CancellationToken ct = default);
+
+    /// <summary>Copies qBittorrent's live progress, speed and ETA onto <paramref name="rows"/> in memory (nothing is
+    /// saved). False, leaving the rows untouched, when qBittorrent can't be reached.</summary>
+    Task<bool> ApplyLiveProgressAsync(IEnumerable<TorrentDownload> rows, CancellationToken ct = default);
 }
 
 /// <summary>Activity &gt; Queue's reads and removals: the active (not sorted, not removed) downloads,
@@ -17,6 +26,7 @@ public interface ITorrentQueueService
 public class TorrentQueueService(
     IDbContextFactory<AppDbContext> dbFactory,
     IQBittorrentClient qBittorrentClient,
+    ScheduledTaskLauncher taskLauncher,
     TorrentChangeNotifier changeNotifier) : ITorrentQueueService
 {
     // RemovedFromClientAt/SortedAt (not Status) is the source of truth for "in the queue": an
@@ -60,5 +70,17 @@ public class TorrentQueueService(
         await db.SaveChangesAsync(ct);
 
         changeNotifier.NotifyChanged();
+    }
+
+    public Task RefreshAsync(CancellationToken ct = default) =>
+        taskLauncher.Queue(QBittorrentSyncTask.TaskName).WaitAsync(ct);
+
+    public async Task<bool> ApplyLiveProgressAsync(IEnumerable<TorrentDownload> rows, CancellationToken ct = default)
+    {
+        var result = await qBittorrentClient.GetTorrentsAsync(ct);
+        if (!result.Success) return false;
+
+        TorrentLiveProgress.Apply(rows, result.Torrents);
+        return true;
     }
 }

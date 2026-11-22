@@ -1,14 +1,48 @@
+using Javbuddy.Data;
 using Javbuddy.Models;
+using Javbuddy.Services.Infrastructure;
+using Javbuddy.Services.Metrics;
+using Javbuddy.Services.Monitoring;
 using Javbuddy.Services.QBittorrent;
+using Javbuddy.Services.Tasks;
 using Javbuddy.Services.Torrents;
 using Javbuddy.Tests.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Services.Torrents;
 
 public class TorrentQueueServiceTests
 {
+    private sealed class FakeSyncTask(Func<Task<string?>> run) : IScheduledTask
+    {
+        public string Name => QBittorrentSyncTask.TaskName;
+        public string Description => "";
+        public TimeSpan GetInterval() => TimeSpan.FromSeconds(30);
+        public Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress) => run();
+    }
+
+    private static ScheduledTaskLauncher CreateLauncher(TestDbContextFactory factory, params IScheduledTask[] tasks)
+    {
+        var tracker = new ScheduledTaskRunTracker();
+        var services = new ServiceCollection();
+        services.AddSingleton<IDbContextFactory<AppDbContext>>(factory);
+        services.AddSingleton(new JavbuddyMetrics());
+        services.AddSingleton(new ScheduledTaskChangeNotifier());
+        services.AddSingleton(Substitute.For<ILogger<ScheduledTaskRunner>>());
+        services.AddSingleton<ScheduledTaskCancellationRegistry>();
+        services.AddSingleton(tracker);
+        services.AddScoped<ScheduledTaskRunner>();
+        foreach (var task in tasks) services.AddSingleton(task);
+        var provider = services.BuildServiceProvider();
+        var jobs = new BackgroundJobRunner(provider.GetRequiredService<IServiceScopeFactory>(), Substitute.For<ILogger<BackgroundJobRunner>>());
+        return new ScheduledTaskLauncher(jobs, tracker);
+    }
+
+    private static ScheduledTaskLauncher NoTasksLauncher() => CreateLauncher(new TestDbContextFactory());
+
     private static async Task<int> SeedAsync(TestDbContextFactory factory, string title, string? hash = null,
         DateTime? grabbedAt = null, DateTime? sortedAt = null, DateTime? removedAt = null)
     {
@@ -42,7 +76,7 @@ public class TorrentQueueServiceTests
         await SeedAsync(factory, "new", grabbedAt: now);
         await SeedAsync(factory, "sorted", sortedAt: now);
         await SeedAsync(factory, "removed", removedAt: now);
-        var service = new TorrentQueueService(factory, Substitute.For<IQBittorrentClient>(), new TorrentChangeNotifier());
+        var service = new TorrentQueueService(factory, Substitute.For<IQBittorrentClient>(), NoTasksLauncher(), new TorrentChangeNotifier());
 
         var rows = await service.GetActiveAsync();
 
@@ -57,7 +91,7 @@ public class TorrentQueueServiceTests
         await SeedAsync(factory, "two");
         await SeedAsync(factory, "sorted", sortedAt: DateTime.UtcNow);
         await SeedAsync(factory, "removed", removedAt: DateTime.UtcNow);
-        var service = new TorrentQueueService(factory, Substitute.For<IQBittorrentClient>(), new TorrentChangeNotifier());
+        var service = new TorrentQueueService(factory, Substitute.For<IQBittorrentClient>(), NoTasksLauncher(), new TorrentChangeNotifier());
 
         Assert.Equal(2, await service.GetActiveCountAsync());
     }
@@ -73,7 +107,7 @@ public class TorrentQueueServiceTests
         var notifier = new TorrentChangeNotifier();
         var notified = 0;
         notifier.Changed += () => notified++;
-        var service = new TorrentQueueService(factory, client, notifier);
+        var service = new TorrentQueueService(factory, client, NoTasksLauncher(), notifier);
 
         await service.RemoveAsync([hashed, unhashed]);
 
@@ -94,7 +128,7 @@ public class TorrentQueueServiceTests
     {
         using var factory = new TestDbContextFactory();
         var id = await SeedAsync(factory, "one", hash: "abc");
-        var service = new TorrentQueueService(factory, Substitute.For<IQBittorrentClient>(), new TorrentChangeNotifier());
+        var service = new TorrentQueueService(factory, Substitute.For<IQBittorrentClient>(), NoTasksLauncher(), new TorrentChangeNotifier());
 
         await service.RemoveAsync([id, 9999]);
 
@@ -110,7 +144,7 @@ public class TorrentQueueServiceTests
         var notifier = new TorrentChangeNotifier();
         var notified = 0;
         notifier.Changed += () => notified++;
-        var service = new TorrentQueueService(factory, client, notifier);
+        var service = new TorrentQueueService(factory, client, NoTasksLauncher(), notifier);
 
         await service.RemoveAsync([]);
 
@@ -129,7 +163,7 @@ public class TorrentQueueServiceTests
         var notifier = new TorrentChangeNotifier();
         var notified = 0;
         notifier.Changed += () => notified++;
-        var service = new TorrentQueueService(factory, client, notifier);
+        var service = new TorrentQueueService(factory, client, NoTasksLauncher(), notifier);
 
         await Assert.ThrowsAsync<HttpRequestException>(() => service.RemoveAsync([id]));
 
@@ -138,5 +172,55 @@ public class TorrentQueueServiceTests
         Assert.Equal(TorrentDownloadStatus.Downloading, row.Status);
         Assert.Null(row.RemovedFromClientAt);
         Assert.Equal(0, notified);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_RunsTheSyncTaskThroughTheLauncherAndWaitsForIt()
+    {
+        using var factory = new TestDbContextFactory();
+        var ran = false;
+        var launcher = CreateLauncher(factory, new FakeSyncTask(async () =>
+        {
+            await Task.Delay(50);
+            ran = true;
+            return "ok";
+        }));
+        var service = new TorrentQueueService(factory, Substitute.For<IQBittorrentClient>(), launcher, new TorrentChangeNotifier());
+
+        await service.RefreshAsync().WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(ran);
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.Equal(QBittorrentSyncTask.TaskName, (await db.ScheduledTaskRuns.SingleAsync()).TaskName);
+    }
+
+    [Fact]
+    public async Task ApplyLiveProgressAsync_CopiesLiveStateOntoMatchingRows()
+    {
+        using var factory = new TestDbContextFactory();
+        var client = Substitute.For<IQBittorrentClient>();
+        client.GetTorrentsAsync(Arg.Any<CancellationToken>()).Returns(new QBittorrentTorrentsResult(true,
+            [new QBittorrentTorrentDto { Hash = "ABC", Progress = 0.5, DlSpeed = 100, Eta = 60 }]));
+        var service = new TorrentQueueService(factory, client, NoTasksLauncher(), new TorrentChangeNotifier());
+        var row = new TorrentDownload { Hash = "abc" };
+
+        Assert.True(await service.ApplyLiveProgressAsync([row]));
+
+        Assert.Equal(0.5, row.Progress);
+        Assert.Equal(100, row.DownloadSpeedBytesPerSec);
+    }
+
+    [Fact]
+    public async Task ApplyLiveProgressAsync_UnreachableClient_LeavesRowsAlone()
+    {
+        using var factory = new TestDbContextFactory();
+        var client = Substitute.For<IQBittorrentClient>();
+        client.GetTorrentsAsync(Arg.Any<CancellationToken>()).Returns(new QBittorrentTorrentsResult(false, []));
+        var service = new TorrentQueueService(factory, client, NoTasksLauncher(), new TorrentChangeNotifier());
+        var row = new TorrentDownload { Hash = "abc", Progress = 0.1 };
+
+        Assert.False(await service.ApplyLiveProgressAsync([row]));
+
+        Assert.Equal(0.1, row.Progress);
     }
 }
