@@ -58,7 +58,7 @@ public class QBittorrentSyncTaskTests
 
         var result = await f.RunFailedAsync();
 
-        Assert.Equal("skipped: qBittorrent unreachable", result);
+        Assert.Equal("skipped: down", result);
         await using var db = await f.Factory.CreateDbContextAsync();
         Assert.Null((await db.TorrentDownloads.SingleAsync()).RemovedFromClientAt);
         Assert.Equal(0, f.Notifications);

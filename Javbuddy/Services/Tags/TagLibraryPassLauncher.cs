@@ -43,7 +43,7 @@ public sealed class TagLibraryPassLauncher(BackgroundJobRunner jobs, TaskActivit
         var name = ActivityName(pass);
         var activityId = activities.Start(name, "Running…");
         var result = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = jobs.Enqueue(name, async (services, ct) =>
+        var job = jobs.Enqueue(name, async (services, ct) =>
         {
             try
             {
@@ -70,6 +70,16 @@ public sealed class TagLibraryPassLauncher(BackgroundJobRunner jobs, TaskActivit
                 Volatile.Write(ref running, 0);
             }
         });
+
+        // A job the runner declined to start (shutdown has begun) never reaches the body above, so it would leave
+        // the launcher busy and the caller awaiting forever. The job task never faults and ends after the body,
+        // so a result still pending here means the body never ran to its end.
+        _ = job.ContinueWith(_ =>
+        {
+            if (!result.TrySetCanceled()) return;
+            activities.Complete(activityId, $"{name} did not run.", failed: true);
+            Volatile.Write(ref running, 0);
+        }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
         return result.Task;
     }
 }

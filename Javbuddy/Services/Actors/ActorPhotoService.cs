@@ -203,7 +203,7 @@ public sealed class ActorPhotoService(
 
         // The display name (a one-name actor sorts under her name, a placeholder under its label) has no SQL form.
         // OrderBy is stable, so each actor's photos stay newest first.
-        return sort == "actor" ? [.. items.OrderBy(p => p.ActorDisplayName)] : items;
+        return sort == "actor" ? [.. items.OrderBy(p => p.ActorDisplayName, StringComparer.CurrentCultureIgnoreCase)] : items;
     }
 
     public async Task<IReadOnlyList<ActorWithPhotoCountSummary>> GetActorsWithPhotosAsync(CancellationToken ct = default)

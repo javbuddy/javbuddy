@@ -52,7 +52,7 @@ public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContex
         {
             // An unreachable/failing qBittorrent says nothing about which torrents exist — reconciling
             // against an empty list would mark every tracked row removed, permanently.
-            return "skipped: qBittorrent unreachable";
+            return $"skipped: {liveResult.ErrorMessage ?? "qBittorrent unreachable"}";
         }
         var liveTorrents = liveResult.Torrents;
         var byHash = liveTorrents
