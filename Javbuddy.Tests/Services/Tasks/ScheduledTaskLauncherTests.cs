@@ -164,4 +164,58 @@ public class ScheduledTaskLauncherTests
         Assert.False(await launcher.QueueAndWaitUntilRecordedAsync("Library Rescan"));
         release.SetResult();
     }
+
+    [Fact]
+    public async Task Queue_TwiceBackToBack_RunsTheTaskOnlyOnce()
+    {
+        using var factory = new TestDbContextFactory();
+        var release = new TaskCompletionSource();
+        var executions = 0;
+        var (launcher, _) = CreateLauncher(factory, new FakeTask("Library Rescan", async _ =>
+        {
+            Interlocked.Increment(ref executions);
+            await release.Task;
+            return "done";
+        }));
+
+        var first = launcher.Queue("Library Rescan");
+        var second = launcher.Queue("Library Rescan");
+        Assert.True(second.IsCompleted);
+        release.SetResult();
+        await first.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(1, executions);
+    }
+
+    [Fact]
+    public async Task QueueAndWaitAsync_TaskAlreadyRunning_WaitsForThatRunToEnd()
+    {
+        using var factory = new TestDbContextFactory();
+        var release = new TaskCompletionSource();
+        var (launcher, _) = CreateLauncher(factory, new FakeTask("Sync", async _ =>
+        {
+            await release.Task;
+            return "done";
+        }));
+
+        var running = launcher.Queue("Sync");
+        var waiting = launcher.QueueAndWaitAsync("Sync");
+        await Task.Delay(300);
+        Assert.False(waiting.IsCompleted);
+
+        release.SetResult();
+        await waiting.WaitAsync(TimeSpan.FromSeconds(30));
+        await running.WaitAsync(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task Queue_UnknownTask_DoesNotLeaveTheNameClaimed()
+    {
+        using var factory = new TestDbContextFactory();
+        var (launcher, _) = CreateLauncher(factory);
+
+        await launcher.Queue("Nope").WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(await launcher.QueueAndWaitUntilRecordedAsync("Nope"));
+    }
 }

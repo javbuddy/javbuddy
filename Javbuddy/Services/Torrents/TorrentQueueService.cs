@@ -13,7 +13,7 @@ public interface ITorrentQueueService
     Task RemoveAsync(IReadOnlyCollection<int> ids, CancellationToken ct = default);
 
     /// <summary>Runs the qBittorrent sync now, through the scheduled-task launcher, and returns once it has ended
-    /// (at once when a sync is already running).</summary>
+    /// (when a sync is already running, once that one has ended).</summary>
     Task RefreshAsync(CancellationToken ct = default);
 
     /// <summary>Copies qBittorrent's live progress, speed and ETA onto <paramref name="rows"/> in memory (nothing is
@@ -73,7 +73,7 @@ public class TorrentQueueService(
     }
 
     public Task RefreshAsync(CancellationToken ct = default) =>
-        taskLauncher.Queue(QBittorrentSyncTask.TaskName).WaitAsync(ct);
+        taskLauncher.QueueAndWaitAsync(QBittorrentSyncTask.TaskName, ct);
 
     public async Task<bool> ApplyLiveProgressAsync(IEnumerable<TorrentDownload> rows, CancellationToken ct = default)
     {

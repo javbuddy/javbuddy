@@ -239,6 +239,7 @@ else
 
     private async Task LoadAsync()
     {
+        alreadyRunningNotice = null;
         var overview = await Overview.GetOverviewAsync();
         scheduledRows = overview.Rows.ToList();
         history = overview.History.ToList();
@@ -253,15 +254,14 @@ else
 
         // Queued on application-owned background execution so the run keeps going (and gets
         // recorded) even after this click handler returns — a full sync can take minutes.
-        if (!await TaskLauncher.QueueAndWaitUntilRecordedAsync(taskName))
-        {
-            justQueued = null;
-            alreadyRunningNotice = $"{taskName} is already running.";
-        }
+        var queued = await TaskLauncher.QueueAndWaitUntilRecordedAsync(taskName);
+        if (!queued) justQueued = null;
 
         // The "queued" row exists now, so the refresh finds it.
         runningTasks.Remove(taskName);
         await LoadAsync();
+        // After the load, which clears the notice: it stays until the next refresh, i.e. the running task's next update.
+        if (!queued) alreadyRunningNotice = $"{taskName} is already running.";
         StartPollingIfNeeded();
     }
 

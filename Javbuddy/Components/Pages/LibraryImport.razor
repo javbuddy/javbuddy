@@ -51,6 +51,11 @@ else
     @ButtonLabel
 </button>
 
+@if (alreadyRunning && isRunning)
+{
+    <p class="text-muted">A Library Rescan is already running.</p>
+}
+
 @code {
     private const string TaskName = "Library Rescan";
 
@@ -66,6 +71,7 @@ else
     // finished, since a bare "no row found" and "the run I started already finished" look the
     // same to LoadAsync's naive latest-row check.
     private DateTime? pendingSinceUtc;
+    private bool alreadyRunning;
 
     private string ButtonLabel
     {
@@ -121,12 +127,18 @@ else
     private async Task Start()
     {
         pendingSinceUtc = DateTime.UtcNow;
+        alreadyRunning = false;
         isRunning = true;
 
         // Queued on application-owned background execution so the run keeps going (and gets
         // recorded) even after this click handler returns or the user navigates away — a full
         // rescan can take minutes. Mirrors System > Tasks' own "Run now" button (see SystemTasks.razor).
-        await TaskLauncher.QueueAndWaitUntilRecordedAsync(TaskName);
+        if (!await TaskLauncher.QueueAndWaitUntilRecordedAsync(TaskName))
+        {
+            // Already running (a scheduled run, or another tab): nothing was queued, so track that run, not a pending one.
+            pendingSinceUtc = null;
+            alreadyRunning = true;
+        }
 
         // The "queued" row exists now, so the refresh finds it.
         await LoadAsync();

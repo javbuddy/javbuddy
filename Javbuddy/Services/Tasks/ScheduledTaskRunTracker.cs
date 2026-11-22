@@ -10,6 +10,9 @@ namespace Javbuddy.Services.Tasks;
 /// from; it is also kept for every other task, where the persisted history covers what happened before a restart.</summary>
 public sealed class ScheduledTaskRunTracker
 {
+    /// <summary>When this process (this tracker) started: what a task that has never run measures its first due time from.</summary>
+    public DateTime StartedUtc { get; } = DateTime.UtcNow;
+
     private readonly ConcurrentDictionary<string, byte> running = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, DateTime> lastCompletion = new(StringComparer.Ordinal);
 
@@ -23,7 +26,19 @@ public sealed class ScheduledTaskRunTracker
         running.TryRemove(taskName, out _);
     }
 
+    /// <summary>Releases a claim without recording a completion (the task never actually ran).</summary>
+    public void Release(string taskName) => running.TryRemove(taskName, out _);
+
     public bool IsRunning(string taskName) => running.ContainsKey(taskName);
+
+    /// <summary>Returns once the task is no longer running (at once when it isn't).</summary>
+    public async Task WaitUntilIdleAsync(string taskName, CancellationToken ct = default)
+    {
+        while (IsRunning(taskName))
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(200), ct);
+        }
+    }
 
     public DateTime? GetLastCompletion(string taskName) =>
         lastCompletion.TryGetValue(taskName, out var value) ? value : null;

@@ -13,6 +13,7 @@ public class ScheduledTaskOverviewServiceTests
         task.Name.Returns(name);
         task.Description.Returns($"{name} description");
         task.ShowInTasksUi.Returns(show);
+        task.RecordRunHistory.Returns(true);
         task.GetInterval().Returns(interval);
         return task;
     }
@@ -47,14 +48,17 @@ public class ScheduledTaskOverviewServiceTests
     public async Task GetOverviewAsync_NeverRunTask_HasNoLastExecutionAndIsDueOneIntervalFromNow()
     {
         using var factory = new TestDbContextFactory();
-        var service = new ScheduledTaskOverviewService(factory, [Task("new", TimeSpan.FromHours(1))], new ScheduledTaskRunTracker());
+        var tracker = new ScheduledTaskRunTracker();
+        var service = new ScheduledTaskOverviewService(factory, [Task("new", TimeSpan.FromHours(1))], tracker);
 
-        var before = DateTime.UtcNow;
-        var row = Assert.Single((await service.GetOverviewAsync()).Rows);
+        var first = Assert.Single((await service.GetOverviewAsync()).Rows);
+        var second = Assert.Single((await service.GetOverviewAsync()).Rows);
 
-        Assert.Null(row.LastExecution);
-        Assert.Null(row.LastDuration);
-        Assert.InRange(row.NextExecution, before.AddHours(1), DateTime.UtcNow.AddHours(1));
+        Assert.Null(first.LastExecution);
+        Assert.Null(first.LastDuration);
+        // Measured from process start, like the scheduler does, so it doesn't slide forward on every refresh.
+        Assert.Equal(tracker.StartedUtc.AddHours(1), first.NextExecution);
+        Assert.Equal(first.NextExecution, second.NextExecution);
     }
 
     [Fact]
@@ -109,5 +113,38 @@ public class ScheduledTaskOverviewServiceTests
         Assert.Equal(t0.AddHours(1), state.Latest?.QueuedAt);
         Assert.Null(state.Latest?.EndedAt);
         Assert.Equal(t0.AddMinutes(1), state.LastCompleted?.EndedAt);
+    }
+
+    [Fact]
+    public async Task GetOverviewAsync_InProcessRun_KeepsTheRowsDurationDespiteTheTrackersLaterTimestamp()
+    {
+        using var factory = new TestDbContextFactory();
+        var t0 = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        await AddRunAsync(factory, "sync", t0, t0, t0.AddMinutes(5));
+        var tracker = new ScheduledTaskRunTracker();
+        tracker.End("sync", t0.AddMinutes(5).AddMilliseconds(3));
+        var service = new ScheduledTaskOverviewService(factory, [Task("sync", TimeSpan.FromHours(6))], tracker);
+
+        var row = Assert.Single((await service.GetOverviewAsync()).Rows);
+
+        Assert.Equal(t0.AddMinutes(5), row.LastExecution);
+        Assert.Equal(TimeSpan.FromMinutes(5), row.LastDuration);
+    }
+
+    [Fact]
+    public async Task GetOverviewAsync_TaskWithoutHistory_UsesTheInMemoryLastCompletion()
+    {
+        using var factory = new TestDbContextFactory();
+        var task = Task("sync", TimeSpan.FromMinutes(1));
+        task.RecordRunHistory.Returns(false);
+        var tracker = new ScheduledTaskRunTracker();
+        var done = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        tracker.End("sync", done);
+        var service = new ScheduledTaskOverviewService(factory, [task], tracker);
+
+        var row = Assert.Single((await service.GetOverviewAsync()).Rows);
+
+        Assert.Equal(done, row.LastExecution);
+        Assert.Equal(done.AddMinutes(1), row.NextExecution);
     }
 }

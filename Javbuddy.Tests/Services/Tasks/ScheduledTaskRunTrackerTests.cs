@@ -43,4 +43,30 @@ public class ScheduledTaskRunTrackerTests
         Assert.Equal(a, ScheduledTaskRunTracker.Latest(null, a));
         Assert.Null(ScheduledTaskRunTracker.Latest(null, null));
     }
+
+    [Fact]
+    public async Task WaitUntilIdleAsync_ReturnsOnceTheTaskEnds()
+    {
+        var tracker = new ScheduledTaskRunTracker();
+        tracker.TryBegin("a");
+
+        var wait = tracker.WaitUntilIdleAsync("a");
+        Assert.False(wait.IsCompleted);
+        tracker.End("a", DateTime.UtcNow);
+
+        await wait.WaitAsync(TimeSpan.FromSeconds(30));
+        await tracker.WaitUntilIdleAsync("never-ran");
+    }
+
+    [Fact]
+    public void Release_FreesTheClaimWithoutRecordingACompletion()
+    {
+        var tracker = new ScheduledTaskRunTracker();
+        tracker.TryBegin("a");
+
+        tracker.Release("a");
+
+        Assert.False(tracker.IsRunning("a"));
+        Assert.Null(tracker.GetLastCompletion("a"));
+    }
 }

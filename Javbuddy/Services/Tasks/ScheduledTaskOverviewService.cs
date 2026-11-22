@@ -47,11 +47,16 @@ public class ScheduledTaskOverviewService(
                 .FirstOrDefaultAsync(ct);
 
             var interval = task.GetInterval();
-            var lastExecution = ScheduledTaskRunTracker.Latest(lastRun?.EndedAt, tracker.GetLastCompletion(task.Name));
+            // A task that keeps history reports its own rows (the in-memory completion trails the row's EndedAt by a few
+            // ms, which would never match the row for the duration); one without history has only the in-memory time.
+            var lastExecution = task.RecordRunHistory ? lastRun?.EndedAt : tracker.GetLastCompletion(task.Name);
             var lastDuration = lastRun is { StartedAt: not null, EndedAt: not null } && lastRun.EndedAt == lastExecution
                 ? lastRun.EndedAt!.Value - lastRun.StartedAt!.Value
                 : (TimeSpan?)null;
-            var nextExecution = (lastExecution ?? DateTime.UtcNow) + interval;
+            // A never-run task is first due an interval after this process started (or at once), as the scheduler decides.
+            var nextExecution = lastExecution is { } last ? last + interval
+                : task.RunImmediatelyWhenNeverRun ? DateTime.UtcNow
+                : tracker.StartedUtc + interval;
 
             rows.Add(new ScheduledTaskRow(task.Name, task.Description, interval, lastExecution, lastDuration, nextExecution));
         }

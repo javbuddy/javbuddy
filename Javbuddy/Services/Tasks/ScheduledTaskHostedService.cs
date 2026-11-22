@@ -26,7 +26,7 @@ public class ScheduledTaskHostedService(IServiceScopeFactory scopeFactory, Sched
     // a long task like ImageCacheTask on a large library. Instead it waits a full interval measured from
     // this process's start before it's first due. A task that fell overdue while the app was off (it has
     // run before, but longer ago than its interval) still catches up right after restart.
-    private readonly DateTime processStartUtc = DateTime.UtcNow;
+    private DateTime processStartUtc => tracker.StartedUtc;
 
     // Old run history is pruned on the first tick and then daily, so a long-running instance doesn't keep it forever.
     private DateTime? lastPruneUtc;

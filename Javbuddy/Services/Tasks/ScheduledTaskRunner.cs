@@ -23,10 +23,12 @@ public class ScheduledTaskRunner(IDbContextFactory<AppDbContext> dbFactory, Javb
 
     /// <param name="onRecorded">Called once the run's "queued" row is saved (at once for a task that records no
     /// history), so the caller that queued it knows a refresh will find it.</param>
+    /// <param name="alreadyClaimed">True when the caller already claimed the task on the run tracker (the launcher does,
+    /// so a second request is refused before it is queued); the claim is released here when the run ends.</param>
     /// <returns>False when the task is already running (from any caller): nothing is run or recorded.</returns>
-    public async Task<bool> RunAsync(IScheduledTask task, CancellationToken ct, Action? onRecorded = null)
+    public async Task<bool> RunAsync(IScheduledTask task, CancellationToken ct, Action? onRecorded = null, bool alreadyClaimed = false)
     {
-        if (!tracker.TryBegin(task.Name))
+        if (!alreadyClaimed && !tracker.TryBegin(task.Name))
         {
             logger.LogInformation("Scheduled task {TaskName} is already running; not starting it again.", task.Name);
             return false;
