@@ -27,6 +27,25 @@ public class SearchServiceTests
         Assert.DoesNotContain(result.Movies, m => m.Code == "NOMATCH-1");
     }
 
+    [Fact]
+    public async Task SearchAsync_TreatsPercentAndUnderscoreAsLiterals()
+    {
+        using var factory = new TestDbContextFactory();
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.Movies.AddRange(
+                new Movie { Code = "AAA-001", Title = "100% Real" },
+                new Movie { Code = "AAA-002", Title = "100 Percent" },
+                new Movie { Code = "AAA-003", Title = "a_b" },
+                new Movie { Code = "AAA-004", Title = "axb" });
+            await db.SaveChangesAsync();
+        }
+        var service = new SearchService(factory);
+
+        Assert.Equal("AAA-001", Assert.Single((await service.SearchAsync("0% R")).Movies).Code);
+        Assert.Equal("AAA-003", Assert.Single((await service.SearchAsync("a_b")).Movies).Code);
+    }
+
     // A crop rewrites the movie's cached poster, so its thumbnail URL must change with it, and match
     // the Movies grid's so both share one cached copy.
     [Fact]

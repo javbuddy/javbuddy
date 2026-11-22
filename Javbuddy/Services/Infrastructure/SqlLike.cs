@@ -10,6 +10,11 @@ public static class SqlLike
     public const string EscapeChar = "\\";
 
     /// <summary>A "contains" pattern for <paramref name="term"/>, with <c>%</c>, <c>_</c> and the escape character taken literally.</summary>
-    public static string Contains(string term) =>
-        "%" + term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+    public static string Contains(string term) => "%" + Escape(term) + "%";
+
+    /// <summary>A "starts with" pattern for <paramref name="term"/>, with <c>%</c>, <c>_</c> and the escape character taken literally.</summary>
+    public static string StartsWith(string term) => Escape(term) + "%";
+
+    private static string Escape(string term) =>
+        term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
 }

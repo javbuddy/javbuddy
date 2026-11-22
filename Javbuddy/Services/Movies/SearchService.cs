@@ -2,6 +2,7 @@ using Javbuddy.Data;
 using Javbuddy.Models;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Images;
+using Javbuddy.Services.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Movies;
@@ -29,12 +30,17 @@ public class SearchService(IDbContextFactory<AppDbContext> dbFactory) : ISearchS
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
+        // % and _ in what was typed are literal characters, not wildcards.
+        var contains = SqlLike.Contains(term);
+        var startsWith = SqlLike.StartsWith(term);
+        const string esc = SqlLike.EscapeChar;
+
         var matches = await db.Movies
             .AsNoTracking()
-            .Where(m => (m.Code != null && EF.Functions.Like(m.Code, $"%{term}%"))
-                     || (m.MetaTitle != null && EF.Functions.Like(m.MetaTitle, $"%{term}%"))
-                     || (m.Title != null && EF.Functions.Like(m.Title, $"%{term}%")))
-            .OrderByDescending(m => m.Code != null && EF.Functions.Like(m.Code, $"{term}%"))
+            .Where(m => (m.Code != null && EF.Functions.Like(m.Code, contains, esc))
+                     || (m.MetaTitle != null && EF.Functions.Like(m.MetaTitle, contains, esc))
+                     || (m.Title != null && EF.Functions.Like(m.Title, contains, esc)))
+            .OrderByDescending(m => m.Code != null && EF.Functions.Like(m.Code, startsWith, esc))
             .ThenBy(m => m.Code)
             .Take(limit)
             .ToListAsync(ct);
@@ -44,10 +50,10 @@ public class SearchService(IDbContextFactory<AppDbContext> dbFactory) : ISearchS
         // An unidentified placeholder is shown on its own movie only, not found by search.
         var actorMatches = await db.Actors
             .Where(a => a.PlaceholderMovieId == null
-                     && (EF.Functions.Like(a.FirstName!, $"%{term}%")
-                         || (a.LastName != null && EF.Functions.Like(a.LastName + " " + a.FirstName, $"%{term}%"))))
-            .OrderByDescending(a => EF.Functions.Like(a.FirstName!, $"{term}%")
-                                  || (a.LastName != null && EF.Functions.Like(a.LastName + " " + a.FirstName, $"{term}%")))
+                     && (EF.Functions.Like(a.FirstName!, contains, esc)
+                         || (a.LastName != null && EF.Functions.Like(a.LastName + " " + a.FirstName, contains, esc))))
+            .OrderByDescending(a => EF.Functions.Like(a.FirstName!, startsWith, esc)
+                                  || (a.LastName != null && EF.Functions.Like(a.LastName + " " + a.FirstName, startsWith, esc)))
             .ThenBy(a => a.LastName)
             .ThenBy(a => a.FirstName)
             .Select(a => new ActorSearchResult(
