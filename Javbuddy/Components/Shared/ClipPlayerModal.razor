@@ -150,10 +150,10 @@
     // Raised on the queue's worker thread; the highlight's set may be what was just generated.
     private void OnMediaGenerated(int movieId)
     {
-        if (disposed || Clip is not { Kind: PlayerClipKind.Highlight } clip || clip.MovieId != movieId || clipTrickplay is not null) return;
+        if (disposed) return;
         _ = InvokeAsync(async () =>
         {
-            if (disposed) return;
+            if (disposed || Clip is not { Kind: PlayerClipKind.Highlight } clip || clip.MovieId != movieId || clipTrickplay is not null) return;
             await LoadClipTrickplayAsync(clip);
             if (clipTrickplay is not null) StateHasChanged();
         });
@@ -162,7 +162,7 @@
     // Raised on the generating thread: the highlight's own set started, progressed or ended.
     private void OnTrickplayGenerationChanged(TrickplayTarget target)
     {
-        if (disposed || ClipTarget(Clip) != target) return;
+        if (disposed) return;
         _ = InvokeAsync(async () =>
         {
             if (disposed || ClipTarget(Clip) is not { } current || current != target) return;

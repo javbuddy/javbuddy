@@ -346,8 +346,11 @@
     // Raised on the queue's worker thread when a scene's, highlight's or apex's screenshot/preview was written.
     private void OnMediaGenerated(int movieId)
     {
-        if (disposed || movieId != MovieId) return;
-        _ = InvokeAsync(ReloadMediaAsync);
+        if (disposed) return;
+        _ = InvokeAsync(async () =>
+        {
+            if (movieId == MovieId) await ReloadMediaAsync();
+        });
     }
 
     // A finished media job only changes the media versions the three lists carry, so just those are re-read

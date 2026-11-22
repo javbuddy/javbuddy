@@ -448,7 +448,7 @@
     // scrub bar switches to its thumbnails.
     private void OnTrickplayGenerationChanged(TrickplayTarget target)
     {
-        if (disposed || target.Clip is not null || target.MovieId != streamMovieId) return;
+        if (disposed || target.Clip is not null) return;
         _ = InvokeAsync(async () =>
         {
             if (disposed || target.MovieId != streamMovieId) return;

@@ -332,7 +332,7 @@
     // loads it once written, so the timeline switches to thumbnails without a refresh.
     private void OnTrickplayGenerationChanged(TrickplayTarget target)
     {
-        if (disposed || target.Clip is not null || target.MovieId != Movie.Id) return;
+        if (disposed || target.Clip is not null) return;
         _ = InvokeAsync(async () =>
         {
             if (disposed || target.MovieId != Movie.Id) return;
@@ -351,7 +351,7 @@
     // written: reload the cards so media that was missing shows up without a refresh.
     private void OnMediaGenerated(int movieId)
     {
-        if (disposed || movieId != Movie.Id) return;
+        if (disposed) return;
         _ = InvokeAsync(async () =>
         {
             if (disposed || movieId != Movie.Id) return;
