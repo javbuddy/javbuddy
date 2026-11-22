@@ -9,6 +9,10 @@ namespace Javbuddy.Services.ActorEnrichment;
 public sealed class ActorEnrichmentRunCache
 {
     public LibraryCastIndex? LibraryCast { get; set; }
+
+    /// <summary>Set when an actor's names or aliases changed during the run, so the movie casts
+    /// are re-synced once at the end rather than once per actor.</summary>
+    public bool CastSyncPending { get; set; }
 }
 
 /// <summary>Every library movie's code indexed by the names in its cast text, for finding an actor's

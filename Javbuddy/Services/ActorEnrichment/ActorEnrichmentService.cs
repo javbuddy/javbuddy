@@ -292,10 +292,17 @@ public class ActorEnrichmentService(
         // Saved before syncing: the sync reads actor names and aliases from the database, so the
         // ones just found must be stored for movies credited under them to be linked and tidied.
         await db.SaveChangesAsync(ct);
-        if (updatedFields.Count > 0 || addedAliases.Count > 0)
+        if (addedAliases.Count > 0 || updatedFields.Any(IsNameBearingField))
         {
-            await MovieActorAssociation.SynchronizeAllAsync(db, ct);
-            await db.SaveChangesAsync(ct);
+            if (runCache is not null)
+            {
+                runCache.CastSyncPending = true;
+            }
+            else
+            {
+                await MovieActorAssociation.SynchronizeAllAsync(db, ct);
+                await db.SaveChangesAsync(ct);
+            }
         }
 
         var imageRefreshed = false;
@@ -320,6 +327,10 @@ public class ActorEnrichmentService(
             imageRefreshed);
     }
 
+    // The fields movie casts are matched against (see ActorMatching); height, cup and the rest never change a link.
+    private static bool IsNameBearingField(string field) =>
+        field is nameof(Actor.JapaneseNameKanji) or nameof(Actor.JapaneseNameKana) or nameof(Actor.R18DevName);
+
     public async Task<ActorBatchEnrichmentResult> EnrichAllAsync(
         ActorEnrichmentOptions? options = null,
         IProgress<TaskProgress>? progress = null,
@@ -335,31 +346,44 @@ public class ActorEnrichmentService(
         var totalFieldsUpdated = 0;
         var runCache = new ActorEnrichmentRunCache();
 
-        for (var i = 0; i < total; i++)
+        try
         {
-            ct.ThrowIfCancellationRequested();
-
-            var actor = actors[i];
-            progress?.Report(new TaskProgress(i + 1, total, actor.DisplayName));
-
-            try
+            for (var i = 0; i < total; i++)
             {
-                var res = await EnrichActorAsync(actor.Id, options, runCache, ct);
-                if (res.Success)
+                ct.ThrowIfCancellationRequested();
+
+                var actor = actors[i];
+                progress?.Report(new TaskProgress(i + 1, total, actor.DisplayName));
+
+                try
                 {
-                    succeeded++;
-                    totalFieldsUpdated += res.FieldsUpdated;
+                    var res = await EnrichActorAsync(actor.Id, options, runCache, ct);
+                    if (res.Success)
+                    {
+                        succeeded++;
+                        totalFieldsUpdated += res.FieldsUpdated;
+                    }
+                    else
+                    {
+                        failed++;
+                        if (res.Blocked) blocked++;
+                    }
                 }
-                else
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    logger.LogWarning(ex, "Enrichment failed unexpectedly for actor {ActorId}", actor.Id);
                     failed++;
-                    if (res.Blocked) blocked++;
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+        }
+        finally
+        {
+            // Also after a cancel: actors already saved must still get their movies linked.
+            if (runCache.CastSyncPending)
             {
-                logger.LogWarning(ex, "Enrichment failed unexpectedly for actor {ActorId}", actor.Id);
-                failed++;
+                await using var syncDb = await dbFactory.CreateDbContextAsync(CancellationToken.None);
+                await MovieActorAssociation.SynchronizeAllAsync(syncDb, CancellationToken.None);
+                await syncDb.SaveChangesAsync(CancellationToken.None);
             }
         }
 

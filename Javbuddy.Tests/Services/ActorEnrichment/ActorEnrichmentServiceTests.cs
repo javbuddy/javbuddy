@@ -96,6 +96,64 @@ public class ActorEnrichmentServiceTests
     }
 
     [Fact]
+    public async Task EnrichAllAsync_LinksMoviesCreditedUnderTheNamesItFinds_AfterTheBatch()
+    {
+        using var factory = new TestDbContextFactory();
+        int movieId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = new Movie { Code = "ABC-123", MetaActresses = "Yuachan, 三上悠亜" };
+            db.AddRange(new Actor { FirstName = "Yua", LastName = "Mikami" }, movie);
+            await db.SaveChangesAsync();
+            movieId = movie.Id;
+        }
+
+        var source = Substitute.For<IActorMetadataSource>();
+        source.SourceName.Returns("Local");
+        source.Priority.Returns(10);
+        source.CanAutoEnrich.Returns(true);
+        source.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        source.LookupAsync(Arg.Any<ActorEnrichmentContext>(), Arg.Any<CancellationToken>())
+            .Returns(new ActorMetadataResult { SourceName = "Local", JapaneseNameKanji = "三上悠亜", Aliases = ["Yuachan"] });
+
+        await new ActorEnrichmentService([source], factory).EnrichAllAsync();
+
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.Equal("Mikami Yua", (await verifyDb.Movies.SingleAsync(m => m.Id == movieId)).MetaActresses);
+        Assert.Single(await verifyDb.MovieActors.ToListAsync());
+    }
+
+    [Fact]
+    public async Task EnrichActorAsync_DoesNotResyncMovieCasts_WhenOnlyANonNameFieldChanges()
+    {
+        using var factory = new TestDbContextFactory();
+        int actorId, movieId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actor = new Actor { FirstName = "Yua", LastName = "Mikami" };
+            // Deliberately stale: a full sync would flag the unmatched name.
+            var movie = new Movie { Code = "ABC-123", MetaActresses = "Someone Else", HasUnmatchedActors = false };
+            db.AddRange(actor, movie);
+            await db.SaveChangesAsync();
+            (actorId, movieId) = (actor.Id, movie.Id);
+        }
+
+        var source = Substitute.For<IActorMetadataSource>();
+        source.SourceName.Returns("Local");
+        source.Priority.Returns(10);
+        source.CanAutoEnrich.Returns(true);
+        source.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        source.LookupAsync(Arg.Any<ActorEnrichmentContext>(), Arg.Any<CancellationToken>())
+            .Returns(new ActorMetadataResult { SourceName = "Local", HeightCm = 160 });
+
+        var result = await new ActorEnrichmentService([source], factory).EnrichActorAsync(actorId);
+
+        Assert.True(result.Success);
+        await using var verifyDb = await factory.CreateDbContextAsync();
+        Assert.False((await verifyDb.Movies.SingleAsync(m => m.Id == movieId)).HasUnmatchedActors);
+    }
+
+    [Fact]
     public async Task EnrichActorAsync_RespectsOverwriteExistingPolicy()
     {
         using var factory = new TestDbContextFactory();
