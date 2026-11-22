@@ -52,7 +52,14 @@ public class QBittorrentSyncTask(IQBittorrentClient qBittorrentClient, IDbContex
 
     public async Task<string?> RunAsync(CancellationToken ct, IProgress<TaskProgress> progress)
     {
-        var liveTorrents = await qBittorrentClient.GetTorrentsAsync(ct);
+        var liveResult = await qBittorrentClient.GetTorrentsAsync(ct);
+        if (!liveResult.Success)
+        {
+            // An unreachable/failing qBittorrent says nothing about which torrents exist — reconciling
+            // against an empty list would mark every tracked row removed, permanently.
+            return "skipped: qBittorrent unreachable";
+        }
+        var liveTorrents = liveResult.Torrents;
         var byHash = liveTorrents
             .Where(t => t.Hash is not null)
             .ToDictionary(t => t.Hash!, t => t, StringComparer.OrdinalIgnoreCase);

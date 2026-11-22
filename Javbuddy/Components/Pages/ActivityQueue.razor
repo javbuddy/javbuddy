@@ -160,8 +160,9 @@ else
     {
         if (rows is null || !NeedsLivePoll(rows)) return;
 
-        var live = await QBittorrentClient.GetTorrentsAsync(ct);
-        TorrentLiveProgress.Apply(rows, live);
+        var result = await QBittorrentClient.GetTorrentsAsync(ct);
+        if (!result.Success) return;
+        TorrentLiveProgress.Apply(rows, result.Torrents);
 
         await InvokeAsync(StateHasChanged);
     }

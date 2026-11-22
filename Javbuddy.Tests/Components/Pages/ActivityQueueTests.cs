@@ -131,7 +131,7 @@ public class ActivityQueueTests : BunitContext
     {
         using var factory = SetUpServices();
         SeedTorrent(factory, TorrentDownloadStatus.Downloading, hash: "abc");
-        qbittorrent.GetTorrentsAsync(Arg.Any<CancellationToken>()).Returns([]);
+        qbittorrent.GetTorrentsAsync(Arg.Any<CancellationToken>()).Returns(new QBittorrentTorrentsResult(true, []));
 
         var cut = Render<ActivityQueue>();
         clock.Advance(TimeSpan.FromSeconds(4));

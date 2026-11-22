@@ -9,6 +9,14 @@ namespace Javbuddy.Services.QBittorrent;
 public record QBittorrentTestResult(bool Success, string Message, string? Version = null);
 public record QBittorrentAddResult(bool Success, string? ErrorMessage);
 
+/// <summary>Outcome of listing torrents. <see cref="Success"/> false means qBittorrent couldn't be
+/// queried (not configured, login rejected, non-2xx, timeout/unreachable) — distinct from a
+/// successful query that returned no torrents, so callers must not treat it as "nothing exists".</summary>
+public record QBittorrentTorrentsResult(bool Success, List<QBittorrentTorrentDto> Torrents, string? ErrorMessage = null)
+{
+    public static QBittorrentTorrentsResult Failure(string message) => new(false, [], message);
+}
+
 public interface IQBittorrentClient
 {
     Task<string?> GetBaseUrlAsync(CancellationToken ct = default);
@@ -26,7 +34,7 @@ public interface IQBittorrentClient
     /// Prowlarr instance bound to 127.0.0.1 when qBittorrent runs on a different host).</summary>
     Task<QBittorrentAddResult> AddTorrentFileAsync(string movieCode, string fileName, byte[] torrentFileBytes, CancellationToken ct = default);
 
-    Task<List<QBittorrentTorrentDto>> GetTorrentsAsync(CancellationToken ct = default);
+    Task<QBittorrentTorrentsResult> GetTorrentsAsync(CancellationToken ct = default);
     Task<bool> DeleteTorrentAsync(string hash, bool deleteFiles = false, CancellationToken ct = default);
 }
 
@@ -202,16 +210,16 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
             message => new QBittorrentAddResult(false, message));
     }
 
-    public async Task<List<QBittorrentTorrentDto>> GetTorrentsAsync(CancellationToken ct = default)
+    public async Task<QBittorrentTorrentsResult> GetTorrentsAsync(CancellationToken ct = default)
     {
         var settings = await GetSettingsAsync(ct);
-        if (settings is null) return new List<QBittorrentTorrentDto>();
+        if (settings is null) return QBittorrentTorrentsResult.Failure("qBittorrent is not configured.");
 
         return await ExecuteAsync(RequestTimeout, ct,
             async (client, token) =>
             {
                 var sid = await LoginAsync(client, settings, token);
-                if (sid is null) return new List<QBittorrentTorrentDto>();
+                if (sid is null) return QBittorrentTorrentsResult.Failure("qBittorrent login was rejected.");
 
                 var infoUrl = CombineUrl(settings.BaseUrl!, "/api/v2/torrents/info");
                 if (!string.IsNullOrWhiteSpace(settings.Category))
@@ -224,12 +232,12 @@ public class QBittorrentClient(IHttpClientFactory httpClientFactory, IDbContextF
                 using var request = new HttpRequestMessage(HttpMethod.Get, infoUrl);
                 AddAuthHeaders(request, settings.BaseUrl!, sid);
                 using var response = await client.SendAsync(request, token);
-                if (!response.IsSuccessStatusCode) return new List<QBittorrentTorrentDto>();
+                if (!response.IsSuccessStatusCode) return QBittorrentTorrentsResult.Failure($"qBittorrent returned {(int)response.StatusCode}.");
 
                 var torrents = await response.Content.ReadFromJsonAsync<List<QBittorrentTorrentDto>>(cancellationToken: token);
-                return torrents ?? new List<QBittorrentTorrentDto>();
+                return new QBittorrentTorrentsResult(true, torrents ?? []);
             },
-            _ => new List<QBittorrentTorrentDto>());
+            QBittorrentTorrentsResult.Failure);
     }
 
     public async Task<bool> DeleteTorrentAsync(string hash, bool deleteFiles = false, CancellationToken ct = default)

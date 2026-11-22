@@ -33,14 +33,35 @@ public class QBittorrentSyncTaskTests
 
         public async Task<TorrentDownload> RunAsync(params QBittorrentTorrentDto[] live)
         {
-            Client.GetTorrentsAsync(Arg.Any<CancellationToken>()).Returns([.. live]);
+            Client.GetTorrentsAsync(Arg.Any<CancellationToken>()).Returns(new QBittorrentTorrentsResult(true, [.. live]));
             var task = new QBittorrentSyncTask(Client, Factory, new ConfigurationBuilder().Build(), Notifier);
             await task.RunAsync(CancellationToken.None, new Progress<TaskProgress>());
             await using var db = await Factory.CreateDbContextAsync();
             return await db.TorrentDownloads.SingleAsync();
         }
 
+        public async Task<string?> RunFailedAsync()
+        {
+            Client.GetTorrentsAsync(Arg.Any<CancellationToken>()).Returns(QBittorrentTorrentsResult.Failure("down"));
+            var task = new QBittorrentSyncTask(Client, Factory, new ConfigurationBuilder().Build(), Notifier);
+            return await task.RunAsync(CancellationToken.None, new Progress<TaskProgress>());
+        }
+
         public void Dispose() => Factory.Dispose();
+    }
+
+    [Fact]
+    public async Task RunAsync_ClientFailure_SkipsReconciliation()
+    {
+        using var f = new Fixture();
+        await f.SeedAsync(r => { r.Hash = "h1"; r.Status = TorrentDownloadStatus.Downloading; });
+
+        var result = await f.RunFailedAsync();
+
+        Assert.Equal("skipped: qBittorrent unreachable", result);
+        await using var db = await f.Factory.CreateDbContextAsync();
+        Assert.Null((await db.TorrentDownloads.SingleAsync()).RemovedFromClientAt);
+        Assert.Equal(0, f.Notifications);
     }
 
     [Fact]
