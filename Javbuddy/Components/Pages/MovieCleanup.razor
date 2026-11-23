@@ -811,6 +811,8 @@
     {
         if (currentMovie?.Id != movieId) return;
         await LoadCurrentTagsAsync();
+        // Removing a movie tag here stops it passing down to the clips the editor shows.
+        if (clipEditor is not null) await clipEditor.MovieTagsChangedAsync();
     }
 
     /// <summary>Loads queue[0]'s movie for the card. A queued movie deleted since the

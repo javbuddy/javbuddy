@@ -226,6 +226,8 @@
     private ClipTreeModel tree = new([], [], []);
     // The movie's own tags that pass down to every clip (ClipTagInheritance).
     private IReadOnlyList<SceneTagItem> movieTags = [];
+    // The movie's tags changed while an operation was running (MovieTagsChangedAsync); reload once it's done.
+    private bool reloadWhenIdle;
     private FileChapters? fileChapters;
     private bool chaptersProbed;
     private bool loaded;
@@ -751,8 +753,17 @@
             return (result.Success, result.ErrorMessage, false);
         });
 
-    /// <summary>Re-reads what the clips inherit after the movie's own tags changed (MovieTagsEditor).</summary>
-    public Task MovieTagsChangedAsync() => RefreshAsync();
+    /// <summary>Re-reads what the clips inherit after the movie's own tags changed (MovieTagsEditor, a host's tag
+    /// chips). With a save in flight it waits: RunAsync reloads once more when it's done.</summary>
+    public Task MovieTagsChangedAsync()
+    {
+        if (busy)
+        {
+            reloadWhenIdle = true;
+            return Task.CompletedTask;
+        }
+        return RefreshAsync();
+    }
 
     // After an own tag in a row: a ↓ when it passes down to the clips inside.
     private static RenderFragment? PassesDownMark(SceneTagItem tag) => tag.PropagatesDown
@@ -1174,6 +1185,11 @@
         finally
         {
             busy = false;
+        }
+        if (reloadWhenIdle && !disposed)
+        {
+            reloadWhenIdle = false;
+            await RefreshAsync();
         }
     }
 

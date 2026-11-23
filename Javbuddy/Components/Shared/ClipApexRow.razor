@@ -7,7 +7,7 @@
     <span class="apex-editor-time">@SceneTimeFormat.Format(Apex.Seconds)</span>
     <ClipActorNames Class="apex-editor-actors" Actors="Apex.Actors" Tags="ActorTags" Library="ActorTagLibrary" />
     <ImplicitChips Items="@ImplicitChip.ForActors(Node.Actors)" ActorTags="ActorTags" Library="ActorTagLibrary" />
-    @if (Apex.Tags.Count > 0 || Node.InheritedTags.Any(t => !t.IsExcluded))
+    @if (Apex.Tags.Count > 0 || Node.InheritedTags.Any(t => !t.IsExcluded && Apex.Tags.All(own => own.TagId != t.Tag.TagId)))
     {
         @* One grid cell for its own tags and the inherited ones, so they wrap in the tags column. *@
         <span class="apex-editor-tags">

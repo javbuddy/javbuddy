@@ -160,4 +160,12 @@ public class ClipTagChipsTests : BunitContext
         Assert.StartsWith("Also inherited from scene 1.", cut.Find(".redundant-mark").GetAttribute("title"));
         Assert.Equal(["↳Play › Beta, inherited from the movie"], cut.FindAll(".inherited-chip").Select(c => c.TextContent.Trim()));
     }
+
+    [Fact]
+    public void ReadOnly_OnlyExcludedInheritedTags_RendersNoEmptyChipRow()
+    {
+        var cut = RenderChips(p => p.Add(x => x.Inherited, [new InheritedTag(Beta, ["the movie"], IsExcluded: true)]));
+
+        Assert.Empty(cut.FindAll(".apex-editor-chips"));
+    }
 }

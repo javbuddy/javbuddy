@@ -338,7 +338,7 @@ public sealed class ClipTagInheritanceStorageTests : IDisposable
     }
 
     [Fact]
-    public async Task LibraryRules_RepointingAPassedDownTag_MovesTheClipsOptOuts()
+    public async Task LibraryRules_RepointingAPassedDownTag_CopiesTheClipsOptOuts()
     {
         await SeedAsync();
         await new TagService(factory, Substitute.For<INfoSyncService>()).SetMovieTagPropagatesDownAsync(movieId, nightId, true);
@@ -363,7 +363,9 @@ public sealed class ClipTagInheritanceStorageTests : IDisposable
 
         await using (var verify = await factory.CreateDbContextAsync())
         {
-            Assert.Equal(eveningId, (await verify.ApexTagExclusions.SingleAsync(e => e.ApexId == apexId)).TagId);
+            // Copied onto "Evening"; nothing uses "Night" any more, so it was pruned and its opt-out went with it.
+            Assert.Equal([eveningId], await verify.ApexTagExclusions.Where(e => e.ApexId == apexId).Select(e => e.TagId).ToListAsync());
+            Assert.False(await verify.Tags.AnyAsync(t => t.Id == nightId));
         }
         var (scenes, _, apexes) = await StoredAsync();
         Assert.Equal([(sceneId, eveningId)], scenes);
@@ -412,5 +414,56 @@ public sealed class ClipTagInheritanceStorageTests : IDisposable
         Assert.True((await highlights.DeleteHighlightAsync(highlightId)).Success);
 
         Assert.Empty((await StoredAsync()).Apexes);
+    }
+
+    [Fact]
+    public async Task LibraryRules_KeepAnOptOut_WhileAHighlightStillPassesTheOldTagDown()
+    {
+        // Rules never rewrite highlight tags, so the highlight keeps passing "Night" down: the apex must stay opted out.
+        await SeedAsync();
+        await new MovieHighlightService(factory).UpdateHighlightAsync(highlightId, 10, 100, null, tagIds: [nightId], propagatingTagIds: [nightId]);
+        await service.SetExcludedAsync(ClipKind.Apex, apexId, nightId, true);
+        await AddRuleAsync("Night", "Evening");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            await TagNormalization.ApplyToLibraryAsync(db);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var verify = await factory.CreateDbContextAsync())
+        {
+            Assert.True(await verify.HighlightTags.AnyAsync(ht => ht.HighlightId == highlightId && ht.TagId == nightId && ht.PropagatesDown));
+        }
+        Assert.Empty((await StoredAsync()).Apexes);
+    }
+
+    [Fact]
+    public async Task MetadataIngestion_KeepsAnOptOut_WhileASceneStillPassesTheOldTagDown()
+    {
+        // Ingestion rewrites the movie's tags only, so the scene keeps passing "Outdoor" down: the highlight must stay
+        // opted out.
+        await SeedAsync();
+        await service.SetSceneTagPropagatesDownAsync(sceneId, outdoorId, true);
+        await service.SetExcludedAsync(ClipKind.Highlight, highlightId, outdoorId, true);
+        await AddRuleAsync("Outdoor", "Outside");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = await db.Movies.SingleAsync(m => m.Id == movieId);
+            await TagNormalization.ApplyToMovieAsync(db, movie, ["Drama"]);
+        }
+
+        Assert.Empty((await StoredAsync()).Highlights);
+    }
+
+    private async Task AddRuleAsync(string source, string targetName)
+    {
+        await using var db = await factory.CreateDbContextAsync();
+        var target = new Tag { Name = targetName };
+        db.Tags.Add(target);
+        await db.SaveChangesAsync();
+        db.TagReplacementRules.Add(new TagReplacementRule { SourceValue = source, TargetTagId = target.Id });
+        await db.SaveChangesAsync();
     }
 }
