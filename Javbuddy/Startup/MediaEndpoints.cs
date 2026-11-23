@@ -38,14 +38,24 @@ public static class MediaEndpoints
         // Jellyfin. With ?fileId= it streams one of the movie's other versions. Range requests (206) let the
         // browser seek without downloading the whole file. The path is only ever the one
         // IMovieStreamService resolves inside a library root, never one from the request.
-        app.MapGet("/api/movies/{movieId:int}/stream", async (int movieId, int? fileId, IMovieStreamService streamService, CancellationToken ct) =>
+        // The URL stays the same when the file is rewritten in place (B-frame repair, chapter writing).
+        // "no-cache" makes the browser revalidate instead of replaying cached byte ranges of the old
+        // file (choppy or unplayable video); the file's ETag (also Last-Modified) lets it tell old from new.
+        app.MapGet("/api/movies/{movieId:int}/stream", async (HttpContext http, int movieId, int? fileId, IMovieStreamService streamService, CancellationToken ct) =>
         {
             var path = fileId is { } id
                 ? await streamService.GetFilePathAsync(movieId, id, ct)
                 : await streamService.GetMainFilePathAsync(movieId, ct);
-            return path is null
-                ? Results.NotFound()
-                : Results.File(path, MovieStreamService.ContentType(path), enableRangeProcessing: true);
+            var info = path is null ? null : new FileInfo(path);
+            if (info is not { Exists: true }) return Results.NotFound();
+
+            http.Response.Headers.CacheControl = "no-cache";
+            return Results.File(
+                path!,
+                MovieStreamService.ContentType(path!),
+                lastModified: info.LastWriteTimeUtc,
+                entityTag: new EntityTagHeaderValue($"\"{info.LastWriteTimeUtc.Ticks:x}-{info.Length:x}\""),
+                enableRangeProcessing: true);
         });
 
         // A sidecar subtitle beside the movie's video file (or its ?fileId= version), as WebVTT for a

@@ -48,4 +48,54 @@ public class MovieStreamEndpointTests
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Response_MustRevalidate_AndCarriesAStrongETag()
+    {
+        var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-STREAM-2", MovieStatus.Got);
+        await DbSeeding.SeedPlayableVideoAsync(fixture.App.Services, fixture.DbFactory, movie);
+        using var client = new HttpClient { BaseAddress = new Uri(fixture.App.ServerAddress) };
+
+        using var response = await client.GetAsync($"/api/movies/{movie.Id}/stream");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoCache);
+        Assert.NotNull(response.Headers.ETag);
+        Assert.False(response.Headers.ETag!.IsWeak);
+    }
+
+    [Fact]
+    public async Task MatchingIfNoneMatch_GetsNotModified()
+    {
+        var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-STREAM-3", MovieStatus.Got);
+        await DbSeeding.SeedPlayableVideoAsync(fixture.App.Services, fixture.DbFactory, movie);
+        using var client = new HttpClient { BaseAddress = new Uri(fixture.App.ServerAddress) };
+        using var first = await client.GetAsync($"/api/movies/{movie.Id}/stream", HttpCompletionOption.ResponseHeadersRead);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/movies/{movie.Id}/stream");
+        request.Headers.IfNoneMatch.Add(first.Headers.ETag!);
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotModified, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RewrittenFile_ChangesTheETag_AndAStaleIfRangeGetsTheWholeFile()
+    {
+        var movie = await DbSeeding.SeedMovieAsync(fixture.DbFactory, "E2E-STREAM-4", MovieStatus.Got);
+        await DbSeeding.SeedPlayableVideoAsync(fixture.App.Services, fixture.DbFactory, movie);
+        var path = Path.Combine(DbSeeding.PlayableLibraryRoot, "E2E-STREAM-4", "E2E-STREAM-4.webm");
+        using var client = new HttpClient { BaseAddress = new Uri(fixture.App.ServerAddress) };
+        using var before = await client.GetAsync($"/api/movies/{movie.Id}/stream", HttpCompletionOption.ResponseHeadersRead);
+
+        // What a repair does: a new file replaces the old one under the same path.
+        File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path).AddMinutes(1));
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/movies/{movie.Id}/stream");
+        request.Headers.Range = new RangeHeaderValue(0, 9);
+        request.Headers.IfRange = new RangeConditionHeaderValue(before.Headers.ETag!);
+        using var after = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        Assert.NotEqual(before.Headers.ETag, after.Headers.ETag);
+    }
 }

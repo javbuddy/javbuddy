@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **A repaired movie plays right away.** The player's video stream is now revalidated by the browser (ETag/Last-Modified from the file) instead of replaying cached bytes of the old file, so after Repair movie (or any in-place rewrite) the video is no longer choppy or unloadable until a fresh browser session.
+
 ## [0.9.2] - 2026-11-22
 
 ### Added
