@@ -12,13 +12,13 @@ public sealed class FfmpegGate(int maxConcurrency, string name = "custom")
     public const string LongName = "long";
     public const string ShortName = "short";
 
-    /// <summary>The gate label used for runs that go through no gate (ffprobe, the dts2pts repair).</summary>
+    /// <summary>The gate label used for runs that go through no gate (ffprobe, the dts2pts repair and chapter remux).</summary>
     public const string UngatedName = "none";
 
     /// <summary>Low-cardinality label for this lane in metrics.</summary>
     public string Name { get; } = name;
 
-    /// <summary>Whole-file work: full trickplay, scene detection, chapter remux and VR merge (the dts2pts repair is ungated).</summary>
+    /// <summary>Whole-file work: full trickplay, scene detection and VR merge (the dts2pts repair and chapter remux are ungated).</summary>
     public static FfmpegGate Long { get; } = new(1, LongName);
 
     /// <summary>A few seconds of video: scene stills, hover previews and highlight-clip trickplay.</summary>

@@ -124,6 +124,22 @@ public sealed class FfmpegClientMetricsTests : IDisposable
     }
 
     [Fact]
+    public async Task RemuxChapters_Success_AddsTheInputDurationAsMediaSeconds_UngatedLabel()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var ffmpeg = Script("ffmpeg", "exit 0");
+
+        var result = await Client(ffmpeg).RemuxWithChaptersAsync("in.mp4", ";FFMETADATA1\n", "out.mp4", TimeSpan.FromSeconds(90), null);
+
+        Assert.True(result.Success);
+        Assert.Equal(1L, Run("remux_chapters", "success").Value);
+        var media = Assert.Single(Of("javbuddy_ffmpeg_input_media_seconds_total"));
+        Assert.Equal(90d, media.Value);
+        Assert.Equal("remux_chapters", media.Tags["operation"]);
+        Assert.Empty(Of("javbuddy_ffmpeg_gate_wait_seconds"));
+    }
+
+    [Fact]
     public async Task Dts2Pts_FailedRun_AddsNoMediaSeconds()
     {
         if (OperatingSystem.IsWindows()) return;

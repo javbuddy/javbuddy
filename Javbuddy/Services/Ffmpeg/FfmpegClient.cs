@@ -263,7 +263,8 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        return await RunInstrumentedAsync("remux_chapters", longGate, totalDuration, new RunIo([inputPath], outputPath), ct, scope => RemuxChaptersCoreAsync(scope, ffmpegPath, inputPath, ffMetadata, outputPath, totalDuration, progress, ct), r => r.Success);
+        // Deliberately not gated: writing chapters is user-initiated and shouldn't queue behind hours of background trickplay or scene detection.
+        return await RunInstrumentedAsync("remux_chapters", null, totalDuration, new RunIo([inputPath], outputPath), ct, scope => RemuxChaptersCoreAsync(scope, ffmpegPath, inputPath, ffMetadata, outputPath, totalDuration, progress, ct), r => r.Success);
     }
 
     private static async Task<FfmpegRunResult> RemuxChaptersCoreAsync(FfmpegRunScope scope, string ffmpegPath, string inputPath, string ffMetadata, string outputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct)

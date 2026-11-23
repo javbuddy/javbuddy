@@ -6,6 +6,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ### Fixed
 
+- **Writing chapters to a movie no longer waits behind background ffmpeg work.** Like video repair, `Write chapters to file…` now starts its lossless remux without waiting at the ffmpeg gate behind trickplay generation or scene detection (#199).
 - **A repaired movie plays right away.** The player's video stream is now revalidated by the browser (ETag/Last-Modified from the file) instead of replaying cached bytes of the old file, so after Repair movie (or any in-place rewrite) the video is no longer choppy or unloadable until a fresh browser session.
 
 ## [0.9.2] - 2026-11-22

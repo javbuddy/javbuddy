@@ -91,6 +91,41 @@ public class FfmpegGateTests
         }
     }
 
+    [Theory]
+    [InlineData("chapter-remux")]
+    [InlineData("dts2pts-repair")]
+    public async Task UngatedRemuxes_DoNotWaitOnEitherGate(string job)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var dir = Directory.CreateTempSubdirectory("javbuddy-ffmpeg-ungated-test-").FullName;
+        try
+        {
+            var script = Path.Combine(dir, "ffmpeg");
+            await File.WriteAllTextAsync(script, "#!/bin/sh\nexit 0\n");
+            File.SetUnixFileMode(script, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var resolver = Substitute.For<IFfmpegBinaryResolver>();
+            resolver.FfmpegPath.Returns(script);
+            var longGate = new FfmpegGate(1);
+            var shortGate = new FfmpegGate(1);
+            var client = new FfmpegClient(resolver, longGate, shortGate);
+            using var busyLong = await longGate.EnterAsync(CancellationToken.None);
+            using var busyShort = await shortGate.EnterAsync(CancellationToken.None);
+
+            var run = job switch
+            {
+                "chapter-remux" => client.RemuxWithChaptersAsync("in.mp4", ";FFMETADATA1\n", "out.mp4", TimeSpan.FromMinutes(10), progress: null),
+                _ => client.RemuxDts2PtsAsync("in.mp4", "out.mp4", TimeSpan.FromMinutes(10), progress: null),
+            };
+            var result = await run.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.True(result.Success, result.ErrorMessage);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task ClientRuns_InOneLane_RunOneAtATime()
     {
