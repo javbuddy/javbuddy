@@ -42,6 +42,10 @@
     <div class="apex-editor-form-actions clip-form-actions">
         <button type="submit" class="apex-editor-btn clip-btn apex-editor-save-btn clip-btn-primary" disabled="@Busy">@(Model.ApexId is null ? "Add" : "Save")</button>
         <button type="button" class="apex-editor-btn clip-btn apex-editor-cancel-btn" @onclick="OnCancel" disabled="@Busy">Cancel</button>
+        @if (Model.ApexId is not null && OnDownload.HasDelegate)
+        {
+            <ClipDownloadButton ClassPrefix="apex-editor" OnDownload="OnDownload" Downloading="Downloading" Disabled="@(Busy || DownloadDisabled)" />
+        }
     </div>
 </form>
 
@@ -66,6 +70,15 @@
     [Parameter] public EventCallback OnSave { get; set; }
 
     [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>Downloads the clip's saved range; editing an existing clip only, and no button when unset.</summary>
+    [Parameter] public EventCallback OnDownload { get; set; }
+
+    /// <summary>This clip's download is being prepared.</summary>
+    [Parameter] public bool Downloading { get; set; }
+
+    /// <summary>Another clip's download is being prepared.</summary>
+    [Parameter] public bool DownloadDisabled { get; set; }
 
     [Parameter] public EventCallback OnNow { get; set; }
 

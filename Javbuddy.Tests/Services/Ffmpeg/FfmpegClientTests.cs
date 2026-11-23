@@ -127,6 +127,15 @@ public class FfmpegClientTests
     }
 
     [Fact]
+    public void ClipCopyArguments_SeekOnInput_StreamCopyVideoAndAudio_IntoTheGivenMuxer()
+    {
+        Assert.Equal(
+            ["-hide_banner", "-nostdin", "-y", "-ss", "17.5", "-i", "in.mkv", "-t", "10",
+             "-map", "0:V", "-map", "0:a?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-f", "mp4", "out.clip"],
+            FfmpegClient.BuildClipCopyArguments("in.mkv", 17.5, 10, "mp4", "out.clip"));
+    }
+
+    [Fact]
     public void ChapterRemuxArguments_ReplaceChapters_DropOldChapterTrack_KeepTags()
     {
         Assert.Equal(

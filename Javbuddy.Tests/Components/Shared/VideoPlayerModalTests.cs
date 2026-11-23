@@ -42,6 +42,7 @@ public class VideoPlayerModalTests : BunitContext
         Services.AddSingleton(Substitute.For<Javbuddy.Services.SceneMedia.ISceneMediaService>());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.SceneMedia.IHighlightMediaService>());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.SceneMedia.IApexMediaService>());
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.ClipExport.IClipExportService>());
         Services.AddSingleton(new Javbuddy.Services.SceneMedia.SceneMediaQueue(Substitute.For<IServiceScopeFactory>(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Javbuddy.Services.SceneMedia.SceneMediaQueue>.Instance));
         JSInterop.Mode = JSRuntimeMode.Loose;
     }

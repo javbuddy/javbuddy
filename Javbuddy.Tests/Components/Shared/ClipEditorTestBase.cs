@@ -1,6 +1,7 @@
 using Bunit;
 using Javbuddy.Components.Shared;
 using Javbuddy.Models;
+using Javbuddy.Services.ClipExport;
 using Javbuddy.Services.Nfo;
 using Javbuddy.Services.SceneMedia;
 using Javbuddy.Services.Scenes;
@@ -31,6 +32,8 @@ public abstract class ClipEditorTestBase : BunitContext
     protected readonly ISceneMediaService sceneMedia = Substitute.For<ISceneMediaService>();
     protected readonly IHighlightMediaService highlightMedia = Substitute.For<IHighlightMediaService>();
     protected readonly IApexMediaService apexMedia = Substitute.For<IApexMediaService>();
+    /// <summary>Unavailable (no export buttons) unless a test sets IsAvailable.</summary>
+    protected readonly IClipExportService clipExport = Substitute.For<IClipExportService>();
     protected readonly ISceneMediaService workerMedia = Substitute.For<ISceneMediaService>();
     protected readonly SceneMediaQueue mediaQueue;
     protected readonly int movieId;
@@ -58,6 +61,7 @@ public abstract class ClipEditorTestBase : BunitContext
         Services.AddSingleton(sceneMedia);
         Services.AddSingleton(highlightMedia);
         Services.AddSingleton(apexMedia);
+        Services.AddSingleton(clipExport);
         // A real queue whose worker resolves workerMedia, so a test can drive a "generated" event.
         var workerServices = new ServiceCollection().AddSingleton(workerMedia).BuildServiceProvider();
         mediaQueue = new SceneMediaQueue(workerServices.GetRequiredService<IServiceScopeFactory>(), NullLogger<SceneMediaQueue>.Instance);

@@ -1,0 +1,28 @@
+/* Last in the form's button row (look: .clip-btn in app.css), pushed to its right end, away from Save / Cancel. */
+.clip-download-btn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.clip-download-spinner {
+    width: 0.65rem;
+    height: 0.65rem;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: clip-download-spin 0.8s linear infinite;
+}
+
+@keyframes clip-download-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .clip-download-spinner {
+        animation-duration: 2.4s;
+    }
+}
