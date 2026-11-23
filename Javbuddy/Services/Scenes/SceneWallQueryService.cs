@@ -10,7 +10,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Javbuddy.Services.Scenes;
 
 /// <summary>Filters for the scene wall. Within Tags, Actors, Studios and ContentTypes (the parent movie's) a scene
-/// matches any selected value (TagIds also match subtags); the filters combine with AND. Text
+/// matches any selected value (TagIds also match subtags; a clip's tags are its own, inherited and rolled up, an
+/// apex's its own and inherited); the filters combine with AND. Text
 /// matches the scene title, movie code or movie title. Scenes hidden from the overview
 /// are left out unless IncludeHidden. ApexOnly keeps clips whose range contains an apex of their movie;
 /// ApexTagIds keeps those containing an apex with one of the tags (or a subtag), implying ApexOnly
@@ -72,6 +73,9 @@ public sealed record SceneWallCard(
 
     /// <summary>Tags rolled up from its highlights and apexes that it doesn't hold itself.</summary>
     public IReadOnlyList<ImplicitTag> ImplicitTags { get; init; } = [];
+
+    /// <summary>Tags it inherits from a parent that passes them down (ClipTagInheritance) and doesn't hold itself.</summary>
+    public IReadOnlyList<SceneTagItem> InheritedTags { get; init; } = [];
 }
 
 public sealed record SceneWallPage(IReadOnlyList<SceneWallCard> Cards, int TotalCount);
@@ -107,6 +111,9 @@ public sealed record HighlightWallCard(
 
     /// <summary>Tags rolled up from its apexes that it doesn't hold itself.</summary>
     public IReadOnlyList<ImplicitTag> ImplicitTags { get; init; } = [];
+
+    /// <summary>Tags it inherits from a parent that passes them down (ClipTagInheritance) and doesn't hold itself.</summary>
+    public IReadOnlyList<SceneTagItem> InheritedTags { get; init; } = [];
 }
 
 public sealed record HighlightWallPage(IReadOnlyList<HighlightWallCard> Cards, int TotalCount);
@@ -142,6 +149,9 @@ public sealed record ApexWallCard(
 
     /// <summary>How long the clip player plays before and after it.</summary>
     public ApexWindow Window { get; init; } = ApexWindow.Default;
+
+    /// <summary>Tags it inherits from a parent that passes them down (ClipTagInheritance) and doesn't hold itself.</summary>
+    public IReadOnlyList<SceneTagItem> InheritedTags { get; init; } = [];
 }
 
 public sealed record ApexWallPage(IReadOnlyList<ApexWallCard> Cards, int TotalCount);
@@ -178,7 +188,7 @@ public interface ISceneWallQueryService
     Task<SceneWallOptions> GetHighlightOptionsAsync(CancellationToken ct = default);
 
     /// <summary>The wall's apex view: ApexTagIds, Actor and the actress attributes match the
-    /// apex's own tags and actors, favorite its own flag, text the movie's code and title. TagIds,
+    /// apex's own and inherited tags and its effective actors, favorite its own flag, text the movie's code and title. TagIds,
     /// ApexOnly and IncludeHidden don't apply.</summary>
     Task<ApexWallPage> GetApexPageAsync(SceneWallFilter filter, SceneWallSort sort, int randomSeed, int skip, int take, CancellationToken ct = default);
 
@@ -234,6 +244,7 @@ public sealed partial class SceneWallQueryService(
         var itemsByMovie = await sceneService.GetScenesForMoviesAsync(movieIds, effective, ct);
         var apexSeconds = await ApexSecondsByMovieAsync(db, itemsByMovie.Keys, ct);
         var rollups = await RollupsAsync(itemsByMovie, effective, ct);
+        var inherited = await InheritedTagsAsync(db, ClipRollupQueries.SceneInheritedTags(db), page.Select(p => p.Id).ToList(), ct);
 
         var cards = page
             .Select(p => (Row: p, Item: itemsByMovie[p.MovieId].FirstOrDefault(i => i.Id == p.Id)))
@@ -257,7 +268,8 @@ public sealed partial class SceneWallQueryService(
                 JellyfinServerId = x.Row.JellyfinServerId,
                 DurationSeconds = x.Row.MediaDurationSeconds,
                 ApexCount = apexSeconds[x.Row.MovieId].Count(a => ApexRanges.IsWithin(x.Item.StartSeconds, x.Item.EffectiveEndSeconds, a)),
-                ImplicitTags = rollups[x.Row.MovieId].Scenes.GetValueOrDefault(x.Item.Id, []),
+                ImplicitTags = NotInherited(rollups[x.Row.MovieId].Scenes.GetValueOrDefault(x.Item.Id, []), inherited[x.Item.Id]),
+                InheritedTags = NotOwn(inherited[x.Item.Id], x.Item.Tags),
             })
             .ToList();
         return new SceneWallPage(cards, total);
@@ -354,6 +366,7 @@ public sealed partial class SceneWallQueryService(
             highlightMedia is null ? null : highlightMedia.ServesVariant, highlightMedia is null ? null : highlightMedia.IsCurrent, ct);
         long? MediaVersion(int id, double start, double end, string variant) =>
             media.Of(id, variant, HighlightMediaService.Window(start, end));
+        var inherited = await InheritedTagsAsync(db, ClipRollupQueries.HighlightInheritedTags(db), ids, ct);
 
         var cards = page.Select(p =>
         {
@@ -379,7 +392,8 @@ public sealed partial class SceneWallQueryService(
                 JellyfinServerId = p.JellyfinServerId,
                 DurationSeconds = p.MediaDurationSeconds,
                 ApexCount = apexSeconds[p.MovieId].Count(a => a >= p.StartSeconds && a < p.EndSeconds),
-                ImplicitTags = rollups[p.MovieId].Highlights.GetValueOrDefault(p.Id, []),
+                ImplicitTags = NotInherited(rollups[p.MovieId].Highlights.GetValueOrDefault(p.Id, []), inherited[p.Id]),
+                InheritedTags = NotOwn(inherited[p.Id], tags),
             };
         }).ToList();
         return new HighlightWallPage(cards, total);
@@ -401,6 +415,7 @@ public sealed partial class SceneWallQueryService(
         var itemsById = (await apexes.GetApexesForMoviesAsync(page.Select(p => p.MovieId).Distinct().ToList(), ct))
             .Values.SelectMany(items => items)
             .ToDictionary(item => item.Id);
+        var inherited = await InheritedTagsAsync(db, ClipRollupQueries.ApexInheritedTags(db), page.Select(p => p.Id).ToList(), ct);
 
         var cards = page
             .Where(p => itemsById.ContainsKey(p.Id))
@@ -426,6 +441,7 @@ public sealed partial class SceneWallQueryService(
                     DurationSeconds = p.MediaDurationSeconds,
                     ThumbVersion = item.ThumbVersion,
                     Window = item.Window,
+                    InheritedTags = NotOwn(inherited[p.Id], item.Tags),
                 };
             })
             .ToList();
@@ -460,10 +476,30 @@ public sealed partial class SceneWallQueryService(
     private static async Task<IReadOnlyList<SceneWallOption>> ActorTagOptionsAsync(IQueryable<Tag> usedTags, CancellationToken ct) =>
         [.. (await ActorTagOptions.LoadAsync(usedTags, ct)).Select(o => new SceneWallOption(o.Id, o.Label))];
 
+    /// <summary>The stored inherited tags of the given clips, by clip, ordered by name.</summary>
+    private static async Task<ILookup<int, SceneTagItem>> InheritedTagsAsync(AppDbContext db, IQueryable<OwnerTag> rows, IReadOnlyCollection<int> ids, CancellationToken ct) =>
+        (await (from r in rows
+                where ids.Contains(r.OwnerId)
+                join t in db.Tags on r.TagId equals t.Id
+                select new { r.OwnerId, t.Id, t.Name, Parent = t.ParentTag != null ? t.ParentTag.Name : null })
+            .AsNoTracking()
+            .ToListAsync(ct))
+        .OrderBy(x => x.Parent ?? x.Name, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+        .ToLookup(x => x.OwnerId, x => new SceneTagItem(x.Id, x.Name, x.Parent));
+
+    // A tag both rolled up and inherited shows once, as inherited.
+    private static List<ImplicitTag> NotInherited(IReadOnlyList<ImplicitTag> rolledUp, IEnumerable<SceneTagItem> inherited) =>
+        rolledUp.Where(t => inherited.All(i => i.TagId != t.Tag.TagId)).ToList();
+
+    private static List<SceneTagItem> NotOwn(IEnumerable<SceneTagItem> inherited, IReadOnlyList<SceneTagItem> own) =>
+        inherited.Where(t => own.All(o => o.TagId != t.TagId)).ToList();
+
     private static async Task<IReadOnlyList<SceneWallOption>> ApexTagOptionsAsync(AppDbContext db, CancellationToken ct)
     {
-        var tags = await db.ApexTags
-            .Select(at => new { at.Tag.Id, at.Tag.Name, Parent = at.Tag.ParentTag != null ? at.Tag.ParentTag.Name : null })
+        var tags = await (from r in ClipRollupQueries.ApexTags(db)
+                          join t in db.Tags on r.TagId equals t.Id
+                          select new { t.Id, t.Name, Parent = t.ParentTag != null ? t.ParentTag.Name : null })
             .Distinct()
             .ToListAsync(ct);
         return tags.Select(t => new SceneWallOption(t.Id, TagLabel.Format(t.Parent, t.Name)))
@@ -740,7 +776,7 @@ public sealed partial class SceneWallQueryService(
         IQueryable<MovieApex> apexes = db.MovieApexes;
         if (filter.ApexTagIds is { Count: > 0 } tagIds)
         {
-            var rows = db.ApexTags.Select(r => new TaggedRow { OwnerId = r.ApexId, HolderId = 0, TagId = r.TagId });
+            var rows = ClipRollupQueries.ApexTags(db).Select(r => new TaggedRow { OwnerId = r.OwnerId, HolderId = 0, TagId = r.TagId });
             apexes = WhereIdIn(apexes, TagFilterQueries.OwnersWith(db, rows, tagIds, filter.MatchAllApexTags));
         }
         return apexes;

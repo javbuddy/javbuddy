@@ -65,3 +65,26 @@
     font-size: 0.85rem;
     line-height: 1;
 }
+
+/* The ↓ "pass down to every clip" toggle: faint while off, lit while on (as ClipTagChips'). */
+.movie-tags-chip-propagate {
+    appearance: none;
+    padding: 0 0.1rem;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.8rem;
+    line-height: 1;
+    opacity: 0.35;
+}
+
+.movie-tags-chip-propagate:hover,
+.movie-tags-chip-propagate:focus-visible {
+    opacity: 0.8;
+}
+
+.movie-tags-chip-propagate[aria-pressed="true"] {
+    opacity: 1;
+    font-weight: 700;
+}

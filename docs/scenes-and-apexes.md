@@ -13,7 +13,7 @@ How a movie's scenes, highlights and apexes relate to each other and to the movi
 
 All three belong to the movie directly (`MovieId`). There are no foreign keys between scenes, highlights and apexes: which scene a highlight or apex "is in" is computed from times each time it's needed, never stored. So moving or resizing a scene changes which highlights and apexes count as inside it — and so what rolls up into it and what they inherit — without touching their rows.
 
-Each level stores only its **own** (explicit) tags and actors. Everything else a level shows — tags rolled up from inside it, actors inherited from above it — is computed.
+Each level stores only its **own** (explicit) tags and actors. Everything else a level shows — tags rolled up from inside it, actors and passed-down tags inherited from above it — is computed (and, for the wall, also stored as a cache: see below).
 
 ### Scenes partition the movie
 
@@ -63,6 +63,26 @@ A row exists while either flag is set; every reader treats any row as the movie'
 - **Metadata never promotes a clip-only row.** `TagNormalization.ApplyToMovieAsync` leaves the flags of rows the metadata lists alone, because clip tags come back as "metadata" twice: from `MetaGenres` on "Apply Rules to Library", and from an `.nfo` that lists them (the `.nfo` includes clip tags). A tag the metadata drops loses `IsExplicit`; the row stays if `FromClips`.
 - **Tag merges** move highlight and apex tags with scene tags (`TagService.RepointClipTagsAsync`) and OR the flags together.
 - **Self-heal.** `TagNormalization.ApplyToLibraryAsync` refreshes every movie with clip tags, so "Apply Rules to Library" fixes flags a missed write path left behind.
+
+## Tags can pass down (opt-in)
+
+The other direction is opt-in, per tag link: a **↓ toggle** on a movie's, scene's or highlight's own tag (`MovieTag` / `SceneTag` / `HighlightTag.PropagatesDown`) makes the clips inside it **inherit** the tag. It always starts off.
+
+```
+Movie tag (explicit, ↓) ──► every scene, highlight and apex of the movie
+Scene tag (↓) ────────────► the highlights starting in it, the apexes in it
+Highlight tag (↓) ────────► the apexes in every highlight holding them
+```
+
+- **Direct, not transitive.** Each source reaches its clips by time, never through another clip, so an inherited tag goes no further. A scene tag reaches a scene-crossing highlight (it starts in the scene) but not the apexes of that highlight lying in the next scene.
+- **Never rolls back up.** Roll-up and `ClipTagSync` read own tags only, so an inherited tag doesn't become implicit above or `FromClips` on the movie.
+- **Only the movie's own tags pass down.** A clip-only `MovieTag` row can't, and clearing `IsExplicit` (removing it from the movie, or metadata dropping it) clears the toggle too.
+- **Opting out.** A saved clip can exclude an inherited tag (`SceneTagExclusion` / `HighlightTagExclusion` / `ApexTagExclusion`): × on the inherited chip in its form, ↺ to inherit it again. It applies to that clip only and to every source. An exclusion nothing would pass down stays dormant and applies again if the tag is passed down later.
+- **Own beats inherited.** A clip that also holds the tag itself shows its own chip, marked redundant.
+- **Shown as inherited, never as the clip's own.** Rows, forms and wall cards draw inherited tags as muted, dotted **↳** chips (`InheritedTagChips`, `scene-wall-tag-inherited`) whose tooltip names the sources ("Inherited from scene 2, not added on this clip"); an own tag that passes down shows a ↓ after its name. A tag both inherited and rolled up shows once, as inherited, and an own tag the clip also inherits is marked redundant ("Also inherited from …").
+- **Labels name own tags only.** An untitled apex's or highlight's label (cards, Movie Detail, the clip player and wall playlists) is built from its own tags; inherited ones show as chips and count in the filters.
+
+`ClipTagInheritance` is the definition, computed per read for the editor (`ClipTree`). For the wall's filters the result is also stored (`SceneInheritedTag` / `HighlightInheritedTag` / `ApexInheritedTag`, excluded ones left out), kept by `ClipActorSync` through the same `Movie.ClipActorsStale` flag as the effective actors: `ClipActorStaleInterceptor` marks the movie when a link that passes down is added, removed or toggled, an exclusion changes, or a clip moves; the `ExecuteDelete` paths (`RemoveSceneTagAsync`, `RemoveTagFromMovieAndClipsAsync`) call `ClipActorStale.MarkAsync`. Tag merges OR the toggle into the surviving link and move exclusions; a replacement rule that repoints a scene or movie tag ("Apply Rules to Library", metadata ingestion) hands the toggle to the rule's target.
 
 ## Actors flow down
 
@@ -123,9 +143,9 @@ The Scenes wall and Actor Detail's clip sections use the same rules, in SQL (`Cl
 
 | View | Tag filter and options | Actor and actress-attribute filters, options, card actors |
 |---|---|---|
-| Scenes | own + rolled up from highlights and apexes | own |
-| Highlights | own + rolled up from its apexes | effective (own, else inherited) |
-| Apexes | own (the **Apex tag** filter) | effective (own, else inherited) |
+| Scenes | own + inherited + rolled up from highlights and apexes | own |
+| Highlights | own + inherited + rolled up from its apexes | effective (own, else inherited) |
+| Apexes | own + inherited (the **Apex tag** filter) | effective (own, else inherited) |
 
 `ClipRollupQueries` mirrors `ClipRollup` in SQL and reads the stored effective actors for `ClipActors`; `ClipRollupQueriesTests` checks both against the same cases as the pure helpers (`ClipCases`), running `ClipActorSync` first. Each containment rule is one indexed lookup (the latest scene starting at or before a point, the earliest highlight holding an apex) rather than a pairwise `NOT EXISTS`, and the filters use non-correlated `IN (…)`. The actress-attribute options read one appearance per cast link behind the stored rows, since age and cup size depend only on the movie.
 
@@ -178,6 +198,7 @@ A scene or highlight card's diamond badge (`ApexCount`) counts the movie's apexe
 | Highlight CRUD | `Services/Scenes/MovieHighlightService.cs`, `HighlightRanges.cs` | `MovieHighlightServiceTests`, `HighlightRangesTests` |
 | Apex CRUD, time helpers | `Services/Scenes/MovieApexService.cs`, `ApexRanges.cs` | `MovieApexServiceTests`, `ApexRangesTests` |
 | Tags up (computed) | `Services/Scenes/ClipRollup.cs` | `ClipRollupTests` (over `ClipCases`) |
+| Tags down (opt-in; computed, stored for the wall) | `Services/Scenes/ClipTagInheritance.cs`, `ClipTagInheritanceService.cs`; stored by `ClipActorSync`; `Components/Shared/InheritedTagChips.razor` | `ClipTagInheritanceTests`, `ClipTagInheritanceStorageTests`, `InheritedTagChipsTests` |
 | Actors down (computed) | `Services/Scenes/ClipActors.cs`; loading per movie in `ClipAssignments.LoadEffectiveActorsAsync` | `ClipActorsTests` (over `ClipCases`) |
 | Movie tag flags | `Models/Movies/MovieTag.cs`, `Services/Scenes/ClipTagSync.cs`, `Services/Tags/{TagService,TagNormalization}.cs` | `ClipTagSyncTests`, `MovieTagFlagsTests`, `ClipTagMaintenanceTests` |
 | Editor tree | `Services/Scenes/ClipTree.cs`; `Components/Shared/ClipEditor.razor`, `ClipHighlightRow`, `ClipHighlightForm`, `ClipApexRow`, `ClipApexForm`, `ClipActorChips`, `ImplicitChips`, `RedundantMark` | `ClipTreeTests`, `ClipEditor{Scene,Highlight,Apex,Tree}Tests`, `ImplicitChipsTests`; E2E `ClipEditorFlowTests` |

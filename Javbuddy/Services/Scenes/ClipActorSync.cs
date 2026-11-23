@@ -5,8 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Scenes;
 
-/// <summary>Keeps the stored effective actors (SceneEffectiveActor, HighlightEffectiveActor, ApexEffectiveActor) and
-/// effective actor tags (SceneEffectiveActorTag and its siblings) equal to what ClipActors and ClipActorTags compute, one movie at a time, for movies flagged
+/// <summary>Keeps the stored effective actors (SceneEffectiveActor, HighlightEffectiveActor, ApexEffectiveActor),
+/// effective actor tags (SceneEffectiveActorTag and its siblings) and inherited tags (SceneInheritedTag and its
+/// siblings) equal to what ClipActors, ClipActorTags and ClipTagInheritance compute, one movie at a time, for movies flagged
 /// Movie.ClipActorsStale. ClipActors stays the only definition of inheritance; the Scenes wall filters on the
 /// stored rows. ClipActorRefreshWorker runs RefreshStaleAsync in the app; tests call it directly.</summary>
 public static class ClipActorSync
@@ -42,6 +43,13 @@ public static class ClipActorSync
         Apply(db, await db.ApexEffectiveActorTags.Where(r => r.MovieId == movieId).ToListAsync(ct), Triples(tags.Apexes),
             r => (r.ApexId, r.ActorId, r.TagId), _ => false, (_, _) => { },
             (owner, actor, tag, _) => new ApexEffectiveActorTag { ApexId = owner, MovieId = movieId, ActorId = actor, TagId = tag });
+        var inherited = await ClipAssignments.LoadInheritedTagsAsync(db, movieId, ct);
+        Apply(db, await db.SceneInheritedTags.Where(r => r.MovieId == movieId).ToListAsync(ct), Inherited(inherited.Scenes),
+            r => (r.SceneId, r.TagId), (owner, tag) => new SceneInheritedTag { SceneId = owner, MovieId = movieId, TagId = tag });
+        Apply(db, await db.HighlightInheritedTags.Where(r => r.MovieId == movieId).ToListAsync(ct), Inherited(inherited.Highlights),
+            r => (r.HighlightId, r.TagId), (owner, tag) => new HighlightInheritedTag { HighlightId = owner, MovieId = movieId, TagId = tag });
+        Apply(db, await db.ApexInheritedTags.Where(r => r.MovieId == movieId).ToListAsync(ct), Inherited(inherited.Apexes),
+            r => (r.ApexId, r.TagId), (owner, tag) => new ApexInheritedTag { ApexId = owner, MovieId = movieId, TagId = tag });
         await db.SaveChangesAsync(ct);
 
         // Actor tags no longer reach the movie as plain tags; drop a link an earlier version left. After the commit,
@@ -103,6 +111,10 @@ public static class ClipActorSync
 
     private static HashSet<(int Owner, int Actor)> Pairs(IReadOnlyDictionary<int, EffectiveActors> byOwner) =>
         byOwner.SelectMany(owner => owner.Value.Actors.Select(a => (owner.Key, a.ActorId))).ToHashSet();
+
+    // The tags each clip inherits and hasn't opted out of.
+    private static HashSet<(int Owner, int Tag)> Inherited(IReadOnlyDictionary<int, IReadOnlyList<InheritedTag>> byOwner) =>
+        byOwner.SelectMany(owner => owner.Value.Where(t => !t.IsExcluded).Select(t => (owner.Key, t.Tag.TagId))).ToHashSet();
 
     private static Dictionary<(int Owner, int Actor, int Tag), bool> Triples(IReadOnlyDictionary<int, IReadOnlyList<EffectiveActorTag>> byOwner) =>
         byOwner.SelectMany(owner => owner.Value.Select(t => (Key: (owner.Key, t.ActorId, t.TagId), t.IsRolledUp))).ToDictionary(t => t.Key, t => t.IsRolledUp);

@@ -189,6 +189,18 @@
     cursor: help;
 }
 
+/* A tag passed down from the movie, its scene or a highlight (ClipTagInheritance): muted with a ↳, not
+   added on this clip itself; dotted to tell it from a rolled-up tag. */
+.scene-wall-tag-inherited {
+    border-style: dotted;
+    color: #868e96;
+    cursor: help;
+}
+
+.scene-wall-tag-arrow {
+    margin-right: 0.15rem;
+}
+
 :root[data-theme="dark"] .scene-wall-card {
     --scene-wall-card-bg: var(--jb-dark-surface);
     color: var(--jb-dark-text);
@@ -200,6 +212,10 @@
 }
 
 :root[data-theme="dark"] .scene-wall-tag-implicit {
+    color: #8a91a5;
+}
+
+:root[data-theme="dark"] .scene-wall-tag-inherited {
     color: #8a91a5;
 }
 

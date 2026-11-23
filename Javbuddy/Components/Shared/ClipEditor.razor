@@ -6,6 +6,7 @@
 @inject IMovieApexService ApexService
 @inject IMovieClipService ClipService
 @inject IActorTagService ActorTagService
+@inject IClipTagInheritanceService TagInheritance
 @inject ISceneChapterImportService ChapterImportService
 @inject ISceneMediaService SceneMedia
 @inject IHighlightMediaService HighlightMedia
@@ -142,7 +143,10 @@
         </div>
     }
 
-    @BeforeTools
+    @* The movie tags editor here reaches the editor through this, to refresh what its clips inherit. *@
+    <CascadingValue Value="this" IsFixed="true">
+        @BeforeTools
+    </CascadingValue>
 
     @* Last row of the panel: the two actions side by side; what they expand into
        (progress, suggestions, confirmation, message) wraps onto full-width lines below. *@
@@ -220,6 +224,8 @@
     private IReadOnlyList<ActorTagListItem> actorTagLibrary = [];
     private ClipActorTagsResult actorTags = new(new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>(), new Dictionary<int, IReadOnlyList<EffectiveActorTag>>());
     private ClipTreeModel tree = new([], [], []);
+    // The movie's own tags that pass down to every clip (ClipTagInheritance).
+    private IReadOnlyList<SceneTagItem> movieTags = [];
     private FileChapters? fileChapters;
     private bool chaptersProbed;
     private bool loaded;
@@ -311,7 +317,8 @@
         cast = await SceneService.GetCastOptionsAsync(MovieId);
         actorTags = await ActorTagService.GetEffectiveAsync(MovieId);
         actorTagLibrary = await ActorTagService.GetActorTagsAsync();
-        tree = ClipTree.Build(cast, scenes, highlights, apexes);
+        movieTags = await TagInheritance.GetPropagatingMovieTagsAsync(MovieId);
+        tree = ClipTree.Build(cast, scenes, highlights, apexes, movieTags);
         loaded = true;
         await OnScenesChanged.InvokeAsync(scenes);
         await OnHighlightsChanged.InvokeAsync(highlights);
@@ -384,7 +391,7 @@
                 if (disposed || movie != MovieId || reloads != loadSequence) continue;
 
                 (scenes, highlights, apexes) = clips;
-                tree = ClipTree.Build(cast, scenes, highlights, apexes);
+                tree = ClipTree.Build(cast, scenes, highlights, apexes, movieTags);
                 await OnScenesChanged.InvokeAsync(scenes);
                 await OnHighlightsChanged.InvokeAsync(highlights);
                 await OnApexesChanged.InvokeAsync(apexes);
@@ -471,8 +478,9 @@
                 <ImplicitChips Items="@ImplicitChip.ForActors(node.Actors)" ActorTags="@(actorTags.Scenes.GetValueOrDefault(scene.Id) ?? [])" Library="actorTagLibrary" />
                 @foreach (var tag in scene.Tags)
                 {
-                    <span class="scene-editor-meta-tag">@ImplicitChip.TagLabel(tag)</span>
+                    <span class="scene-editor-meta-tag">@ImplicitChip.TagLabel(tag)@PassesDownMark(tag)</span>
                 }
+                <InheritedTagChips Items="node.InheritedTags" OwnTagIds="@scene.Tags.Select(t => t.TagId).ToHashSet()" />
                 <ImplicitChips Items="@ImplicitChip.ForTags(node.ImplicitTags)" />
             </span>
         </button>
@@ -545,6 +553,8 @@
     private RenderFragment HighlightFormFragment(HighlightFormModel model) => __builder =>
     {
         <ClipHighlightForm Model="model" Cast="cast" Scenes="scenes" Busy="busy" RolledUpTags="RolledUpTags(model.HighlightId)"
+                           InheritedTags="@(HighlightNodeOf(model.HighlightId)?.InheritedTags ?? [])"
+                           OnToggleExcluded="@(model.HighlightId is { } editedId ? EventCallback.Factory.Create<InheritedTag>(this, tag => ToggleExcludedAsync(ClipKind.Highlight, editedId, tag)) : default)"
                            Position="@(model.HighlightId is { } id ? highlights.FirstOrDefault(h => h.Id == id)?.Position ?? 1 : highlights.Count + 1)"
                            OnSave="SaveHighlightAsync" OnCancel="() => { highlightForm = null; error = null; }"
                            OnDownload="@(model.HighlightId is { } downloadId ? ExportCallback(ClipKind.Highlight, downloadId) : default)"
@@ -579,15 +589,27 @@
     // Every tag an edited highlight's apexes roll up to it, its own included: the form
     // grays the ones it doesn't hold and marks the ones it does as redundant.
     private IReadOnlyList<ImplicitTag> RolledUpTags(int? highlightId) =>
-        highlightId is { } id && tree.Scenes.SelectMany(s => s.Highlights).Concat(tree.OutsideHighlights).FirstOrDefault(h => h.Highlight.Id == id) is { } node
+        HighlightNodeOf(highlightId) is { } node
             ? [.. node.ImplicitTags.Concat(node.RedundantTags)
                 .OrderBy(t => t.Tag.ParentName ?? t.Tag.Name, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(t => t.Tag.Name, StringComparer.OrdinalIgnoreCase)]
             : [];
 
+    private HighlightNode? HighlightNodeOf(int? highlightId) =>
+        highlightId is { } id ? tree.Scenes.SelectMany(s => s.Highlights).Concat(tree.OutsideHighlights).FirstOrDefault(h => h.Highlight.Id == id) : null;
+
+    private ApexNode? ApexNodeOf(int? apexId) =>
+        apexId is { } id
+            ? tree.Scenes.SelectMany(s => s.Apexes.Concat(s.Highlights.SelectMany(h => h.Apexes)))
+                .Concat(tree.OutsideApexes).Concat(tree.OutsideHighlights.SelectMany(h => h.Apexes))
+                .FirstOrDefault(a => a.Apex.Id == id)
+            : null;
+
     private RenderFragment ApexFormFragment(ApexFormModel model) => __builder =>
     {
         <ClipApexForm Model="model" Cast="cast" Scenes="scenes" Highlights="highlights" Apexes="apexes" DefaultWindow="defaultApexWindow" Busy="busy"
+                      InheritedTags="@(ApexNodeOf(model.ApexId)?.InheritedTags ?? [])"
+                      OnToggleExcluded="@(model.ApexId is { } editedApexId ? EventCallback.Factory.Create<InheritedTag>(this, tag => ToggleExcludedAsync(ClipKind.Apex, editedApexId, tag)) : default)"
                       OnSave="SaveApexAsync" OnCancel="() => { apexForm = null; error = null; }"
                       OnDownload="@(model.ApexId is { } downloadId ? ExportCallback(ClipKind.Apex, downloadId) : default)"
                       Downloading="@(model.ApexId is { } d && exporting == (ClipKind.Apex, d))" DownloadDisabled="@(exporting is not null)"
@@ -715,6 +737,27 @@
 
     private Task RemoveSceneTagAsync(int sceneId, int tagId) =>
         RunSceneAsync(() => SceneService.RemoveSceneTagAsync(sceneId, tagId), movieTagsMayChange: true);
+
+    // Applied at once, like the scene's tags; the stored inherited rows follow in the background.
+    private Task ToggleSceneTagPropagatesAsync(int sceneId, SceneTagItem tag) =>
+        RunSceneAsync(() => TagInheritance.SetSceneTagPropagatesDownAsync(sceneId, tag.TagId, !tag.PropagatesDown));
+
+    /// <summary>Opts a saved clip out of an inherited tag, or back in. Applied at once, like actor tags, even
+    /// with the clip's form open.</summary>
+    private Task ToggleExcludedAsync(ClipKind kind, int clipId, InheritedTag tag) =>
+        RunAsync(async () =>
+        {
+            var result = await TagInheritance.SetExcludedAsync(kind, clipId, tag.Tag.TagId, !tag.IsExcluded);
+            return (result.Success, result.ErrorMessage, false);
+        });
+
+    /// <summary>Re-reads what the clips inherit after the movie's own tags changed (MovieTagsEditor).</summary>
+    public Task MovieTagsChangedAsync() => RefreshAsync();
+
+    // After an own tag in a row: a ↓ when it passes down to the clips inside.
+    private static RenderFragment? PassesDownMark(SceneTagItem tag) => tag.PropagatesDown
+        ? @<span class="clip-editor-passes-down" title="Passed down to the clips inside"><span aria-hidden="true">↓</span><span class="visually-hidden">, passed down</span></span>
+        : null;
 
     private async Task StartAddSceneAsync()
     {
@@ -850,13 +893,14 @@
         }
 
         var tagIds = form.Tags.Select(t => t.TagId).ToList();
+        var propagatingTagIds = form.Tags.Where(t => t.PropagatesDown).Select(t => t.TagId).ToList();
         // None of its own: it inherits; an update clears to that with an empty list.
         var actorIds = form.ActorIds?.ToList() ?? [];
         await RunAsync(async () =>
         {
             var result = form.HighlightId is { } highlightId
-                ? await HighlightService.UpdateHighlightAsync(highlightId, start, end, form.Title, tagIds, actorIds)
-                : await HighlightService.AddHighlightAsync(MovieId, start, end, form.Title, tagIds, actorIds);
+                ? await HighlightService.UpdateHighlightAsync(highlightId, start, end, form.Title, tagIds, actorIds, propagatingTagIds)
+                : await HighlightService.AddHighlightAsync(MovieId, start, end, form.Title, tagIds, actorIds, propagatingTagIds);
             return (result.Success, result.ErrorMessage, result.MovieTagsChanged);
         }, closeForm: () => highlightForm = null);
     }
@@ -1234,6 +1278,8 @@
                 }
                 <ClipTagChips Tags="editing.Tags" ClassPrefix="scene-editor" ChipClass="scene-editor-chip-on scene-editor-tag-chip" Busy="busy"
                               RedundantTags="redundant" RolledUp="rolledUp"
+                              PropagateTitle="to the highlights and apexes in this scene" OnTogglePropagate="tag => ToggleSceneTagPropagatesAsync(editing.Id, tag)"
+                              Inherited="@(editingNode?.InheritedTags ?? [])" OnToggleExcluded="tag => ToggleExcludedAsync(ClipKind.Scene, editing.Id, tag)"
                               OnRemove="tag => RemoveSceneTagAsync(editing.Id, tag.TagId)" OnAdd="tagId => AddSceneTagAsync(editing.Id, tagId)" />
             </div>
             @ActorTagsFragment(ActorTagLevel.Scene, editing.Id, editing.EffectiveActors, actorTags.Scenes.GetValueOrDefault(editing.Id) ?? [])

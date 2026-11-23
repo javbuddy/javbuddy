@@ -25,5 +25,16 @@ public sealed record ImplicitChip(string Label, string Tooltip)
     public static string RedundantTagTooltip(IEnumerable<string> sources) =>
         $"Also from {string.Join(", ", sources)}. Remove it and it stays, grayed, as implied.";
 
+    /// <summary>An inherited tag's tooltip when where it comes from isn't known (the wall's cards).</summary>
+    public const string InheritedTagTooltip = "Inherited: passed down from the movie, its scene or a highlight, not added on this clip";
+
+    /// <summary>An inherited tag's tooltip: where it comes from.</summary>
+    public static string InheritedFromTooltip(IEnumerable<string> sources) =>
+        $"Inherited from {string.Join(", ", sources)}, not added on this clip";
+
+    /// <summary>An own tag's tooltip when the clip also inherits it: removed, it stays as an inherited tag.</summary>
+    public static string RedundantInheritedTooltip(IEnumerable<string> sources) =>
+        $"Also inherited from {string.Join(", ", sources)}. Remove it and it stays, as an inherited ↳ tag.";
+
     public static string TagLabel(SceneTagItem tag) => Javbuddy.Services.Tags.TagLabel.Format(tag.ParentName, tag.Name);
 }

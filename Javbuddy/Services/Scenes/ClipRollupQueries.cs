@@ -32,8 +32,8 @@ public sealed class ClipPoint
 }
 
 /// <summary>EF-translatable mirror of <see cref="ClipRollup"/> (tags up) for the Scenes wall's filters, options and
-/// cards, plus the stored effective actors <see cref="ClipActors"/> computes (kept by
-/// ClipActorSync). Each containment rule is one pair query below, reused by every roll-up and by the wall's apex
+/// cards, plus the stored effective actors <see cref="ClipActors"/> computes and the stored inherited tags
+/// <see cref="ClipTagInheritance"/> computes (both kept by ClipActorSync). Each containment rule is one pair query below, reused by every roll-up and by the wall's apex
 /// filters, and ClipRollupQueriesTests checks tags and actors against the same cases as the pure helpers. The results
 /// are composed into correlated subqueries (<c>…Any(r =&gt; r.OwnerId == s.Id)</c>), so nothing here runs on its own.</summary>
 public static class ClipRollupQueries
@@ -89,9 +89,10 @@ public static class ClipRollupQueries
 
     // --- Tags up ---
 
-    /// <summary>Each scene's own tags, plus those of the highlights overlapping it and the apexes in it.</summary>
+    /// <summary>Each scene's own tags, the ones it inherits, plus those of the highlights overlapping it and the apexes in it.</summary>
     public static IQueryable<OwnerTag> SceneTags(AppDbContext db) =>
         db.SceneTags.Select(st => new OwnerTag { OwnerId = st.SceneId, TagId = st.TagId })
+            .Concat(SceneInheritedTags(db))
             .Concat(from p in HighlightOverlappedScenes(db)
                     from ht in db.HighlightTags
                     where ht.HighlightId == p.OwnerId
@@ -101,13 +102,34 @@ public static class ClipRollupQueries
                     where at.ApexId == p.OwnerId
                     select new OwnerTag { OwnerId = p.OtherId, TagId = at.TagId });
 
-    /// <summary>Each highlight's own tags, plus those of the apexes in it.</summary>
+    /// <summary>Each highlight's own tags, the ones it inherits, plus those of the apexes in it.</summary>
     public static IQueryable<OwnerTag> HighlightTags(AppDbContext db) =>
         db.HighlightTags.Select(ht => new OwnerTag { OwnerId = ht.HighlightId, TagId = ht.TagId })
+            .Concat(HighlightInheritedTags(db))
             .Concat(from p in ApexHighlights(db)
                     from at in db.ApexTags
                     where at.ApexId == p.OwnerId
                     select new OwnerTag { OwnerId = p.OtherId, TagId = at.TagId });
+
+    /// <summary>Each apex's own tags plus the ones it inherits.</summary>
+    public static IQueryable<OwnerTag> ApexTags(AppDbContext db) =>
+        db.ApexTags.Select(at => new OwnerTag { OwnerId = at.ApexId, TagId = at.TagId })
+            .Concat(ApexInheritedTags(db));
+
+    // --- Tags down: stored ---
+    // Inherited only, never rolled up (ClipTagInheritance). Rolling up counts only own tags, so these go no further.
+
+    /// <summary>The tags each scene inherits from the movie, as ClipActorSync stores them.</summary>
+    public static IQueryable<OwnerTag> SceneInheritedTags(AppDbContext db) =>
+        db.SceneInheritedTags.Select(r => new OwnerTag { OwnerId = r.SceneId, TagId = r.TagId });
+
+    /// <summary>The tags each highlight inherits from the movie and the scene it starts in.</summary>
+    public static IQueryable<OwnerTag> HighlightInheritedTags(AppDbContext db) =>
+        db.HighlightInheritedTags.Select(r => new OwnerTag { OwnerId = r.HighlightId, TagId = r.TagId });
+
+    /// <summary>The tags each apex inherits from the movie, its scene and the highlights holding it.</summary>
+    public static IQueryable<OwnerTag> ApexInheritedTags(AppDbContext db) =>
+        db.ApexInheritedTags.Select(r => new OwnerTag { OwnerId = r.ApexId, TagId = r.TagId });
 
     // --- Actors down: stored ---
 

@@ -87,6 +87,8 @@ public sealed partial class SceneWallQueryService
             .ToListAsync(ct);
         var ids = rows.Select(r => r.Id).ToList();
         var actors = await ActorNamesAsync(db, ClipRollupQueries.ApexActors(db).Where(r => ids.Contains(r.OwnerId)), ct);
+        // Own tags only, like ApexItem.DisplayLabel (the card's and Movie Detail's title): a label names what was put
+        // on the apex; inherited tags show as chips and count in the filters.
         var tags = (await db.ApexTags.AsNoTracking()
                 .Where(at => ids.Contains(at.ApexId))
                 .Select(at => new { Owner = at.ApexId, at.Tag.Name })

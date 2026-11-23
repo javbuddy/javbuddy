@@ -46,6 +46,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SceneEffectiveActor> SceneEffectiveActors => Set<SceneEffectiveActor>();
     public DbSet<HighlightEffectiveActor> HighlightEffectiveActors => Set<HighlightEffectiveActor>();
     public DbSet<ApexEffectiveActor> ApexEffectiveActors => Set<ApexEffectiveActor>();
+    public DbSet<SceneTagExclusion> SceneTagExclusions => Set<SceneTagExclusion>();
+    public DbSet<HighlightTagExclusion> HighlightTagExclusions => Set<HighlightTagExclusion>();
+    public DbSet<ApexTagExclusion> ApexTagExclusions => Set<ApexTagExclusion>();
+    public DbSet<SceneInheritedTag> SceneInheritedTags => Set<SceneInheritedTag>();
+    public DbSet<HighlightInheritedTag> HighlightInheritedTags => Set<HighlightInheritedTag>();
+    public DbSet<ApexInheritedTag> ApexInheritedTags => Set<ApexInheritedTag>();
     public DbSet<MovieActorTag> MovieActorTags => Set<MovieActorTag>();
     public DbSet<SceneActorTag> SceneActorTags => Set<SceneActorTag>();
     public DbSet<HighlightActorTag> HighlightActorTags => Set<HighlightActorTag>();
@@ -436,6 +442,98 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasOne(row => row.MovieActor)
                 .WithMany()
                 .HasForeignKey(row => new { row.MovieId, row.ActorId })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Tags passed down (ClipTagInheritance): a clip's opt-outs, and the stored inherited tags ClipActorSync keeps
+        // for the wall's filters. MovieId indexes serve the per-movie refresh, (TagId, owner) the filters.
+        modelBuilder.Entity<SceneTagExclusion>(entity =>
+        {
+            entity.HasKey(row => new { row.SceneId, row.TagId });
+            entity.HasIndex(row => new { row.TagId, row.SceneId });
+            entity.HasIndex(row => row.MovieId);
+            entity.HasOne(row => row.Scene)
+                .WithMany()
+                .HasForeignKey(row => row.SceneId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(row => row.Tag)
+                .WithMany()
+                .HasForeignKey(row => row.TagId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<HighlightTagExclusion>(entity =>
+        {
+            entity.HasKey(row => new { row.HighlightId, row.TagId });
+            entity.HasIndex(row => new { row.TagId, row.HighlightId });
+            entity.HasIndex(row => row.MovieId);
+            entity.HasOne(row => row.Highlight)
+                .WithMany()
+                .HasForeignKey(row => row.HighlightId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(row => row.Tag)
+                .WithMany()
+                .HasForeignKey(row => row.TagId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ApexTagExclusion>(entity =>
+        {
+            entity.HasKey(row => new { row.ApexId, row.TagId });
+            entity.HasIndex(row => new { row.TagId, row.ApexId });
+            entity.HasIndex(row => row.MovieId);
+            entity.HasOne(row => row.Apex)
+                .WithMany()
+                .HasForeignKey(row => row.ApexId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(row => row.Tag)
+                .WithMany()
+                .HasForeignKey(row => row.TagId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SceneInheritedTag>(entity =>
+        {
+            entity.HasKey(row => new { row.SceneId, row.TagId });
+            entity.HasIndex(row => new { row.TagId, row.SceneId });
+            entity.HasIndex(row => row.MovieId);
+            entity.HasOne(row => row.Scene)
+                .WithMany()
+                .HasForeignKey(row => row.SceneId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(row => row.Tag)
+                .WithMany()
+                .HasForeignKey(row => row.TagId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<HighlightInheritedTag>(entity =>
+        {
+            entity.HasKey(row => new { row.HighlightId, row.TagId });
+            entity.HasIndex(row => new { row.TagId, row.HighlightId });
+            entity.HasIndex(row => row.MovieId);
+            entity.HasOne(row => row.Highlight)
+                .WithMany()
+                .HasForeignKey(row => row.HighlightId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(row => row.Tag)
+                .WithMany()
+                .HasForeignKey(row => row.TagId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ApexInheritedTag>(entity =>
+        {
+            entity.HasKey(row => new { row.ApexId, row.TagId });
+            entity.HasIndex(row => new { row.TagId, row.ApexId });
+            entity.HasIndex(row => row.MovieId);
+            entity.HasOne(row => row.Apex)
+                .WithMany()
+                .HasForeignKey(row => row.ApexId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(row => row.Tag)
+                .WithMany()
+                .HasForeignKey(row => row.TagId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261122174230_AddMovieFileContentType";
+    public override string LastMigrationId => "20261123163437_AddTagPropagation";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -387,6 +387,26 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("ApexEffectiveActorTags");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.ApexInheritedTag", b =>
+            {
+                b.Property<int>("ApexId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("ApexId", "TagId");
+
+                b.HasIndex("MovieId");
+
+                b.HasIndex("TagId", "ApexId");
+
+                b.ToTable("ApexInheritedTags");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.ApexPlaybackSettings", b =>
             {
                 b.Property<int>("Id")
@@ -417,6 +437,26 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.HasIndex("TagId");
 
                 b.ToTable("ApexTags");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.ApexTagExclusion", b =>
+            {
+                b.Property<int>("ApexId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("ApexId", "TagId");
+
+                b.HasIndex("MovieId");
+
+                b.HasIndex("TagId", "ApexId");
+
+                b.ToTable("ApexTagExclusions");
             });
 
         modelBuilder.Entity("Javbuddy.Models.BackupSettings", b =>
@@ -798,6 +838,26 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("HighlightEffectiveActorTags");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.HighlightInheritedTag", b =>
+            {
+                b.Property<int>("HighlightId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("HighlightId", "TagId");
+
+                b.HasIndex("MovieId");
+
+                b.HasIndex("TagId", "HighlightId");
+
+                b.ToTable("HighlightInheritedTags");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.HighlightTag", b =>
             {
                 b.Property<int>("HighlightId")
@@ -806,11 +866,34 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<int>("TagId")
                     .HasColumnType("INTEGER");
 
+                b.Property<bool>("PropagatesDown")
+                    .HasColumnType("INTEGER");
+
                 b.HasKey("HighlightId", "TagId");
 
                 b.HasIndex("TagId");
 
                 b.ToTable("HighlightTags");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.HighlightTagExclusion", b =>
+            {
+                b.Property<int>("HighlightId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("HighlightId", "TagId");
+
+                b.HasIndex("MovieId");
+
+                b.HasIndex("TagId", "HighlightId");
+
+                b.ToTable("HighlightTagExclusions");
             });
 
         modelBuilder.Entity("Javbuddy.Models.IgnoredTag", b =>
@@ -1654,6 +1737,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<bool>("IsExplicit")
                     .HasColumnType("INTEGER");
 
+                b.Property<bool>("PropagatesDown")
+                    .HasColumnType("INTEGER");
+
                 b.HasKey("MovieId", "TagId");
 
                 b.HasIndex("TagId");
@@ -1945,6 +2031,26 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.ToTable("SceneEffectiveActorTags");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.SceneInheritedTag", b =>
+            {
+                b.Property<int>("SceneId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("SceneId", "TagId");
+
+                b.HasIndex("MovieId");
+
+                b.HasIndex("TagId", "SceneId");
+
+                b.ToTable("SceneInheritedTags");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.SceneSuggestion", b =>
             {
                 b.Property<int>("Id")
@@ -1986,11 +2092,34 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<int>("TagId")
                     .HasColumnType("INTEGER");
 
+                b.Property<bool>("PropagatesDown")
+                    .HasColumnType("INTEGER");
+
                 b.HasKey("SceneId", "TagId");
 
                 b.HasIndex("TagId");
 
                 b.ToTable("SceneTags");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.SceneTagExclusion", b =>
+            {
+                b.Property<int>("SceneId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("TagId")
+                    .HasColumnType("INTEGER");
+
+                b.Property<int>("MovieId")
+                    .HasColumnType("INTEGER");
+
+                b.HasKey("SceneId", "TagId");
+
+                b.HasIndex("MovieId");
+
+                b.HasIndex("TagId", "SceneId");
+
+                b.ToTable("SceneTagExclusions");
             });
 
         modelBuilder.Entity("Javbuddy.Models.ScheduledTaskRun", b =>
@@ -2436,10 +2565,48 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Tag");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.ApexInheritedTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.MovieApex", "Apex")
+                    .WithMany()
+                    .HasForeignKey("ApexId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Apex");
+
+                b.Navigation("Tag");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.ApexTag", b =>
             {
                 b.HasOne("Javbuddy.Models.MovieApex", "Apex")
                     .WithMany("ApexTags")
+                    .HasForeignKey("ApexId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Apex");
+
+                b.Navigation("Tag");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.ApexTagExclusion", b =>
+            {
+                b.HasOne("Javbuddy.Models.MovieApex", "Apex")
+                    .WithMany()
                     .HasForeignKey("ApexId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();
@@ -2547,10 +2714,48 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Tag");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.HighlightInheritedTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.MovieHighlight", "Highlight")
+                    .WithMany()
+                    .HasForeignKey("HighlightId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Highlight");
+
+                b.Navigation("Tag");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.HighlightTag", b =>
             {
                 b.HasOne("Javbuddy.Models.MovieHighlight", "Highlight")
                     .WithMany("HighlightTags")
+                    .HasForeignKey("HighlightId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Highlight");
+
+                b.Navigation("Tag");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.HighlightTagExclusion", b =>
+            {
+                b.HasOne("Javbuddy.Models.MovieHighlight", "Highlight")
+                    .WithMany()
                     .HasForeignKey("HighlightId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();
@@ -2770,6 +2975,25 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Navigation("Tag");
             });
 
+        modelBuilder.Entity("Javbuddy.Models.SceneInheritedTag", b =>
+            {
+                b.HasOne("Javbuddy.Models.Scene", "Scene")
+                    .WithMany()
+                    .HasForeignKey("SceneId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Scene");
+
+                b.Navigation("Tag");
+            });
+
         modelBuilder.Entity("Javbuddy.Models.SceneSuggestion", b =>
             {
                 b.HasOne("Javbuddy.Models.Movie", "Movie")
@@ -2785,6 +3009,25 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             {
                 b.HasOne("Javbuddy.Models.Scene", "Scene")
                     .WithMany("SceneTags")
+                    .HasForeignKey("SceneId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.HasOne("Javbuddy.Models.Tag", "Tag")
+                    .WithMany()
+                    .HasForeignKey("TagId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+
+                b.Navigation("Scene");
+
+                b.Navigation("Tag");
+            });
+
+        modelBuilder.Entity("Javbuddy.Models.SceneTagExclusion", b =>
+            {
+                b.HasOne("Javbuddy.Models.Scene", "Scene")
+                    .WithMany()
                     .HasForeignKey("SceneId")
                     .OnDelete(DeleteBehavior.Cascade)
                     .IsRequired();

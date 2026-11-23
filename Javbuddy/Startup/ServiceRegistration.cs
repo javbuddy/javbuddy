@@ -123,6 +123,7 @@ public static class ServiceRegistration
         services.AddScoped<IMovieApexService, MovieApexService>();
         services.AddScoped<IMovieClipService, MovieClipService>();
         services.AddScoped<IClipTagSyncService, ClipTagSyncService>();
+        services.AddScoped<IClipTagInheritanceService, ClipTagInheritanceService>();
         services.AddScoped<IActorTagService, ActorTagService>();
         services.AddSingleton<ClipActorRefreshSignal>();
         services.AddSingleton<ClipActorStaleInterceptor>();

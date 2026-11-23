@@ -30,7 +30,7 @@
     </div>
     <div class="apex-editor-field clip-form-field">
         <span class="apex-editor-label clip-form-label">Tags</span>
-        <ClipTagChips FormTags="Model.Tags" ClassPrefix="apex-editor" Busy="Busy" OnChanged="Rerender">
+        <ClipTagChips FormTags="Model.Tags" ClassPrefix="apex-editor" Busy="Busy" OnChanged="Rerender" Inherited="InheritedTags" OnToggleExcluded="OnToggleExcluded">
             @if (Model.ApexId is null && PreviousTagSuggestions() is { Count: > 0 } suggestions)
             {
                 <div class="apex-editor-suggestions" aria-label="Tags from the previous apex">
@@ -64,6 +64,12 @@
 
     /// <summary>The default lead-in and tail, shown where the apex has none of its own.</summary>
     [Parameter] public ApexWindow DefaultWindow { get; set; } = ApexWindow.Default;
+
+    /// <summary>The tags passed down to the apex being edited (ClipTagInheritance); none for a new one.</summary>
+    [Parameter] public IReadOnlyList<InheritedTag> InheritedTags { get; set; } = [];
+
+    /// <summary>Opts the apex out of an inherited tag or back in, applied at once; unset for a new one.</summary>
+    [Parameter] public EventCallback<InheritedTag> OnToggleExcluded { get; set; }
 
     [Parameter] public bool Busy { get; set; }
 

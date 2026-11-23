@@ -1,0 +1,44 @@
+/* Inherited tags: muted like the implied chips (ImplicitChips), but dotted, upright and led by ↳ so they read as
+   "passed down from a parent", distinct both from the clip's own solid chips and from rolled-up (dashed) ones. */
+.inherited-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.3rem;
+}
+
+.inherited-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0 0.4rem;
+    font-size: 0.75rem;
+    color: var(--scene-editor-muted, var(--jb-dark-muted-cool));
+    background: transparent;
+    border: 1px dotted var(--scene-editor-border, rgba(255, 255, 255, 0.22));
+    border-radius: 999px;
+    cursor: help;
+}
+
+.inherited-chip-arrow {
+    opacity: 0.8;
+}
+
+.inherited-chip-excluded {
+    opacity: 0.6;
+}
+
+.inherited-chip-button {
+    appearance: none;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.inherited-chip-button:disabled {
+    cursor: default;
+    opacity: 0.5;
+}

@@ -4,24 +4,43 @@
    redundant, rolled-up ones grayed beside them), an optional slot for extras (the apex form's suggestions)
    and the add box. Either edits FormTags in place, for the highlight and apex forms (OnChanged then lets the
    form re-render what depends on them), or hands the change to OnAdd / OnRemove, for the scene form, which
-   saves each at once. ClassPrefix keeps each form's class names on the chips. *@
+   saves each at once. ClassPrefix keeps each form's class names on the chips. With PropagateTitle each own chip
+   gets a ↓ toggle, off unless turned on, for whether the tag passes down to the clips inside (flipped in FormTags in
+   place, else handed to OnTogglePropagate). Inherited shows the tags passed down to this clip (InheritedTagChips). *@
 @{
     var items = FormTags ?? Tags;
 }
-@if (items.Count > 0 || RolledUp.Count > 0)
+@if (items.Count > 0 || RolledUp.Count > 0 || Inherited.Count > 0)
 {
     <div class="clip-tag-chips @ClassPrefix-chips">
         @foreach (var tag in items)
         {
             <span class="clip-tag-chip @ClassPrefix-chip @ChipClass">
                 @ImplicitChip.TagLabel(tag)
-                @if (RedundantTags.FirstOrDefault(r => r.Tag.TagId == tag.TagId) is { } carried)
+                @if (PropagateTitle is not null)
                 {
-                    <RedundantMark Tooltip="@ImplicitChip.RedundantTagTooltip(carried.Sources)" />
+                    var label = ImplicitChip.TagLabel(tag);
+                    <button type="button" class="clip-tag-chip-propagate" disabled="@Busy" aria-pressed="@(tag.PropagatesDown ? "true" : "false")"
+                            aria-label="Pass @label down" title="@(tag.PropagatesDown ? $"Passed down: {PropagateTitle}. Click to stop." : $"Pass down: {PropagateTitle}")"
+                            @onclick="() => TogglePropagateAsync(tag)">↓</button>
+                }
+                @{
+                    // Inherited wins: removed, the tag stays as an inherited ↳ chip, which takes the place of a rolled-up one.
+                    var inheritedFrom = Inherited.Where(i => !i.IsExcluded && i.Tag.TagId == tag.TagId).SelectMany(i => i.Sources).ToList();
+                    var rolledUpFrom = RedundantTags.Where(r => r.Tag.TagId == tag.TagId).SelectMany(r => r.Sources).ToList();
+                }
+                @if (inheritedFrom.Count > 0)
+                {
+                    <RedundantMark Tooltip="@ImplicitChip.RedundantInheritedTooltip(inheritedFrom)" />
+                }
+                else if (rolledUpFrom.Count > 0)
+                {
+                    <RedundantMark Tooltip="@ImplicitChip.RedundantTagTooltip(rolledUpFrom)" />
                 }
                 <button type="button" class="clip-tag-chip-remove @ClassPrefix-chip-remove" disabled="@Busy" aria-label="Remove @tag.Name" @onclick="() => RemoveAsync(tag)">×</button>
             </span>
         }
+        <InheritedTagChips Items="Inherited" OwnTagIds="@items.Select(t => t.TagId).ToHashSet()" OnToggleExcluded="OnToggleExcluded" Busy="Busy" />
         <ImplicitChips Items="RolledUp" />
     </div>
 }
@@ -51,6 +70,18 @@
     /// <summary>What the clips below roll up to this one, grayed beside its own tags.</summary>
     [Parameter] public IReadOnlyList<ImplicitChip> RolledUp { get; set; } = [];
 
+    /// <summary>Where an own tag passes down to ("to the highlights and apexes in this scene"); null: no ↓ toggle.</summary>
+    [Parameter] public string? PropagateTitle { get; set; }
+
+    /// <summary>An own tag whose ↓ toggle was flipped, when <see cref="FormTags"/> is not set.</summary>
+    [Parameter] public EventCallback<SceneTagItem> OnTogglePropagate { get; set; }
+
+    /// <summary>The tags passed down to this clip, excluded ones included.</summary>
+    [Parameter] public IReadOnlyList<InheritedTag> Inherited { get; set; } = [];
+
+    /// <summary>Opts the clip out of an inherited tag or back in; without it the inherited chips are read-only.</summary>
+    [Parameter] public EventCallback<InheritedTag> OnToggleExcluded { get; set; }
+
     [Parameter, EditorRequired] public string ClassPrefix { get; set; } = string.Empty;
 
     /// <summary>Extra classes on each own-tag chip.</summary>
@@ -71,6 +102,19 @@
         if (FormTags.Any(t => t.TagId == tagId)) return;
         if (await TagService.GetByIdAsync(tagId) is not { } tag) return;
         FormTags.Add(new SceneTagItem(tag.Id, tag.Name, tag.ParentTag?.Name));
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task TogglePropagateAsync(SceneTagItem tag)
+    {
+        if (FormTags is null)
+        {
+            await OnTogglePropagate.InvokeAsync(tag);
+            return;
+        }
+        var index = FormTags.IndexOf(tag);
+        if (index < 0) return;
+        FormTags[index] = tag with { PropagatesDown = !tag.PropagatesDown };
         await OnChanged.InvokeAsync();
     }
 

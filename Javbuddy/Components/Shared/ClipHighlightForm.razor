@@ -33,7 +33,8 @@
         <div class="highlight-editor-field clip-form-field">
             <span class="highlight-editor-label clip-form-label">Tags</span>
             <ClipTagChips FormTags="Model.Tags" ClassPrefix="highlight-editor" Busy="Busy" OnChanged="Rerender"
-                          RedundantTags="RolledUpTags" RolledUp="RolledUpChips()" />
+                          RedundantTags="RolledUpTags" RolledUp="RolledUpChips()"
+                          PropagateTitle="to the apexes in this highlight" Inherited="InheritedTags" OnToggleExcluded="OnToggleExcluded" />
         </div>
         <div class="highlight-editor-form-actions clip-form-actions">
             <button type="submit" class="highlight-editor-btn clip-btn highlight-editor-save-btn clip-btn-primary" disabled="@Busy">@(Model.HighlightId is null ? "Add" : "Save")</button>
@@ -56,6 +57,12 @@
     /// <summary>Every tag the highlight's apexes roll up to it, as last saved, its own ones
     /// included; empty when adding.</summary>
     [Parameter] public IReadOnlyList<ImplicitTag> RolledUpTags { get; set; } = [];
+
+    /// <summary>The tags passed down to the highlight being edited (ClipTagInheritance); none for a new one.</summary>
+    [Parameter] public IReadOnlyList<InheritedTag> InheritedTags { get; set; } = [];
+
+    /// <summary>Opts the highlight out of an inherited tag or back in, applied at once; unset for a new one.</summary>
+    [Parameter] public EventCallback<InheritedTag> OnToggleExcluded { get; set; }
 
     [Parameter] public bool Busy { get; set; }
 
