@@ -6,7 +6,9 @@
    Distinct from a scene's own tags (ClipEditor's scene form). Adds/removes go through
    ITagService, which syncs MetaGenres and checks .nfo drift. A tag the movie only has because a
    scene, highlight or apex carries it shows as a grayed chip with no remove button; one the
-   movie has explicitly that a clip carries too is marked redundant.
+   movie has explicitly that a clip carries too is marked redundant. Each own tag has a ↓ toggle, off unless turned
+   on, that passes it down to every scene, highlight and apex (ClipTagInheritance); the ClipEditor it sits in is then
+   told to re-read what its clips inherit.
    Themed by the same --scene-editor-* custom properties as the ClipEditor. *@
 <div class="movie-tags-editor">
     <button type="button" class="movie-tags-toggle" aria-expanded="@(expanded ? "true" : "false")" @onclick="ToggleAsync">
@@ -28,11 +30,14 @@
                 {
                     <span class="movie-tags-chip">
                         @Label(tag)
+                        <button type="button" class="movie-tags-chip-propagate" disabled="@busy" aria-pressed="@(tag.PropagatesDown ? "true" : "false")" aria-label="Pass @Label(tag) down"
+                                title="@(tag.PropagatesDown ? "Passed down: to every scene, highlight and apex. Click to stop." : "Pass down: to every scene, highlight and apex")"
+                                @onclick="() => TogglePropagateAsync(tag)">↓</button>
                         @if (tag.FromClips)
                         {
                             <RedundantMark Tooltip="Also from its scenes, highlights or apexes. Remove it and it stays, grayed, as implied." />
                         }
-                        <button type="button" class="movie-tags-chip-remove" aria-label="Remove @tag.Name" @onclick="() => RemoveAsync(tag.Id)">×</button>
+                        <button type="button" class="movie-tags-chip-remove" disabled="@busy" aria-label="Remove @tag.Name" @onclick="() => RemoveAsync(tag.Id)">×</button>
                     </span>
                 }
                 <ImplicitChips Items="@ImpliedChips" />
@@ -54,14 +59,19 @@
     /// movie's tags elsewhere can re-read them.</summary>
     [Parameter] public EventCallback OnChanged { get; set; }
 
+    /// <summary>The ClipEditor this sits in, if any: told when what its clips inherit may have changed.</summary>
+    [CascadingParameter] public ClipEditor? Editor { get; set; }
+
     // FromClips on an explicit tag means a clip carries it too, so it's redundant.
-    private sealed record TagChip(int Id, string Name, string? ParentName, bool IsImplicit, bool FromClips);
+    private sealed record TagChip(int Id, string Name, string? ParentName, bool IsImplicit, bool FromClips, bool PropagatesDown);
 
     private IReadOnlyList<TagChip> tags = [];
     private bool expanded;
     private bool loaded;
     private int? loadedMovieId;
     private string? error;
+    // A toggle or remove in flight: the chips' buttons wait, so a double click doesn't send the change twice.
+    private bool busy;
 
     protected override void OnParametersSet()
     {
@@ -97,7 +107,7 @@
         if (movieId != MovieId) return;
 
         tags = links
-            .Select(l => new TagChip(l.TagId, l.Tag.Name, l.Tag.ParentTag?.Name, !l.IsExplicit, l.FromClips))
+            .Select(l => new TagChip(l.TagId, l.Tag.Name, l.Tag.ParentTag?.Name, !l.IsExplicit, l.FromClips, l.PropagatesDown))
             .OrderBy(t => t.ParentName ?? t.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -115,10 +125,38 @@
 
     private async Task RemoveAsync(int tagId)
     {
-        var result = await TagService.RemoveTagFromMovieAsync(MovieId, tagId);
-        error = result.Success ? null : result.ErrorMessage;
-        await LoadAsync();
-        if (result.Success) await OnChanged.InvokeAsync();
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var passedDown = tags.Any(t => t.Id == tagId && t.PropagatesDown);
+            var result = await TagService.RemoveTagFromMovieAsync(MovieId, tagId);
+            error = result.Success ? null : result.ErrorMessage;
+            await LoadAsync();
+            if (result.Success) await OnChanged.InvokeAsync();
+            if (result.Success && passedDown && Editor is not null) await Editor.MovieTagsChangedAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task TogglePropagateAsync(TagChip tag)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await TagService.SetMovieTagPropagatesDownAsync(MovieId, tag.Id, !tag.PropagatesDown);
+            error = result.Success ? null : result.ErrorMessage;
+            await LoadAsync();
+            if (result.Success && Editor is not null) await Editor.MovieTagsChangedAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 
     private static string Label(TagChip tag) => TagLabel.Format(tag.ParentName, tag.Name);

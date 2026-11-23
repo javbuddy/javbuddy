@@ -354,3 +354,10 @@
     align-items: center;
     padding: 0 0.4rem;
 }
+
+/* A ↓ after an own tag that passes down to the clips inside (ClipTagInheritance). */
+.clip-editor-passes-down {
+    margin-left: 0.2rem;
+    font-weight: 700;
+    cursor: help;
+}

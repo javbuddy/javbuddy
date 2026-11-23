@@ -76,9 +76,13 @@ public interface ITagService
     /// <summary>Removes the tag from the movie and from every scene, highlight and apex of the
     /// movie that carries it, so a tag the movie only has through its clips goes too.</summary>
     Task<OperationResult> RemoveTagFromMovieAndClipsAsync(int movieId, int tagId, CancellationToken ct = default);
+
+    /// <summary>Turns on or off whether the movie's own (explicit) tag passes down to all its scenes, highlights
+    /// and apexes as an inherited tag (ClipTagInheritance).</summary>
+    Task<OperationResult> SetMovieTagPropagatesDownAsync(int movieId, int tagId, bool propagatesDown, CancellationToken ct = default);
 }
 
-public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncService nfoSyncService, INfoDriftCheckQueue? driftChecks = null) : ITagService
+public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncService nfoSyncService, INfoDriftCheckQueue? driftChecks = null, ClipActorRefreshSignal? clipActors = null) : ITagService
 {
     private const string ActorTagsCannotMerge = "Actor tags can't be merged.";
 
@@ -781,6 +785,8 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         if (link.FromClips && !link.Tag.IsActorTag)
         {
             link.IsExplicit = false;
+            // Only the movie's own tag passes down; adding it again starts with the toggle off.
+            link.PropagatesDown = false;
         }
         else
         {
@@ -814,9 +820,12 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
             await db.HighlightTags.Where(t => t.TagId == tagId && t.Highlight.MovieId == movieId).ExecuteDeleteAsync(ct);
             await db.ApexTags.Where(t => t.TagId == tagId && t.Apex.MovieId == movieId).ExecuteDeleteAsync(ct);
             await db.MovieTags.Where(mt => mt.MovieId == movieId && mt.TagId == tagId)
-                .ExecuteUpdateAsync(s => s.SetProperty(mt => mt.IsExplicit, false), ct);
+                .ExecuteUpdateAsync(s => s.SetProperty(mt => mt.IsExplicit, false).SetProperty(mt => mt.PropagatesDown, false), ct);
+            // ExecuteDelete/Update bypass ClipActorStaleInterceptor: what the clips inherit may have changed.
+            await ClipActorStale.MarkAsync(db, movieId, ct);
             await transaction.CommitAsync(ct);
         }
+        clipActors?.Signal();
 
         // Then let the roll-up delete the now-unreferenced row. After the commit, not inside it: ClipTagSync waits for
         // other refreshes of its own, and one of them may be waiting for this transaction's write lock.
@@ -837,10 +846,11 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
         {
             existing.IsExplicit |= sourceLink.IsExplicit;
             existing.FromClips |= sourceLink.FromClips;
+            existing.PropagatesDown |= sourceLink.PropagatesDown;
             return;
         }
 
-        var added = new MovieTag { MovieId = sourceLink.MovieId, TagId = targetTagId, IsExplicit = sourceLink.IsExplicit, FromClips = sourceLink.FromClips };
+        var added = new MovieTag { MovieId = sourceLink.MovieId, TagId = targetTagId, IsExplicit = sourceLink.IsExplicit, FromClips = sourceLink.FromClips, PropagatesDown = sourceLink.PropagatesDown };
         db.MovieTags.Add(added);
         targetLinks[sourceLink.MovieId] = added;
     }
@@ -848,14 +858,43 @@ public class TagService(IDbContextFactory<AppDbContext> dbFactory, INfoSyncServi
     /// <summary>Moves scene, highlight and apex tags from the merged-away
     /// source tags onto the target, the way merges move MovieTags; without this they'd cascade away with
     /// the source, leaving the movie's FromClips flags pointing at tags no clip carries. A clip that
-    /// already has the target just loses the source.</summary>
+    /// already has the target just loses the source; the "pass down" toggle is ORed over every source the clip had
+    /// (several in MergeMany) and the target. Exclusions move the same way.</summary>
     private static async Task RepointClipTagsAsync(AppDbContext db, IReadOnlyCollection<int> sourceTagIds, int targetTagId, CancellationToken ct)
     {
+        var passingScenes = await db.SceneTags.Where(st => sourceTagIds.Contains(st.TagId) && st.PropagatesDown).Select(st => st.SceneId).ToListAsync(ct);
+        var passingHighlights = await db.HighlightTags.Where(ht => sourceTagIds.Contains(ht.TagId) && ht.PropagatesDown).Select(ht => ht.HighlightId).ToListAsync(ct);
+        foreach (var kept in await db.SceneTags.Where(st => st.TagId == targetTagId && passingScenes.Contains(st.SceneId)).ToListAsync(ct)) kept.PropagatesDown = true;
+        foreach (var kept in await db.HighlightTags.Where(ht => ht.TagId == targetTagId && passingHighlights.Contains(ht.HighlightId)).ToListAsync(ct)) kept.PropagatesDown = true;
+
         await LinkRepointer.RepointAsync(db.SceneTags, st => sourceTagIds.Contains(st.TagId), st => st.TagId == targetTagId,
-            st => st.SceneId, st => new SceneTag { SceneId = st.SceneId, TagId = targetTagId }, ct);
+            st => st.SceneId, st => new SceneTag { SceneId = st.SceneId, TagId = targetTagId, PropagatesDown = passingScenes.Contains(st.SceneId) }, ct);
         await LinkRepointer.RepointAsync(db.HighlightTags, ht => sourceTagIds.Contains(ht.TagId), ht => ht.TagId == targetTagId,
-            ht => ht.HighlightId, ht => new HighlightTag { HighlightId = ht.HighlightId, TagId = targetTagId }, ct);
+            ht => ht.HighlightId, ht => new HighlightTag { HighlightId = ht.HighlightId, TagId = targetTagId, PropagatesDown = passingHighlights.Contains(ht.HighlightId) }, ct);
         await LinkRepointer.RepointAsync(db.ApexTags, at => sourceTagIds.Contains(at.TagId), at => at.TagId == targetTagId,
             at => at.ApexId, at => new ApexTag { ApexId = at.ApexId, TagId = targetTagId }, ct);
+        await LinkRepointer.RepointAsync(db.SceneTagExclusions, e => sourceTagIds.Contains(e.TagId), e => e.TagId == targetTagId,
+            e => e.SceneId, e => new SceneTagExclusion { SceneId = e.SceneId, MovieId = e.MovieId, TagId = targetTagId }, ct);
+        await LinkRepointer.RepointAsync(db.HighlightTagExclusions, e => sourceTagIds.Contains(e.TagId), e => e.TagId == targetTagId,
+            e => e.HighlightId, e => new HighlightTagExclusion { HighlightId = e.HighlightId, MovieId = e.MovieId, TagId = targetTagId }, ct);
+        await LinkRepointer.RepointAsync(db.ApexTagExclusions, e => sourceTagIds.Contains(e.TagId), e => e.TagId == targetTagId,
+            e => e.ApexId, e => new ApexTagExclusion { ApexId = e.ApexId, MovieId = e.MovieId, TagId = targetTagId }, ct);
+    }
+
+    public async Task<OperationResult> SetMovieTagPropagatesDownAsync(int movieId, int tagId, bool propagatesDown, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var link = await db.MovieTags.Include(mt => mt.Tag).FirstOrDefaultAsync(mt => mt.MovieId == movieId && mt.TagId == tagId, ct);
+        if (link is not { IsExplicit: true } || link.Tag.IsActorTag)
+        {
+            return OperationResult.Fail("Only the movie's own tags can pass down to its clips.");
+        }
+        if (link.PropagatesDown != propagatesDown)
+        {
+            // A tracked change, so ClipActorStaleInterceptor marks the movie and wakes the refresh.
+            link.PropagatesDown = propagatesDown;
+            await db.SaveChangesAsync(ct);
+        }
+        return OperationResult.Ok();
     }
 }

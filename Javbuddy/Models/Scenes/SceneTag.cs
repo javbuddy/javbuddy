@@ -9,4 +9,8 @@ public class SceneTag
 
     public int TagId { get; set; }
     public Tag Tag { get; set; } = null!;
+
+    /// <summary>Opt-in: the tag also reaches the clips inside the scene: the highlights starting in it and the apexes in it as an inherited tag (ClipTagInheritance).
+    /// Always false on a new link.</summary>
+    public bool PropagatesDown { get; set; }
 }

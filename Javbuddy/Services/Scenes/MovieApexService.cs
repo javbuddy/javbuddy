@@ -12,6 +12,9 @@ public sealed record ApexItem(int Id, int Position, double Seconds, IReadOnlyLis
     /// <summary>Marked as a favorite.</summary>
     public bool IsFavorite { get; init; }
 
+    /// <summary>Tags it opted out of inheriting (<see cref="ClipTagInheritance"/>).</summary>
+    public IReadOnlySet<int> ExcludedTagIds { get; init; } = new HashSet<int>();
+
     /// <summary>The apex's own actors, ordered by name; empty when it inherits.</summary>
     public IReadOnlyList<SceneActorItem> Actors { get; init; } = [];
 
@@ -136,6 +139,8 @@ public class MovieApexService(
             .OrderBy(a => a.Seconds).ThenBy(a => a.Id)
             .ToListAsync(ct);
         var ids = apexes.Select(a => a.Id).ToList();
+        var exclusions = (await db.ApexTagExclusions.AsNoTracking().Where(e => movies.Contains(e.MovieId)).Select(e => new { e.ApexId, e.TagId }).ToListAsync(ct))
+            .ToLookup(e => e.ApexId, e => e.TagId);
         // Only media /apex-image would serve counts (as for highlights): a variant the current cache mode
         // keeps, sampled for the apex's current time. Nothing is loaded when nothing is served.
         var anyServed = apexMedia is not null && (apexMedia.ServesPreview || apexMedia.ServesVariant(SceneMediaService.VariantThumb));
@@ -158,6 +163,7 @@ public class MovieApexService(
                     .ToList())
                 {
                     IsFavorite = a.IsFavorite,
+                    ExcludedTagIds = exclusions[a.Id].ToHashSet(),
                     Actors = a.ApexActors
                         .Select(aa => new SceneActorItem(aa.ActorId, aa.MovieActor.Actor.DisplayName))
                         .OrderBy(actor => actor.Name, StringComparer.OrdinalIgnoreCase)

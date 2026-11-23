@@ -1,0 +1,53 @@
+@* Tags a scene, highlight or apex inherits because a parent passes them down (ClipTagInheritance): muted, dotted
+   chips with a leading ↳, so they never read as tags added on the clip itself; the tooltip names where each comes
+   from. With OnToggleExcluded (an existing clip's form) each gets an × that opts the clip out, and the excluded ones
+   stay, struck through, with a button to inherit them again (even when the clip also holds the tag itself, so the
+   opt-out is never hidden state). Inherited tags the clip also holds itself are left out (its own chip is marked
+   redundant instead). Screen readers get the "inherited" wording as visually hidden text. *@
+@{
+    var editable = OnToggleExcluded.HasDelegate;
+    var shown = Items
+        .Where(t => t.IsExcluded ? editable : !(OwnTagIds?.Contains(t.Tag.TagId) ?? false))
+        .ToList();
+}
+@if (shown.Count > 0)
+{
+    <span class="inherited-chips">
+        @foreach (var tag in shown)
+        {
+            var label = ImplicitChip.TagLabel(tag.Tag);
+            if (tag.IsExcluded)
+            {
+                <span class="inherited-chip inherited-chip-excluded" title="Not inherited here (from @string.Join(", ", tag.Sources))">
+                    <s>@label</s><span class="visually-hidden">, not inherited here</span>
+                    <button type="button" class="inherited-chip-button" disabled="@Busy" aria-label="Inherit @label again" title="Inherit it again"
+                            @onclick="() => OnToggleExcluded.InvokeAsync(tag)">↺</button>
+                </span>
+            }
+            else
+            {
+                <span class="inherited-chip" title="@ImplicitChip.InheritedFromTooltip(tag.Sources)">
+                    <span class="inherited-chip-arrow" aria-hidden="true">↳</span>@label<span class="visually-hidden">, inherited from @string.Join(", ", tag.Sources)</span>
+                    @if (editable)
+                    {
+                        <button type="button" class="inherited-chip-button" disabled="@Busy" aria-label="Don't inherit @label here" title="Don't inherit it here"
+                                @onclick="() => OnToggleExcluded.InvokeAsync(tag)">×</button>
+                    }
+                </span>
+            }
+        }
+    </span>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<InheritedTag> Items { get; set; } = [];
+
+    /// <summary>The clip's own tag ids, left out here.</summary>
+    [Parameter] public IReadOnlySet<int>? OwnTagIds { get; set; }
+
+    /// <summary>Opts the clip out of an inherited tag, or back in; without it the chips are read-only and excluded
+    /// ones are hidden.</summary>
+    [Parameter] public EventCallback<InheritedTag> OnToggleExcluded { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+}

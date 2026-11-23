@@ -37,12 +37,19 @@ public sealed record SceneItem(
 
     /// <summary>Left out of the Scenes overview.</summary>
     public bool IsHiddenFromOverview { get; init; }
+
+    /// <summary>Tags it opted out of inheriting (<see cref="ClipTagInheritance"/>).</summary>
+    public IReadOnlySet<int> ExcludedTagIds { get; init; } = new HashSet<int>();
 }
 
 public sealed record SceneActorItem(int ActorId, string Name);
 
 /// <summary>ParentName is set for a subtag.</summary>
-public sealed record SceneTagItem(int TagId, string Name, string? ParentName);
+public sealed record SceneTagItem(int TagId, string Name, string? ParentName)
+{
+    /// <summary>The owner's link passes the tag down to the clips inside it (<see cref="ClipTagInheritance"/>).</summary>
+    public bool PropagatesDown { get; init; }
+}
 
 public sealed record SceneOperationResult(bool Success, string? ErrorMessage = null, int? SceneId = null)
 {
@@ -127,6 +134,8 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
             .Include(s => s.SceneTags).ThenInclude(st => st.Tag).ThenInclude(t => t.ParentTag)
             .ToListAsync(ct);
         var sceneIds = scenes.Select(s => s.Id).ToList();
+        var exclusions = (await db.SceneTagExclusions.AsNoTracking().Where(e => ids.Contains(e.MovieId)).Select(e => new { e.SceneId, e.TagId }).ToListAsync(ct))
+            .ToLookup(e => e.SceneId, e => e.TagId);
         // Only media /scene-image would serve counts: sampled for the scene's current range, a variant
         // the current cache mode serves, unexpired and still on disk. Anything else would show as a
         // broken image. Without a media service (tests), whatever is cached for the range counts.
@@ -145,12 +154,13 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
                     .ToList(),
                 EffectiveActors = effective[id].Scenes.GetValueOrDefault(r.Scene.Id, EffectiveActors.None),
                 Tags = r.Scene.SceneTags
-                    .Select(st => new SceneTagItem(st.TagId, st.Tag.Name, st.Tag.ParentTag?.Name))
+                    .Select(st => new SceneTagItem(st.TagId, st.Tag.Name, st.Tag.ParentTag?.Name) { PropagatesDown = st.PropagatesDown })
                     .OrderBy(t => t.ParentName ?? t.Name, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
                     .ToList(),
                 IsFavorite = r.Scene.IsFavorite,
                 IsHiddenFromOverview = r.Scene.IsHiddenFromOverview,
+                ExcludedTagIds = exclusions[r.Scene.Id].ToHashSet(),
                 ThumbVersion = MediaVersion(r, SceneMediaService.VariantThumb),
                 PreviewVersion = MediaVersion(r, SceneMediaService.VariantPreview)
             })
@@ -353,7 +363,13 @@ public class MovieSceneService(IDbContextFactory<AppDbContext> dbFactory, IScene
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var movieId = await db.Scenes.Where(s => s.Id == sceneId).Select(s => (int?)s.MovieId).FirstOrDefaultAsync(ct);
         var removed = await db.SceneTags.Where(st => st.SceneId == sceneId && st.TagId == tagId).ExecuteDeleteAsync(ct);
-        if (removed > 0 && movieId is not null && clipTags is not null) await clipTags.RefreshAsync(movieId.Value, ct);
+        if (removed > 0 && movieId is not null)
+        {
+            // ExecuteDelete bypasses ClipActorStaleInterceptor: the tag may have passed down to the scene's clips.
+            await ClipActorStale.MarkAsync(db, movieId.Value, ct);
+            clipActors?.Signal();
+            if (clipTags is not null) await clipTags.RefreshAsync(movieId.Value, ct);
+        }
         return SceneOperationResult.Ok(sceneId);
     }
 

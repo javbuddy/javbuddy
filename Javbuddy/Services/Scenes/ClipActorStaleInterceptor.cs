@@ -22,7 +22,8 @@ public sealed class ClipActorRefreshSignal
 
 /// <summary>Marks a movie's stored effective actors stale (Movie.ClipActorsStale) in the same
 /// SaveChanges as any tracked change that can alter them — a clip added, deleted or moved, an own-actor or cast
-/// link added or removed, the movie's duration, an actor deleted — then signals the worker. ExecuteUpdate and
+/// link added or removed, the movie's duration, an actor deleted, a tag link that passes down added, removed or
+/// toggled, a tag exclusion added or removed — then signals the worker. ExecuteUpdate and
 /// ExecuteDelete bypass it; those call sites use ClipActorStale.MarkAsync.</summary>
 public sealed class ClipActorStaleInterceptor(ClipActorRefreshSignal signal) : SaveChangesInterceptor
 {
@@ -35,10 +36,18 @@ public sealed class ClipActorStaleInterceptor(ClipActorRefreshSignal signal) : S
     {
         if (eventData.Context is AppDbContext db)
         {
-            var movieIds = AffectedMovieIds(db, out var deletedActorIds);
+            var movieIds = AffectedMovieIds(db, out var deletedActorIds, out var sceneIds, out var highlightIds);
             if (deletedActorIds.Count > 0)
             {
                 movieIds.UnionWith(db.MovieActors.Where(ma => deletedActorIds.Contains(ma.ActorId)).Select(ma => ma.MovieId).ToList());
+            }
+            if (sceneIds.Count > 0)
+            {
+                movieIds.UnionWith(db.Scenes.Where(sc => sceneIds.Contains(sc.Id)).Select(sc => sc.MovieId).ToList());
+            }
+            if (highlightIds.Count > 0)
+            {
+                movieIds.UnionWith(db.MovieHighlights.Where(h => highlightIds.Contains(h.Id)).Select(h => h.MovieId).ToList());
             }
             var untracked = Untracked(db, movieIds);
             if (untracked.Count > 0)
@@ -54,10 +63,18 @@ public sealed class ClipActorStaleInterceptor(ClipActorRefreshSignal signal) : S
     {
         if (eventData.Context is AppDbContext db)
         {
-            var movieIds = AffectedMovieIds(db, out var deletedActorIds);
+            var movieIds = AffectedMovieIds(db, out var deletedActorIds, out var sceneIds, out var highlightIds);
             if (deletedActorIds.Count > 0)
             {
                 movieIds.UnionWith(await db.MovieActors.Where(ma => deletedActorIds.Contains(ma.ActorId)).Select(ma => ma.MovieId).ToListAsync(cancellationToken));
+            }
+            if (sceneIds.Count > 0)
+            {
+                movieIds.UnionWith(await db.Scenes.Where(sc => sceneIds.Contains(sc.Id)).Select(sc => sc.MovieId).ToListAsync(cancellationToken));
+            }
+            if (highlightIds.Count > 0)
+            {
+                movieIds.UnionWith(await db.MovieHighlights.Where(h => highlightIds.Contains(h.Id)).Select(h => h.MovieId).ToListAsync(cancellationToken));
             }
             var untracked = Untracked(db, movieIds);
             if (untracked.Count > 0)
@@ -89,12 +106,15 @@ public sealed class ClipActorStaleInterceptor(ClipActorRefreshSignal signal) : S
         return Task.CompletedTask;
     }
 
-    private static HashSet<int> AffectedMovieIds(AppDbContext db, out List<int> deletedActorIds)
+    private static HashSet<int> AffectedMovieIds(AppDbContext db, out List<int> deletedActorIds, out List<int> sceneIds, out List<int> highlightIds)
     {
         // This hook runs before SaveChanges detects changes. Enumerating Entries() detects them, which is what
         // catches time-only edits (the time-edit tests guard that), so keep it the first thing that reads entries.
         var movieIds = new HashSet<int>();
         deletedActorIds = [];
+        // Tag links that pass down (or stop passing down) don't carry their movie: resolved from the clip after.
+        sceneIds = [];
+        highlightIds = [];
         foreach (var entry in db.ChangeTracker.Entries())
         {
             switch (entry.Entity)
@@ -112,12 +132,25 @@ public sealed class ClipActorStaleInterceptor(ClipActorRefreshSignal signal) : S
                 case MovieActor link when AddedOrDeleted(entry): movieIds.Add(link.MovieId); break;
                 case Movie movie when entry.State == EntityState.Modified && entry.Property(nameof(Movie.MediaDurationSeconds)).IsModified: movieIds.Add(movie.Id); break;
                 case Actor actor when entry.State == EntityState.Deleted: deletedActorIds.Add(actor.Id); break;
+                case MovieTag link when PassesDown(entry, link.PropagatesDown, nameof(MovieTag.IsExplicit)): movieIds.Add(link.MovieId); break;
+                case SceneTag link when PassesDown(entry, link.PropagatesDown): sceneIds.Add(link.SceneId); break;
+                case HighlightTag link when PassesDown(entry, link.PropagatesDown): highlightIds.Add(link.HighlightId); break;
+                case SceneTagExclusion row when AddedOrDeleted(entry): movieIds.Add(row.MovieId); break;
+                case HighlightTagExclusion row when AddedOrDeleted(entry): movieIds.Add(row.MovieId); break;
+                case ApexTagExclusion row when AddedOrDeleted(entry): movieIds.Add(row.MovieId); break;
             }
         }
         return movieIds;
     }
 
     private static bool AddedOrDeleted(EntityEntry entry) => entry.State is EntityState.Added or EntityState.Deleted;
+
+    // A tag link that changes what its clips inherit: one that passes down added or removed, its toggle flipped, or
+    // (for a movie link) other properties that decide whether it passes down.
+    private static bool PassesDown(EntityEntry entry, bool propagatesDown, params string[] others) =>
+        (AddedOrDeleted(entry) && propagatesDown)
+        || (entry.State == EntityState.Modified
+            && (entry.Property("PropagatesDown").IsModified || (propagatesDown && others.Any(p => entry.Property(p).IsModified))));
 
     private static bool Touches(EntityEntry entry, params string[] times) =>
         AddedOrDeleted(entry) || (entry.State == EntityState.Modified && times.Any(time => entry.Property(time).IsModified));

@@ -67,7 +67,7 @@ public class MovieTagsEditorTests : BunitContext
 
         await cut.Find(".movie-tags-toggle").ClickAsync();
 
-        Assert.Equal("Drama", cut.Find(".movie-tags-chip").TextContent.Replace("×", "").Trim());
+        Assert.Equal("Drama", cut.Find(".movie-tags-chip").TextContent.Replace("×", "").Replace("↓", "").Trim());
         Assert.NotEmpty(cut.FindAll(".tag-search-input"));
     }
 
@@ -83,7 +83,7 @@ public class MovieTagsEditorTests : BunitContext
         var cut = RenderEditor();
         await cut.Find(".movie-tags-toggle").ClickAsync();
 
-        var names = cut.FindAll(".movie-tags-chip").Select(c => c.TextContent.Replace("×", "").Trim()).ToList();
+        var names = cut.FindAll(".movie-tags-chip").Select(c => c.TextContent.Replace("×", "").Replace("↓", "").Trim()).ToList();
         Assert.Equal(["Apple", "zebra", "Étude"], names);
     }
 
@@ -130,7 +130,7 @@ public class MovieTagsEditorTests : BunitContext
         await tagService.AddTagToMovieAsync(movieId, await CreateTagAsync("Creampie"));
         await cut.InvokeAsync(() => cut.Instance.RefreshAsync());
 
-        Assert.Equal("Creampie", cut.Find(".movie-tags-chip").TextContent.Replace("×", "").Trim());
+        Assert.Equal("Creampie", cut.Find(".movie-tags-chip").TextContent.Replace("×", "").Replace("↓", "").Trim());
         Assert.Equal("Movie tags (1)", cut.Find(".movie-tags-toggle").TextContent.Replace("▾", "").Trim());
     }
 
@@ -187,5 +187,22 @@ public class MovieTagsEditorTests : BunitContext
         var mark = squirt.QuerySelector(".redundant-mark")!;
         Assert.Equal("redundant", mark.TextContent);
         Assert.StartsWith("Also from its scenes, highlights or apexes.", mark.GetAttribute("title"));
+    }
+
+    [Fact]
+    public async Task PassDownToggle_StartsOff_AndSavesTheMovieTagsToggle()
+    {
+        var tagId = await CreateTagAsync("Drama");
+        await tagService.AddTagToMovieAsync(movieId, tagId);
+
+        var cut = RenderEditor();
+        await cut.Find(".movie-tags-toggle").ClickAsync();
+        Assert.Equal("false", cut.Find(".movie-tags-chip-propagate").GetAttribute("aria-pressed"));
+
+        await cut.Find(".movie-tags-chip-propagate").ClickAsync();
+
+        Assert.Equal("true", cut.Find(".movie-tags-chip-propagate").GetAttribute("aria-pressed"));
+        await using var db = await factory.CreateDbContextAsync();
+        Assert.True(db.MovieTags.Single(mt => mt.MovieId == movieId && mt.TagId == tagId).PropagatesDown);
     }
 }

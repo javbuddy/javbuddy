@@ -7,6 +7,7 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 ### Added
 
 - **Download a clip losslessly.** Editing a scene, highlight or apex in the clip editor now offers a **Download clip** button in the form's header, which saves just that clip through the browser, stream-copied (no re-encode), ready for an external decensoring or upscaling tool. It is a WebM when the source is VP8/VP9/AV1 with Opus or Vorbis audio, an MP4 for the usual H.264/HEVC with AAC (or MP3, AC-3, E-AC-3, Opus, ALAC) audio, and an MKV when neither fits (say, FLAC or DTS audio). The range is the one the clip player plays. A copy can only start on a keyframe, so a clip may start a few seconds early; the file name gives its real start. The clip is prepared in the image cache folder and deleted once downloaded, or about an hour later if it never is.
+- **Tags can pass down to the clips inside.** A movie, scene or highlight tag has a ↓ toggle (off by default) that makes the clips inside inherit it: a movie tag reaches every scene, highlight and apex, a scene tag the highlights starting in it and the apexes in it, a highlight tag the apexes in it. Inherited tags show as muted ↳ chips that name where they come from, never as the clip's own, and count in the Scenes wall's tag filters, including the Apex tag filter. A clip can opt out of an inherited tag from its edit form. Existing tags start with the toggle off.
 
 ### Fixed
 

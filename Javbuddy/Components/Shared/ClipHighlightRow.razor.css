@@ -67,3 +67,10 @@
 .highlight-editor-continues {
     font-style: italic;
 }
+
+/* A ↓ after an own tag that passes down to the clips inside (ClipTagInheritance). */
+.highlight-editor-passes-down {
+    margin-left: 0.2rem;
+    font-weight: 700;
+    cursor: help;
+}

@@ -1,6 +1,10 @@
 namespace Javbuddy.Services.Scenes;
 
-public sealed record ApexNode(ApexItem Apex, EffectiveActors Actors);
+public sealed record ApexNode(ApexItem Apex, EffectiveActors Actors)
+{
+    /// <summary>Tags passed down to it (<see cref="ClipTagInheritance"/>), excluded ones included.</summary>
+    public IReadOnlyList<InheritedTag> InheritedTags { get; init; } = [];
+}
 
 /// <summary>A highlight in the editor's tree. ContinuesIntoScenePositions lists the later scenes it reaches
 /// into ("continues into scene 2"), since it is only drawn under the scene it starts in. RedundantTags are
@@ -13,6 +17,9 @@ public sealed record HighlightNode(
     IReadOnlyList<int> ContinuesIntoScenePositions)
 {
     public IReadOnlyList<ImplicitTag> RedundantTags { get; init; } = [];
+
+    /// <summary>Tags passed down to it (<see cref="ClipTagInheritance"/>), excluded ones included.</summary>
+    public IReadOnlyList<InheritedTag> InheritedTags { get; init; } = [];
 }
 
 /// <summary>A scene in the editor's tree, with the highlights starting in it and the apexes in it that no
@@ -25,6 +32,9 @@ public sealed record SceneNode(
     IReadOnlyList<ApexNode> Apexes)
 {
     public IReadOnlyList<ImplicitTag> RedundantTags { get; init; } = [];
+
+    /// <summary>Tags passed down to it (<see cref="ClipTagInheritance"/>), excluded ones included.</summary>
+    public IReadOnlyList<InheritedTag> InheritedTags { get; init; } = [];
 }
 
 /// <summary>One direct child of a scene (or of the "outside scenes" group): a highlight or an apex.</summary>
@@ -39,13 +49,16 @@ public sealed record ClipTreeModel(
 /// drawn exactly once. Containment is computed from times, never stored: a highlight sits under the scene it
 /// starts in; an apex under its parent highlight (<see cref="ClipActors.ParentHighlight"/>, the one it inherits
 /// actors from), else directly under the scene holding it; what no scene holds goes in the "outside scenes"
-/// group. Each node carries its rolled-up tags (<see cref="ClipRollup"/>) and effective actors
-/// (<see cref="ClipActors"/>).</summary>
+/// group. Each node carries its rolled-up tags (<see cref="ClipRollup"/>), inherited tags
+/// (<see cref="ClipTagInheritance"/>, from movieTags and the clips' own; a tag both inherited and rolled up is listed
+/// once, as inherited) and effective actors (<see cref="ClipActors"/>).</summary>
 public static class ClipTree
 {
-    public static ClipTreeModel Build(IReadOnlyList<SceneActorItem> cast, IReadOnlyList<SceneItem> scenes, IReadOnlyList<HighlightItem> highlights, IReadOnlyList<ApexItem> apexes)
+    public static ClipTreeModel Build(IReadOnlyList<SceneActorItem> cast, IReadOnlyList<SceneItem> scenes, IReadOnlyList<HighlightItem> highlights, IReadOnlyList<ApexItem> apexes,
+        IReadOnlyList<SceneTagItem>? movieTags = null)
     {
         var rollup = ClipRollup.Compute(scenes, highlights, apexes);
+        var inherited = ClipTagInheritance.Compute(movieTags ?? [], scenes, highlights, apexes);
         var actors = ClipActors.Compute(cast, scenes, highlights, apexes);
         var orderedScenes = scenes.OrderBy(s => s.Position).ToList();
 
@@ -57,7 +70,7 @@ public static class ClipTree
         var outsideApexes = new List<ApexNode>();
         foreach (var apex in apexes.OrderBy(a => a.Seconds).ThenBy(a => a.Id))
         {
-            var node = new ApexNode(apex, actors.Apexes[apex.Id]);
+            var node = new ApexNode(apex, actors.Apexes[apex.Id]) { InheritedTags = inherited.Apexes[apex.Id] };
             if (ClipActors.ParentHighlight(highlights, apex.Seconds) is { } parent)
             {
                 Add(apexesByParent, parent.Id, node);
@@ -81,10 +94,11 @@ public static class ClipTree
                 .Where(s => s.Position > (start?.Position ?? 0) && ClipRollup.HighlightOverlapsScene(s, highlight))
                 .Select(s => s.Position)
                 .ToList();
-            var node = new HighlightNode(highlight, rollup.Highlights[highlight.Id], actors.Highlights[highlight.Id],
+            var node = new HighlightNode(highlight, NotInherited(rollup.Highlights[highlight.Id], inherited.Highlights[highlight.Id]), actors.Highlights[highlight.Id],
                 apexesByParent.GetValueOrDefault(highlight.Id, []), continuesInto)
             {
                 RedundantTags = rollup.RedundantHighlights[highlight.Id],
+                InheritedTags = inherited.Highlights[highlight.Id],
             };
             if (start is not null)
             {
@@ -97,10 +111,11 @@ public static class ClipTree
         }
 
         var sceneNodes = orderedScenes
-            .Select(s => new SceneNode(s, rollup.Scenes[s.Id], actors.Scenes[s.Id],
+            .Select(s => new SceneNode(s, NotInherited(rollup.Scenes[s.Id], inherited.Scenes[s.Id]), actors.Scenes[s.Id],
                 highlightsByScene.GetValueOrDefault(s.Id, []), apexesByScene.GetValueOrDefault(s.Id, []))
             {
                 RedundantTags = rollup.RedundantScenes[s.Id],
+                InheritedTags = inherited.Scenes[s.Id],
             })
             .ToList();
         return new ClipTreeModel(sceneNodes, outsideHighlights, outsideApexes);
@@ -116,6 +131,10 @@ public static class ClipTree
             .ThenBy(c => c.Id)
             .Select(c => c.Child)
             .ToList();
+
+    /// <summary>Rolled-up tags less the ones the clip also inherits: those show once, as inherited.</summary>
+    public static IReadOnlyList<ImplicitTag> NotInherited(IReadOnlyList<ImplicitTag> rolledUp, IReadOnlyList<InheritedTag> inherited) =>
+        rolledUp.Where(t => !inherited.Any(i => !i.IsExcluded && i.Tag.TagId == t.Tag.TagId)).ToList();
 
     private static void Add<T>(Dictionary<int, List<T>> map, int key, T value)
     {

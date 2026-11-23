@@ -27,3 +27,31 @@
     font-size: 0.85rem;
     line-height: 1;
 }
+
+/* The ↓ "pass down" toggle: faint while off, so a plain tag looks as before; lit while on. */
+.clip-tag-chip-propagate {
+    appearance: none;
+    padding: 0 0.1rem;
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.8rem;
+    line-height: 1;
+    opacity: 0.35;
+}
+
+.clip-tag-chip-propagate:hover,
+.clip-tag-chip-propagate:focus-visible {
+    opacity: 0.8;
+}
+
+.clip-tag-chip-propagate[aria-pressed="true"] {
+    opacity: 1;
+    font-weight: 700;
+}
+
+.clip-tag-chip-propagate:disabled {
+    cursor: default;
+}

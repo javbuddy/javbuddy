@@ -33,7 +33,7 @@ public sealed class DatabaseMaintenanceTaskTests : IDisposable
         {
             await db.Database.EnsureCreatedAsync();
             SqlitePragmaInterceptor.EnableWal(db.Database, NullLogger.Instance);
-            db.Tags.AddRange(Enumerable.Range(0, 2000).Select(i => new Tag { Name = $"Tag {i} {new string('x', 150)}" }));
+            db.Tags.AddRange(Enumerable.Range(0, 4000).Select(i => new Tag { Name = $"Tag {i} {new string('x', 150)}" }));
             await db.SaveChangesAsync();
             await db.Tags.Where(t => t.Id > 100).ExecuteDeleteAsync();
             sizeWithFreePages = await SqliteMaintenance.GetSizeBytesAsync(db.Database, CancellationToken.None);

@@ -1,19 +1,21 @@
 
 @* An apex's row in ClipEditor's tree: its time, its own actors
-   or the ones it inherits (grayed, with where from), and its tags. Pure display; ClipEditor acts on the
+   or the ones it inherits (grayed, with where from), its tags and the ones passed down to it (↳). Pure display; ClipEditor acts on the
    callbacks. *@
 <button type="button" class="apex-editor-row" @onclick="OnSeek" title="@SeekTitle">
     <span class="apex-editor-pos">@Apex.Position</span>
     <span class="apex-editor-time">@SceneTimeFormat.Format(Apex.Seconds)</span>
     <ClipActorNames Class="apex-editor-actors" Actors="Apex.Actors" Tags="ActorTags" Library="ActorTagLibrary" />
     <ImplicitChips Items="@ImplicitChip.ForActors(Node.Actors)" ActorTags="ActorTags" Library="ActorTagLibrary" />
-    @if (Apex.Tags.Count > 0)
+    @if (Apex.Tags.Count > 0 || Node.InheritedTags.Any(t => !t.IsExcluded))
     {
+        @* One grid cell for its own tags and the inherited ones, so they wrap in the tags column. *@
         <span class="apex-editor-tags">
             @foreach (var tag in Apex.Tags)
             {
                 <span class="apex-editor-tag">@ImplicitChip.TagLabel(tag)</span>
             }
+            <InheritedTagChips Items="Node.InheritedTags" OwnTagIds="@Apex.Tags.Select(t => t.TagId).ToHashSet()" />
         </span>
     }
 </button>

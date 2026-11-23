@@ -57,6 +57,59 @@ public static class ClipAssignments
         return (actors, ClipActorTags.Compute(actors, scenes, highlights, apexes, sets));
     }
 
+    /// <summary>The movie's explicit tags it passes down to its clips (MovieTag.PropagatesDown), ordered by name.</summary>
+    public static async Task<IReadOnlyList<SceneTagItem>> LoadPropagatingMovieTagsAsync(AppDbContext db, int movieId, CancellationToken ct) =>
+        (await db.MovieTags.AsNoTracking()
+            .Where(mt => mt.MovieId == movieId && mt.IsExplicit && mt.PropagatesDown && !mt.Tag.IsActorTag)
+            .Select(mt => new { mt.TagId, mt.Tag.Name, Parent = mt.Tag.ParentTag != null ? mt.Tag.ParentTag.Name : null })
+            .ToListAsync(ct))
+        .Select(t => new SceneTagItem(t.TagId, t.Name, t.Parent) { PropagatesDown = true })
+        .OrderBy(t => t.ParentName ?? t.Name, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    /// <summary>The movie's clips' inherited tags (<see cref="ClipTagInheritance"/>), for ClipActorSync: loads just
+    /// the times, the tag links that pass down and the exclusions. Tag names are left empty.</summary>
+    public static async Task<ClipTagInheritanceResult> LoadInheritedTagsAsync(AppDbContext db, int movieId, CancellationToken ct)
+    {
+        var duration = await db.Movies.Where(m => m.Id == movieId).Select(m => m.MediaDurationSeconds).FirstOrDefaultAsync(ct);
+        var movieTags = await db.MovieTags.AsNoTracking()
+            .Where(mt => mt.MovieId == movieId && mt.IsExplicit && mt.PropagatesDown && !mt.Tag.IsActorTag)
+            .Select(mt => mt.TagId)
+            .ToListAsync(ct);
+        var scenes = await db.Scenes.AsNoTracking().Where(s => s.MovieId == movieId).ToListAsync(ct);
+        var sceneTags = (await db.SceneTags.AsNoTracking().Where(t => t.Scene.MovieId == movieId && t.PropagatesDown).Select(t => new { t.SceneId, t.TagId }).ToListAsync(ct))
+            .ToLookup(t => t.SceneId, t => Passed(t.TagId));
+        var highlights = await db.MovieHighlights.AsNoTracking().Where(h => h.MovieId == movieId).ToListAsync(ct);
+        var highlightTags = (await db.HighlightTags.AsNoTracking().Where(t => t.Highlight.MovieId == movieId && t.PropagatesDown).Select(t => new { t.HighlightId, t.TagId }).ToListAsync(ct))
+            .ToLookup(t => t.HighlightId, t => Passed(t.TagId));
+        var apexes = await db.MovieApexes.AsNoTracking().Where(a => a.MovieId == movieId).OrderBy(a => a.Seconds).ThenBy(a => a.Id).ToListAsync(ct);
+        var sceneExclusions = (await db.SceneTagExclusions.AsNoTracking().Where(e => e.MovieId == movieId).ToListAsync(ct)).ToLookup(e => e.SceneId, e => e.TagId);
+        var highlightExclusions = (await db.HighlightTagExclusions.AsNoTracking().Where(e => e.MovieId == movieId).ToListAsync(ct)).ToLookup(e => e.HighlightId, e => e.TagId);
+        var apexExclusions = (await db.ApexTagExclusions.AsNoTracking().Where(e => e.MovieId == movieId).ToListAsync(ct)).ToLookup(e => e.ApexId, e => e.TagId);
+
+        var sceneItems = SceneRanges.ResolveEffectiveRanges(scenes, duration)
+            .Select(r => new SceneItem(r.Scene.Id, r.Position, "", r.Scene.Title, r.Scene.StartSeconds, r.Scene.EndSeconds, r.EffectiveEndSeconds)
+            {
+                Tags = sceneTags[r.Scene.Id].ToList(),
+                ExcludedTagIds = sceneExclusions[r.Scene.Id].ToHashSet(),
+            })
+            .ToList();
+        var highlightItems = HighlightRanges.Order(highlights)
+            .Select((h, i) => new HighlightItem(h.Id, i + 1, "", h.Title, h.StartSeconds, h.EndSeconds, h.IsFavorite, 0)
+            {
+                Tags = highlightTags[h.Id].ToList(),
+                ExcludedTagIds = highlightExclusions[h.Id].ToHashSet(),
+            })
+            .ToList();
+        var apexItems = apexes
+            .Select((a, i) => new ApexItem(a.Id, i + 1, a.Seconds, []) { ExcludedTagIds = apexExclusions[a.Id].ToHashSet() })
+            .ToList();
+        return ClipTagInheritance.Compute(movieTags.Select(Passed).ToList(), sceneItems, highlightItems, apexItems);
+
+        static SceneTagItem Passed(int tagId) => new(tagId, "", null) { PropagatesDown = true };
+    }
+
     private static async Task<Dictionary<int, (IReadOnlyList<SceneActorItem> Cast, List<SceneItem> Scenes, List<HighlightItem> Highlights, List<ApexItem> Apexes)>> LoadClipItemsAsync(
         AppDbContext db, IReadOnlyCollection<int> movieIds, CancellationToken ct)
     {

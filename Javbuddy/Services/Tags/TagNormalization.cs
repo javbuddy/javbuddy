@@ -54,6 +54,7 @@ public static class TagNormalization
                 .Select(v => v!)
                 .ToList();
             await ApplyToMovieAsync(db, movie, normalized, context, existingLinks: null, ct);
+            if (movie.Id != 0) await RepointExclusionsAsync(db, context, movie.Id, ct);
             await db.SaveChangesAsync(ct);
         }
         finally
@@ -117,6 +118,7 @@ public static class TagNormalization
         }
 
         await ApplyToSceneTagsAsync(db, context, ct);
+        await RepointExclusionsAsync(db, context, movieId: null, ct);
 
         // Flush the per-movie MovieTag and SceneTag adds/removes above before the orphan check below queries
         // MovieTags — that query hits the database directly, so it would otherwise still see
@@ -355,6 +357,16 @@ public static class TagNormalization
         var resolvedIds = resolved.Where(t => t.Id != 0).Select(t => t.Id).ToHashSet();
         var resolvedNewTags = resolved.Where(t => t.Id == 0).ToList();
 
+        // A link that passed down whose tag a replacement rule now repoints hands its toggle to the rule's target.
+        var knownById = context.KnownTags.Where(t => t.Id != 0).ToDictionary(t => t.Id);
+        var passingIds = existingLinks
+            .Where(link => link.PropagatesDown && link.IsExplicit && !resolvedIds.Contains(link.TagId) && knownById.ContainsKey(link.TagId))
+            .Select(link => knownById[link.TagId])
+            .Select(tag => FindRule(tag.ParentTag != null ? $"{tag.ParentTag.Name}{Tag.HierarchyDelimiter}{tag.Name}" : tag.Name, context.Rules)?.TargetTagId)
+            .OfType<int>()
+            .Where(resolvedIds.Contains)
+            .ToHashSet();
+
         // A tag the metadata no longer lists stops being explicit; the row stays while a scene, highlight
         // or apex still carries it. A row the metadata does list keeps its flags: a tag the
         // movie only has through its clips comes back here from MetaGenres and from an .nfo that lists clip
@@ -364,6 +376,8 @@ public static class TagNormalization
             if (link.FromClips)
             {
                 link.IsExplicit = false;
+                // Only the movie's own tag passes down to its clips.
+                link.PropagatesDown = false;
             }
             else
             {
@@ -372,9 +386,13 @@ public static class TagNormalization
         }
 
         var existingTagIds = existingLinks.Select(link => link.TagId).ToHashSet();
+        foreach (var link in existingLinks.Where(link => passingIds.Contains(link.TagId) && link.IsExplicit && !link.PropagatesDown))
+        {
+            link.PropagatesDown = true;
+        }
         foreach (var tagId in resolvedIds.Where(id => !existingTagIds.Contains(id)))
         {
-            db.MovieTags.Add(new MovieTag { MovieId = movie.Id, TagId = tagId });
+            db.MovieTags.Add(new MovieTag { MovieId = movie.Id, TagId = tagId, PropagatesDown = passingIds.Contains(tagId) });
         }
         foreach (var newTag in resolvedNewTags)
         {
@@ -402,6 +420,40 @@ public static class TagNormalization
         return names.Count > 0 ? string.Join(", ", names) : null;
     }
 
+    /// <summary>Moves the clips' tag exclusions (opt-outs of an inherited tag) along with the tags: an exclusion of a
+    /// tag a replacement rule repoints now excludes the rule's target, as the toggle that passes it down moved there
+    /// (and as a tag merge moves them). Without this the exclusion would stay on the superseded tag and be pruned with
+    /// it, and the clip would start inheriting the target. Ignored tags are left: nothing passes them down any
+    /// more. One movie, or every movie when movieId is null.</summary>
+    private static async Task RepointExclusionsAsync(AppDbContext db, NormalizationContext context, int? movieId, CancellationToken ct)
+    {
+        var tagsById = context.KnownTags.Where(t => t.Id != 0).ToDictionary(t => t.Id);
+        int? TargetOf(int tagId)
+        {
+            if (!tagsById.TryGetValue(tagId, out var tag)) return null;
+            var value = tag.ParentTag != null ? $"{tag.ParentTag.Name}{Tag.HierarchyDelimiter}{tag.Name}" : tag.Name;
+            if (IsIgnored(value, context)) return null;
+            return FindRule(value, context.Rules)?.TargetTagId is { } target && target != tagId ? target : null;
+        }
+
+        Repoint(await db.SceneTagExclusions.Where(e => movieId == null || e.MovieId == movieId).ToListAsync(ct),
+            e => e.SceneId, e => e.TagId, e => new SceneTagExclusion { SceneId = e.SceneId, MovieId = e.MovieId, TagId = TargetOf(e.TagId)!.Value });
+        Repoint(await db.HighlightTagExclusions.Where(e => movieId == null || e.MovieId == movieId).ToListAsync(ct),
+            e => e.HighlightId, e => e.TagId, e => new HighlightTagExclusion { HighlightId = e.HighlightId, MovieId = e.MovieId, TagId = TargetOf(e.TagId)!.Value });
+        Repoint(await db.ApexTagExclusions.Where(e => movieId == null || e.MovieId == movieId).ToListAsync(ct),
+            e => e.ApexId, e => e.TagId, e => new ApexTagExclusion { ApexId = e.ApexId, MovieId = e.MovieId, TagId = TargetOf(e.TagId)!.Value });
+
+        void Repoint<TRow>(List<TRow> rows, Func<TRow, int> owner, Func<TRow, int> tagOf, Func<TRow, TRow> repointed) where TRow : class
+        {
+            var present = rows.Select(r => (owner(r), tagOf(r))).ToHashSet();
+            foreach (var row in rows.Where(r => TargetOf(tagOf(r)) is not null).ToList())
+            {
+                db.Remove(row);
+                if (present.Add((owner(row), TargetOf(tagOf(row))!.Value))) db.Add(repointed(row));
+            }
+        }
+    }
+
     /// <summary>Applies the ignore list and replacement rules to every scene's tags:
     /// an ignored tag is unlinked, a tag matching a rule is repointed to the rule's target (once,
     /// even when the scene already has it or several of its tags map there). A tag is matched by
@@ -415,24 +467,34 @@ public static class TagNormalization
         foreach (var sceneLinks in links.GroupBy(link => link.SceneId))
         {
             var resolvedIds = new HashSet<int>();
+            // Resolved tags any of whose source links passed down: a repointed link keeps its toggle.
+            var passingIds = new HashSet<int>();
             foreach (var link in sceneLinks)
             {
+                int resolvedId;
                 if (!tagsById.TryGetValue(link.TagId, out var tag))
                 {
-                    resolvedIds.Add(link.TagId);
-                    continue;
+                    resolvedId = link.TagId;
                 }
-
-                var value = tag.ParentTag != null ? $"{tag.ParentTag.Name}{Tag.HierarchyDelimiter}{tag.Name}" : tag.Name;
-                if (IsIgnored(value, context)) continue;
-                resolvedIds.Add(FindRule(value, context.Rules)?.TargetTagId ?? link.TagId);
+                else
+                {
+                    var value = tag.ParentTag != null ? $"{tag.ParentTag.Name}{Tag.HierarchyDelimiter}{tag.Name}" : tag.Name;
+                    if (IsIgnored(value, context)) continue;
+                    resolvedId = FindRule(value, context.Rules)?.TargetTagId ?? link.TagId;
+                }
+                resolvedIds.Add(resolvedId);
+                if (link.PropagatesDown) passingIds.Add(resolvedId);
             }
 
             var existingIds = sceneLinks.Select(link => link.TagId).ToHashSet();
             db.SceneTags.RemoveRange(sceneLinks.Where(link => !resolvedIds.Contains(link.TagId)));
+            foreach (var link in sceneLinks.Where(link => passingIds.Contains(link.TagId) && !link.PropagatesDown))
+            {
+                link.PropagatesDown = true;
+            }
             foreach (var tagId in resolvedIds.Where(id => !existingIds.Contains(id)))
             {
-                db.SceneTags.Add(new SceneTag { SceneId = sceneLinks.Key, TagId = tagId });
+                db.SceneTags.Add(new SceneTag { SceneId = sceneLinks.Key, TagId = tagId, PropagatesDown = passingIds.Contains(tagId) });
             }
         }
     }

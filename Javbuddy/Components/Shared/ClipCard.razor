@@ -31,7 +31,7 @@
                 <span class="scene-wall-fav" title="Favorite apex"><FavoriteHeartIcon Filled="true" Size="14" /></span>
             }
         </div>
-        @CardBody(null, apex.Code, apex.MovieTitle, apex.Actors, apex.Tags, [])
+        @CardBody(null, apex.Code, apex.MovieTitle, apex.Actors, apex.Tags, [], apex.InheritedTags)
     </a>
 }
 else if (Highlight is { } highlight)
@@ -56,7 +56,7 @@ else if (Highlight is { } highlight)
             }
             @ApexCount(highlight.ApexCount)
         </div>
-        @CardBody(highlight.DisplayTitle, highlight.Code, highlight.MovieTitle, highlight.Actors, highlight.Tags, highlight.ImplicitTags)
+        @CardBody(highlight.DisplayTitle, highlight.Code, highlight.MovieTitle, highlight.Actors, highlight.Tags, highlight.ImplicitTags, highlight.InheritedTags)
     </a>
 }
 else if (Scene is { } scene)
@@ -84,7 +84,7 @@ else if (Scene is { } scene)
             }
             @ApexCount(scene.ApexCount)
         </div>
-        @CardBody(scene.DisplayTitle, scene.Code, scene.MovieTitle, scene.Actors, scene.Tags, scene.ImplicitTags)
+        @CardBody(scene.DisplayTitle, scene.Code, scene.MovieTitle, scene.Actors, scene.Tags, scene.ImplicitTags, scene.InheritedTags)
     </a>
 }
 
@@ -104,10 +104,10 @@ else if (Scene is { } scene)
         return OnPlay.InvokeAsync(clip);
     }
 
-    // The part of a card every kind shares: title, movie, actors and tags, its own then those rolled up
-    // from its clips. An apex card has no title; as every card in its view
+    // The part of a card every kind shares: title, movie, actors and tags, its own, then those it inherits, then those
+    // rolled up from its clips. An apex card has no title; as every card in its view
     // lacks one, the cards still share a height.
-    private static RenderFragment CardBody(string? displayTitle, string movieCode, string movieTitle, IReadOnlyList<string> actors, IReadOnlyList<SceneTagItem> tags, IReadOnlyList<ImplicitTag> implicitTags) => @<div class="scene-wall-body">
+    private static RenderFragment CardBody(string? displayTitle, string movieCode, string movieTitle, IReadOnlyList<string> actors, IReadOnlyList<SceneTagItem> tags, IReadOnlyList<ImplicitTag> implicitTags, IReadOnlyList<SceneTagItem> inheritedTags) => @<div class="scene-wall-body">
         @if (displayTitle is not null)
         {
             <div class="scene-wall-scene-title" title="@displayTitle">@displayTitle</div>
@@ -123,6 +123,11 @@ else if (Scene is { } scene)
                 @foreach (var tag in tags)
                 {
                     <span class="scene-wall-tag">@ImplicitChip.TagLabel(tag)</span>
+                }
+                @foreach (var tag in inheritedTags)
+                {
+                    var label = ImplicitChip.TagLabel(tag);
+                    <span class="scene-wall-tag scene-wall-tag-inherited" title="@ImplicitChip.InheritedTagTooltip"><span class="scene-wall-tag-arrow" aria-hidden="true">↳</span>@label<span class="visually-hidden">, inherited</span></span>
                 }
                 @foreach (var chip in ImplicitChip.ForTags(implicitTags))
                 {

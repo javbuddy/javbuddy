@@ -134,4 +134,30 @@ public class ClipTagChipsTests : BunitContext
         Assert.True(html.IndexOf("apex-editor-chips", StringComparison.Ordinal) < html.IndexOf("class=\"slot\"", StringComparison.Ordinal));
         Assert.True(html.IndexOf("class=\"slot\"", StringComparison.Ordinal) < html.IndexOf("tag-search-input", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void PropagateToggle_FlipsTheFormTagInPlace_AndIsAbsentWithoutATitle()
+    {
+        var formTags = new List<SceneTagItem> { Alpha };
+        var cut = RenderChips(p => p.Add(x => x.FormTags, formTags).Add(x => x.PropagateTitle, "to the apexes in this highlight"));
+
+        var toggle = cut.Find(".clip-tag-chip-propagate");
+        Assert.Equal("false", toggle.GetAttribute("aria-pressed"));
+        toggle.Click();
+
+        Assert.True(Assert.Single(formTags).PropagatesDown);
+        Assert.Equal("true", cut.Find(".clip-tag-chip-propagate").GetAttribute("aria-pressed"));
+        Assert.Empty(RenderChips(p => p.Add(x => x.Tags, [Alpha])).FindAll(".clip-tag-chip-propagate"));
+    }
+
+    [Fact]
+    public void AnOwnTagAlsoInherited_IsMarkedRedundant_AndNotRepeatedAsInherited()
+    {
+        var cut = RenderChips(p => p
+            .Add(x => x.Tags, [Alpha])
+            .Add(x => x.Inherited, [new InheritedTag(Alpha, ["scene 1"], false), new InheritedTag(Beta, ["the movie"], false)]));
+
+        Assert.StartsWith("Also inherited from scene 1.", cut.Find(".redundant-mark").GetAttribute("title"));
+        Assert.Equal(["↳Play › Beta, inherited from the movie"], cut.FindAll(".inherited-chip").Select(c => c.TextContent.Trim()));
+    }
 }

@@ -18,4 +18,8 @@ public class MovieTag
     public bool IsExplicit { get; set; } = true;
 
     public bool FromClips { get; set; }
+
+    /// <summary>Opt-in: the tag also reaches the clips inside the movie: all its scenes, highlights and apexes. Only an explicit link passes it down as an inherited tag (ClipTagInheritance).
+    /// Always false on a new link.</summary>
+    public bool PropagatesDown { get; set; }
 }

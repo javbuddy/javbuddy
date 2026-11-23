@@ -54,6 +54,7 @@ public abstract class ClipEditorTestBase : BunitContext
         clipService = new MovieClipService(factory, sceneService, highlightService, apexService);
         Services.AddSingleton<IMovieClipService>(clipService);
         Services.AddSingleton<IActorTagService>(new ActorTagService(factory));
+        Services.AddSingleton<IClipTagInheritanceService>(new ClipTagInheritanceService(factory));
         Services.AddSingleton<ITagService>(new TagService(factory, Substitute.For<INfoSyncService>()));
         Services.AddSingleton(chapterImport);
         Services.AddSingleton(Substitute.For<ISceneChapterWriteService>());

@@ -30,6 +30,9 @@ public sealed record HighlightItem(
     /// <summary>The highlight's library tags, ordered by name.</summary>
     public IReadOnlyList<SceneTagItem> Tags { get; init; } = [];
 
+    /// <summary>Tags it opted out of inheriting (<see cref="ClipTagInheritance"/>).</summary>
+    public IReadOnlySet<int> ExcludedTagIds { get; init; } = new HashSet<int>();
+
     /// <summary>Version (cache-buster) of the highlight's screenshot, null when there is no current
     /// one. Served at <c>/highlight-image/{Id}/thumb?v=…</c>.</summary>
     public long? ThumbVersion { get; init; }
@@ -65,12 +68,13 @@ public interface IMovieHighlightService
 
     /// <summary>Adds a highlight with tagIds (none when null) and actorIds as its own actors; none (null or
     /// empty) means it inherits them. Actors must be in the movie's cast. Its tags roll up to
-    /// the movie through ClipTagSync.</summary>
-    Task<HighlightOperationResult> AddHighlightAsync(int movieId, double startSeconds, double endSeconds, string? title, IReadOnlyCollection<int>? tagIds = null, IReadOnlyCollection<int>? actorIds = null, CancellationToken ct = default);
+    /// the movie through ClipTagSync. propagatingTagIds are the tags among tagIds that pass down to its apexes.</summary>
+    Task<HighlightOperationResult> AddHighlightAsync(int movieId, double startSeconds, double endSeconds, string? title, IReadOnlyCollection<int>? tagIds = null, IReadOnlyCollection<int>? actorIds = null, IReadOnlyCollection<int>? propagatingTagIds = null, CancellationToken ct = default);
 
     /// <summary>Changes the range and title and, unless null, replaces the tags with tagIds and its own
-    /// actors with actorIds (empty: it goes back to inheriting).</summary>
-    Task<HighlightOperationResult> UpdateHighlightAsync(int highlightId, double startSeconds, double endSeconds, string? title, IReadOnlyCollection<int>? tagIds = null, IReadOnlyCollection<int>? actorIds = null, CancellationToken ct = default);
+    /// actors with actorIds (empty: it goes back to inheriting); then, unless null, propagatingTagIds are the tags
+    /// among them that pass down to its apexes (null leaves the toggles alone; a newly added tag starts off).</summary>
+    Task<HighlightOperationResult> UpdateHighlightAsync(int highlightId, double startSeconds, double endSeconds, string? title, IReadOnlyCollection<int>? tagIds = null, IReadOnlyCollection<int>? actorIds = null, IReadOnlyCollection<int>? propagatingTagIds = null, CancellationToken ct = default);
 
     Task<HighlightOperationResult> DeleteHighlightAsync(int highlightId, CancellationToken ct = default);
 
@@ -113,6 +117,8 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
                 .ToListAsync(ct))
             .ToLookup(h => h.MovieId);
         var ids = highlightsByMovie.SelectMany(g => g).Select(h => h.Id).ToList();
+        var exclusions = (await db.HighlightTagExclusions.AsNoTracking().Where(e => movies.Contains(e.MovieId)).Select(e => new { e.HighlightId, e.TagId }).ToListAsync(ct))
+            .ToLookup(e => e.HighlightId, e => e.TagId);
         // Only media /highlight-image would serve counts (as for scenes).
         var media = await ClipAssignments.LoadClipMediaVersionsAsync(db, HighlightMediaService.Role, ids,
             highlightMedia is null ? null : highlightMedia.ServesVariant, highlightMedia is null ? null : highlightMedia.IsCurrent, ct);
@@ -135,7 +141,7 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
                         .OrderBy(actor => actor.Name, StringComparer.OrdinalIgnoreCase)
                         .ToList();
                     var tags = h.HighlightTags
-                        .Select(ht => new SceneTagItem(ht.TagId, ht.Tag.Name, ht.Tag.ParentTag?.Name))
+                        .Select(ht => new SceneTagItem(ht.TagId, ht.Tag.Name, ht.Tag.ParentTag?.Name) { PropagatesDown = ht.PropagatesDown })
                         .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase)
                         .ToList();
                     return new HighlightItem(h.Id, i + 1,
@@ -145,6 +151,7 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
                         Actors = actors,
                         EffectiveActors = effectiveActors,
                         Tags = tags,
+                        ExcludedTagIds = exclusions[h.Id].ToHashSet(),
                         ThumbVersion = MediaVersion(h, SceneMediaService.VariantThumb),
                         PreviewVersion = MediaVersion(h, SceneMediaService.VariantPreview)
                     };
@@ -167,7 +174,7 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
         return await db.Tags.CountAsync(t => distinct.Contains(t.Id) && !t.IsActorTag, ct) == distinct.Count ? (distinct, null) : (null, "Tag not found.");
     }
 
-    public async Task<HighlightOperationResult> AddHighlightAsync(int movieId, double startSeconds, double endSeconds, string? title, IReadOnlyCollection<int>? tagIds = null, IReadOnlyCollection<int>? actorIds = null, CancellationToken ct = default)
+    public async Task<HighlightOperationResult> AddHighlightAsync(int movieId, double startSeconds, double endSeconds, string? title, IReadOnlyCollection<int>? tagIds = null, IReadOnlyCollection<int>? actorIds = null, IReadOnlyCollection<int>? propagatingTagIds = null, CancellationToken ct = default)
     {
         var normalizedTitle = title.TrimToNull();
         if (normalizedTitle?.Length > TitleMaxLength)
@@ -207,7 +214,7 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
         };
         foreach (var tagId in distinctTagIds ?? [])
         {
-            highlight.HighlightTags.Add(new HighlightTag { TagId = tagId });
+            highlight.HighlightTags.Add(new HighlightTag { TagId = tagId, PropagatesDown = propagatingTagIds?.Contains(tagId) == true });
         }
         foreach (var actorId in distinctActorIds)
         {
@@ -220,7 +227,7 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
         return HighlightOperationResult.Ok(highlight.Id) with { MovieTagsChanged = tagsChanged };
     }
 
-    public async Task<HighlightOperationResult> UpdateHighlightAsync(int highlightId, double startSeconds, double endSeconds, string? title, IReadOnlyCollection<int>? tagIds = null, IReadOnlyCollection<int>? actorIds = null, CancellationToken ct = default)
+    public async Task<HighlightOperationResult> UpdateHighlightAsync(int highlightId, double startSeconds, double endSeconds, string? title, IReadOnlyCollection<int>? tagIds = null, IReadOnlyCollection<int>? actorIds = null, IReadOnlyCollection<int>? propagatingTagIds = null, CancellationToken ct = default)
     {
         var normalizedTitle = title.TrimToNull();
         if (normalizedTitle?.Length > TitleMaxLength)
@@ -264,6 +271,15 @@ public class MovieHighlightService(IDbContextFactory<AppDbContext> dbFactory, IH
             foreach (var tagId in distinctTagIds.Where(id => highlight.HighlightTags.All(ht => ht.TagId != id)).ToList())
             {
                 highlight.HighlightTags.Add(new HighlightTag { TagId = tagId });
+            }
+            // Null leaves the toggles as they are (a new tag starts off), like actorIds.
+            if (propagatingTagIds is not null)
+            {
+                foreach (var link in highlight.HighlightTags)
+                {
+                    var passes = propagatingTagIds.Contains(link.TagId);
+                    if (link.PropagatesDown != passes) link.PropagatesDown = passes;
+                }
             }
         }
         if (distinctActorIds is not null)
