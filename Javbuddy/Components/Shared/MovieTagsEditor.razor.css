@@ -88,3 +88,7 @@
     opacity: 1;
     font-weight: 700;
 }
+
+.movie-tags-chip-propagate:disabled {
+    cursor: default;
+}

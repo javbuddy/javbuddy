@@ -54,7 +54,7 @@ public static class TagNormalization
                 .Select(v => v!)
                 .ToList();
             await ApplyToMovieAsync(db, movie, normalized, context, existingLinks: null, ct);
-            if (movie.Id != 0) await RepointExclusionsAsync(db, context, movie.Id, ct);
+            if (movie.Id != 0) await CopyExclusionsToRuleTargetsAsync(db, context, movie.Id, ct);
             await db.SaveChangesAsync(ct);
         }
         finally
@@ -118,7 +118,7 @@ public static class TagNormalization
         }
 
         await ApplyToSceneTagsAsync(db, context, ct);
-        await RepointExclusionsAsync(db, context, movieId: null, ct);
+        await CopyExclusionsToRuleTargetsAsync(db, context, movieId: null, ct);
 
         // Flush the per-movie MovieTag and SceneTag adds/removes above before the orphan check below queries
         // MovieTags — that query hits the database directly, so it would otherwise still see
@@ -420,12 +420,13 @@ public static class TagNormalization
         return names.Count > 0 ? string.Join(", ", names) : null;
     }
 
-    /// <summary>Moves the clips' tag exclusions (opt-outs of an inherited tag) along with the tags: an exclusion of a
-    /// tag a replacement rule repoints now excludes the rule's target, as the toggle that passes it down moved there
-    /// (and as a tag merge moves them). Without this the exclusion would stay on the superseded tag and be pruned with
-    /// it, and the clip would start inheriting the target. Ignored tags are left: nothing passes them down any
-    /// more. One movie, or every movie when movieId is null.</summary>
-    private static async Task RepointExclusionsAsync(AppDbContext db, NormalizationContext context, int? movieId, CancellationToken ct)
+    /// <summary>Copies the clips' tag exclusions (opt-outs of an inherited tag) onto the tags replacement rules repoint
+    /// them to: the toggle that passes the tag down moved to the rule's target, so without this the clip would start
+    /// inheriting the target. Copied, not moved: not every source is repointed here (highlight tags never are, and
+    /// the single-movie path only rewrites movie tags), so the original exclusion must keep blocking the old tag. It
+    /// goes dormant once nothing passes that tag down, and cascades away if the tag is pruned. Ignored tags are left.
+    /// One movie, or every movie when movieId is null.</summary>
+    private static async Task CopyExclusionsToRuleTargetsAsync(AppDbContext db, NormalizationContext context, int? movieId, CancellationToken ct)
     {
         var tagsById = context.KnownTags.Where(t => t.Id != 0).ToDictionary(t => t.Id);
         int? TargetOf(int tagId)
@@ -443,13 +444,12 @@ public static class TagNormalization
         Repoint(await db.ApexTagExclusions.Where(e => movieId == null || e.MovieId == movieId).ToListAsync(ct),
             e => e.ApexId, e => e.TagId, e => new ApexTagExclusion { ApexId = e.ApexId, MovieId = e.MovieId, TagId = TargetOf(e.TagId)!.Value });
 
-        void Repoint<TRow>(List<TRow> rows, Func<TRow, int> owner, Func<TRow, int> tagOf, Func<TRow, TRow> repointed) where TRow : class
+        void Repoint<TRow>(List<TRow> rows, Func<TRow, int> owner, Func<TRow, int> tagOf, Func<TRow, TRow> copied) where TRow : class
         {
             var present = rows.Select(r => (owner(r), tagOf(r))).ToHashSet();
             foreach (var row in rows.Where(r => TargetOf(tagOf(r)) is not null).ToList())
             {
-                db.Remove(row);
-                if (present.Add((owner(row), TargetOf(tagOf(row))!.Value))) db.Add(repointed(row));
+                if (present.Add((owner(row), TargetOf(tagOf(row))!.Value))) db.Add(copied(row));
             }
         }
     }

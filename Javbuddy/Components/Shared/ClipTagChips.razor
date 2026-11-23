@@ -9,8 +9,12 @@
    place, else handed to OnTogglePropagate). Inherited shows the tags passed down to this clip (InheritedTagChips). *@
 @{
     var items = FormTags ?? Tags;
+    // What InheritedTagChips will draw: every inherited tag when editable, else those not excluded and not own.
+    var anyInherited = OnToggleExcluded.HasDelegate
+        ? Inherited.Count > 0
+        : Inherited.Any(i => !i.IsExcluded && items.All(t => t.TagId != i.Tag.TagId));
 }
-@if (items.Count > 0 || RolledUp.Count > 0 || Inherited.Count > 0)
+@if (items.Count > 0 || RolledUp.Count > 0 || anyInherited)
 {
     <div class="clip-tag-chips @ClassPrefix-chips">
         @foreach (var tag in items)
