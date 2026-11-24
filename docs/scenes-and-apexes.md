@@ -153,7 +153,7 @@ A scene or highlight card's diamond badge (`ApexCount`) counts the movie's apexe
 
 ## Exporting a clip
 
-**Download clip** in a scene's, highlight's or apex's edit form (`ClipDownloadButton`; existing clips only, and only with a local video and ffmpeg) saves that clip through the browser, losslessly, for an external tool such as a decensor or upscale pass. It downloads the clip as saved, not unsaved edits in the form.
+**Download clip**, the icon button in the header of a scene's, highlight's or apex's edit form (`ClipFormHeader` / `ClipDownloadButton`; existing clips only, and only with a local video and ffmpeg) saves that clip through the browser, losslessly, for an external tool such as a decensor or upscale pass. It downloads the clip as saved, not unsaved edits in the form.
 
 - **Range**: the one the clip player plays, from the same helpers: a scene's effective range (`SceneRanges.ResolveEffectiveRanges`), a highlight's `[start, end)`, an apex's `ApexRanges.ClipFor` with its own or the default window; all cut at the end of the file. The source is the movie's main file (`MovieVideoFiles.FindMainAsync`, the primary version).
 - **Stream copy** (`FfmpegClient.BuildClipCopyArguments`): video (not cover art) and audio streams are copied unchanged; subtitle, data and attachment streams are left out. A copy can only start on a keyframe, so the file starts at the keyframe at or before the clip's start (up to a few seconds early); the end is exact. `ClipExportService` reads the real start back from the output's length and names the file with it: `CODE - Scene 2 [hh-mm-ss - hh-mm-ss].mp4` (a scene's title, a highlight's title or "Highlight N", or "Apex N", by position).

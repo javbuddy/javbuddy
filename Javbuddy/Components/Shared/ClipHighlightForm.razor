@@ -6,6 +6,10 @@
    anyway marked redundant. ClipEditor validates and saves; it also owns the model, since the h / Shift+H shortcuts set its times. *@
 <div class="highlight-editor-form-wrap">
     <form class="highlight-editor-form clip-form" @onsubmit="OnSave" @onsubmit:preventDefault>
+        @if (Model.HighlightId is not null && OnDownload.HasDelegate)
+        {
+            <ClipFormHeader Title="Edit highlight" ClassPrefix="highlight-editor" OnDownload="OnDownload" Downloading="Downloading" Disabled="@(Busy || DownloadDisabled)" />
+        }
         <label class="highlight-editor-field clip-form-field">
             <span class="highlight-editor-label clip-form-label">Title <span class="highlight-editor-hint clip-form-hint">(optional)</span></span>
             <input class="highlight-editor-input clip-form-input highlight-editor-title-input" type="text" maxlength="200" placeholder="@TitlePlaceholder()" @bind="Model.Title" @bind:event="oninput" />
@@ -34,10 +38,6 @@
         <div class="highlight-editor-form-actions clip-form-actions">
             <button type="submit" class="highlight-editor-btn clip-btn highlight-editor-save-btn clip-btn-primary" disabled="@Busy">@(Model.HighlightId is null ? "Add" : "Save")</button>
             <button type="button" class="highlight-editor-btn clip-btn highlight-editor-cancel-btn" @onclick="OnCancel" disabled="@Busy">Cancel</button>
-            @if (Model.HighlightId is not null && OnDownload.HasDelegate)
-            {
-                <ClipDownloadButton ClassPrefix="highlight-editor" OnDownload="OnDownload" Downloading="Downloading" Disabled="@(Busy || DownloadDisabled)" />
-            }
         </div>
     </form>
 </div>

@@ -3,6 +3,10 @@
    ClipEditor's whole tree. ClipEditor validates and saves; it also owns the model, since the m / Shift+M
    shortcuts and the Now buttons set its times. The scene's actors and tags live beside the form in ClipEditor. *@
 <form class="scene-editor-form clip-form" @onsubmit="OnSave" @onsubmit:preventDefault>
+    @if (Model.SceneId is not null && OnDownload.HasDelegate)
+    {
+        <ClipFormHeader Title="@($"Edit scene {Scenes.FirstOrDefault(s => s.Id == Model.SceneId)?.Position}")" ClassPrefix="scene-editor" OnDownload="OnDownload" Downloading="Downloading" Disabled="@(Busy || DownloadDisabled)" />
+    }
     <label class="scene-editor-field clip-form-field">
         <span class="scene-editor-label clip-form-label">Title</span>
         <input class="scene-editor-input clip-form-input scene-editor-title-input" type="text" maxlength="200" placeholder="Scene @(Model.SceneId is { } id ? Scenes.FirstOrDefault(s => s.Id == id)?.Position : Scenes.Count + 1)" @bind="Model.Title" @bind:event="oninput" />
@@ -27,10 +31,6 @@
     <div class="scene-editor-form-actions clip-form-actions">
         <button type="submit" class="scene-editor-btn clip-btn scene-editor-save-btn clip-btn-primary" disabled="@Busy">@(Model.SceneId is null ? "Add" : "Save")</button>
         <button type="button" class="scene-editor-btn clip-btn scene-editor-cancel-btn" @onclick="OnCancel" disabled="@Busy">Cancel</button>
-        @if (Model.SceneId is not null && OnDownload.HasDelegate)
-        {
-            <ClipDownloadButton ClassPrefix="scene-editor" OnDownload="OnDownload" Downloading="Downloading" Disabled="@(Busy || DownloadDisabled)" />
-        }
     </div>
 </form>
 

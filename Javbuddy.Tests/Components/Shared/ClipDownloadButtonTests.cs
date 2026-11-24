@@ -20,7 +20,7 @@ public class ClipDownloadButtonTests : BunitContext
         var cut = RenderButton(clicked: () => clicks++);
 
         var button = cut.Find("button.highlight-editor-download-btn");
-        Assert.Contains("Download clip", button.TextContent);
+        Assert.Equal("Download clip", button.GetAttribute("aria-label"));
         Assert.Equal("false", button.GetAttribute("aria-busy"));
         Assert.Empty(cut.FindAll(".clip-download-spinner"));
         button.Click();

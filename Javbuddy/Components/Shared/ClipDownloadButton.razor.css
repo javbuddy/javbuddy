@@ -1,9 +1,30 @@
-/* Last in the form's button row (look: .clip-btn in app.css), pushed to its right end, away from Save / Cancel. */
+/* A compact pill in the edit form's header, apart from Save / Cancel. */
 .clip-download-btn {
-    margin-left: auto;
+    appearance: none;
+    flex: none;
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--scene-editor-border, rgba(255, 255, 255, 0.14));
+    border-radius: 999px;
+    background-color: var(--scene-editor-btn-bg, rgba(255, 255, 255, 0.08));
+    color: inherit;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.clip-download-btn:hover:not(:disabled),
+.clip-download-btn:focus-visible {
+    border-color: var(--jb-accent);
+    color: var(--jb-accent);
+    outline: none;
+}
+
+.clip-download-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 .clip-download-spinner {

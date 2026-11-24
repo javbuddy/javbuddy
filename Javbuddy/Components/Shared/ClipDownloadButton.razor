@@ -1,6 +1,6 @@
-@* "Download clip" at the end of a scene, highlight or apex edit form's buttons: saves the clip's saved range losslessly through
+@* "Download clip" chip in the header of a scene, highlight or apex edit form (ClipFormHeader): saves the clip's saved range losslessly through
    the browser (ClipEditor prepares it with IClipExportService, then starts the download). Spins while the clip is being cut. *@
-<button type="button" class="clip-btn clip-download-btn @ClassPrefix-download-btn" @onclick="OnDownload" disabled="@(Disabled || Downloading)"
+<button type="button" aria-label="Download clip" class="clip-download-btn @ClassPrefix-download-btn" @onclick="OnDownload" disabled="@(Disabled || Downloading)"
         aria-busy="@(Downloading ? "true" : "false")"
         title="@(Downloading ? "Preparing the clip…" : "Download the saved clip losslessly (stream copy, no re-encode)")">
     @if (Downloading)
@@ -11,7 +11,6 @@
     {
         <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z" /><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z" /></svg>
     }
-    Download clip
 </button>
 
 @code {

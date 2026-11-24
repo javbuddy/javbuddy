@@ -1,0 +1,20 @@
+@* The header of a scene, highlight or apex edit form for an existing clip: what is being edited, and the "Download clip" chip
+   at its right, apart from the Save / Cancel buttons. *@
+<div class="clip-form-head">
+    <b class="clip-form-head-title">@Title</b>
+    <ClipDownloadButton ClassPrefix="@ClassPrefix" OnDownload="OnDownload" Downloading="Downloading" Disabled="Disabled" />
+</div>
+
+@code {
+    /// <summary>"Edit scene 2", "Edit highlight", "Edit apex".</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+
+    /// <summary>The host form's class prefix, passed on to <see cref="ClipDownloadButton"/>.</summary>
+    [Parameter, EditorRequired] public string ClassPrefix { get; set; } = string.Empty;
+
+    [Parameter] public EventCallback OnDownload { get; set; }
+
+    [Parameter] public bool Downloading { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+}

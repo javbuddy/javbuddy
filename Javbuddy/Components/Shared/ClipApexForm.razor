@@ -4,6 +4,10 @@
    previous apex's tags. ClipEditor validates and saves, and owns the model, since the a
    shortcut opens and moves it. *@
 <form class="apex-editor-form clip-form" @onsubmit="OnSave" @onsubmit:preventDefault>
+    @if (Model.ApexId is not null && OnDownload.HasDelegate)
+    {
+        <ClipFormHeader Title="Edit apex" ClassPrefix="apex-editor" OnDownload="OnDownload" Downloading="Downloading" Disabled="@(Busy || DownloadDisabled)" />
+    }
     <label class="apex-editor-field clip-form-field">
         <span class="apex-editor-label clip-form-label">Time</span>
         <ClipTimeField @bind-Value="Model.Time" ClassPrefix="apex-editor" InputClass="apex-editor-time-input" NowClass="apex-editor-now-btn"
@@ -42,10 +46,6 @@
     <div class="apex-editor-form-actions clip-form-actions">
         <button type="submit" class="apex-editor-btn clip-btn apex-editor-save-btn clip-btn-primary" disabled="@Busy">@(Model.ApexId is null ? "Add" : "Save")</button>
         <button type="button" class="apex-editor-btn clip-btn apex-editor-cancel-btn" @onclick="OnCancel" disabled="@Busy">Cancel</button>
-        @if (Model.ApexId is not null && OnDownload.HasDelegate)
-        {
-            <ClipDownloadButton ClassPrefix="apex-editor" OnDownload="OnDownload" Downloading="Downloading" Disabled="@(Busy || DownloadDisabled)" />
-        }
     </div>
 </form>
 
