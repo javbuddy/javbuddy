@@ -1,5 +1,6 @@
 using Bunit;
 using Javbuddy.Services.ClipExport;
+using Javbuddy.Services.Scenes;
 using NSubstitute;
 
 namespace Javbuddy.Tests.Components.Shared;
