@@ -143,7 +143,9 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
         if (parsed is null) return null;
 
         var durationSeconds = double.TryParse(parsed.Format?.Duration, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0;
-        var videoStream = parsed.Streams?.FirstOrDefault(s => s.CodecType == "video");
+        // Skip embedded cover art (an mjpeg/png "video" stream flagged attached_pic), which can come before the real video;
+        // the clip copy's -map 0:V skips it the same way.
+        var videoStream = parsed.Streams?.FirstOrDefault(s => s.CodecType == "video" && s.Disposition?.AttachedPic != 1);
         var audioStream = parsed.Streams?.FirstOrDefault(s => s.CodecType == "audio");
 
         return new FfprobeMediaInfo
@@ -955,5 +957,13 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
         [JsonPropertyName("channels")]
         public int? Channels { get; set; }
+
+        public FfprobeDisposition? Disposition { get; set; }
+    }
+
+    private class FfprobeDisposition
+    {
+        [JsonPropertyName("attached_pic")]
+        public int? AttachedPic { get; set; }
     }
 }

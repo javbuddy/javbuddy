@@ -19,6 +19,7 @@ public class VideoPlayerModalTests : BunitContext
     private readonly IMovieStreamService streamService = Substitute.For<IMovieStreamService>();
     private readonly ITrickplayService trickplayService = Substitute.For<ITrickplayService>();
     private readonly TestDbContextFactory factory = new();
+    private readonly Javbuddy.Services.ClipExport.IClipExportService clipExport = Substitute.For<Javbuddy.Services.ClipExport.IClipExportService>();
 
     public VideoPlayerModalTests()
     {
@@ -42,7 +43,7 @@ public class VideoPlayerModalTests : BunitContext
         Services.AddSingleton(Substitute.For<Javbuddy.Services.SceneMedia.ISceneMediaService>());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.SceneMedia.IHighlightMediaService>());
         Services.AddSingleton(Substitute.For<Javbuddy.Services.SceneMedia.IApexMediaService>());
-        Services.AddSingleton(Substitute.For<Javbuddy.Services.ClipExport.IClipExportService>());
+        Services.AddSingleton(clipExport);
         Services.AddSingleton(new Javbuddy.Services.SceneMedia.SceneMediaQueue(Substitute.For<IServiceScopeFactory>(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Javbuddy.Services.SceneMedia.SceneMediaQueue>.Instance));
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
@@ -119,6 +120,42 @@ public class VideoPlayerModalTests : BunitContext
         Assert.Contains("Climax", cut.Find(".video-player-side-panel .highlight-editor-row").TextContent);
         Assert.Single(cut.FindAll(".video-player-column .scrub-bar-track-wrap .highlight-segment"));
         Assert.Equal("Bath", Assert.Single(reported!).Title);
+    }
+
+    [Fact]
+    public async Task SwitchingMovie_ReplacesTheEditor_AndCancelsAClipStillBeingCut()
+    {
+        int first, second;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var a = new Movie { Code = "ABC-123", MediaDurationSeconds = 180 };
+            var b = new Movie { Code = "ABC-456", MediaDurationSeconds = 180 };
+            db.Movies.AddRange(a, b);
+            await db.SaveChangesAsync();
+            (first, second) = (a.Id, b.Id);
+        }
+        await new MovieHighlightService(factory).AddHighlightAsync(first, 100, 120, "Climax");
+        clipExport.IsAvailable.Returns(true);
+        var token = CancellationToken.None;
+        var pending = new TaskCompletionSource<Javbuddy.Services.ClipExport.ClipExportResult>();
+        clipExport.PrepareAsync(Arg.Any<Javbuddy.Services.ClipExport.ClipKind>(), Arg.Any<int>(), Arg.Do<CancellationToken>(t => token = t))
+            .Returns(pending.Task);
+
+        var cut = Render<VideoPlayerModal>(p => p
+            .Add(x => x.Show, true)
+            .Add(x => x.MovieId, first)
+            .Add(x => x.ShowEditor, true)
+            .Add(x => x.DurationSeconds, 180d));
+        var editor = cut.FindComponent<ClipEditor>().Instance;
+        cut.WaitForElement(".highlight-editor-edit-btn").Click();
+        cut.WaitForElement(".highlight-editor-download-btn").Click();
+        cut.WaitForAssertion(() => Assert.True(token.CanBeCanceled));
+
+        cut.Render(p => p.Add(x => x.MovieId, second));
+
+        // A fresh editor for the next movie (its download buttons not held disabled), and the first movie's cut stopped.
+        Assert.NotSame(editor, cut.FindComponent<ClipEditor>().Instance);
+        Assert.True(token.IsCancellationRequested);
     }
 
     [Fact]
