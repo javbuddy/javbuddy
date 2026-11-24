@@ -3,8 +3,8 @@ namespace Javbuddy.Services.Ffmpeg;
 /// <summary>Caps how many ffmpeg processes run at once in one lane. The scene-media, trickplay, VR-merge and
 /// scene-detection jobs each have their own queue, so without a shared cap they all decode video together; a decode can
 /// use every core and holds a lot of memory, so the extra processes only slow each other down. There are two lanes of
-/// one slot each: <see cref="Long"/> for whole-file decodes and remuxes, <see cref="Short"/> for stills, hover previews
-/// and highlight-clip trickplay, so those stay quick while an hours-long job runs. ffprobe is cheap and not gated, so
+/// one slot each: <see cref="Long"/> for whole-file decodes, <see cref="Short"/> for stills, hover previews
+/// and highlight-clip trickplay, so those stay quick while an hours-long job runs. ffprobe and the stream-copy jobs (VR merge, clip export, chapter remux, dts2pts repair) use little CPU and are not gated, so
 /// scanning keeps going too. The lanes are static because the client itself is scoped, so the cap has to live outside
 /// it.</summary>
 public sealed class FfmpegGate(int maxConcurrency, string name = "custom")
@@ -12,13 +12,13 @@ public sealed class FfmpegGate(int maxConcurrency, string name = "custom")
     public const string LongName = "long";
     public const string ShortName = "short";
 
-    /// <summary>The gate label used for runs that go through no gate (ffprobe, the dts2pts repair and chapter remux).</summary>
+    /// <summary>The gate label used for runs that go through no gate (ffprobe and the stream-copy jobs: VR merge, clip export, the dts2pts repair and chapter remux).</summary>
     public const string UngatedName = "none";
 
     /// <summary>Low-cardinality label for this lane in metrics.</summary>
     public string Name { get; } = name;
 
-    /// <summary>Whole-file work: full trickplay, scene detection and VR merge (the dts2pts repair and chapter remux are ungated).</summary>
+    /// <summary>Whole-file work: full trickplay and scene detection (stream-copy jobs such as VR merge, clip export, the dts2pts repair and chapter remux are ungated).</summary>
     public static FfmpegGate Long { get; } = new(1, LongName);
 
     /// <summary>A few seconds of video: scene stills, hover previews and highlight-clip trickplay.</summary>

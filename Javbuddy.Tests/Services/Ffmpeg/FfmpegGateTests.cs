@@ -94,6 +94,8 @@ public class FfmpegGateTests
     [Theory]
     [InlineData("chapter-remux")]
     [InlineData("dts2pts-repair")]
+    [InlineData("clip-export")]
+    [InlineData("vr-merge")]
     public async Task UngatedRemuxes_DoNotWaitOnEitherGate(string job)
     {
         if (OperatingSystem.IsWindows()) return;
@@ -114,6 +116,9 @@ public class FfmpegGateTests
             var run = job switch
             {
                 "chapter-remux" => client.RemuxWithChaptersAsync("in.mp4", ";FFMETADATA1\n", "out.mp4", TimeSpan.FromMinutes(10), progress: null),
+                "clip-export" => client.ExportClipCopyAsync("in.mp4", 0, 5, "mp4", "out.mp4"),
+                "vr-merge" => client.ConcatWithChaptersAsync(
+                    new FfmpegConcatRequest([new FfmpegConcatPart("a.mp4", "A", 1_000_000), new FfmpegConcatPart("b.mp4", "B", 1_000_000)], "out.mp4"), progress: null),
                 _ => client.RemuxDts2PtsAsync("in.mp4", "out.mp4", TimeSpan.FromMinutes(10), progress: null),
             };
             var result = await run.WaitAsync(TimeSpan.FromSeconds(5));

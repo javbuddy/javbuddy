@@ -185,7 +185,7 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
         }
 
         var totalDuration = TimeSpan.FromMicroseconds(request.Parts.Sum(p => p.DurationMicroseconds));
-        return await RunInstrumentedAsync("concat", longGate, totalDuration, new RunIo([.. request.Parts.Select(p => p.AbsolutePath)], request.OutputPath), ct, scope => ConcatCoreAsync(scope, ffmpegPath, request, totalDuration, progress, ct), r => r.Success);
+        return await RunInstrumentedAsync("concat", null, totalDuration, new RunIo([.. request.Parts.Select(p => p.AbsolutePath)], request.OutputPath), ct, scope => ConcatCoreAsync(scope, ffmpegPath, request, totalDuration, progress, ct), r => r.Success);
     }
 
     private static async Task<FfmpegRunResult> ConcatCoreAsync(FfmpegRunScope scope, string ffmpegPath, FfmpegConcatRequest request, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct)
@@ -271,9 +271,9 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
             return FfmpegRunResult.Failed("ffmpeg is not available.");
         }
 
-        // The long lane: a scene can be tens of minutes, so the copy reads hundreds of MB to several GB.
+        // Ungated: a stream copy uses almost no CPU, so it has no reason to queue behind a decode.
         var arguments = BuildClipCopyArguments(inputPath, startSeconds, durationSeconds, muxer, outputPath);
-        return await RunInstrumentedAsync("clip_export", longGate, TimeSpan.FromSeconds(Math.Max(durationSeconds, 0)), new RunIo([inputPath], outputPath), ct, scope => RunCoreAsync(scope, ffmpegPath, arguments, ct), r => r.Success);
+        return await RunInstrumentedAsync("clip_export", null, TimeSpan.FromSeconds(Math.Max(durationSeconds, 0)), new RunIo([inputPath], outputPath), ct, scope => RunCoreAsync(scope, ffmpegPath, arguments, ct), r => r.Success);
     }
 
     // Input seeking with stream copy starts at the keyframe before -ss; -t still ends at start + duration, and make_zero shifts the
