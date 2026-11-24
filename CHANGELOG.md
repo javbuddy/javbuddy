@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-24
+
 ### Fixed
 
 - **Downloading a clip and merging VR parts no longer wait behind background ffmpeg work.** Both are stream copies that barely use the CPU, so like video repair they now start right away instead of queuing at the ffmpeg gate behind trickplay generation or scene detection.
