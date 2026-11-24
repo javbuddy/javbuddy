@@ -8,13 +8,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.ClipExport;
 
-public enum ClipKind
-{
-    Scene,
-    Highlight,
-    Apex,
-}
-
 /// <summary>What preparing an export did. On success <see cref="Token"/> downloads the clip (<c>/api/clip-exports/{token}</c>) as
 /// <see cref="FileName"/>, and <see cref="ActualStartSeconds"/> is where it really starts: stream copy begins on the keyframe at or
 /// before <see cref="RequestedStartSeconds"/>.</summary>

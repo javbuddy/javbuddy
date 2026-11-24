@@ -139,7 +139,7 @@ public class VideoPlayerModalTests : BunitContext
         clipExport.IsAvailable.Returns(true);
         var token = CancellationToken.None;
         var pending = new TaskCompletionSource<Javbuddy.Services.ClipExport.ClipExportResult>();
-        clipExport.PrepareAsync(Arg.Any<Javbuddy.Services.ClipExport.ClipKind>(), Arg.Any<int>(), Arg.Do<CancellationToken>(t => token = t))
+        clipExport.PrepareAsync(Arg.Any<Javbuddy.Services.Scenes.ClipKind>(), Arg.Any<int>(), Arg.Do<CancellationToken>(t => token = t))
             .Returns(pending.Task);
 
         var cut = Render<VideoPlayerModal>(p => p

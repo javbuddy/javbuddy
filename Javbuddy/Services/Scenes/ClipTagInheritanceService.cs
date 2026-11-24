@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Javbuddy.Services.Scenes;
 
-/// <summary>The kind of clip a tag toggle or exclusion is on.</summary>
+/// <summary>A kind of clip: what a tag toggle or exclusion is on, or what a clip export cuts.</summary>
 public enum ClipKind { Scene, Highlight, Apex }
 
 /// <summary>Edits what tags pass down to clips (<see cref="ClipTagInheritance"/>): a scene's own tag's "pass down"
