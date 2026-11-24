@@ -6,7 +6,7 @@
    Distinct from a scene's own tags (ClipEditor's scene form). Adds/removes go through
    ITagService, which syncs MetaGenres and checks .nfo drift. A tag the movie only has because a
    scene, highlight or apex carries it shows as a grayed chip with no remove button; one the
-   movie has explicitly that a clip carries too is marked redundant. Each own tag has a ↓ toggle, off unless turned
+   movie has explicitly that a clip carries too is marked redundant. Each own tag (not an actor tag) has a ↓ toggle, off unless turned
    on, that passes it down to every scene, highlight and apex (ClipTagInheritance); the ClipEditor it sits in is then
    told to re-read what its clips inherit.
    Themed by the same --scene-editor-* custom properties as the ClipEditor. *@
@@ -30,9 +30,13 @@
                 {
                     <span class="movie-tags-chip">
                         @Label(tag)
-                        <button type="button" class="movie-tags-chip-propagate" disabled="@busy" aria-pressed="@(tag.PropagatesDown ? "true" : "false")" aria-label="Pass @Label(tag) down"
-                                title="@(tag.PropagatesDown ? "Passed down: to every scene, highlight and apex. Click to stop." : "Pass down: to every scene, highlight and apex")"
-                                @onclick="() => TogglePropagateAsync(tag)">↓</button>
+                        @* An actor tag (a link left by an older version) never passes down. *@
+                        @if (!tag.IsActorTag)
+                        {
+                            <button type="button" class="movie-tags-chip-propagate" disabled="@busy" aria-pressed="@(tag.PropagatesDown ? "true" : "false")" aria-label="Pass @Label(tag) down"
+                                    title="@(tag.PropagatesDown ? "Passed down: to every scene, highlight and apex. Click to stop." : "Pass down: to every scene, highlight and apex")"
+                                    @onclick="() => TogglePropagateAsync(tag)">↓</button>
+                        }
                         @if (tag.FromClips)
                         {
                             <RedundantMark Tooltip="Also from its scenes, highlights or apexes. Remove it and it stays, grayed, as implied." />
@@ -63,7 +67,7 @@
     [CascadingParameter] public ClipEditor? Editor { get; set; }
 
     // FromClips on an explicit tag means a clip carries it too, so it's redundant.
-    private sealed record TagChip(int Id, string Name, string? ParentName, bool IsImplicit, bool FromClips, bool PropagatesDown);
+    private sealed record TagChip(int Id, string Name, string? ParentName, bool IsImplicit, bool FromClips, bool PropagatesDown, bool IsActorTag);
 
     private IReadOnlyList<TagChip> tags = [];
     private bool expanded;
@@ -107,7 +111,7 @@
         if (movieId != MovieId) return;
 
         tags = links
-            .Select(l => new TagChip(l.TagId, l.Tag.Name, l.Tag.ParentTag?.Name, !l.IsExplicit, l.FromClips, l.PropagatesDown))
+            .Select(l => new TagChip(l.TagId, l.Tag.Name, l.Tag.ParentTag?.Name, !l.IsExplicit, l.FromClips, l.PropagatesDown, l.Tag.IsActorTag))
             .OrderBy(t => t.ParentName ?? t.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();

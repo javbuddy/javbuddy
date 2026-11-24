@@ -59,9 +59,30 @@ public class ClipTagInheritanceService(IDbContextFactory<AppDbContext> dbFactory
         {
             return SceneOperationResult.Fail("Clip not found.");
         }
-        if (!await db.Tags.AnyAsync(t => t.Id == tagId, ct))
+        var isActorTag = await db.Tags.Where(t => t.Id == tagId).Select(t => (bool?)t.IsActorTag).FirstOrDefaultAsync(ct);
+        if (isActorTag is null)
         {
             return SceneOperationResult.Fail("Tag not found.");
+        }
+        if (isActorTag.Value)
+        {
+            return SceneOperationResult.Fail("Actor tags aren't passed down, so there's nothing to opt out of.");
+        }
+        // Only opt out of a tag the clip inherits now: a stray row would lie dormant and silently block the tag later,
+        // once something starts passing it down. Opting back in is always allowed, so a stray row can still be cleared.
+        if (excluded)
+        {
+            var inherited = await ClipAssignments.LoadInheritedTagsAsync(db, movieId.Value, ct);
+            var pools = kind switch
+            {
+                ClipKind.Scene => inherited.Scenes,
+                ClipKind.Highlight => inherited.Highlights,
+                _ => inherited.Apexes,
+            };
+            if (!pools.TryGetValue(clipId, out var pool) || !pool.Any(t => t.Tag.TagId == tagId))
+            {
+                return SceneOperationResult.Fail("Nothing passes this tag down to the clip.");
+            }
         }
 
         switch (kind)
