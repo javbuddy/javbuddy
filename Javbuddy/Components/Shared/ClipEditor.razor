@@ -1171,21 +1171,23 @@
         try
         {
             var (success, failure, movieTagsChanged) = await operation();
-            if (!success)
+            if (success)
+            {
+                error = null;
+                closeForm?.Invoke();
+                await ReloadAsync();
+                if (movieTagsChanged) await OnMovieTagsMayHaveChanged.InvokeAsync();
+            }
+            else
             {
                 error = failure;
-                return;
             }
-
-            error = null;
-            closeForm?.Invoke();
-            await ReloadAsync();
-            if (movieTagsChanged) await OnMovieTagsMayHaveChanged.InvokeAsync();
         }
         finally
         {
             busy = false;
         }
+        // The movie's tags changed mid-save: reload even when the save failed, so the inherited chips aren't stale.
         if (reloadWhenIdle && !disposed)
         {
             reloadWhenIdle = false;

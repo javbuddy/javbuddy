@@ -205,4 +205,23 @@ public class MovieTagsEditorTests : BunitContext
         await using var db = await factory.CreateDbContextAsync();
         Assert.True(db.MovieTags.Single(mt => mt.MovieId == movieId && mt.TagId == tagId).PropagatesDown);
     }
+
+    [Fact]
+    public async Task AnActorTagLinkLeftOnTheMovie_HasNoPassDownToggle()
+    {
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actorTag = new Tag { Name = "Pose", IsActorTag = true };
+            db.Tags.Add(actorTag);
+            await db.SaveChangesAsync();
+            db.MovieTags.Add(new MovieTag { MovieId = movieId, TagId = actorTag.Id });
+            await db.SaveChangesAsync();
+        }
+
+        var cut = RenderEditor();
+        await cut.Find(".movie-tags-toggle").ClickAsync();
+
+        Assert.Contains("Pose", cut.Find(".movie-tags-chip").TextContent);
+        Assert.Empty(cut.FindAll(".movie-tags-chip-propagate"));
+    }
 }

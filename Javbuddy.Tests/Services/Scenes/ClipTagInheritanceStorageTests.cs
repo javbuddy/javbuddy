@@ -457,6 +457,105 @@ public sealed class ClipTagInheritanceStorageTests : IDisposable
         Assert.Empty((await StoredAsync()).Highlights);
     }
 
+    [Fact]
+    public async Task LibraryRules_DontCopyAnOptOut_OntoATagTheClipAlreadyInherited()
+    {
+        // The movie passes down both "Night" and "Evening"; the scene opted out of "Night" only. Repointing "Night"
+        // onto "Evening" must leave the scene inheriting "Evening", as before.
+        await SeedAsync();
+        var tags = new TagService(factory, Substitute.For<INfoSyncService>());
+        int eveningId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var evening = new Tag { Name = "Evening" };
+            db.Tags.Add(evening);
+            await db.SaveChangesAsync();
+            eveningId = evening.Id;
+            db.MovieTags.Add(new MovieTag { MovieId = movieId, TagId = eveningId });
+            db.Movies.Single(m => m.Id == movieId).MetaGenres = "Evening, Night";
+            await db.SaveChangesAsync();
+        }
+        await tags.SetMovieTagPropagatesDownAsync(movieId, nightId, true);
+        await tags.SetMovieTagPropagatesDownAsync(movieId, eveningId, true);
+        await RefreshAsync();
+        Assert.True((await service.SetExcludedAsync(ClipKind.Scene, sceneId, nightId, true)).Success);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            db.TagReplacementRules.Add(new TagReplacementRule { SourceValue = "Night", TargetTagId = eveningId });
+            await db.SaveChangesAsync();
+        }
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            await TagNormalization.ApplyToLibraryAsync(db);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var verify = await factory.CreateDbContextAsync())
+        {
+            Assert.False(await verify.SceneTagExclusions.AnyAsync(e => e.SceneId == sceneId && e.TagId == eveningId));
+        }
+        Assert.Contains((sceneId, eveningId), (await StoredAsync()).Scenes);
+    }
+
+    [Fact]
+    public async Task MetadataIngestion_CopiesAnOptOut_OntoTheTagTheRuleRepointsTo()
+    {
+        await SeedAsync();
+        await new TagService(factory, Substitute.For<INfoSyncService>()).SetMovieTagPropagatesDownAsync(movieId, nightId, true);
+        await RefreshAsync();
+        Assert.True((await service.SetExcludedAsync(ClipKind.Scene, sceneId, nightId, true)).Success);
+        await AddRuleAsync("Night", "Evening");
+
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var movie = await db.Movies.SingleAsync(m => m.Id == movieId);
+            await TagNormalization.ApplyToMovieAsync(db, movie, ["Night"]);
+        }
+
+        await using var verify = await factory.CreateDbContextAsync();
+        var eveningId = await verify.Tags.Where(t => t.Name == "Evening").Select(t => t.Id).SingleAsync();
+        Assert.True(await verify.MovieTags.AnyAsync(mt => mt.MovieId == movieId && mt.TagId == eveningId && mt.PropagatesDown));
+        Assert.True(await verify.SceneTagExclusions.AnyAsync(e => e.SceneId == sceneId && e.TagId == eveningId));
+    }
+
+    [Fact]
+    public async Task SetExcluded_RejectsATagTheClipDoesntInherit_ButAlwaysAllowsOptingBackIn()
+    {
+        await SeedAsync();
+
+        // "Night" is on the movie but not passed down.
+        Assert.False((await service.SetExcludedAsync(ClipKind.Scene, sceneId, nightId, true)).Success);
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            Assert.False(await db.SceneTagExclusions.AnyAsync());
+            // A stray row from before the check can still be cleared.
+            db.SceneTagExclusions.Add(new SceneTagExclusion { SceneId = sceneId, MovieId = movieId, TagId = nightId });
+            await db.SaveChangesAsync();
+        }
+        Assert.True((await service.SetExcludedAsync(ClipKind.Scene, sceneId, nightId, false)).Success);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.False(await verify.SceneTagExclusions.AnyAsync());
+    }
+
+    [Fact]
+    public async Task SetExcluded_RejectsAnActorTag()
+    {
+        await SeedAsync();
+        int actorTagId;
+        await using (var db = await factory.CreateDbContextAsync())
+        {
+            var actorTag = new Tag { Name = "Pose", IsActorTag = true };
+            db.Tags.Add(actorTag);
+            await db.SaveChangesAsync();
+            actorTagId = actorTag.Id;
+        }
+
+        Assert.False((await service.SetExcludedAsync(ClipKind.Apex, apexId, actorTagId, true)).Success);
+        await using var verify = await factory.CreateDbContextAsync();
+        Assert.False(await verify.ApexTagExclusions.AnyAsync());
+    }
+
     private async Task AddRuleAsync(string source, string targetName)
     {
         await using var db = await factory.CreateDbContextAsync();

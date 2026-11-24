@@ -53,8 +53,10 @@ public static class TagNormalization
                 .Where(v => !string.IsNullOrEmpty(v))
                 .Select(v => v!)
                 .ToList();
+            var before = movie.Id != 0 ? await SnapshotRepointedExclusionsAsync(db, context, movie.Id, ct) : [];
             await ApplyToMovieAsync(db, movie, normalized, context, existingLinks: null, ct);
-            if (movie.Id != 0) await CopyExclusionsToRuleTargetsAsync(db, context, movie.Id, ct);
+            await db.SaveChangesAsync(ct);
+            await CopyExclusionsToRuleTargetsAsync(db, context, before, ct);
             await db.SaveChangesAsync(ct);
         }
         finally
@@ -91,6 +93,8 @@ public static class TagNormalization
             .GroupBy(link => link.MovieId)
             .ToDictionary(group => group.Key, group => group.ToList());
 
+        var exclusionsBefore = await SnapshotRepointedExclusionsAsync(db, context, movieId: null, ct);
+
         // Chunked, each chunk in its own short transaction, so other writers get in between chunks instead of
         // waiting out one library-sized batch.
         foreach (var chunk in movies.Chunk(LibraryChunkSize))
@@ -118,7 +122,8 @@ public static class TagNormalization
         }
 
         await ApplyToSceneTagsAsync(db, context, ct);
-        await CopyExclusionsToRuleTargetsAsync(db, context, movieId: null, ct);
+        await db.SaveChangesAsync(ct);
+        await CopyExclusionsToRuleTargetsAsync(db, context, exclusionsBefore, ct);
 
         // Flush the per-movie MovieTag and SceneTag adds/removes above before the orphan check below queries
         // MovieTags — that query hits the database directly, so it would otherwise still see
@@ -420,38 +425,77 @@ public static class TagNormalization
         return names.Count > 0 ? string.Join(", ", names) : null;
     }
 
-    /// <summary>Copies the clips' tag exclusions (opt-outs of an inherited tag) onto the tags replacement rules repoint
-    /// them to: the toggle that passes the tag down moved to the rule's target, so without this the clip would start
-    /// inheriting the target. Copied, not moved: not every source is repointed here (highlight tags never are, and
-    /// the single-movie path only rewrites movie tags), so the original exclusion must keep blocking the old tag. It
-    /// goes dormant once nothing passes that tag down, and cascades away if the tag is pruned. Ignored tags are left.
-    /// One movie, or every movie when movieId is null.</summary>
-    private static async Task CopyExclusionsToRuleTargetsAsync(AppDbContext db, NormalizationContext context, int? movieId, CancellationToken ct)
+    /// <summary>What each clip inherits, before the pass, in every movie (or just <paramref name="movieId"/>) with a clip
+    /// opted out of a tag a replacement rule repoints: <see cref="CopyExclusionsToRuleTargetsAsync"/> compares it with
+    /// what they inherit afterwards.</summary>
+    private static async Task<Dictionary<int, ClipTagInheritanceResult>> SnapshotRepointedExclusionsAsync(AppDbContext db, NormalizationContext context, int? movieId, CancellationToken ct)
     {
+        var rows = await db.SceneTagExclusions.Where(e => movieId == null || e.MovieId == movieId).Select(e => new { e.MovieId, e.TagId })
+            .Concat(db.HighlightTagExclusions.Where(e => movieId == null || e.MovieId == movieId).Select(e => new { e.MovieId, e.TagId }))
+            .Concat(db.ApexTagExclusions.Where(e => movieId == null || e.MovieId == movieId).Select(e => new { e.MovieId, e.TagId }))
+            .Distinct()
+            .ToListAsync(ct);
         var tagsById = context.KnownTags.Where(t => t.Id != 0).ToDictionary(t => t.Id);
-        int? TargetOf(int tagId)
+        var snapshot = new Dictionary<int, ClipTagInheritanceResult>();
+        foreach (var id in rows.Where(r => RuleTargetOf(r.TagId, tagsById, context) is not null).Select(r => r.MovieId).Distinct())
         {
-            if (!tagsById.TryGetValue(tagId, out var tag)) return null;
-            var value = tag.ParentTag != null ? $"{tag.ParentTag.Name}{Tag.HierarchyDelimiter}{tag.Name}" : tag.Name;
-            if (IsIgnored(value, context)) return null;
-            return FindRule(value, context.Rules)?.TargetTagId is { } target && target != tagId ? target : null;
+            snapshot[id] = await ClipAssignments.LoadInheritedTagsAsync(db, id, ct);
+        }
+        return snapshot;
+    }
+
+    /// <summary>Copies a clip's opt-out of a tag onto the tag a replacement rule repoints it to, when the pass moved what
+    /// passed that tag down onto the target and so the clip only now inherits it. A clip that already inherited
+    /// the target (from another source) keeps it: its opt-out of the old tag never covered that one. Copied, not moved: not
+    /// every source is repointed (highlight tags never are, and the single-movie path only rewrites movie tags), so
+    /// the original must keep blocking the old tag; it cascades away if the tag is pruned. Needs the pass saved, so
+    /// the stored links are the new ones. <paramref name="before"/> is <see cref="SnapshotRepointedExclusionsAsync"/>'s.</summary>
+    private static async Task CopyExclusionsToRuleTargetsAsync(AppDbContext db, NormalizationContext context, Dictionary<int, ClipTagInheritanceResult> before, CancellationToken ct)
+    {
+        if (before.Count == 0) return;
+        var tagsById = context.KnownTags.Where(t => t.Id != 0).ToDictionary(t => t.Id);
+        var movieIds = before.Keys.ToList();
+        var sceneRows = await db.SceneTagExclusions.Where(e => movieIds.Contains(e.MovieId)).ToListAsync(ct);
+        var highlightRows = await db.HighlightTagExclusions.Where(e => movieIds.Contains(e.MovieId)).ToListAsync(ct);
+        var apexRows = await db.ApexTagExclusions.Where(e => movieIds.Contains(e.MovieId)).ToListAsync(ct);
+
+        foreach (var (movieId, old) in before)
+        {
+            var now = await ClipAssignments.LoadInheritedTagsAsync(db, movieId, ct);
+            Copy(sceneRows.Where(e => e.MovieId == movieId).ToList(), old.Scenes, now.Scenes, e => e.SceneId, e => e.TagId,
+                (e, target) => new SceneTagExclusion { SceneId = e.SceneId, MovieId = e.MovieId, TagId = target });
+            Copy(highlightRows.Where(e => e.MovieId == movieId).ToList(), old.Highlights, now.Highlights, e => e.HighlightId, e => e.TagId,
+                (e, target) => new HighlightTagExclusion { HighlightId = e.HighlightId, MovieId = e.MovieId, TagId = target });
+            Copy(apexRows.Where(e => e.MovieId == movieId).ToList(), old.Apexes, now.Apexes, e => e.ApexId, e => e.TagId,
+                (e, target) => new ApexTagExclusion { ApexId = e.ApexId, MovieId = e.MovieId, TagId = target });
         }
 
-        Repoint(await db.SceneTagExclusions.Where(e => movieId == null || e.MovieId == movieId).ToListAsync(ct),
-            e => e.SceneId, e => e.TagId, e => new SceneTagExclusion { SceneId = e.SceneId, MovieId = e.MovieId, TagId = TargetOf(e.TagId)!.Value });
-        Repoint(await db.HighlightTagExclusions.Where(e => movieId == null || e.MovieId == movieId).ToListAsync(ct),
-            e => e.HighlightId, e => e.TagId, e => new HighlightTagExclusion { HighlightId = e.HighlightId, MovieId = e.MovieId, TagId = TargetOf(e.TagId)!.Value });
-        Repoint(await db.ApexTagExclusions.Where(e => movieId == null || e.MovieId == movieId).ToListAsync(ct),
-            e => e.ApexId, e => e.TagId, e => new ApexTagExclusion { ApexId = e.ApexId, MovieId = e.MovieId, TagId = TargetOf(e.TagId)!.Value });
-
-        void Repoint<TRow>(List<TRow> rows, Func<TRow, int> owner, Func<TRow, int> tagOf, Func<TRow, TRow> copied) where TRow : class
+        void Copy<TRow>(List<TRow> rows, IReadOnlyDictionary<int, IReadOnlyList<InheritedTag>> old, IReadOnlyDictionary<int, IReadOnlyList<InheritedTag>> now,
+            Func<TRow, int> owner, Func<TRow, int> tagOf, Func<TRow, int, TRow> copied) where TRow : class
         {
+            bool Inherits(IReadOnlyDictionary<int, IReadOnlyList<InheritedTag>> pools, int clipId, int tagId) =>
+                pools.TryGetValue(clipId, out var pool) && pool.Any(t => t.Tag.TagId == tagId);
+
             var present = rows.Select(r => (owner(r), tagOf(r))).ToHashSet();
-            foreach (var row in rows.Where(r => TargetOf(tagOf(r)) is not null).ToList())
+            foreach (var row in rows)
             {
-                if (present.Add((owner(row), TargetOf(tagOf(row))!.Value))) db.Add(copied(row));
+                if (RuleTargetOf(tagOf(row), tagsById, context) is not { } target) continue;
+                var clipId = owner(row);
+                // Only the rows the pass repointed: the target wasn't reaching the clip before and is now.
+                if (Inherits(old, clipId, target) || !Inherits(now, clipId, target)) continue;
+                if (present.Add((clipId, target))) db.Add(copied(row, target));
             }
         }
+    }
+
+    /// <summary>The tag a replacement rule repoints the tag to, or null (no rule, the rule targets the tag itself,
+    /// or the tag is ignored).</summary>
+    private static int? RuleTargetOf(int tagId, Dictionary<int, Tag> tagsById, NormalizationContext context)
+    {
+        if (!tagsById.TryGetValue(tagId, out var tag)) return null;
+        var value = tag.ParentTag != null ? $"{tag.ParentTag.Name}{Tag.HierarchyDelimiter}{tag.Name}" : tag.Name;
+        if (IsIgnored(value, context)) return null;
+        return FindRule(value, context.Rules)?.TargetTagId is { } target && target != tagId ? target : null;
     }
 
     /// <summary>Applies the ignore list and replacement rules to every scene's tags:
