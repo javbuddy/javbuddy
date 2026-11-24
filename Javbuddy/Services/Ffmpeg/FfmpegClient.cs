@@ -44,6 +44,12 @@ public interface IFfmpegClient
     /// ffMetadata (FFMETADATA1 text), keeping every stream and the global tags.</summary>
     Task<FfmpegRunResult> RemuxWithChaptersAsync(string inputPath, string ffMetadata, string outputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct = default);
 
+    /// <summary>Stream-copies <paramref name="durationSeconds"/> from <paramref name="startSeconds"/> into a file of ffmpeg's
+    /// <paramref name="muxer"/> ("mp4", "webm", "matroska"; a lossless clip export). Stream copy can only start on a keyframe, so the
+    /// clip begins at the keyframe before the start and runs to the exact end; probe the output for where it really starts. Keeps
+    /// the video (not cover art) and audio streams only.</summary>
+    Task<FfmpegRunResult> ExportClipCopyAsync(string inputPath, double startSeconds, double durationSeconds, string muxer, string outputPath, CancellationToken ct = default);
+
     /// <summary>Decodes the whole file (downscaled) through blackdetect and scdet and returns every
     /// black stretch and hard cut they report; null when ffmpeg fails. Slow: a full
     /// decode, so callers run it as a background job. sink, when given, gets each signal as soon as
@@ -137,7 +143,9 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
         if (parsed is null) return null;
 
         var durationSeconds = double.TryParse(parsed.Format?.Duration, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0;
-        var videoStream = parsed.Streams?.FirstOrDefault(s => s.CodecType == "video");
+        // Skip embedded cover art (an mjpeg/png "video" stream flagged attached_pic), which can come before the real video;
+        // the clip copy's -map 0:V skips it the same way.
+        var videoStream = parsed.Streams?.FirstOrDefault(s => s.CodecType == "video" && s.Disposition?.AttachedPic != 1);
         var audioStream = parsed.Streams?.FirstOrDefault(s => s.CodecType == "audio");
 
         return new FfprobeMediaInfo
@@ -255,6 +263,32 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
     public Task<FfmpegRunResult> ExtractPreviewVideoAsync(string inputPath, double seconds, double durationSeconds, bool leftEyeOnly, string outputPath, CancellationToken ct = default) =>
         RunAsync("preview", outputPath, BuildPreviewVideoArguments(inputPath, seconds, durationSeconds, leftEyeOnly, outputPath), ct);
+
+    public async Task<FfmpegRunResult> ExportClipCopyAsync(string inputPath, double startSeconds, double durationSeconds, string muxer, string outputPath, CancellationToken ct = default)
+    {
+        if (binaryResolver.FfmpegPath is not { } ffmpegPath)
+        {
+            return FfmpegRunResult.Failed("ffmpeg is not available.");
+        }
+
+        // The long lane: a scene can be tens of minutes, so the copy reads hundreds of MB to several GB.
+        var arguments = BuildClipCopyArguments(inputPath, startSeconds, durationSeconds, muxer, outputPath);
+        return await RunInstrumentedAsync("clip_export", longGate, TimeSpan.FromSeconds(Math.Max(durationSeconds, 0)), new RunIo([inputPath], outputPath), ct, scope => RunCoreAsync(scope, ffmpegPath, arguments, ct), r => r.Success);
+    }
+
+    // Input seeking with stream copy starts at the keyframe before -ss; -t still ends at start + duration, and make_zero shifts the
+    // pre-roll's negative timestamps to start at 0. Only video (0:V leaves out attached cover pictures) and audio are mapped:
+    // subtitle (mov_text, SRT, PGS), data (tmcd) and attachment streams fit only some containers and would fail the whole copy.
+    public static List<string> BuildClipCopyArguments(string inputPath, double startSeconds, double durationSeconds, string muxer, string outputPath) =>
+    [
+        "-hide_banner", "-nostdin", "-y",
+        "-ss", FormatSeconds(startSeconds), "-i", inputPath,
+        "-t", FormatSeconds(durationSeconds),
+        "-map", "0:V", "-map", "0:a?",
+        "-c", "copy", "-avoid_negative_ts", "make_zero",
+        "-f", muxer,
+        outputPath,
+    ];
 
     public async Task<FfmpegRunResult> RemuxWithChaptersAsync(string inputPath, string ffMetadata, string outputPath, TimeSpan totalDuration, IProgress<FfmpegProgress>? progress, CancellationToken ct = default)
     {
@@ -924,5 +958,13 @@ public partial class FfmpegClient(IFfmpegBinaryResolver binaryResolver, FfmpegGa
 
         [JsonPropertyName("channels")]
         public int? Channels { get; set; }
+
+        public FfprobeDisposition? Disposition { get; set; }
+    }
+
+    private class FfprobeDisposition
+    {
+        [JsonPropertyName("attached_pic")]
+        public int? AttachedPic { get; set; }
     }
 }

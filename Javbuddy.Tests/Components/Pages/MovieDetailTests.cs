@@ -60,6 +60,7 @@ public class MovieDetailTests : BunitContext
         Services.AddSingleton(sceneMedia);
         Services.AddSingleton(highlightMedia);
         Services.AddSingleton(apexMedia);
+        Services.AddSingleton(Substitute.For<Javbuddy.Services.ClipExport.IClipExportService>());
         Services.AddSingleton<Javbuddy.Services.SceneMedia.IMovieClipMediaQueueService>(new Javbuddy.Services.SceneMedia.MovieClipMediaQueueService(sceneMedia, highlightMedia, apexMedia));
         Services.AddSingleton(new Javbuddy.Services.SceneMedia.SceneMediaQueue(Substitute.For<IServiceScopeFactory>(), Microsoft.Extensions.Logging.Abstractions.NullLogger<Javbuddy.Services.SceneMedia.SceneMediaQueue>.Instance));
         Services.AddSingleton(Substitute.For<Javbuddy.Services.Trickplay.IHighlightTrickplayService>());

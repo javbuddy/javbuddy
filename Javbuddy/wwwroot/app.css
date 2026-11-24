@@ -600,5 +600,6 @@ h1:focus {
 
 .clip-form-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.35rem;
 }

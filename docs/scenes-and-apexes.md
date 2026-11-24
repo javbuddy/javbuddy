@@ -151,6 +151,15 @@ A scene or highlight card's diamond badge (`ApexCount`) counts the movie's apexe
 - **Jump keys**: `MarkerJumps` gives the H / Shift+H targets (a highlight's start) and A / Shift+A targets (`StartFor` of an apex). In the clip player only markers inside the clip count, and a jump never leaves the clip. While the editor is open, H and A mark highlights and apexes instead, and Shift+H and Shift+A end them.
 - **Clip-relative apexes**: `ApexRanges.WithinClip` shifts the apexes inside a clip so the clip player's track starts at 0.
 
+## Exporting a clip
+
+**Download clip**, the icon button in the header of a scene's, highlight's or apex's edit form (`ClipFormHeader` / `ClipDownloadButton`; existing clips only, and only with a local video and ffmpeg) saves that clip through the browser, losslessly, for an external tool such as a decensor or upscale pass. It downloads the clip as saved, not unsaved edits in the form.
+
+- **Range**: the one the clip player plays, from the same helpers: a scene's effective range (`SceneRanges.ResolveEffectiveRanges`), a highlight's `[start, end)`, an apex's `ApexRanges.ClipFor` with its own or the default window; all cut at the end of the file. The source is the movie's main file (`MovieVideoFiles.FindMainAsync`, the primary version).
+- **Stream copy** (`FfmpegClient.BuildClipCopyArguments`): video (not cover art) and audio streams are copied unchanged; subtitle, data and attachment streams are left out. A copy can only start on a keyframe, so the file starts at the keyframe at or before the clip's start (up to a few seconds early); the end is exact. `ClipExportService` reads the real start back from the output's length and names the file with it: `CODE - Scene 2 [hh-mm-ss - hh-mm-ss].mp4` (a scene's title, a highlight's title or "Highlight N", or "Apex N", by position).
+- **Container** (`ClipContainer.For`, from the source's first video and audio codecs): WebM for VP8/VP9/AV1 with Opus/Vorbis, else MP4 for H.264/HEVC/AV1/VP9/MPEG-4 Part 2 with AAC/MP3/AC-3/E-AC-3/Opus/ALAC (or no audio), else Matroska (for example H.264 with FLAC, PCM or DTS audio). If the MP4 or WebM copy fails anyway (another audio track in a codec it can't hold), the copy is retried as Matroska.
+- **Download**: `PrepareAsync` cuts the clip into `clip-exports/` under the image cache folder (as `.clip` files, which cache maintenance ignores) and hands back a random single-use token; the editor then opens `/api/clip-exports/{token}` (`ClipExportEndpoints`), which streams the file and deletes it when the response ends. A clip nobody downloads, and anything a restart left behind, is deleted once it is an hour old: `ClipExportSweeper` runs `ClipExportDownloads.Sweep` at startup and every 10 minutes (and each export sweeps too). The image cache volume needs room for the largest clip while it's being downloaded. Closing the editor mid-cut (the next movie on Review, closing the player) cancels it: ffmpeg is stopped and the temp file deleted. The copy runs in ffmpeg's long lane (`FfmpegGate.Long`, one at a time with scene detection, chapter writing and VR merges).
+
 ## Deleting things
 
 | Deleted | Effect |
@@ -176,3 +185,4 @@ A scene or highlight card's diamond badge (`ApexCount`) counts the movie's apexe
 | Shared actor checks, untitled labels | `Services/Scenes/ClipAssignments.cs`, `ActorTagLabel.cs` | via the service tests |
 | Actor merge | `Services/Actors/ActorService.cs` (`MergeAsync`) | `ActorServiceTests`, `SceneActorsAndTagsTests` |
 | Jump targets | `Components/Shared/MarkerJumps.cs` | `MarkerJumpsTests` |
+| Clip export | `Services/ClipExport/{ClipExportService,ClipExportDownloads,ClipExportSweeper,ClipContainer,ClipExportNaming}.cs`, `Startup/ClipExportEndpoints.cs`, `Components/Shared/ClipDownloadButton.razor` | `ClipExportServiceTests`, `ClipExportDownloadsTests`, `ClipContainerTests`, `ClipExportNamingTests`, `ClipExportSweeperTests`, `ClipExportEndpointsTests`, `ClipEditorExportTests`, `ClipDownloadButtonTests` |

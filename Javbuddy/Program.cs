@@ -172,5 +172,6 @@ app.MapRazorComponents<App>()
 app.MapMediaEndpoints();
 app.MapDeoVrEndpoints();
 app.MapBackupEndpoints();
+app.MapClipExportEndpoints();
 
 app.Run();

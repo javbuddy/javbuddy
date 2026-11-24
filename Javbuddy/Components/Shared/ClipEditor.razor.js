@@ -71,6 +71,17 @@ export function applySubtitleStyle(selector, size, background) {
     video.style.setProperty("--video-subtitle-background", SUBTITLE_BACKGROUNDS[background] ?? "transparent");
 }
 
+// Starts a browser download of url (a prepared clip export; the server names the file in Content-Disposition).
+export function download(url) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "";
+    link.style.display = "none";
+    document.body.append(link);
+    link.click();
+    link.remove();
+}
+
 export function seek(selector, seconds) {
     const video = document.querySelector(selector);
     if (!video) return false;

@@ -2,6 +2,7 @@ using Javbuddy.Services.ActorEnrichment;
 using Javbuddy.Services.ActorEnrichment.Sources;
 using Javbuddy.Services.Actors;
 using Javbuddy.Services.Backups;
+using Javbuddy.Services.ClipExport;
 using Javbuddy.Services.DeoVr;
 using Javbuddy.Services.Ffmpeg;
 using Javbuddy.Services.HealthChecks;
@@ -134,6 +135,9 @@ public static class ServiceRegistration
         services.AddScoped<ISceneMediaService, SceneMediaService>();
         services.AddScoped<IHighlightMediaService, HighlightMediaService>();
         services.AddScoped<IApexMediaService, ApexMediaService>();
+        services.AddSingleton<ClipExportDownloads>();
+        services.AddHostedService<ClipExportSweeper>();
+        services.AddScoped<IClipExportService, ClipExportService>();
         services.AddScoped<IMovieClipMediaQueueService, MovieClipMediaQueueService>();
         services.AddScoped<ISceneChapterWriteService, SceneChapterWriteService>();
         services.AddScoped<ISceneDetectionService, SceneDetectionService>();

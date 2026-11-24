@@ -87,7 +87,8 @@
 
     private MovieTagsEditor? movieTagsEditor;
 
-    private RenderFragment<TrickplayLayout?> EditorPanel(int movieId) => trickplay => @<ClipEditor MovieId="movieId"
+    private RenderFragment<TrickplayLayout?> EditorPanel(int movieId) => trickplay => @<ClipEditor @key="movieId"
+                                                                      MovieId="movieId"
                                                                       VideoSelector="video.video-player-video"
                                                                       DurationSeconds="DurationSeconds"
                                                                       Trickplay="trickplay"

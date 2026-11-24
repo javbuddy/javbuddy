@@ -1,3 +1,4 @@
+@using Javbuddy.Services.ClipExport
 @using Javbuddy.Services.SceneMedia
 @using Javbuddy.Services.Trickplay
 @inject IMovieSceneService SceneService
@@ -9,6 +10,7 @@
 @inject ISceneMediaService SceneMedia
 @inject IHighlightMediaService HighlightMedia
 @inject IApexMediaService ApexMedia
+@inject IClipExportService ClipExport
 @inject SceneMediaQueue SceneMediaQueue
 @inject IJSRuntime JS
 @implements IAsyncDisposable
@@ -232,6 +234,8 @@
     private ApexFormModel? apexForm;
     private ApexWindow defaultApexWindow = ApexWindow.Default;
     private string? error;
+    private (ClipKind Kind, int Id)? exporting;
+    private readonly CancellationTokenSource exportCts = new();
     private bool busy;
     private object? pendingDelete;
     private IJSObjectReference? jsModule;
@@ -543,6 +547,8 @@
         <ClipHighlightForm Model="model" Cast="cast" Scenes="scenes" Busy="busy" RolledUpTags="RolledUpTags(model.HighlightId)"
                            Position="@(model.HighlightId is { } id ? highlights.FirstOrDefault(h => h.Id == id)?.Position ?? 1 : highlights.Count + 1)"
                            OnSave="SaveHighlightAsync" OnCancel="() => { highlightForm = null; error = null; }"
+                           OnDownload="@(model.HighlightId is { } downloadId ? ExportCallback(ClipKind.Highlight, downloadId) : default)"
+                           Downloading="@(model.HighlightId is { } d && exporting == (ClipKind.Highlight, d))" DownloadDisabled="@(exporting is not null)"
                            OnNow="end => SetHighlightTimeFromPlayerAsync(end)" />
         @if (model.HighlightId is { } highlightId && highlights.FirstOrDefault(h => h.Id == highlightId) is { } highlight)
         {
@@ -583,6 +589,8 @@
     {
         <ClipApexForm Model="model" Cast="cast" Scenes="scenes" Highlights="highlights" Apexes="apexes" DefaultWindow="defaultApexWindow" Busy="busy"
                       OnSave="SaveApexAsync" OnCancel="() => { apexForm = null; error = null; }"
+                      OnDownload="@(model.ApexId is { } downloadId ? ExportCallback(ClipKind.Apex, downloadId) : default)"
+                      Downloading="@(model.ApexId is { } d && exporting == (ClipKind.Apex, d))" DownloadDisabled="@(exporting is not null)"
                       OnNow="SetApexTimeFromPlayerAsync" OnWindowNow="tail => SetApexWindowFromPlayerAsync(tail)" />
         @if (model.ApexId is { } apexId && apexes.FirstOrDefault(a => a.Id == apexId) is { } apex)
         {
@@ -643,6 +651,47 @@
 
     private static string ImportTooltip(FileChapters found) =>
         $"{found.FileName}: {string.Join(", ", found.Chapters.Select((c, i) => c.Title ?? $"Chapter {i + 1}"))}";
+
+    // --- Export ---
+
+    // No download without a local video or ffmpeg; one at a time from this editor. It downloads the clip's saved range.
+    private EventCallback ExportCallback(ClipKind kind, int id) =>
+        HasLocalVideo && ClipExport.IsAvailable ? EventCallback.Factory.Create(this, () => ExportAsync(kind, id)) : default;
+
+    // The button spins while the clip is cut; then the browser's own download takes over, so success shows no message.
+    // Closing the editor (the next movie, the player modal) cancels the cut: ffmpeg is stopped and its temp file deleted.
+    private async Task ExportAsync(ClipKind kind, int id)
+    {
+        if (exporting is not null || disposed) return;
+        exporting = (kind, id);
+        error = null;
+        StateHasChanged();
+        try
+        {
+            var result = await ClipExport.PrepareAsync(kind, id, exportCts.Token);
+            if (disposed) return;
+            if (result is not { Success: true, DownloadUrl: { } url })
+            {
+                error = $"Download failed: {result.Error}";
+            }
+            else if (await GetModuleAsync() is { } js)
+            {
+                await js.InvokeVoidAsync("download", url);
+            }
+            else
+            {
+                error = "Download failed: the page couldn't start the download. Reload it and try again.";
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or JSDisconnectedException or ObjectDisposedException)
+        {
+            // The editor or page is gone; a clip already prepared expires unclaimed.
+        }
+        finally
+        {
+            exporting = null;
+        }
+    }
 
     // --- Scenes ---
 
@@ -1155,6 +1204,8 @@
     private RenderFragment SceneFormFragment() => @<div class="scene-editor-form-wrap">
     <ClipSceneForm Model="sceneForm!" Scenes="scenes" Busy="busy"
                    OnSave="SaveSceneAsync" OnCancel="() => { sceneForm = null; error = null; }"
+                   OnDownload="@(sceneForm!.SceneId is { } downloadId ? ExportCallback(ClipKind.Scene, downloadId) : default)"
+                   Downloading="@(sceneForm!.SceneId is { } d && exporting == (ClipKind.Scene, d))" DownloadDisabled="@(exporting is not null)"
                    OnNow="end => SetSceneTimeFromPlayerAsync(end)" />
     @* Outside the form: Enter in the tag search must not submit the scene's times/title.
        Actor and tag changes apply immediately, independent of Save. *@
@@ -1198,6 +1249,7 @@
     {
         if (disposed) return;
         disposed = true;
+        await exportCts.CancelAsync();
         if (subscribed)
         {
             SceneMediaQueue.Generated -= OnMediaGenerated;

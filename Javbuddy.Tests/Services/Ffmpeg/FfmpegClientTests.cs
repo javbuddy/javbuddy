@@ -76,6 +76,28 @@ public class FfmpegClientTests
     }
 
     [Fact]
+    public void ParseProbeOutput_SkipsEmbeddedCoverArt_ForTheVideoStream()
+    {
+        // An MP4 whose embedded poster (mjpeg, attached_pic) comes before the real H.264 stream.
+        const string json = """
+            {
+                "streams": [
+                    { "index": 0, "codec_name": "mjpeg", "codec_type": "video", "width": 800, "height": 538, "disposition": { "default": 0, "attached_pic": 1 } },
+                    { "index": 1, "codec_name": "h264", "codec_type": "video", "width": 1920, "height": 1080, "r_frame_rate": "30000/1001", "disposition": { "default": 1, "attached_pic": 0 } },
+                    { "index": 2, "codec_name": "aac", "codec_type": "audio", "channels": 2, "disposition": { "default": 1, "attached_pic": 0 } }
+                ],
+                "format": { "duration": "10.000000" }
+            }
+            """;
+
+        var info = FfmpegClient.ParseProbeOutput(json)!;
+
+        Assert.Equal("h264", info.VideoCodec);
+        Assert.Equal(1920, info.Width);
+        Assert.Equal("aac", info.AudioCodec);
+    }
+
+    [Fact]
     public void ParseProbeOutput_NoChaptersOrInvalidJson()
     {
         Assert.Empty(FfmpegClient.ParseProbeOutput("""{ "format": { "duration": "5" } }""")!.Chapters);
@@ -124,6 +146,15 @@ public class FfmpegClientTests
              "-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "32", "-deadline", "good", "-cpu-used", "2", "-row-mt", "1",
              "-pix_fmt", "yuv420p", "-f", "webm", "out.webm"],
             FfmpegClient.BuildPreviewVideoArguments("in.mp4", 603, 4, leftEyeOnly: true, "out.webm"));
+    }
+
+    [Fact]
+    public void ClipCopyArguments_SeekOnInput_StreamCopyVideoAndAudio_IntoTheGivenMuxer()
+    {
+        Assert.Equal(
+            ["-hide_banner", "-nostdin", "-y", "-ss", "17.5", "-i", "in.mkv", "-t", "10",
+             "-map", "0:V", "-map", "0:a?", "-c", "copy", "-avoid_negative_ts", "make_zero", "-f", "mp4", "out.clip"],
+            FfmpegClient.BuildClipCopyArguments("in.mkv", 17.5, 10, "mp4", "out.clip"));
     }
 
     [Fact]
