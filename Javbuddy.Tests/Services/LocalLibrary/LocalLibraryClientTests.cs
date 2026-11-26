@@ -436,6 +436,7 @@ public class LocalLibraryClientTests
                 LastWriteUtc = info.LastWriteTimeUtc,
                 IsPrimary = true,
                 MediaScannedAt = DateTime.UtcNow,
+                MediaProbeRevision = MediaInfoProber.ProbeRevision,
             });
             db.Movies.Add(movie);
             db.SaveChanges();
@@ -741,6 +742,95 @@ public class LocalLibraryClientTests
 
         Assert.True(result.Success);
         await prober.DidNotReceive().ProbeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RefreshMediaInfoOnlyAsync_UnchangedFileFromOlderProbeRevision_ReProbesOnceAndStoresJasna()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        var moviePath = Path.Combine(folder, "ABC-123.mp4");
+        await File.WriteAllTextAsync(moviePath, "x");
+        var info = new FileInfo(moviePath);
+
+        int movieId;
+        using (var db = factory.CreateDbContext())
+        {
+            var movie = new Movie { Code = "ABC-123", Status = MovieStatus.Got, FileAddedAt = info.CreationTimeUtc, MediaScannedAt = DateTime.UtcNow };
+            movie.MovieFiles.Add(new MovieFile
+            {
+                FileName = "ABC-123.mp4",
+                FileSizeBytes = info.Length,
+                LastWriteUtc = info.LastWriteTimeUtc,
+                IsPrimary = true,
+                MediaScannedAt = DateTime.UtcNow,
+                MediaProbeRevision = 0,
+            });
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        var prober = Substitute.For<IMediaInfoProber>();
+        prober.ProbeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new MediaProbeResult { Success = true, Comment = Tests.Services.MediaInfo.JasnaSettingsTagTests.LtxTag });
+        var client = CreateClientFor(factory, root, prober);
+
+        await client.RefreshMediaInfoOnlyAsync(movieId);
+        await client.RefreshMediaInfoOnlyAsync(movieId);
+
+        await prober.Received(1).ProbeAsync(moviePath, Arg.Any<CancellationToken>());
+        using var verifyDb = factory.CreateDbContext();
+        var updated = verifyDb.Movies.Include(m => m.MovieFiles).Single(m => m.Id == movieId);
+        var file = Assert.Single(updated.MovieFiles);
+        Assert.Equal("0.12.3", file.JasnaVersion);
+        Assert.Equal("ltx", file.JasnaRestoration);
+        Assert.Equal(MediaInfoProber.ProbeRevision, file.MediaProbeRevision);
+        Assert.Equal(MovieContentType.Decensored, file.ContentType);
+        Assert.Equal(MovieContentType.Decensored, updated.ContentType);
+    }
+
+    [Fact]
+    public async Task RefreshMediaInfoOnlyAsync_MediaInfoOff_OlderProbeRevisionStillCountsAsUnchanged()
+    {
+        using var factory = new TestDbContextFactory();
+        using var root = new TempRoot();
+        var folder = root.AddMovieFolder("ABC-123");
+        var moviePath = Path.Combine(folder, "ABC-123.mp4");
+        await File.WriteAllTextAsync(moviePath, "x");
+        var info = new FileInfo(moviePath);
+
+        int movieId;
+        DateTime scannedAt = DateTime.UtcNow.AddDays(-1);
+        using (var db = factory.CreateDbContext())
+        {
+            db.MediaInfoSettings.Add(new MediaInfoSettings { Enabled = false });
+            var movie = new Movie { Code = "ABC-123", Status = MovieStatus.Got, FileAddedAt = info.CreationTimeUtc, MediaScannedAt = scannedAt };
+            movie.MovieFiles.Add(new MovieFile
+            {
+                FileName = "ABC-123.mp4",
+                FileSizeBytes = info.Length,
+                LastWriteUtc = info.LastWriteTimeUtc,
+                IsPrimary = true,
+                MediaScannedAt = scannedAt,
+                MediaProbeRevision = 0,
+            });
+            db.Movies.Add(movie);
+            db.SaveChanges();
+            movieId = movie.Id;
+        }
+
+        var prober = Substitute.For<IMediaInfoProber>();
+        var client = CreateClientFor(factory, root, prober);
+
+        var result = await client.RefreshMediaInfoOnlyAsync(movieId);
+
+        Assert.True(result.Success);
+        await prober.DidNotReceive().ProbeAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        using var verifyDb = factory.CreateDbContext();
+        // The unchanged-files shortcut ran: the full path would have re-stamped MediaScannedAt.
+        Assert.Equal(scannedAt, verifyDb.Movies.Single(m => m.Id == movieId).MediaScannedAt!.Value, TimeSpan.FromSeconds(1));
     }
 
     [Fact]
@@ -1877,6 +1967,7 @@ public class LocalLibraryClientTests
                 FileSizeBytes = flatInfo.Length,
                 LastWriteUtc = flatInfo.LastWriteTimeUtc,
                 MediaScannedAt = DateTime.UtcNow,
+                MediaProbeRevision = MediaInfoProber.ProbeRevision,
                 Width = 1920,
                 Height = 1080,
             });
@@ -1887,6 +1978,7 @@ public class LocalLibraryClientTests
                 FileSizeBytes = pinnedInfo.Length,
                 LastWriteUtc = pinnedInfo.LastWriteTimeUtc,
                 MediaScannedAt = DateTime.UtcNow,
+                MediaProbeRevision = MediaInfoProber.ProbeRevision,
                 VrType = null,
                 VrTypePinned = true,
             });

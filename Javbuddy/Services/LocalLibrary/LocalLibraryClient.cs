@@ -1064,11 +1064,19 @@ public class LocalLibraryClient(
         // files match existing files, none were added or removed, and each file's size and last-write
         // time haven't moved since a successful probe.
         var countsMatch = movie.MovieFiles.Count == diskFileInfos.Count;
+
+        // A file probed by an older MediaInfoProber.ProbeRevision is probed once more to fill the new
+        // fields, but only while MediaInfo is on: a skipped probe can't fill them, so with MediaInfo off
+        // the revision would never catch up and every rescan would treat the movie as changed.
+        var mediaInfoOn = await db.MediaInfoSettings.ReadSingleRowAsync(ct) is not { Enabled: false };
+        bool ProbeRevisionCurrent(MovieFile f) => !mediaInfoOn || f.MediaProbeRevision >= MediaInfoProber.ProbeRevision;
+
         var movieAlreadySucceeded = movie.MediaScannedAt is not null && movie.MediaScanError is null;
         var allUnchanged = countsMatch && movieAlreadySucceeded && diskFileInfos.All(d =>
             existingFileMap.TryGetValue(d.FileName, out var existing)
             && existing.MediaScannedAt is not null
             && existing.MediaScanError is null
+            && ProbeRevisionCurrent(existing)
             && existing.FileSizeBytes == d.Info.Length
             && existing.LastWriteUtc == d.Info.LastWriteTimeUtc);
 
@@ -1149,6 +1157,7 @@ public class LocalLibraryClient(
 
                 var fileUnchanged = mf.MediaScannedAt is not null
                     && mf.MediaScanError is null
+                    && ProbeRevisionCurrent(mf)
                     && mf.FileSizeBytes == fInfo.Length
                     && mf.LastWriteUtc == fInfo.LastWriteTimeUtc;
 

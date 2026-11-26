@@ -190,4 +190,19 @@ public class MediaInfoTextFormatterTests
         Assert.Equal(movieReport, fileReport);
     }
 
+    [Fact]
+    public void FormatFull_WithJasnaSettings_AppendsJasnaSectionsAfterTheStreams()
+    {
+        var report = MediaInfoTextFormatter.FormatFull(ScannedMovie(), Tests.Services.MediaInfo.JasnaSettingsTagTests.LtxTag);
+
+        Assert.NotNull(report);
+        Assert.Contains("\nJasna\nVersion                   : 0.12.3 (schema 1)\n", report);
+        Assert.Contains("\nJasna: LTX\nWeights                   : ltx-restore-alpha1-distill8-int8.safetensors\n", report);
+        Assert.Contains("\nJasna: Output\nCodec                     : hevc (hevc_nvenc)\n", report);
+        Assert.True(report.IndexOf("\nText\n", StringComparison.Ordinal) < report.IndexOf("\nJasna\n", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FormatFull_WithoutJasnaSettings_HasNoJasnaSection() =>
+        Assert.DoesNotContain("Jasna", MediaInfoTextFormatter.FormatFull(ScannedMovie()));
 }

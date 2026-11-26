@@ -296,6 +296,27 @@ public static class LocalLibraryMetadataMapper
         file.SubtitleCount = probe.SubtitleCount;
         file.MediaScannedAt = DateTime.UtcNow;
         file.MediaScanError = probe.Success ? null : probe.ErrorMessage;
+
+        if (probe.Success)
+        {
+            ApplyJasnaSettings(file, JasnaSettingsTag.Parse(probe.Comment));
+            file.MediaProbeRevision = MediaInfoProber.ProbeRevision;
+        }
+    }
+
+    /// <summary>Stores a file's Jasna settings tag (or clears it). A file that wasn't Jasna output
+    /// before becomes Decensored; after that its content type is left to the user, so changing it by
+    /// hand sticks across rescans.</summary>
+    public static void ApplyJasnaSettings(MovieFile file, JasnaSettings? jasna)
+    {
+        if (jasna is not null && file.JasnaVersion is null)
+        {
+            file.ContentType = MovieContentType.Decensored;
+        }
+
+        file.JasnaSettingsJson = jasna?.Json;
+        file.JasnaVersion = jasna?.Version is { } version && version.Length > 32 ? version[..32] : jasna?.Version;
+        file.JasnaRestoration = jasna?.Restoration is { } restoration && restoration.Length > 64 ? restoration[..64] : jasna?.Restoration;
     }
 
     /// <summary>Synchronizes primary version specs and aggregated counts/sizes onto Movie.</summary>

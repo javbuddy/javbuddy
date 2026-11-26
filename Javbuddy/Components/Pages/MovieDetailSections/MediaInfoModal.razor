@@ -62,7 +62,7 @@
 @code {
     /// <summary>The "Media Info" modal for MovieDetail's toolbar button — shows the full
     /// General/Video/Audio report (Services/MediaInfoTextFormatter) for technical info gathered
-    /// for each movie file/version. Doesn't re-probe the file itself.</summary>
+    /// for each movie file/version, plus Jasna's restoration settings for a version Jasna restored. Doesn't re-probe the file itself.</summary>
     [Parameter, EditorRequired] public Movie Movie { get; set; } = null!;
 
     /// <summary>Whether the modal is open. The page owns it; the modal asks to close through <see cref="OnClose"/>.</summary>
@@ -107,7 +107,7 @@
     {
         if (activeFile is not null)
         {
-            fullReport = MediaInfoTextFormatter.FormatFull(activeFile);
+            fullReport = MediaInfoTextFormatter.FormatFull(activeFile, activeFile.JasnaSettingsJson);
         }
         else
         {

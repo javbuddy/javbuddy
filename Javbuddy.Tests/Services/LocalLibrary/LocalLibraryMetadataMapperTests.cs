@@ -374,4 +374,52 @@ public class GeneratedMetadataTests
         Assert.Null(movie.MetaRuntimeMinutes);
         Assert.False(LocalLibraryMetadataMapper.HasExistingMetadata(movie));
     }
+
+    [Fact]
+    public void ApplyMediaProbe_JasnaComment_StoresSettingsMarksDecensoredAndStampsRevision()
+    {
+        var file = new MovieFile { FileName = "SSNI-258-LTX.mp4", ContentType = MovieContentType.Censored };
+
+        LocalLibraryMetadataMapper.ApplyMediaProbe(file, new MediaProbeResult { Success = true, Comment = Tests.Services.MediaInfo.JasnaSettingsTagTests.LtxTag });
+
+        Assert.Equal(Tests.Services.MediaInfo.JasnaSettingsTagTests.LtxTag, file.JasnaSettingsJson);
+        Assert.Equal("0.12.3", file.JasnaVersion);
+        Assert.Equal("ltx", file.JasnaRestoration);
+        Assert.Equal(MovieContentType.Decensored, file.ContentType);
+        Assert.Equal(MediaInfoProber.ProbeRevision, file.MediaProbeRevision);
+    }
+
+    [Fact]
+    public void ApplyMediaProbe_AlreadyJasna_KeepsContentTypeSetByHand()
+    {
+        var file = new MovieFile { FileName = "a.mp4", JasnaVersion = "0.12.3", ContentType = MovieContentType.Uncensored };
+
+        LocalLibraryMetadataMapper.ApplyMediaProbe(file, new MediaProbeResult { Success = true, Comment = Tests.Services.MediaInfo.JasnaSettingsTagTests.LtxTag });
+
+        Assert.Equal(MovieContentType.Uncensored, file.ContentType);
+    }
+
+    [Fact]
+    public void ApplyMediaProbe_OtherComment_ClearsJasnaAndLeavesContentType()
+    {
+        var file = new MovieFile { FileName = "a.mp4", JasnaVersion = "0.12.3", JasnaRestoration = "ltx", JasnaSettingsJson = "{}", ContentType = MovieContentType.Decensored };
+
+        LocalLibraryMetadataMapper.ApplyMediaProbe(file, new MediaProbeResult { Success = true, Comment = "Encoded by HandBrake" });
+
+        Assert.Null(file.JasnaSettingsJson);
+        Assert.Null(file.JasnaVersion);
+        Assert.Null(file.JasnaRestoration);
+        Assert.Equal(MovieContentType.Decensored, file.ContentType);
+    }
+
+    [Fact]
+    public void ApplyMediaProbe_FailedProbe_KeepsJasnaAndRevision()
+    {
+        var file = new MovieFile { FileName = "a.mp4", JasnaVersion = "0.12.3", MediaProbeRevision = 0 };
+
+        LocalLibraryMetadataMapper.ApplyMediaProbe(file, MediaProbeResult.Failed("timed out"));
+
+        Assert.Equal("0.12.3", file.JasnaVersion);
+        Assert.Equal(0, file.MediaProbeRevision);
+    }
 }

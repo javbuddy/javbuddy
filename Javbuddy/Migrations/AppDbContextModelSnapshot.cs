@@ -15,7 +15,7 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
     // If you encounter a merge conflict in the line below, it means you need to
     // discard one of the migration branches and recreate its migrations on top of
     // the other branch. See https://aka.ms/efcore-docs-migrations-conflicts for more info.
-    public override string LastMigrationId => "20261123163437_AddTagPropagation";
+    public override string LastMigrationId => "20261126083656_MovieFileJasnaSettings";
 
     protected override void BuildModel(ModelBuilder modelBuilder)
     {
@@ -1605,11 +1605,25 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
                 b.Property<bool>("IsPrimaryPinned")
                     .HasColumnType("INTEGER");
 
+                b.Property<string>("JasnaRestoration")
+                    .HasMaxLength(64)
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("JasnaSettingsJson")
+                    .HasColumnType("TEXT");
+
+                b.Property<string>("JasnaVersion")
+                    .HasMaxLength(32)
+                    .HasColumnType("TEXT");
+
                 b.Property<DateTime?>("LastWriteUtc")
                     .HasColumnType("TEXT");
 
                 b.Property<string>("MatrixCoefficients")
                     .HasColumnType("TEXT");
+
+                b.Property<int>("MediaProbeRevision")
+                    .HasColumnType("INTEGER");
 
                 b.Property<string>("MediaScanError")
                     .HasColumnType("TEXT");

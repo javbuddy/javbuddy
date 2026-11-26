@@ -109,6 +109,24 @@ public class MovieFile : IMediaTechnicalInfo
     public DateTime? MediaScannedAt { get; set; }
     public string? MediaScanError { get; set; }
 
+    /// <summary>Which <see cref="MediaInfoProber.ProbeRevision"/> last probed this file. A file probed by
+    /// an older revision is probed again on the next rescan even when unchanged, so a new probe field
+    /// fills in for the existing library.</summary>
+    public int MediaProbeRevision { get; set; }
+
+    /// <summary>The Jasna restoration settings tag from the file's comment, as read (see
+    /// <see cref="JasnaSettingsTag"/>); null when the file isn't Jasna output.</summary>
+    public string? JasnaSettingsJson { get; set; }
+
+    /// <summary>The Jasna version that restored this file, from <see cref="JasnaSettingsJson"/>.</summary>
+    [StringLength(32)]
+    public string? JasnaVersion { get; set; }
+
+    /// <summary>The restoration models Jasna used, as <see cref="JasnaSettings.Restoration"/> ("ltx",
+    /// "basicvsrpp" or "basicvsrpp+ltx"), from <see cref="JasnaSettingsJson"/>.</summary>
+    [StringLength(64)]
+    public string? JasnaRestoration { get; set; }
+
     [NotMapped]
     public string FileSizeDisplay => ByteSizeFormatter.Format(FileSizeBytes);
 

@@ -4,6 +4,10 @@ All notable changes to this project are documented in this file, in [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **Jasna restoration settings in Media Info.** A version restored by [Jasna](https://github.com/Kruk2/jasna) carries its settings in the file's comment tag; Media Info now shows them after the General/Video/Audio report, in a **Jasna** section (version, restoration model, detection settings, segments), one per restoration model (**Jasna: LTX**, **Jasna: BasicVSR++**) and **Jasna: Output** (codec, encoder settings, and any LUT, sharpening or upscale). A version is marked **Decensored** the first time its Jasna tag is found; changing its content type by hand afterwards sticks. The Jasna version and restoration model are stored per version for filtering later. The next Library Rescan probes every file once more, even unchanged ones, to read the tag from your existing library.
+
 ## [0.10.1] - 2026-11-24
 
 ### Fixed

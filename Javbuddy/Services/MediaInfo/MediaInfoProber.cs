@@ -20,6 +20,10 @@ public class MediaProbeResult
     public string? ContainerCodecId { get; init; }
     public string? ContainerCodecIdCompatible { get; init; }
     public string? WritingApplication { get; init; }
+
+    /// <summary>The container's free-text comment tag (MP4 <c>©cmt</c>, Matroska <c>COMMENT</c>), where
+    /// Jasna writes its restoration settings (see <see cref="JasnaSettingsTag"/>).</summary>
+    public string? Comment { get; init; }
     public double? DurationSeconds { get; init; }
     public int? OverallBitRateKbps { get; init; }
     public double? FrameRate { get; init; }
@@ -99,6 +103,10 @@ public class MediaInfoProber(
     // be killed from managed code. MediaProbeGate bounds how many such calls can be outstanding and
     // joins a retry of a still-running file instead of adding another.
     private static readonly TimeSpan DefaultProbeTimeout = TimeSpan.FromMinutes(1);
+
+    /// <summary>Bumped when the probe reads a new field, so a rescan probes unchanged files again once
+    /// (MovieFile.MediaProbeRevision). 1: the comment tag, for Jasna's settings.</summary>
+    public const int ProbeRevision = 1;
 
     private readonly IDbContextFactory<AppDbContext> dbFactory = dbFactory;
     private readonly MediaProbeGate probeGate = probeGate ?? new MediaProbeGate();
@@ -187,6 +195,7 @@ public class MediaInfoProber(
                 ContainerCodecId = Str(mi, MediaInfoLib.StreamKind.General, "CodecID"),
                 ContainerCodecIdCompatible = Str(mi, MediaInfoLib.StreamKind.General, "CodecID_Compatible"),
                 WritingApplication = Str(mi, MediaInfoLib.StreamKind.General, "Encoded_Application"),
+                Comment = Str(mi, MediaInfoLib.StreamKind.General, "Comment"),
                 DurationSeconds = MsToSeconds(Dbl(mi, MediaInfoLib.StreamKind.General, "Duration")),
                 OverallBitRateKbps = BpsToKbps(Dbl(mi, MediaInfoLib.StreamKind.General, "OverallBitRate")),
                 FrameRate = Dbl(mi, MediaInfoLib.StreamKind.General, "FrameRate"),

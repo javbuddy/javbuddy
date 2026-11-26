@@ -14,8 +14,9 @@ public static class MediaInfoTextFormatter
 
     /// <summary>Full General/Video/Audio report, formatted like MediaInfoLib's own classic text
     /// output (including its GiB/MiB binary byte units and "(NN%) of file size" stream-size
-    /// annotations). Null if the movie has never been scanned.</summary>
-    public static string? FormatFull(IMediaTechnicalInfo movie)
+    /// annotations). Null if the movie has never been scanned. <paramref name="jasnaSettingsJson"/>
+    /// (a version's MovieFile.JasnaSettingsJson) adds Jasna's restoration settings as sections of their own.</summary>
+    public static string? FormatFull(IMediaTechnicalInfo movie, string? jasnaSettingsJson = null)
     {
         if (movie.MediaScannedAt is null || movie.MediaScanError is not null)
         {
@@ -93,6 +94,20 @@ public static class MediaInfoTextFormatter
         if (movie.MediaSubtitleCount is > 0)
         {
             AppendSection(sb, "Text", section => Line(section, "Count", movie.MediaSubtitleCount?.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        if (jasnaSettingsJson is not null)
+        {
+            foreach (var (title, lines) in JasnaSettingsTag.ReportSections(jasnaSettingsJson))
+            {
+                AppendSection(sb, title, section =>
+                {
+                    foreach (var (label, value) in lines)
+                    {
+                        Line(section, label, value);
+                    }
+                });
+            }
         }
 
         return sb.ToString().TrimEnd('\r', '\n');
